@@ -8108,6 +8108,54 @@ canvas {
     background-color: #dc3545 !important;  /* Make confirm red */
     color: white !important;
 }
+
+/* --- EVERYDAY HOTSPOT GEOCODER VISIBILITY FIX --- */
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder {
+    background-color: #2c2c2c !important;
+    border: 1px solid #555 !important;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3) !important;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--input {
+    color: #ffffff !important;
+    background-color: transparent !important;
+    padding-left: 35px !important;
+    font-weight: 600 !important;
+    font-size: 1rem !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--input::placeholder {
+    color: #aaaaaa !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--icon {
+    fill: #aaaaaa !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--suggestions {
+    background-color: #2c2c2c !important;
+    border: 1px solid #444 !important;
+    border-radius: 8px !important;
+    z-index: 999999 !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--suggestion {
+    color: #ffffff !important;
+    padding: 12px 15px !important;
+    border-bottom: 1px solid #444 !important;
+    background-color: #2c2c2c !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--suggestion:hover {
+    background-color: #444444 !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--suggestion-title {
+    color: #ffffff !important;
+    font-weight: 800 !important;
+}
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--suggestion-address {
+    color: #aaaaaa !important;
+}
+/* Hide the close button on the forced popup */
+#genericMessagePopup.force-hotspot .popup-close {
+    display: none !important;
+}
     </style>
 </head>
 <body>
@@ -8165,13 +8213,19 @@ canvas {
             <h1 id="homeGreetingName" style="font-size: 1.3rem; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">Welcome!</h1>
             <p>Great to see you.</p>
         </div>
-        <div class="home-header-actions">
-            <!-- Receipt Icon: Payment Notices -->
-            <button class="home-header-btn" onclick="showPaymentNotices()"><i class="fas fa-receipt"></i></button>
-            <!-- Bell Icon: General Notices -->
-            <button class="home-header-btn" onclick="showGeneralNotices()"><i class="far fa-bell"></i></button>
-        </div>
+       <div class="home-header-actions">
+    <!-- Receipt Icon: Payment Notices -->
+    <button class="home-header-btn" onclick="showPaymentNotices()"><i class="fas fa-receipt"></i></button>
+    
+    <!-- Bell Icon: General Notices (Now with Red Dot) -->
+    <button class="home-header-btn" style="position: relative;" onclick="showGeneralNotices()">
+        <i class="far fa-bell"></i>
+        <!-- Red Dot Badge -->
+        <span id="bellUnreadBadge" style="position: absolute; top: 10px; right: 12px; width: 10px; height: 10px; background: #dc3545; border-radius: 50%; border: 2px solid white;"></span>
+    </button>
+</div>
     </div>
+
 
     <div class="home-services-grid">
         <!-- 1. Handlers -->
@@ -8786,21 +8840,68 @@ canvas {
     </div>
 </div>
 <!-- NEW Spend Options Popup -->
+<!-- NEW Spend Options Popup (National Voucher Store) -->
 <div id="spendOptionsPopup" class="modal-overlay">
-    <div class="modal-content" style="text-align: center; padding-bottom: 30px;">
-        <button class="popup-close" onclick="closeModal('spendOptionsPopup')" style="position: absolute; right: 20px; top: 20px; background: transparent; border: none; font-size: 1.5rem; color: #666;">&times;</button>
-        <h3 style="margin-bottom: 10px; color: #333;">Spend Your Earnings</h3>
-        <p style="color: #888; margin-bottom: 25px;">Choose how you want to use your balance.</p>
+    <div class="modal-content" style="text-align: center; padding-bottom: 30px; background: #1a1a2e !important; color: white;">
+        <button class="popup-close" onclick="closeModal('spendOptionsPopup')" style="position: absolute; right: 20px; top: 20px; background: transparent; border: none; font-size: 1.5rem; color: #fff;">&times;</button>
+        
+        <h3 style="margin-bottom: 5px; color: #fff;"><i class="fas fa-store" style="color: #FFC107;"></i> Rewards Store</h3>
+        <p style="color: #aaa; margin-bottom: 20px; font-size: 0.9rem;">Spend your hard-earned wallet balance here.</p>
 
-        <div style="display: flex; flex-direction: column; gap: 15px;">
-            <button class="btn" onclick="alert('Airtime purchases coming soon!');" style="background: #f8f9fa; color: #333; border: 2px solid #ddd; padding: 16px; border-radius: 16px; justify-content: flex-start; font-size: 1rem;">
-                <i class="fas fa-mobile-alt" style="color: #007BFF; font-size: 1.5rem; width: 30px;"></i> Buy Airtime
+        <!-- Current Balance Display -->
+        <div style="background: #11141a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333;">
+            <span style="color: #888; font-size: 0.8rem; text-transform: uppercase;">Available Balance</span>
+            <div id="storeWalletBalance" style="font-size: 2rem; font-weight: 900; color: #28a745;">R0.00</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; text-align: left;">
+            
+            <!-- 1Voucher / KFC Option -->
+            <button class="btn" onclick="purchaseExternalVoucher('KFC / 1Voucher', 50)" style="background: #252540; color: white; border: 1px solid #444; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; transition: 0.2s;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-drumstick-bite" style="color: #e21326; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">KFC / 1Voucher</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">Digital PIN sent via WhatsApp</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #FFC107;">R50.00</span>
             </button>
-            <button class="btn" onclick="alert('Voucher purchases coming soon!');" style="background: #f8f9fa; color: #333; border: 2px solid #ddd; padding: 16px; border-radius: 16px; justify-content: flex-start; font-size: 1rem;">
-                <i class="fas fa-ticket-alt" style="color: #FFC107; font-size: 1.5rem; width: 30px;"></i> Buy Store Vouchers
+
+            <!-- Shoprite / Checkers Option -->
+            <button class="btn" onclick="purchaseExternalVoucher('Shoprite Grocery', 100)" style="background: #252540; color: white; border: 1px solid #444; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; transition: 0.2s;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-shopping-basket" style="color: #28a745; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">Shoprite / Checkers</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">Digital Grocery PIN</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #FFC107;">R100.00</span>
             </button>
-            <button class="btn" onclick="closeModal('spendOptionsPopup'); requestWithdrawal();" style="background: #e8f5e9; color: #28a745; border: 2px solid #c8e6c9; padding: 16px; border-radius: 16px; justify-content: flex-start; font-size: 1rem;">
-                <i class="fas fa-money-bill-wave" style="color: #28a745; font-size: 1.5rem; width: 30px;"></i> Withdraw to Bank Cash
+
+            <!-- Airtime Option -->
+            <button class="btn" onclick="purchaseExternalVoucher('Airtime / Data', 20)" style="background: #252540; color: white; border: 1px solid #444; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; transition: 0.2s;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-mobile-alt" style="color: #007BFF; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">Airtime or Data</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">Loaded to your registered number</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #FFC107;">R20.00</span>
+            </button>
+
+            <!-- Bank Withdrawal (Highest Threshold to encourage keeping money in app) -->
+            <button class="btn" onclick="closeModal('spendOptionsPopup'); requestWithdrawal();" style="background: #1e3a23; color: white; border: 1px solid #28a745; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; margin-top: 10px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-university" style="color: #28a745; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">Bank Cash Out</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">EFT processing takes 48hrs</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #28a745;">Min R150</span>
             </button>
         </div>
     </div>
@@ -9089,18 +9190,8 @@ canvas {
     </div>
 </nav>
 
-<div class="action-card" onclick="launchNativeNav(-26.2041, 28.0473)">
-    <div class="action-card-icon">
-        <i class="fas fa-location-arrow"></i>
-    </div>
-    <div class="action-card-text">
-        <h4>Navigate Now</h4>
-        <p>Premium turn-by-turn routing</p>
-    </div>
-</div>
-<!-- === HANDLER BOOKING POPUP === -->
-<!-- === HANDLER BOOKING POPUP === -->
-<!-- === HANDLER BOOKING POPUP === -->
+
+
 <!-- === HANDLER BOOKING POPUP === -->
 <div id="handlerBookingPopup" class="modal-overlay">
     <div class="modal-content" style="background: #141414 !important; border: 1px solid #333 !important; max-width: 450px !important;">
@@ -9217,6 +9308,74 @@ canvas {
         <button class="btn btn-primary" onclick="closeModal('emergencySentPopup')" style="border-radius: 12px; padding: 12px;">OK</button>
     </div>
 </div>
+
+
+<!-- NEW Spend Options Popup (National Voucher Store) -->
+<div id="spendOptionsPopup" class="modal-overlay">
+    <div class="modal-content" style="text-align: center; padding-bottom: 30px; background: #1a1a2e !important; color: white;">
+        <button class="popup-close" onclick="closeModal('spendOptionsPopup')" style="position: absolute; right: 20px; top: 20px; background: transparent; border: none; font-size: 1.5rem; color: #fff;">&times;</button>
+        
+        <h3 style="margin-bottom: 5px; color: #fff;"><i class="fas fa-store" style="color: #FFC107;"></i> Rewards Store</h3>
+        <p style="color: #aaa; margin-bottom: 20px; font-size: 0.9rem;">Spend your hard-earned wallet balance here.</p>
+
+        <!-- Current Balance Display -->
+        <div style="background: #11141a; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #333;">
+            <span style="color: #888; font-size: 0.8rem; text-transform: uppercase;">Available Balance</span>
+            <div id="storeWalletBalance" style="font-size: 2rem; font-weight: 900; color: #28a745;">R0.00</div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; text-align: left;">
+            
+            <!-- 1Voucher / KFC Option -->
+            <button class="btn" onclick="purchaseExternalVoucher('KFC / 1Voucher', 50)" style="background: #252540; color: white; border: 1px solid #444; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; transition: 0.2s;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-drumstick-bite" style="color: #e21326; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">KFC / 1Voucher</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">Digital PIN sent via WhatsApp</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #FFC107;">R50.00</span>
+            </button>
+
+            <!-- Shoprite / Checkers Option -->
+            <button class="btn" onclick="purchaseExternalVoucher('Shoprite Grocery', 100)" style="background: #252540; color: white; border: 1px solid #444; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; transition: 0.2s;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-shopping-basket" style="color: #28a745; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">Shoprite / Checkers</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">Digital Grocery PIN</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #FFC107;">R100.00</span>
+            </button>
+
+            <!-- Airtime Option -->
+            <button class="btn" onclick="purchaseExternalVoucher('Airtime / Data', 20)" style="background: #252540; color: white; border: 1px solid #444; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; transition: 0.2s;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-mobile-alt" style="color: #007BFF; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">Airtime or Data</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">Loaded to your registered number</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #FFC107;">R20.00</span>
+            </button>
+
+            <!-- Bank Withdrawal (Highest Threshold to encourage keeping money in app) -->
+            <button class="btn" onclick="closeModal('spendOptionsPopup'); requestWithdrawal();" style="background: #1e3a23; color: white; border: 1px solid #28a745; padding: 16px; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; font-size: 1rem; cursor: pointer; margin-top: 10px;">
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <i class="fas fa-university" style="color: #28a745; font-size: 1.8rem; width: 35px; text-align: center;"></i>
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-weight: 800;">Bank Cash Out</span>
+                        <span style="font-size: 0.75rem; color: #aaa;">EFT processing takes 48hrs</span>
+                    </div>
+                </div>
+                <span style="font-weight: 900; color: #28a745;">Min R150</span>
+            </button>
+        </div>
+    </div>
+</div>
 <script>
     function launchNativeNav(lat, lng) {
     if (window.AndroidNav) {
@@ -9245,8 +9404,6 @@ if (!window.saKeyLocations) {
         { name: "King Shaka International Airport, DBN", lat: -29.6144, lng: 31.1197, type: "airport" },
         { name: "Cape Town International Airport", lat: -33.9715, lng: 18.6021, type: "airport" },
         { name: "Lanseria International Airport, JHB", lat: -25.9385, lng: 27.9261, type: "airport" },
-        { name: "Kruger Mpumalanga International Airport", lat: -25.3850, lng: 31.1054, type: "airport" },
-        { name: "Bram Fischer International Airport, NLP", lat: -29.0935, lng: 26.3024, type: "airport" },
 
         // --- UNIVERSITIES / EDUCATION ---
         { name: "Wits University, Braamfontein", lat: -26.1929, lng: 28.0305, type: "school" },
@@ -9256,13 +9413,39 @@ if (!window.saKeyLocations) {
         { name: "UKZN Howard College, Durban", lat: -29.8665, lng: 30.9806, type: "school" },
         { name: "Stellenbosch University", lat: -33.9311, lng: 18.8659, type: "school" },
         { name: "TUT - Tshwane University of Technology", lat: -25.7313, lng: 28.1613, type: "school" },
+        { name: "University of South Africa (UNISA), Pretoria", lat: -25.7624, lng: 28.1994, type: "school" },
+        { name: "Rhodes University, Makhanda", lat: -33.3134, lng: 26.5204, type: "school" },
 
-        // --- HOSPITALS & CLINICS ---
+        // --- SCHOOLS ---
+        { name: "Grey College, Bloemfontein", lat: -29.1128, lng: 26.1983, type: "school" },
+        { name: "Rondebosch Boys' High School, Cape Town", lat: -33.9669, lng: 18.4735, type: "school" },
+        { name: "King Edward VII School, Johannesburg", lat: -26.1738, lng: 28.0614, type: "school" },
+        { name: "Durban High School, Berea", lat: -29.8492, lng: 31.0028, type: "school" },
+
+        // --- HOSPITALS, CLINICS & HEALTH ---
         { name: "Chris Hani Baragwanath Hospital, Soweto", lat: -26.2598, lng: 27.9392, type: "hospital" },
         { name: "Groote Schuur Hospital, Cape Town", lat: -33.9405, lng: 18.4633, type: "hospital" },
         { name: "Inkosi Albert Luthuli Hospital, DBN", lat: -29.8821, lng: 30.9416, type: "hospital" },
         { name: "Charlotte Maxeke Hospital, JHB", lat: -26.1754, lng: 28.0436, type: "hospital" },
         { name: "Steve Biko Academic Hospital, PTA", lat: -25.7314, lng: 28.2001, type: "hospital" },
+        { name: "Hillbrow Community Health Centre, JHB", lat: -26.1894, lng: 28.0449, type: "hospital" },
+        { name: "Albert Street Clinic, JHB Marshalltown", lat: -26.2081, lng: 28.0465, type: "hospital" },
+        { name: "Yeoville Clinic, Johannesburg", lat: -26.1788, lng: 28.0583, type: "hospital" },
+
+        // --- CHURCHES & RELIGIOUS ---
+        { name: "Regina Mundi Catholic Church, Soweto", lat: -26.2464, lng: 27.8703, type: "church" },
+        { name: "St. Mary's Cathedral, Johannesburg", lat: -26.1998, lng: 28.0454, type: "church" },
+        { name: "St. George's Cathedral, Cape Town", lat: -33.9251, lng: 18.4194, type: "church" },
+        { name: "Grace Bible Church, Soweto", lat: -26.2522, lng: 27.8596, type: "church" },
+        { name: "ZCC Moria Church, Polokwane", lat: -23.9012, lng: 30.1345, type: "church" },
+
+        // --- RESTAURANTS & FOOD ---
+        { name: "Sakhumzi Restaurant, Vilakazi St, Soweto", lat: -26.2383, lng: 27.9056, type: "restaurant" },
+        { name: "Chaf Pozi, Orlando Towers, Soweto", lat: -26.1925, lng: 27.9272, type: "restaurant" },
+        { name: "The Marble Restaurant, Rosebank", lat: -26.1469, lng: 28.0371, type: "restaurant" },
+        { name: "The Grillhouse, Rosebank", lat: -26.1458, lng: 28.0421, type: "restaurant" },
+        { name: "Moyo Restaurant, uShaka Marine World", lat: -29.8679, lng: 31.0478, type: "restaurant" },
+        { name: "Chef's Warehouse, Cape Town", lat: -33.9248, lng: 18.4201, type: "restaurant" },
 
         // --- GAUTENG MALLS ---
         { name: "Sandton City, Johannesburg", lat: -26.1076, lng: 28.0567, type: "mall" },
@@ -9275,18 +9458,11 @@ if (!window.saKeyLocations) {
         // --- KZN MALLS ---
         { name: "Gateway Theatre of Shopping, Umhlanga", lat: -29.7252, lng: 31.0637, type: "mall" },
         { name: "The Pavilion, Westville", lat: -29.8505, lng: 30.9329, type: "mall" },
-        { name: "Galleria Mall, Amanzimtoti", lat: -30.0435, lng: 30.8922, type: "mall" },
         { name: "Mega City, Umlazi", lat: -29.9678, lng: 30.9023, type: "mall" },
-        { name: "Midlands Mall, Pietermaritzburg", lat: -29.5768, lng: 30.3725, type: "mall" },
-        { name: "Boardwalk Inkwazi, Richards Bay", lat: -28.7512, lng: 32.0493, type: "mall" },
-        { name: "Cornubia Mall", lat: -29.7126, lng: 31.0538, type: "mall" },
-        { name: "Oceans Mall, Umhlanga", lat: -29.7275, lng: 31.0874, type: "mall" },
 
         // --- WESTERN CAPE MALLS ---
         { name: "Canal Walk, Cape Town", lat: -33.8929, lng: 18.5140, type: "mall" },
         { name: "V&A Waterfront", lat: -33.9037, lng: 18.4205, type: "mall" },
-        { name: "Tyger Valley Centre", lat: -33.8715, lng: 18.6322, type: "mall" },
-        { name: "Somerset Mall", lat: -34.0844, lng: 18.8239, type: "mall" },
 
         // --- TAXI RANKS ---
         { name: "Bree Street Taxi Rank, JHB", lat: -26.1995, lng: 28.0403, type: "rank" },
@@ -9295,14 +9471,10 @@ if (!window.saKeyLocations) {
         { name: "Pretoria Station Taxi Rank", lat: -25.7570, lng: 28.1873, type: "rank" },
         { name: "The Workshop Taxi Rank, Durban", lat: -29.8569, lng: 31.0256, type: "rank" },
         { name: "Warwick Junction, Durban", lat: -29.8550, lng: 31.0150, type: "rank" },
-        { name: "Umlazi Taxi Rank", lat: -29.9650, lng: 30.8850, type: "rank" },
-        { name: "Pinetown Taxi Rank", lat: -29.8159, lng: 30.8523, type: "rank" },
         { name: "Cape Town Station Deck", lat: -33.9230, lng: 18.4255, type: "rank" },
-        { name: "Bellville Taxi Rank", lat: -33.9015, lng: 18.6290, type: "rank" },
-        { name: "Khayelitsha Taxi Rank", lat: -34.0416, lng: 18.6657, type: "rank" }
+        { name: "Bellville Taxi Rank", lat: -33.9015, lng: 18.6290, type: "rank" }
     ];
 }
-
 // Make a safe local reference for legacy variables
 var saKeyLocations = window.saKeyLocations;
       // Helper to get locations sorted by distance
@@ -9352,7 +9524,7 @@ if (!firebase.apps.length) {
           const database = firebase.database();
           const auth = firebase.auth();
           const storage = firebase.storage();
-          mapboxgl.accessToken = 'pk.eyJ1IjoiZ29zb3V0aGFmcmljYSIsImEiOiJjbW80OG16b2kxNnphMnFyMGRjcnZzMG15In0.uq4JASBTHH4Z2TZoMoj5jQ';
+          mapboxgl.accessToken = '__MAPBOX_PUBLIC_TOKEN__';
           // Global variables
           // Global variables
           var map, geocoder, pickupGeocoder, parcelGeocoder, userId, commuterData, userMarker;
@@ -9498,6 +9670,7 @@ function updatePromoWalletDisplay() {
             }
           
  // --- Force Phone Number Check ---
+// --- Force Phone Number Check & Everyday Hotspot Check ---
 if (!commuterData.phone || commuterData.phone.trim() === '') {
     if (typeof window.lockPhoneModalOpen === 'function') {
         window.lockPhoneModalOpen();
@@ -9508,22 +9681,18 @@ if (!commuterData.phone || commuterData.phone.trim() === '') {
             phoneModal.classList.add('open');
         }
     }
+} else {
+    // Phone exists! Now check if they have set an Everyday Pick-up Hotspot
+    if (!commuterData.preferredLocation && !sessionStorage.getItem('hotspotPromptSkipped')) {
+        // Wait 3 seconds for the dashboard and map to load peacefully, then prompt them
+        setTimeout(() => {
+            if (typeof window.showPreferredLocationPopup === 'function') {
+                window.showPreferredLocationPopup();
+            }
+        }, 3000);
+    }
 }
 
-if (commuterData && commuterData.currentRequest) {
-    database.ref('requests/' + commuterData.currentRequest).once('value').then(snap => {
-        const req = snap.val();
-        if (!req) {
-            // Request doesn't exist, clear state
-            console.log("Stale trip detected - request missing. Clearing state.");
-            if (typeof forceClearTripState === 'function') forceClearTripState();
-        } else if (req.status === 'cancelled_by_admin' || req.status === 'cancelled_by_driver' ||
-                   req.status === 'cancelled_by_commuter' || req.status === 'completed' || req.status === 'rejected') {
-            console.log(`Stale trip detected - status: ${req.status}. Clearing state.`);
-            if (typeof forceClearTripState === 'function') forceClearTripState();
-        }
-    });
-}
             initializeUserEarnings();
             checkAndProcessNewReferral();
             checkAndProcessAdShareReward();
@@ -9545,6 +9714,7 @@ if (commuterData && commuterData.currentRequest) {
         handleLoginError("Session invalid. Please log in again.");
     });
 }
+// 1. Update this existing function
 window.saveEnforcedPhoneNumber = function(e) {
      if(e) {
          e.preventDefault();
@@ -9552,10 +9722,10 @@ window.saveEnforcedPhoneNumber = function(e) {
      }
 
      const inputVal = document.getElementById('enforcedPhoneInput').value;
-     const phone = inputVal.replace(/\s+/g, '').trim(); // Remove spaces
+     const phone = inputVal.replace(/\s+/g, '').trim();
 
      if (phone.length < 10) {
-         showGenericMessage("Invalid", "Please enter a valid phone number (at least 10 digits).", "fa-exclamation-triangle", "icon-warning");
+         showGenericMessage("Invalid", "Please enter a valid phone number.", "fa-exclamation-triangle", "icon-warning");
          return;
      }
 
@@ -9565,11 +9735,9 @@ window.saveEnforcedPhoneNumber = function(e) {
          btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
      }
 
-     // Save to Firebase
      database.ref(`commuters/${userId}`).update({ phone: phone }).then(() => {
-         if(commuterData) commuterData.phone = phone; // Update local memory
+         if(commuterData) commuterData.phone = phone; 
 
-         // 🚨 GATELOCK RELEASE: Disconnect the observer so the modal can close
          if (window.phoneModalObserver) {
              window.phoneModalObserver.disconnect();
              window.phoneModalObserver = null;
@@ -9578,32 +9746,26 @@ window.saveEnforcedPhoneNumber = function(e) {
          const modal = document.getElementById('phoneEnforcementModal');
          if(modal) {
              modal.classList.remove('open');
-             modal.style.setProperty('display', 'none', 'important'); // Force hide safely
+             modal.style.setProperty('display', 'none', 'important'); 
          }
 
-         // --- TRIGGER WHATSAPP WELCOME MESSAGE ---
          try {
              var cleanPhone = phone.replace(/\s+/g, '');
              var normalizedPhone = cleanPhone.startsWith('0') ? '27' + cleanPhone.substring(1) : cleanPhone;
              normalizedPhone = normalizedPhone.replace('+', '');
-
              var commuterName = commuterData.name || 'User';
-
              fetch('https://app.asiye.cloud/whatsapp_bot.php', {
                  method: 'POST',
                  headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({
-                     action: 'send_welcome',
-                     phone: normalizedPhone,
-                     name: commuterName
-                 })
+                 body: JSON.stringify({ action: 'send_welcome', phone: normalizedPhone, name: commuterName })
              }).catch(e => console.error("WhatsApp trigger error", e));
-         } catch (e) {
-             console.error("Failed to trigger WhatsApp", e);
-         }
-         // ----------------------------------------
+         } catch (e) {}
 
-         showToast("Phone number saved successfully!", "success");
+         // ✨ IMMEDIATELY TRIGGER THE HOTSPOT POPUP AFTER PHONE IS SAVED
+         setTimeout(() => {
+             window.showPreferredLocationPopup();
+         }, 500);
+
      }).catch(err => {
          if(btn) {
              btn.disabled = false;
@@ -9613,9 +9775,147 @@ window.saveEnforcedPhoneNumber = function(e) {
      });
 };
 
-// =================================================================
-// ACTIVE GATELOCK SENTINEL: Prevents Programmatic Closures
-// =================================================================
+// 2. Add these NEW functions right below the function above
+window.showPreferredLocationPopup = async function() {
+    const popup = document.getElementById('genericMessagePopup');
+    
+    // Add special class to hide close 'X' button
+    popup.classList.add('force-hotspot');
+
+    // Style and inject HTML (NO SKIP BUTTON)
+    popup.innerHTML = `
+        <div class="modal-content" style="text-align: left; padding: 30px 25px !important; background: #1e1e1e !important; color: white !important; border-radius: 24px !important; border: 1px solid #333 !important; max-width: 400px; margin: 0 auto; box-shadow: 0 20px 50px rgba(0,0,0,0.6) !important;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <i class="fas fa-fire" style="font-size: 3.5rem; color: #FFC107; margin-bottom: 15px; filter: drop-shadow(0 0 15px rgba(255,193,7,0.4));"></i>
+                <h3 style="color: #ffffff !important; margin-bottom: 10px; font-weight: 900; font-size: 1.5rem;">Everyday Pick-up Hotspot</h3>
+                <p style="color: #cccccc !important; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.5;">Where do you usually catch your transport? We share this securely with drivers to ensure they patrol your area.</p>
+            </div>
+            
+            <label style="color: #FFC107; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; margin-bottom: 8px; display: block;">Search Address or Rank</label>
+            <div id="prefLocationGeocoder" style="margin-bottom: 25px; border-radius: 12px; overflow: visible;"></div>
+            <input type="hidden" id="prefLocLat"><input type="hidden" id="prefLocLng"><input type="hidden" id="prefLocText">
+            
+            <button id="saveHotspotBtn" class="btn btn-primary" onclick="savePreferredLocation()" style="width: 100%; padding: 16px; font-weight: 900; background: #FFC107 !important; color: #000000 !important; border: none; border-radius: 16px; box-shadow: 0 4px 15px rgba(255, 193, 7, 0.3); font-size: 1.1rem; text-transform: uppercase;">
+                Save Hotspot
+            </button>
+        </div>
+    `;
+    
+    // Force modal to open and lock it above everything
+    popup.style.setProperty('display', 'flex', 'important');
+    popup.style.setProperty('z-index', '999999', 'important');
+    popup.classList.add('open');
+
+    // Show overlay, lock it
+    let overlay = document.getElementById('popupOverlay');
+    if(overlay) {
+        overlay.style.setProperty('display', 'block', 'important');
+        overlay.style.setProperty('z-index', '999998', 'important');
+        overlay.style.setProperty('background', 'rgba(0,0,0,0.85)', 'important');
+        overlay.classList.add('open');
+    }
+
+    // Initialize Geocoder for the search bar
+    const geocoderOptions = {
+        accessToken: mapboxgl.accessToken,
+        mapboxgl: mapboxgl,
+        marker: false,
+        placeholder: 'E.g. Jabulani Mall, Soweto'
+    };
+
+    const prefGeocoder = new MapboxGeocoder(geocoderOptions);
+    document.getElementById('prefLocationGeocoder').appendChild(prefGeocoder.onAdd(map));
+    
+    // Capture user selection
+    prefGeocoder.on('result', (e) => {
+        document.getElementById('prefLocLng').value = e.result.geometry.coordinates[0];
+        document.getElementById('prefLocLat').value = e.result.geometry.coordinates[1];
+        document.getElementById('prefLocText').value = e.result.place_name;
+    });
+
+    // Auto-fill with current real-time GPS
+    if (window.commuterLat && window.commuterLng) {
+        try {
+            const address = await getAddressFromCoordsPromise(window.commuterLng, window.commuterLat);
+            prefGeocoder.setInput(address);
+            document.getElementById('prefLocLng').value = window.commuterLng;
+            document.getElementById('prefLocLat').value = window.commuterLat;
+            document.getElementById('prefLocText').value = address;
+        } catch(e) {}
+    }
+
+    // 🔥 GATELOCK OBSERVER: Continuously enforce modal stays open if not saved
+    const observer = new MutationObserver(() => {
+        if (!commuterData.preferredLocation && (!popup.classList.contains('open') || popup.style.display === 'none')) {
+            popup.style.setProperty('display', 'flex', 'important');
+            popup.classList.add('open');
+            if(overlay) overlay.style.setProperty('display', 'block', 'important');
+        }
+    });
+    observer.observe(popup, { attributes: true, attributeFilter: ['style', 'class'] });
+    window.hotspotModalObserver = observer;
+};
+// Function to handle the "Skip" action gracefully
+window.skipPreferredLocation = function() {
+    // Save to session storage so we don't ask again until they restart the app
+    sessionStorage.setItem('hotspotPromptSkipped', 'true');
+    closeModal('genericMessagePopup');
+};
+window.savePreferredLocation = function() {
+    const lat = document.getElementById('prefLocLat').value;
+    const lng = document.getElementById('prefLocLng').value;
+    const text = document.getElementById('prefLocText').value;
+
+    if (!lat || !lng || !text) {
+        showToast("Please search and select a valid location.", "danger");
+        return;
+    }
+
+    const btn = document.getElementById('saveHotspotBtn');
+    if(btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    }
+
+    database.ref(`commuters/${userId}/preferredLocation`).set({
+        lat: parseFloat(lat),
+        lng: parseFloat(lng),
+        address: text,
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        if(commuterData) {
+            commuterData.preferredLocation = { lat: parseFloat(lat), lng: parseFloat(lng), address: text };
+        }
+
+        // Disconnect the strict observer so it can close
+        if (window.hotspotModalObserver) {
+            window.hotspotModalObserver.disconnect();
+            window.hotspotModalObserver = null;
+        }
+
+        const popup = document.getElementById('genericMessagePopup');
+        if (popup) {
+            popup.classList.remove('force-hotspot');
+            popup.classList.remove('open');
+            popup.style.setProperty('display', 'none', 'important');
+        }
+        
+        const overlay = document.getElementById('popupOverlay');
+        if (overlay) {
+            overlay.classList.remove('open');
+            overlay.style.setProperty('display', 'none', 'important');
+        }
+
+        showToast("Hotspot saved! Drivers will now see your area.", "success");
+    }).catch(err => {
+        if(btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'Save Hotspot';
+        }
+        showToast("Error saving location. Check connection.", "danger");
+    });
+};
+
 // =================================================================
 // 🛡️ HOISTED ACTIVE GATELOCK SENTINEL: Prevents Programmatic Closures
 // =================================================================
@@ -10485,7 +10785,26 @@ window.hideModernDashboard = function() {
           var fName = window.commuterData.name || window.commuterData.firstName || '';
           var lName = window.commuterData.surname || window.commuterData.lastName || '';
           var fullName = `${fName} ${lName}`.trim() || 'Passenger';
+// Add inside function updateDashboardUserInfo() { ... }
+const totalTrips = window.commuterData.totalTrips || 0;
+const tripsTowardsNextReward = totalTrips % 15;
+const progressPercentage = (tripsTowardsNextReward / 15) * 100;
 
+const progressBar = document.getElementById('loyaltyProgressBar');
+const progressText = document.getElementById('loyaltyProgressText');
+
+if (progressBar && progressText) {
+    // If they just hit the milestone
+    if (totalTrips > 0 && tripsTowardsNextReward === 0) {
+        progressBar.style.width = '100%';
+        progressText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i>';
+        progressText.style.color = '#28a745';
+    } else {
+        progressBar.style.width = `${progressPercentage}%`;
+        progressText.textContent = `${tripsTowardsNextReward}/15`;
+        progressText.style.color = '#FFC107';
+    }
+}
           const greetingEl = document.getElementById('homeGreetingName');
           if (greetingEl) {
               greetingEl.textContent = `Welcome, ${fullName}`;
@@ -10557,9 +10876,106 @@ window.hideModernDashboard = function() {
           document.getElementById('paymentNoticesList').innerHTML = html;
       });
   };
-  window.showGeneralNotices = function() {
-      showGenericMessage("Notifications", "You are all caught up! No new alerts.", "fa-bell", "icon-info");
-  };
+ // =======================================================================
+// UPDATED: NOTIFICATIONS POPUP (Now houses the Loyalty Tracker)
+// =======================================================================
+// =======================================================================
+// UPDATED: NOTIFICATIONS POPUP (Fixed Text Visibility)
+// =======================================================================
+window.showGeneralNotices = function() {
+    closeAllPopups();
+
+    // 1. Hide the red notification dot once the user opens the menu
+    const bellBadge = document.getElementById('bellUnreadBadge');
+    if (bellBadge) bellBadge.style.display = 'none';
+
+    // 2. Calculate Loyalty Progress dynamically
+    const totalTrips = (window.commuterData && window.commuterData.totalTrips) ? window.commuterData.totalTrips : 0;
+    const tripsTowardsNextReward = totalTrips % 15;
+    const progressPercentage = (tripsTowardsNextReward / 15) * 100;
+
+    let progressHtml = '';
+    if (totalTrips > 0 && tripsTowardsNextReward === 0) {
+        progressHtml = `<div style="font-weight: 900; color: #28a745 !important; font-size: 1.1rem;"><i class="fas fa-check-circle"></i> Ready!</div>`;
+    } else {
+        progressHtml = `<div style="font-weight: 900; color: #FFC107 !important; font-size: 1.1rem;">${tripsTowardsNextReward}/15</div>`;
+    }
+
+    const popup = document.getElementById('genericMessagePopup');
+    
+    // Reset standard popup styling classes
+    popup.className = 'modal-overlay';
+    popup.style.alignItems = 'center';
+    popup.style.justifyContent = 'center';
+
+    // 3. Inject the UI (Added !important to all text colors and borders to override global CSS)
+    popup.innerHTML = `
+        <div class="modal-content" style="background:#141414 !important; max-width: 400px !important; margin: auto !important; padding: 25px !important; border-radius: 24px !important; text-align: left !important; height: auto !important; box-shadow: 0 15px 35px rgba(0,0,0,0.6) !important; border: 1px solid #333 !important;">
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                <h3 style="color:#ffffff !important; margin:0; font-weight:800; text-shadow: none !important;"><i class="fas fa-bell" style="color:#007BFF !important;"></i> Notifications</h3>
+                <button onclick="closeModal('genericMessagePopup')" style="background:none; border:none; font-size:1.5rem; color:#888888 !important; cursor:pointer;">&times;</button>
+            </div>
+
+            <!-- LOYALTY TRACKER CARD -->
+            <div style="background: linear-gradient(135deg, #1e1e1e, #2a2a2a) !important; border-radius: 20px; padding: 20px; margin-bottom: 20px; border: 1px solid #333 !important; box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #ffffff !important; font-size: 1.1rem; font-weight: 800; text-shadow: none !important;">
+                        🍗 Ride to Eat Free <br><span style="color:#FFC107 !important;">Shoprite or KFC</span>
+                    </h3>
+                </div>
+                
+                <p style="color: #dddddd !important; font-size: 0.85rem; margin-bottom: 8px; line-height: 1.5; text-shadow: none !important;">
+                    Keep riding and earn a <strong style="color:#ffffff !important;">FREE KFC Voucher</strong> or <strong style="color:#ffffff !important;">Shoprite 1Voucher</strong> reward!
+                </p>
+                <p style="color: #aaaaaa !important; font-size: 0.8rem; margin-bottom: 15px; font-style: italic; text-shadow: none !important;">
+                    Every trip brings you closer to your next free meal.
+                </p>
+                
+                <div style="display: flex; align-items: center; gap: 15px;">
+                    <div style="flex: 1; height: 8px; background: #333333 !important; border-radius: 10px; overflow: hidden;">
+                        <div style="height: 100%; width: ${progressPercentage}%; background: linear-gradient(90deg, #FFC107, #ff9800) !important; border-radius: 10px; transition: width 1s ease-in-out;"></div>
+                    </div>
+                    ${progressHtml}
+                </div>
+            </div>
+            
+            <p style="text-align:center; color:#aaaaaa !important; font-size: 0.9rem; margin-top: 20px; margin-bottom: 10px; text-shadow: none !important;">
+                You are all caught up! No other new alerts.
+            </p>
+            
+            <button class="gocab-book-btn" onclick="closeModal('genericMessagePopup')" style="width: 100%; padding: 14px; background: #333333 !important; color: #ffffff !important; border: none !important; margin-top: 10px; border-radius: 12px; font-weight: bold;">Close</button>
+        </div>
+    `;
+    
+    openModal('genericMessagePopup');
+};
+
+// =======================================================================
+// UPDATED: DASHBOARD USER INFO (Removed obsolete tracker references)
+// =======================================================================
+window.updateDashboardUserInfo = function() {
+    // Safely grab the data whether it's attached to window or just a global variable
+    const data = typeof commuterData !== 'undefined' ? commuterData : window.commuterData;
+
+    if (data) {
+        var fName = data.name || data.firstName || '';
+        var lName = data.surname || data.lastName || '';
+        var fullName = `${fName} ${lName}`.trim();
+
+        if (!fullName || fullName === "") fullName = 'Passenger';
+
+        const greetingEl = document.getElementById('homeGreetingName');
+        if (greetingEl) {
+            greetingEl.textContent = `Welcome, ${fullName}`;
+        }
+
+        const picEl = document.getElementById('homeProfilePic');
+        if (picEl && data.profile_picture_url) {
+            picEl.src = getValidImageUrl(data.profile_picture_url);
+        }
+    }
+};
 
 
   window.openMinibusTaxis = function() {
@@ -10655,30 +11071,7 @@ window.openEHailingTaxis = window.openAsiyeGoTaxis;
       }
   };
   const originalUpdateSideMenuData = window.updateSideMenuData;
-  window.updateDashboardUserInfo = function() {
-      // Safely grab the data whether it's attached to window or just a global variable
-      const data = typeof commuterData !== 'undefined' ? commuterData : window.commuterData;
-
-      if (data) {
-          var fName = data.name || data.firstName || '';
-          var lName = data.surname || data.lastName || '';
-          var fullName = `${fName} ${lName}`.trim();
-
-          if (!fullName || fullName === "") fullName = 'Passenger';
-
-          const greetingEl = document.getElementById('homeGreetingName');
-          if (greetingEl) {
-              greetingEl.textContent = `Welcome, ${fullName}`;
-          }
-
-          const picEl = document.getElementById('homeProfilePic');
-          if (picEl && data.profile_picture_url) {
-              picEl.src = getValidImageUrl(data.profile_picture_url);
-          }
-      }
-  };
-
-        function handleLogout() {
+          function handleLogout() {
               console.log("Logging out...");
               setLoading(true); // Assuming you have a setLoading function or similar UI feedback
 
@@ -11594,73 +11987,50 @@ window.handleIncomingNotification = function(notification) {
           console.log("Stale request cleaned. User is free to request again.");
       }
           // Add this function to index.html
+// =======================================================================
+// PERSISTENT COMMUTER DROP-OFF & RATING POPUP
+// =======================================================================
 window.showDropOffPopup = function(tripData) {
     console.log("Showing drop-off popup with data:", tripData);
 
-    closeAllPopups();
+    // 1. Save state to localStorage to survive page refreshes
+    localStorage.setItem('unratedTrip_Commuter', JSON.stringify(tripData));
 
-    const rawAmount = tripData.paidAmount || tripData.amount || 0;
-    const appliedCredit = tripData.appliedCredit || 0;
-    const paymentMethod = tripData.paymentMethod || 'Cash';
-    const driverId = tripData.driverId;
-    const driverName = tripData.driverName || 'Your driver';
-    const finalAmount = tripData.finalAmount || Math.max(0, rawAmount - appliedCredit);
-
-    const popup = document.getElementById('genericMessagePopup');
-
-    // Build payment display HTML
-    let paymentHtml = '';
-    let creditNoticeHtml = '';
-
-    if (appliedCredit > 0) {
-        paymentHtml = `
-            <div style="background: #e8f5e9; padding: 15px; border-radius: 16px; margin: 15px 0; border: 1px solid #c8e6c9;">
-                <p style="margin: 0; color: #2e7d32; font-size: 0.85rem; font-weight: 700;">Promo Applied!</p>
-                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 5px;">
-                    <span style="font-size: 0.9rem; color: #666;">Original fare:</span>
-                    <span style="font-size: 1rem; color: #999; text-decoration: line-through;">R${rawAmount}</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                    <span style="font-size: 0.9rem; color: #28a745;">Promo credit applied:</span>
-                    <span style="font-size: 1rem; color: #28a745; font-weight: 800;">-R${appliedCredit.toFixed(2)}</span>
-                </div>
-                <div style="border-top: 1px solid #c8e6c9; margin-top: 8px; padding-top: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: baseline;">
-                        <span style="font-size: 1rem; font-weight: 800; color: #333;">Remaining to pay:</span>
-                        <span style="font-size: 1.4rem; font-weight: 900; color: #28a745;">R${finalAmount}</span>
-                    </div>
-                </div>
-            </div>
-        `;
-        creditNoticeHtml = `<div style="font-size: 0.85rem; color: #007BFF; font-weight: 700; margin-top: 5px;">Please pay R${finalAmount} via ${payMethod.toUpperCase()}</div>`;
-    } else if (payMethod.toLowerCase() === 'card') {
-        paymentHtml = `
-            <div style="background: #e6f2ff; padding: 15px; border-radius: 16px; margin: 15px 0; border: 1px solid #b3d7ff;">
-                <p style="margin: 0; color: #007BFF; font-size: 0.85rem; font-weight: 700;">Prepaid Card Payment</p>
-                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 5px;">
-                    <span style="font-size: 1rem; font-weight: 800; color: #333;">Amount paid:</span>
-                    <span style="font-size: 1.4rem; font-weight: 900; color: #007BFF;">R${finalAmount}</span>
-                </div>
-                <p style="margin: 10px 0 0 0; font-size: 0.8rem; color: #666;">No cash needed. Thank you for riding with Asiye!</p>
-            </div>
-        `;
-    } else {
-        paymentHtml = `
-            <div style="background: #e8f5e9; padding: 15px; border-radius: 16px; margin: 15px 0; border: 1px solid #c8e6c9;">
-                <p style="margin: 0; color: #2e7d32; font-size: 0.85rem; font-weight: 700;">Please pay driver:</p>
-                <div style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 5px;">
-                    <span style="font-size: 1rem; font-weight: 800; color: #333;">Amount:</span>
-                    <span style="font-size: 1.8rem; font-weight: 900; color: #28a745;">R${finalAmount}</span>
-                </div>
-                <p style="margin: 10px 0 0 0; font-size: 0.8rem; color: #666;">Payment Method: Cash</p>
-            </div>
-        `;
+    // Prevent duplicate popups from spawning
+    if (document.getElementById("ratingModalContainer")) {
+        console.log("Rating modal is already open, ignoring duplicate trigger.");
+        return;
     }
 
-    popup.innerHTML = `
-        <div class="modal-content" style="background: #fff !important; color: #111 !important; border-radius: 24px !important; padding: 30px 20px !important; max-width: 400px !important; margin: auto !important; text-align: center !important;">
-            <button class="popup-close" onclick="closeModal('genericMessagePopup')" style="position: absolute; right: 20px; top: 20px; background: transparent; border: none; font-size: 1.5rem; color: #888; cursor: pointer;">&times;</button>
+    closeAllPopups();
 
+    // Safely prioritize actual paid/final amounts over estimated calculations
+    var rawAmount = tripData?.paidAmount ? parseFloat(tripData.paidAmount) : (tripData?.amount ? parseFloat(tripData.amount) : parseFloat(tripData?.calculatedPrice || 0));
+    var appliedCredit = tripData?.appliedCredit || 0;
+
+    var fareAmount = Math.round(rawAmount);
+    var cashToPay = tripData?.finalAmount !== undefined ? parseFloat(tripData.finalAmount) : Math.max(0, fareAmount - appliedCredit);
+
+    const payMethod = tripData?.paymentMethod || 'Cash';
+    const driverId = tripData?.driverId || tripData?.taxiId || null;
+    const driverName = tripData?.driverName || 'Your driver';
+
+    var displayAmount = fareAmount;
+    var displayMethod = payMethod;
+    var creditNoticeHtml = '';
+
+    if (payMethod.toLowerCase() === 'credit' && appliedCredit > 0) {
+        displayAmount = cashToPay;
+        displayMethod = 'Cash (Promo Applied)';
+        creditNoticeHtml = `<div style="font-size: 0.85rem; color: #007BFF; font-weight: 700; margin-top: 5px;">R${appliedCredit.toFixed(2)} Promo Credit Paid Automatically</div>`;
+    } else if (payMethod.toLowerCase() === 'card') {
+        displayMethod = 'Card (Prepaid)';
+    }
+
+    // Notice: The Close (X) button has been removed to enforce rating submission
+    const popupContent = `
+        <div class="modal-content" style="text-align: center; background: #fff !important; color: #111 !important; border-radius: 24px !important; padding: 30px 20px !important; max-width: 400px !important; margin: auto !important;">
+            
             <div style="width: 70px; height: 70px; background: #e8f5e9; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
                 <i class="fas fa-flag-checkered" style="font-size: 2rem; color: #28a745;"></i>
             </div>
@@ -11668,52 +12038,55 @@ window.showDropOffPopup = function(tripData) {
             <h3 style="margin-top: 0; margin-bottom: 5px; color: #111; font-weight: 800;">Trip Completed!</h3>
             <p style="color: #666; margin-bottom: 15px;">Thank you for riding with ${driverName}</p>
 
-            ${paymentHtml}
-            ${creditNoticeHtml}
+            <div style="background: #e8f5e9; padding: 15px; border-radius: 16px; margin: 15px 0; border: 1px solid #c8e6c9;">
+                <p style="margin: 0; color: #2e7d32; font-size: 0.95rem; font-weight: 700;">Please pay driver:</p>
+                <h2 style="margin: 5px 0 0 0; color: #28a745; font-size: 2.2rem; font-weight: 900;">R${displayAmount}</h2>
+                <span style="font-size: 0.9rem; color: #666; font-weight:bold;">Payment Method: ${displayMethod}</span>
+                ${creditNoticeHtml}
+            </div>
 
             <div style="margin: 20px 0;">
                 <p style="color: #666; margin-bottom: 10px;">How was your trip?</p>
                 <div class="stars" style="font-size: 2.5em; color: #ffc107; display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
-                    ${[1,2,3,4,5].map(r => `<span class="star" data-rating="${r}" style="cursor:pointer; transition: transform 0.2s;">&#9733;</span>`).join('')}
+                    ${[1,2,3,4,5].map(r => `<span class="star" data-rating="${r}" style="cursor:pointer; transition: transform 0.2s; color: #e0e0e0;">&#9733;</span>`).join('')}
                 </div>
                 <textarea id="ratingComment" placeholder="Add a comment... (optional)" style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid #ddd; margin-bottom: 15px; resize: vertical; font-family: inherit;"></textarea>
             </div>
 
-            <button id="submitRatingBtn" class="btn btn-success" style="width: 100%; padding: 14px; border-radius: 16px; font-weight: 800; font-size: 1rem; background: #28a745; color: white; border: none; cursor: pointer;">
+            <button id="submitRatingBtn" class="btn btn-success" style="width: 100%; padding: 16px; border-radius: 16px; font-weight: 900; font-size: 1.1rem; background: #28a745; color: white; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(40,167,69,0.3);">
                 Submit Rating
             </button>
         </div>
     `;
 
-    openModal('genericMessagePopup');
+    const ratingModal = document.createElement('div');
+    ratingModal.id = "ratingModalContainer";
+    ratingModal.className = 'modal-overlay open';
+    // Force highest possible z-index
+    ratingModal.style.cssText = 'display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 2147483647 !important; pointer-events: auto !important; background: rgba(0,0,0,0.85) !important; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; align-items: center; justify-content: center;';
+    ratingModal.innerHTML = popupContent;
+    document.body.appendChild(ratingModal);
 
-    // Handle star rating
-    let selectedRating = 0;
-    const stars = popup.querySelectorAll('.star');
+    const stars = ratingModal.querySelectorAll('.star');
+    var selectedRating = 0;
+
     stars.forEach(star => {
         const rating = parseInt(star.dataset.rating);
         star.onclick = () => {
             selectedRating = rating;
-            stars.forEach(s => {
-                s.style.color = parseInt(s.dataset.rating) <= rating ? '#ffc107' : '#e0e0e0';
-            });
+            stars.forEach(s => s.style.color = parseInt(s.dataset.rating) <= rating ? '#ffc107' : '#e0e0e0');
         };
     });
 
-    // Handle rating submission
-    const submitBtn = document.getElementById('submitRatingBtn');
-    submitBtn.onclick = () => {
-        if (selectedRating === 0) {
-            showGenericMessage("Rating Required", "Please select a star rating for your driver.", "fa-star", "icon-warning");
-            return;
-        }
+    ratingModal.querySelector('#submitRatingBtn').onclick = function() {
+        if (selectedRating === 0) return showGenericMessage("Rating Required", "Please select a star rating for your driver.", "fa-star", "icon-warning");
 
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
-        submitBtn.disabled = true;
+        const btn = ratingModal.querySelector('#submitRatingBtn');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+        btn.disabled = true;
 
         const comment = document.getElementById('ratingComment').value;
 
-        // Save rating to database
         if (driverId && userId) {
             const ratingData = {
                 rating: selectedRating,
@@ -11723,55 +12096,70 @@ window.showDropOffPopup = function(tripData) {
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             };
 
-            // Save to driver's ratings
             database.ref(`taxis/${driverId}/ratings`).push(ratingData).then(() => {
-                // Update driver's average rating
                 database.ref(`taxis/${driverId}`).once('value').then(snapshot => {
                     const driver = snapshot.val();
                     if (driver) {
                         const currentAvg = driver.rating || 5.0;
                         const totalRatings = driver.totalRatings || 0;
                         const newAvg = ((currentAvg * totalRatings) + selectedRating) / (totalRatings + 1);
-
-                        database.ref(`taxis/${driverId}`).update({
-                            rating: newAvg,
-                            totalRatings: totalRatings + 1
-                        });
+                        database.ref(`taxis/${driverId}`).update({ rating: newAvg, totalRatings: totalRatings + 1 });
                     }
                 });
 
-                // Also save to the request record
-                if (tripData.requestId) {
-                    database.ref(`requests/${tripData.requestId}`).update({
+                const activeReqId = tripData.requestId || window.currentRequestId || localStorage.getItem('currentRequestId');
+                if (activeReqId) {
+                    database.ref(`requests/${activeReqId}`).update({
                         passengerRating: selectedRating,
                         passengerComment: comment || '',
+                        passengerRated: true,
                         ratedAt: firebase.database.ServerValue.TIMESTAMP
                     });
                 }
 
-                closeModal('genericMessagePopup');
-                showGenericMessage("Thank You!", "Your rating has been submitted.", "fa-check-circle", "icon-success");
+                if (driverId) {
+                    const chatId = generateChatId(userId, driverId);
+                    database.ref(`chats/${chatId}`).remove().catch(()=>{});
+                }
 
-                // Refresh dashboard
+                // 2. Clear from local storage so it doesn't pop up again
+                localStorage.removeItem('unratedTrip_Commuter');
+                
+                // 3. Redirect to dashboard
+                showGenericMessage("Thank You!", "Your rating has been submitted.", "fa-check-circle", "icon-success");
                 setTimeout(() => {
-                    if (typeof showModernDashboard === 'function') showModernDashboard();
+                    window.location.href = 'dashboard.html';
                 }, 1500);
 
             }).catch(err => {
                 console.error("Error saving rating:", err);
                 showGenericMessage("Error", "Could not submit rating. Please try again.", "fa-exclamation-circle", "icon-danger");
-                submitBtn.innerHTML = 'Submit Rating';
-                submitBtn.disabled = false;
+                btn.innerHTML = 'Submit Rating';
+                btn.disabled = false;
             });
         } else {
-            closeModal('genericMessagePopup');
+            // 2. Clear from local storage
+            localStorage.removeItem('unratedTrip_Commuter');
+            
+            // 3. Redirect to dashboard
             showGenericMessage("Thank You!", "Your rating has been recorded.", "fa-check-circle", "icon-success");
             setTimeout(() => {
-                if (typeof showModernDashboard === 'function') showModernDashboard();
+                window.location.href = 'dashboard.html';
             }, 1500);
         }
     };
 };
+
+// 4. BOOT CHECKER: If the user refreshes, force the popup back open immediately
+document.addEventListener('DOMContentLoaded', () => {
+    const pendingRating = localStorage.getItem('unratedTrip_Commuter');
+    if (pendingRating) {
+        console.log("Recovered unrated trip. Forcing popup...");
+        setTimeout(() => {
+            window.showDropOffPopup(JSON.parse(pendingRating));
+        }, 1500);
+    }
+});
           function showActiveTripBanner() {
               const banner = document.getElementById('activeTripBanner');
               banner.style.display = 'flex';
@@ -14430,20 +14818,346 @@ window.showDropOffPopup = function(reqData) {
               document.getElementById('routeDirections').innerHTML = `<p><strong>Updated ETA:</strong> ${routeData.eta} min</p><p><strong>Distance:</strong> ${routeData.distance} km</p>`;
           }
 
-        function setupEnhancedSearch() {
-      const commonOptions = {
-          accessToken: mapboxgl.accessToken,
-          mapboxgl: mapboxgl,
-          marker: false,
-          types: 'poi,place,address,locality,neighborhood',
-          // Update proximity here as well
-          proximity: [commuterLng, commuterLat]
-      };
+     // =======================================================================
+// 1. REPLACED: INITIALIZE DUAL INPUTS (Native HTML Inputs)
+// =======================================================================
+// =======================================================================
+// 1. INITIALIZE DUAL INPUTS (Native HTML Inputs)
+// =======================================================================
+window.initDualGeocoders = async function() {
+    const destContainer = document.getElementById('uber-dest-container');
+    const pickupContainer = document.getElementById('uber-pickup-container');
 
-      if (geocoder) geocoder.setProximity(commonOptions.proximity);
-      if (parcelGeocoder) parcelGeocoder.setProximity(commonOptions.proximity);
-      if (pickupGeocoder) pickupGeocoder.setProximity(commonOptions.proximity);
-  }
+    if (destContainer) {
+        destContainer.innerHTML = `
+            <input type="text" id="uberDestInput" class="mapboxgl-ctrl-geocoder--input" 
+                   placeholder="Where to?" 
+                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
+    }
+
+    if (pickupContainer) {
+        pickupContainer.innerHTML = `
+            <input type="text" id="uberPickupInput" class="mapboxgl-ctrl-geocoder--input" 
+                   placeholder="Current Location" 
+                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
+    }
+
+    window.setupDestAutocomplete();
+
+    const pickupInput = document.getElementById('uberPickupInput');
+    if (pickupInput) {
+        pickupInput.value = "Fetching current address...";
+    }
+
+    // Helper to resolve and display the physical address
+    function updatePickupInputWithAddress(lng, lat) {
+        getAddressFromCoordsPromise(lng, lat).then(addr => {
+            if (pickupInput) {
+                pickupInput.value = addr.split(',')[0].trim();
+            }
+        }).catch(() => {
+            if (pickupInput) pickupInput.value = "Current Location";
+        });
+    }
+
+    // Request active high-accuracy geolocation on launch
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                // Update global positions
+                commuterLat = lat;
+                commuterLng = lng;
+                window.commuterLat = lat;
+                window.commuterLng = lng;
+                
+                if (userMarker) userMarker.setLngLat([lng, lat]);
+                
+                updatePickupInputWithAddress(lng, lat);
+            },
+            (error) => {
+                console.warn("GPS tracking timed out, using background position:", error);
+                if (commuterLat && commuterLng) {
+                    updatePickupInputWithAddress(commuterLng, commuterLat);
+                } else {
+                    if (pickupInput) pickupInput.value = "Current Location";
+                }
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 10000 }
+        );
+    } else if (commuterLat && commuterLng) {
+        updatePickupInputWithAddress(commuterLng, commuterLat);
+    } else {
+        if (pickupInput) pickupInput.value = "Current Location";
+    }
+};
+// =======================================================================
+// UI HELPER: SHOW SEARCHING SPINNER
+// =======================================================================
+window.showSearchingIndicator = function() {
+    const listDiv = document.getElementById('uber-suggestions-list');
+    if (!listDiv) return;
+
+    listDiv.innerHTML = `
+        <div style="padding: 30px 20px; text-align: center; color: #888;">
+            <div class="spinner" style="margin: 0 auto 10px auto; width: 24px; height: 24px; border-width: 3px; border-color: #333; border-left-color: #007BFF;"></div>
+            <div style="font-size: 0.9rem; font-weight: 500;">Searching locations...</div>
+        </div>
+    `;
+};
+
+// =======================================================================
+// RENDER COMPREHENSIVE CATEGORIES & ICONS
+// =======================================================================
+// =======================================================================
+// RENDER COMPREHENSIVE CATEGORIES & ICONS (MAPBOX VERSION)
+// =======================================================================
+window.renderUberSuggestions = function(features, type) {
+    const listDiv = document.getElementById('uber-suggestions-list');
+    if (!listDiv) return;
+
+    if (!features || features.length === 0) {
+        listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;">No matching locations found</div>`;
+        return;
+    }
+
+    var html = '';
+    const escHtml = (text) => text ? text.toString().replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[m])) : '';
+
+    features.forEach(f => {
+        const placeName = f.text || (f.place_name ? f.place_name.split(',')[0] : 'Location');
+        const fullAddress = f.place_name || placeName;
+
+        var addressSubtitle = fullAddress.replace(placeName, '').replace(/^,\s*/, '').trim();
+        if (!addressSubtitle) addressSubtitle = "South Africa";
+
+        var distStr = "";
+        if (window.commuterLat && window.commuterLng && f.geometry && f.geometry.coordinates) {
+            const d = calculateDistance(window.commuterLat, window.commuterLng, f.geometry.coordinates[1], f.geometry.coordinates[0]);
+            distStr = d < 1 ? (d * 1000).toFixed(0) + " m" : d.toFixed(1) + " km";
+        }
+
+        const safeFullAddress = escHtml(fullAddress);
+        const nameLower = placeName.toLowerCase();
+        
+        const fProperties = f.properties || {};
+        const categories = (fProperties.category || '').toLowerCase();
+        const description = (fProperties.description || '').toLowerCase();
+        const maki = (fProperties.maki || '').toLowerCase();
+        const placeTypes = f.place_type || [];
+
+        // --- Icon categorization logic ---
+        const isSettlement = placeTypes.includes('neighborhood') || placeTypes.includes('locality') || nameLower.includes('township') || nameLower.includes('village');
+        const isFood = nameLower.includes('kfc') || nameLower.includes('mcdonald') || categories.includes('restaurant') || categories.includes('food');
+        const isEducation = nameLower.includes('school') || nameLower.includes('college') || categories.includes('school');
+        const isRetail = nameLower.includes('shop') || nameLower.includes('mall') || nameLower.includes('supermarket') || categories.includes('shop');
+        const isWorship = nameLower.includes('church') || categories.includes('church');
+        const isMedical = nameLower.includes('hospital') || nameLower.includes('clinic') || categories.includes('hospital');
+
+        var iconClass = "fa-map-marker-alt";
+        var colorHex = "#888888";
+
+        if (description.includes('rank') || description.includes('taxi')) {
+            iconClass = "fa-taxi"; colorHex = "#FFC107"; 
+        } else if (isEducation) {
+            iconClass = "fa-graduation-cap"; colorHex = "#007BFF"; 
+        } else if (isFood) {
+            iconClass = "fa-utensils"; colorHex = "#e63946"; 
+        } else if (isRetail) {
+            iconClass = "fa-shopping-bag"; colorHex = "#2a9d8f"; 
+        } else if (isWorship) {
+            iconClass = "fa-church"; colorHex = "#4f5d75"; 
+        } else if (isMedical) {
+            iconClass = "fa-hospital"; colorHex = "#38b000"; 
+        } else if (placeTypes.includes('poi')) {
+            iconClass = "fa-building"; colorHex = "#495057";
+        }
+
+        html += `
+        <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
+             onclick="window.selectUberSuggestion('${type}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${safeFullAddress}')">
+            <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
+                <i class="fas ${iconClass}" style="font-size: 1.2rem; margin-bottom: 4px; color: ${colorHex} !important;"></i>
+                <span style="font-size: 0.75rem; color: #888;">${distStr}</span>
+            </div>
+            <div style="flex: 1; margin-left: 10px; overflow: hidden;">
+                <div style="color: #ffffff; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escHtml(placeName)}</div>
+                <div style="color: #888888; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escHtml(addressSubtitle)}</div>
+            </div>
+        </div>
+        `;
+    });
+
+    listDiv.innerHTML = html;
+};       // =======================================================================
+// GLOBAL HOISTED AUTOCOMPLETE HELPERS
+// =======================================================================
+// =======================================================================
+// SELECTION HANDLING (Saves Coordinates for Pricing Math)
+// =======================================================================
+function restoreDefaultSuggestions() {
+    const listDiv = document.getElementById('uber-suggestions-list');
+    if (!listDiv) return;
+
+    var places = saKeyLocations.slice(0, 5);
+    var html = '';
+
+    places.forEach(p => {
+        const safeAddress = p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+        var distStr = "";
+        if (commuterLat && commuterLng) {
+            const d = calculateDistance(commuterLat, commuterLng, p.lat, p.lng);
+            distStr = d < 1 ? (d * 1000).toFixed(0) + " m" : d.toFixed(1) + " km";
+        }
+
+        html += `
+        <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
+             onclick="window.selectUberSuggestion('destination', ${p.lng}, ${p.lat}, '${safeAddress}')">
+            <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
+                <i class="far fa-clock" style="font-size: 1.2rem; margin-bottom: 4px; color: #fff;"></i>
+                <span style="font-size: 0.75rem; color: #888;">${distStr}</span>
+            </div>
+            <div style="flex: 1; margin-left: 10px; overflow: hidden;">
+                <div style="color: white; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
+                <div style="color: #888; font-size: 0.9rem;">Suggested</div>
+            </div>
+        </div>
+        `;
+    });
+    listDiv.innerHTML = html;
+}
+window.restoreDefaultSuggestions = restoreDefaultSuggestions;
+
+// =======================================================================
+// INITIALIZE DUAL INPUTS (Native HTML Inputs)
+// =======================================================================
+window.initDualGeocoders = async function() {
+    const destContainer = document.getElementById('uber-dest-container');
+    const pickupContainer = document.getElementById('uber-pickup-container');
+
+    if (destContainer) {
+        destContainer.innerHTML = `
+            <input type="text" id="uberDestInput" class="mapboxgl-ctrl-geocoder--input" 
+                   placeholder="Where to?" 
+                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
+    }
+
+    if (pickupContainer) {
+        pickupContainer.innerHTML = `
+            <input type="text" id="uberPickupInput" class="mapboxgl-ctrl-geocoder--input" 
+                   placeholder="Current Location" 
+                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
+    }
+
+    window.setupDestAutocomplete();
+
+    try {
+        const pickupInput = document.getElementById('uberPickupInput');
+        if (pickupInput) {
+            pickupInput.value = "Fetching location...";
+            const currentAddr = await getAddressFromCoordsPromise(commuterLng, commuterLat);
+            pickupInput.value = currentAddr.split(',')[0].trim();
+        }
+    } catch (e) {
+        const pickupInput = document.getElementById('uberPickupInput');
+        if (pickupInput) pickupInput.value = "Current Location";
+    }
+};
+
+// =======================================================================
+// AUTOCOMPLETE SEARCH ENGINE (Direct Mapbox Geocoding Fetch)
+// =======================================================================
+// =======================================================================
+// MAPBOX POI-OVERDRIVE SEARCH ENGINE & INPUT LISTENER
+// =======================================================================
+   function handleImmediateInput(e, type) {
+        const query = e.target.value;
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        // 🚨 CRITICAL FIX: Erase old coordinates the moment the user types a new address
+        if (type === 'destination') {
+            window.ehailingDestLat = null;
+            window.ehailingDestLng = null;
+            window.userDropOffDestination = query;
+        } else if (type === 'pickup') {
+            // (Optional) We can leave pickup as GPS unless they select a new one
+        }
+
+        if (!query || query.trim() === '') {
+            window.restoreDefaultSuggestions();
+        } else {
+            window.showSearchingIndicator();
+            searchTimeout = setTimeout(() => {
+                performLiveSearch(query, type);
+            }, 300);
+        }
+    }
+// =======================================================================
+// 4. REPLACED: SELECTION HANDLING (Native Input Association)
+// =======================================================================
+// =======================================================================
+// 5. REPLACED: CONFIRM TAXI FLOW (Native Input Parser)
+// =======================================================================
+window.findTaxisFlow = function() {
+    if (typeof isTripLive === 'function' && isTripLive()) {
+        return;
+    }
+
+    const destSearchView = document.getElementById('destSearchView');
+    let input;
+
+    if (destSearchView && destSearchView.style.display !== 'none') {
+        input = document.getElementById('uberDestInput');
+    } else {
+        input = document.querySelector('#geocoder-container .mapboxgl-ctrl-geocoder--input');
+    }
+
+    if (input && input.value.trim() !== "") {
+        userDropOffDestination = input.value;
+    }
+
+    if (userDropOffDestination) {
+        closeModal('destinationPromptPopup');
+
+        if (map && commuterLat && commuterLng) {
+            map.flyTo({ center: [commuterLng, commuterLat], zoom: 16.5, essential: true });
+        }
+
+        if (window.currentRideMode === 'ehailing' || window.isAsiyeGoMode) {
+            findAsiyeGoTaxis();
+        } else {
+            findMinibusTaxis();
+        }
+    } else {
+        showGenericMessage('Destination Required', 'Please enter a destination.', 'fa-map-marker-alt', 'icon-info');
+    }
+};
+
+// =======================================================================
+// 6. ENHANCED SEARCH PROXIMITY SAFE WRAPPER
+// =======================================================================
+function setupEnhancedSearch() {
+    const commonOptions = {
+        accessToken: mapboxgl.accessToken,
+        mapboxgl: mapboxgl,
+        marker: false,
+        types: 'poi,place,address,locality,neighborhood',
+        proximity: [commuterLng, commuterLat]
+    };
+
+    if (typeof geocoder !== 'undefined' && geocoder && typeof geocoder.setProximity === 'function') {
+        geocoder.setProximity(commonOptions.proximity);
+    }
+    if (typeof parcelGeocoder !== 'undefined' && parcelGeocoder && typeof parcelGeocoder.setProximity === 'function') {
+        parcelGeocoder.setProximity(commonOptions.proximity);
+    }
+    if (typeof pickupGeocoder !== 'undefined' && pickupGeocoder && typeof pickupGeocoder.setProximity === 'function') {
+        pickupGeocoder.setProximity(commonOptions.proximity);
+    }
+}  
           // Add this helper function in your script
       function handleImageError(image) {
           // Replaces broken image with a generic placeholder
@@ -16027,60 +16741,20 @@ window.removeFamilyMember = async function(memberId) {
               return ((name ? name.charAt(0) : "") + (surname ? surname.charAt(0) : "")).toUpperCase() || "C";
           }
 
-     window.calculateDynamicPrice = function(distanceKm, activeDriversCount) {
-          const baseFare = 12.00; // Bolt base fare
-          const ratePerKm = 8.00; // Bolt per km rate
-          const minFare = 25.00;  // Bolt minimum fare
-
-          var multiplier = 1.0;
-          // Apply demand-based surge pricing (multiplier)
-          if (activeDriversCount === 0) {
-              multiplier = 1.5; // Very high surge (will map to dummy cars)
-          } else if (activeDriversCount <= 2) {
-              multiplier = 1.5; // High surge
-          } else if (activeDriversCount <= 5) {
-              multiplier = 1.2; // Mild surge
-          }
-
-          // Expose globally to show the surge icon
-          window.isSurgeActive = multiplier > 1.0;
-
-          var price = (baseFare + (distanceKm * ratePerKm)) * multiplier;
-          return Math.round(Math.max(minFare, price));
-      };
-
-     function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371; // Radius of earth in km
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                Math.sin(dLon / 2) * Math.sin(dLon / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
-  }
-      function getAddressFromCoordsPromise(lng, lat) {
-      return new Promise((resolve, reject) => {
-          if (!lng || !lat) resolve("Unknown Location");
-
-          fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=address,place,poi`)
-              .then(response => response.json())
-              .then(data => {
-                  if (data.features && data.features.length > 0) {
-                      // Removes ", South Africa" to keep it short for the popup
-                      resolve(data.features[0].place_name.replace(', South Africa', ''));
-                  } else {
-                      resolve("Unknown Location");
-                  }
-              })
-              .catch(err => {
-                  console.error("Geocoding Error:", err);
-                  resolve("Location Unavailable");
-              });
-      });
-  }
-
-  function openLocationConfirmFromSheet() {
+    // =======================================================================
+// BOLT-STYLE PRICING ENGINE
+// =======================================================================
+// =======================================================================
+// BOLT/UBER SA REALISTIC PRICING ENGINE (2024 Rates)
+// =======================================================================
+ 
+// =======================================================================
+// BOLT/UBER SA REALISTIC PRICING ENGINE 
+// =======================================================================
+// =======================================================================
+// BOLT/UBER SA REALISTIC PRICING ENGINE 
+// =======================================================================
+ function openLocationConfirmFromSheet() {
       closeModal('taxiListSheet');
 
       // Refresh the big confirmation popup address
@@ -17055,86 +17729,38 @@ window.confirmAccountDeletion = async function() {
   }
 
 
-  window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
-      const shortName = fullPlaceName.split(',')[0].trim();
+   window.restoreDefaultSuggestions = function() {
+    const listDiv = document.getElementById('uber-suggestions-list');
+    if (!listDiv) return;
 
-      if (type === 'destination') {
-          userDropOffDestination = fullPlaceName; // Set complete address
-          const destInput = document.querySelector('#uber-dest-container input');
-          if (destInput) destInput.value = fullPlaceName;
+    var places = saKeyLocations.slice(0, 5);
+    var html = '';
 
-          const container = document.getElementById('uber-suggestions-list');
-          if (container) container.innerHTML = '';
+    places.forEach(p => {
+        const safeAddress = p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
-          if (typeof window.findTaxisFlow === 'function') {
-              window.findTaxisFlow();
-          }
-      } else if (type === 'pickup') {
-          commuterLng = lng;
-          commuterLat = lat;
+        var distStr = "";
+        if (commuterLat && commuterLng) {
+            const d = calculateDistance(commuterLat, commuterLng, p.lat, p.lng);
+            distStr = d < 1 ? (d * 1000).toFixed(0) + " m" : d.toFixed(1) + " km";
+        }
 
-          const pickupInput = document.querySelector('#uber-pickup-container input');
-          if (pickupInput) pickupInput.value = fullPlaceName; // Set complete address
-
-          if (userMarker) userMarker.setLngLat([lng, lat]);
-          if (map) map.flyTo({ center: [lng, lat], zoom: 16 });
-
-          const container = document.getElementById('uber-suggestions-list');
-          if (container) container.innerHTML = '';
-
-          if (typeof window.refreshLocationDisplay === 'function') {
-              window.refreshLocationDisplay();
-          }
-      }
-  };
-
-  document.addEventListener('DOMContentLoaded', () => {
-      setupDestAutocomplete();
-  });
-  window.restoreDefaultSuggestions = function(query = '') {
-      const listDiv = document.getElementById('uber-suggestions-list');
-      if (!listDiv) return;
-
-      var places = saKeyLocations;
-
-      // Filter locations based on the typed input
-      if (query && query.trim() !== '') {
-          const lowerQuery = query.toLowerCase();
-          places = saKeyLocations.filter(loc =>
-              loc.name.toLowerCase().includes(lowerQuery)
-          );
-      } else {
-          // Show up to 4 items by default if the input is empty
-          places = saKeyLocations.slice(0, 4);
-      }
-
-      var html = '';
-
-      if (places.length === 0) {
-          html = '<div style="padding: 16px; color: #888; text-align: center;">No matching locations found</div>';
-      } else {
-          places.forEach(p => {
-              const safeAddress = `${p.name}`.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-              html += `
-              <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
-                   onclick="selectUberSuggestion('destination', ${p.lng}, ${p.lat}, '${safeAddress}')">
-                  <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
-                      <i class="far fa-clock" style="font-size: 1.2rem; margin-bottom: 4px; color: #fff;"></i>
-                      <span style="font-size: 0.75rem; color: #888;">${p.type || 'loc'}</span>
-                  </div>
-                  <div style="flex: 1; margin-left: 10px; overflow: hidden;">
-                      <div style="color: white; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
-                  </div>
-              </div>
-              `;
-          });
-      }
-
-      listDiv.innerHTML = html;
-  };
-
-
+        html += `
+        <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
+             onclick="window.selectUberSuggestion('destination', ${p.lng}, ${p.lat}, '${safeAddress}')">
+            <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
+                <i class="far fa-clock" style="font-size: 1.2rem; margin-bottom: 4px; color: #fff;"></i>
+                <span style="font-size: 0.75rem; color: #888;">${distStr}</span>
+            </div>
+            <div style="flex: 1; margin-left: 10px; overflow: hidden;">
+                <div style="color: white; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
+                <div style="color: #888; font-size: 0.9rem;">Suggested</div>
+            </div>
+        </div>
+        `;
+    });
+    listDiv.innerHTML = html;
+};
       function updateSliderDots(slider) {
           const width = slider.clientWidth;
           const scrollLeft = slider.scrollLeft;
@@ -17249,196 +17875,14 @@ window.confirmAccountDeletion = async function() {
       }
       return matchingFeatures.slice(0, 2);
   };
-  window.initDualGeocoders = async function() {
-      var commonOptions = {
-          accessToken: mapboxgl.accessToken,
-          mapboxgl: mapboxgl,
-          marker: false,
-          countries: 'za',
-          types: 'address,poi,neighborhood,locality,place',
-          limit: 8,
-          localGeocoder: window.forwardGeocoder
-      };
-
-      if (typeof commuterLng === 'number' && typeof commuterLat === 'number' && !isNaN(commuterLng)) {
-          commonOptions.proximity = [commuterLng, commuterLat];
-      }
-
-      // Helper to show searching state instantly
-      window.showSearchingIndicator = function() {
-          const listDiv = document.getElementById('uber-suggestions-list');
-          if (listDiv && !listDiv.innerHTML.includes('fa-spinner')) {
-              listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;"><i class="fas fa-spinner fa-spin"></i> Searching addresses...</div>`;
-          }
-      };
-
-      const destContainer = document.getElementById('uber-dest-container');
-      const pickupContainer = document.getElementById('uber-pickup-container');
-
-      // FIX 1: Destination Geocoder - Always attach the input safely
-      if (destContainer) {
-          destContainer.innerHTML = ''; // Clear container
-
-          // Safely remove old Mapbox instances if they exist
-          if (typeof geocoder !== 'undefined' && geocoder && map && map.hasControl && map.hasControl(geocoder)) {
-              try { map.removeControl(geocoder); } catch(e){}
-          }
-
-          // Re-instantiate so it binds to the new popup view correctly
-          geocoder = new MapboxGeocoder({ ...commonOptions, placeholder: 'Where to?' });
-
-          geocoder.on('loading', () => window.showSearchingIndicator());
-          geocoder.on('results', (e) => {
-              const features = e.features || e.results ||[];
-              window.renderUberSuggestions(features, 'destination');
-          });
-          geocoder.on('error', () => {
-              const listDiv = document.getElementById('uber-suggestions-list');
-              if (listDiv) listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;">Network error fetching results.</div>`;
-          });
-          geocoder.on('clear', () => window.restoreDefaultSuggestions());
-
-          destContainer.appendChild(geocoder.onAdd(map));
-      }
-
-      // FIX 2: Pickup Geocoder - Always attach the input safely
-      if (pickupContainer) {
-          pickupContainer.innerHTML = '';
-
-          // Safely remove old Mapbox instances if they exist
-          if (typeof pickupGeocoder !== 'undefined' && pickupGeocoder && map && map.hasControl && map.hasControl(pickupGeocoder)) {
-              try { map.removeControl(pickupGeocoder); } catch(e){}
-          }
-
-          pickupGeocoder = new MapboxGeocoder({ ...commonOptions, placeholder: 'Current Location' });
-
-          pickupGeocoder.on('loading', () => window.showSearchingIndicator());
-          pickupGeocoder.on('results', (e) => {
-              const features = e.features || e.results ||[];
-              window.renderUberSuggestions(features, 'pickup');
-          });
-          pickupGeocoder.on('error', () => {
-              const listDiv = document.getElementById('uber-suggestions-list');
-              if (listDiv) listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;">Network error fetching results.</div>`;
-          });
-          pickupGeocoder.on('clear', () => window.restoreDefaultSuggestions());
-
-          pickupContainer.appendChild(pickupGeocoder.onAdd(map));
-      }
-
-      // Initialize custom autocomplete UI listeners
-      window.setupDestAutocomplete();
-
-      // Set Current Pickup Text Safely
-      try {
-          if (pickupContainer) {
-              const pickupInput = pickupContainer.querySelector('input');
-              if (pickupInput && (!pickupInput.value || pickupInput.value.trim() === '')) {
-                  pickupInput.value = "Fetching location...";
-                  const currentAddr = await getAddressFromCoordsPromise(commuterLng, commuterLat);
-                  pickupInput.value = currentAddr.split(',')[0].trim();
-              }
-          }
-      } catch (e) {
-          const pickupInput = pickupContainer?.querySelector('input');
-          if (pickupInput) pickupInput.value = "Current Location";
-      }
-  }; // <-- THIS SAFELY CLOSES initDualGeocoders
-
-
+ 
   // The setupDestAutocomplete function was missing its declaration in your snippet!
-  window.setupDestAutocomplete = function() {
-      const destContainer = document.getElementById('uber-dest-container');
-      const pickupContainer = document.getElementById('uber-pickup-container');
+  // =======================================================================
+// BULLETPROOF DIRECT GEOCIDING SEARCH & POI RENDERING ENGINE
+// =======================================================================
 
-      if (!destContainer || !pickupContainer) return;
 
-      const destInput = destContainer.querySelector('input');
-      const pickupInput = pickupContainer.querySelector('input');
-
-      // Instantly hide suggestions and show "Searching..." while waiting for Mapbox
-      function handleImmediateInput(e) {
-          if (!e.target.value || e.target.value.trim() === '') {
-              window.restoreDefaultSuggestions();
-          } else {
-              window.showSearchingIndicator();
-          }
-      }
-
-      if (destInput) {
-          destInput.addEventListener('focus', function(e) {
-              if (!e.target.value) window.restoreDefaultSuggestions();
-          });
-          destInput.addEventListener('input', handleImmediateInput);
-      }
-
-      if (pickupInput) {
-          pickupInput.addEventListener('focus', function(e) {
-              if (!e.target.value) window.restoreDefaultSuggestions();
-          });
-          pickupInput.addEventListener('input', handleImmediateInput);
-      }
-  }; // <-- THIS SAFELY CLOSES setupDestAutocomplete
-  // Also verify renderUberSuggestions gracefully handles empty api results
-  window.renderUberSuggestions = function(features, type) {
-      const listDiv = document.getElementById('uber-suggestions-list');
-      if (!listDiv) return;
-
-      if (!features || features.length === 0) {
-          listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;">No matching locations found</div>`;
-          return;
-      }
-
-      var html = '';
-      features.forEach(f => {
-          const placeName = f.text || (f.place_name ? f.place_name.split(',')[0] : 'Location');
-          const fullAddress = f.place_name || placeName;
-
-          var addressSubtitle = fullAddress.replace(placeName, '').replace(/^,\s*/, '').trim();
-          if (!addressSubtitle) addressSubtitle = "South Africa";
-
-          // Accurate live distance calc
-          var distStr = "";
-          if (commuterLat && commuterLng && f.geometry && f.geometry.coordinates) {
-              const d = calculateDistance(commuterLat, commuterLng, f.geometry.coordinates[1], f.geometry.coordinates[0]);
-              if (d < 1) {
-                  distStr = (d * 1000).toFixed(0) + " m";
-              } else {
-                  distStr = d.toFixed(1) + " km";
-              }
-          }
-
-          const safeFullAddress = fullAddress.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-          // Dynamic Icon Logic
-          var iconClass = "fa-map-marker-alt";
-          var colorHex = "#aaa";
-          if (f.properties && f.properties.description && f.properties.description.includes('Rank')) {
-              iconClass = "fa-taxi";
-              colorHex = "#FFC107";
-          } else if (f.place_type && f.place_type.includes('poi')) {
-              iconClass = "fa-building";
-          } else {
-              iconClass = "fa-map-pin";
-          }
-
-          html += `
-          <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
-               onclick="window.selectUberSuggestion('${type}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${safeFullAddress}')">
-              <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
-                  <i class="fas ${iconClass}" style="font-size: 1.2rem; margin-bottom: 4px; color: ${colorHex};"></i>
-                  <span style="font-size: 0.75rem; color: #888;">${distStr}</span>
-              </div>
-              <div style="flex: 1; margin-left: 10px; overflow: hidden;">
-                  <div style="color: #ffffff; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(placeName)}</div>
-                  <div style="color: #888888; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(addressSubtitle)}</div>
-              </div>
-          </div>
-          `;
-      });
-
-      listDiv.innerHTML = html;
-  };
+ 
 
   window.restoreDefaultSuggestions = function() {
       const listDiv = document.getElementById('uber-suggestions-list');
@@ -17617,29 +18061,36 @@ function openModal(modalId) {
             };
 
             // --- CASE 1: Main Destination Prompt (Taxi Search) ---
-            if (modalId === 'destinationPromptPopup' && typeof parcelGeocoder === 'undefined' || !window.geocoder) {
-                window.geocoder = new MapboxGeocoder(geocoderOptions);
-                const container = document.getElementById('geocoder-container');
-                if (container) {
-                    container.innerHTML = '';
-                    container.appendChild(window.geocoder.onAdd(map));
-                    window.geocoder.on('result', (e) => {
-                        userDropOffDestination = e.result.text;
-                    });
-                }
-            }
-            // --- CASE 2: Parcel Destination ---
-            else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
-                window.parcelGeocoder = new MapboxGeocoder(geocoderOptions);
-                const container = document.getElementById('parcel-geocoder-container');
-                if (container) {
-                    container.innerHTML = '';
-                    container.appendChild(window.parcelGeocoder.onAdd(map));
-                    window.parcelGeocoder.on('result', (e) => {
-                        userDropOffDestination = e.result.text;
-                    });
-                }
-            }
+           // Inside openModal(modalId) find this block:
+if (modalId === 'destinationPromptPopup' && typeof parcelGeocoder === 'undefined' || !window.geocoder) {
+    window.geocoder = new MapboxGeocoder(geocoderOptions);
+    const container = document.getElementById('geocoder-container');
+    if (container) {
+        container.innerHTML = '';
+        container.appendChild(window.geocoder.onAdd(map));
+        window.geocoder.on('result', (e) => {
+            userDropOffDestination = e.result.text;
+            // CRITICAL FIX: Save coords here too!
+            window.ehailingDestLng = e.result.geometry.coordinates[0];
+            window.ehailingDestLat = e.result.geometry.coordinates[1];
+        });
+    }
+}
+// --- CASE 2: Parcel Destination ---
+else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
+    window.parcelGeocoder = new MapboxGeocoder(geocoderOptions);
+    const container = document.getElementById('parcel-geocoder-container');
+    if (container) {
+        container.innerHTML = '';
+        container.appendChild(window.parcelGeocoder.onAdd(map));
+        window.parcelGeocoder.on('result', (e) => {
+            userDropOffDestination = e.result.text;
+            // CRITICAL FIX: Save coords here too!
+            window.ehailingDestLng = e.result.geometry.coordinates[0];
+            window.ehailingDestLat = e.result.geometry.coordinates[1];
+        });
+    }
+}
             // --- CASE 3: Change Pickup Location (Manual Pin) ---
             else if (modalId === 'changeLocationPopup' && !window.pickupGeocoder) {
                 const pickupOpts = { ...geocoderOptions, placeholder: 'Search pickup address' };
@@ -20352,7 +20803,7 @@ function openModal(modalId) {
       openModal('genericMessagePopup');
 
       // Initialize map
-      mapboxgl.accessToken = 'pk.eyJ1IjoiZ29zb3V0aGFmcmljYSIsImEiOiJjbTM4ajZmdmowc2JnMmlxeHF5bzB1dnJlIn0.CV71_oh-Tnag84kUE4K0ZQ';
+      mapboxgl.accessToken = '__MAPBOX_PUBLIC_TOKEN__';
       trackingMap = new mapboxgl.Map({
           container: 'trackingMapContainer',
           style: 'mapbox://styles/mapbox/streets-v12',
@@ -21260,98 +21711,232 @@ function openModal(modalId) {
   };
 
 
+// =======================================================================
+// 1. BOLT/UBER SA REALISTIC PRICING ENGINE 
+// =======================================================================
+window.calculateDynamicPrice = function(distanceKm, activeDriversCount) {
+    const baseFare = 30.00; // Updated base fare to R30.00
+    const ratePerKm = 8.00; // Bolt per km rate
+    const minFare = 35.00;  // Bolt minimum fare
 
-  window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
-      if (type === 'destination') {
-          // 1. Set global variables
-          userDropOffDestination = fullPlaceName;
-          ehailingDestLng = lng;
-          ehailingDestLat = lat;
+    var multiplier = 1.0;
+    if (activeDriversCount === 0) {
+        multiplier = 1.5;
+    } else if (activeDriversCount <= 2) {
+        multiplier = 1.5;
+    } else if (activeDriversCount <= 5) {
+        multiplier = 1.2;
+    }
 
-          // 2. Visually update input
-          const destInput = document.querySelector('#uber-dest-container input');
-          if (destInput) destInput.value = fullPlaceName;
+    window.isSurgeActive = multiplier > 1.0;
+    var price = (baseFare + (distanceKm * ratePerKm)) * multiplier;
+    return Math.round(Math.max(minFare, price));
+};
 
-          // 3. Clear suggestions
-          const container = document.getElementById('uber-suggestions-list');
-          if (container) container.innerHTML = '';
+// =======================================================================
+// 2. SELECTION HANDLING (Strictly Saves Coordinates for Math)
+// =======================================================================
+// =======================================================================
+// SELECTION HANDLING (Correctly saves GPS Coordinates for Pricing)
+// =======================================================================
+window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
+    console.log(`Suggestion selected: type=${type}, name=${fullPlaceName}, coordinates=[${lng}, ${lat}]`);
 
-          // 4. Trigger Taxi Search
-          if (typeof window.findTaxisFlow === 'function') {
-              window.findTaxisFlow();
-          }
-      } else if (type === 'pickup') {
-          commuterLng = lng;
-          commuterLat = lat;
+    if (type === 'destination') {
+        userDropOffDestination = fullPlaceName;
+        
+        // Save selected destination coordinates globally for pricing calculations
+        window.ehailingDestLng = lng;
+        window.ehailingDestLat = lat;
+        ehailingDestLng = lng;
+        ehailingDestLat = lat;
 
-          const pickupInput = document.querySelector('#uber-pickup-container input');
-          if (pickupInput) pickupInput.value = fullPlaceName;
+        const destInput = document.getElementById('uberDestInput');
+        if (destInput) destInput.value = fullPlaceName;
 
-          if (userMarker) userMarker.setLngLat([lng, lat]);
-          if (map) map.flyTo({ center:[lng, lat], zoom: 16 });
+        const container = document.getElementById('uber-suggestions-list');
+        if (container) container.innerHTML = '';
 
-          const container = document.getElementById('uber-suggestions-list');
-          if (container) container.innerHTML = '';
+        if (typeof window.findTaxisFlow === 'function') {
+            window.findTaxisFlow();
+        }
+    } else if (type === 'pickup') {
+        commuterLng = lng;
+        commuterLat = lat;
 
-          if (typeof window.refreshLocationDisplay === 'function') {
-              window.refreshLocationDisplay();
-          }
+        // Save selected pickup coordinates globally
+        window.commuterLng = lng;
+        window.commuterLat = lat;
 
-          // Auto-shift focus to destination
-          const destInput = document.querySelector('#uber-dest-container input');
-          if (destInput) destInput.focus();
-      }
-  };
+        const pickupInput = document.getElementById('uberPickupInput');
+        if (pickupInput) pickupInput.value = fullPlaceName;
 
-window.findTaxisFlow = function() {
-      if (typeof isTripLive === 'function' && isTripLive()) {
-          return;
-      }
+        if (userMarker) userMarker.setLngLat([lng, lat]);
+        if (map) map.flyTo({ center: [lng, lat], zoom: 16 });
 
-      // Determine which view the user is looking at, to grab the correct input
-      const destSearchView = document.getElementById('destSearchView');
-      let input;
+        const container = document.getElementById('uber-suggestions-list');
+        if (container) container.innerHTML = '';
 
-      if (destSearchView && destSearchView.style.display !== 'none') {
-          // Grab from the Uber-style dual geocoder
-          input = document.querySelector('#uber-dest-container .mapboxgl-ctrl-geocoder--input');
-      } else {
-          // Grab from standard popup
-          input = document.querySelector('#geocoder-container .mapboxgl-ctrl-geocoder--input');
-      }
+        if (typeof window.refreshLocationDisplay === 'function') {
+            window.refreshLocationDisplay();
+        }
+    }
+};
+// =======================================================================
+// 3. ASIYE GO (e-HAILING) CORE LOGIC & STRICT PRICING ENGINE
+// =======================================================================
+window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
+    window.currentRideMode = isDeliveryMode ? 'delivery' : 'ehailing';
+    window.isAsiyeGoMode = true;
 
-      if (input && input.value.trim() !== "") {
-          userDropOffDestination = input.value;
-      }
+    var tripDistKm = 5;
+    var activeDestLat = (typeof ehailingDestLat !== 'undefined' && ehailingDestLat) ? ehailingDestLat : window.ehailingDestLat;
+    var activeDestLng = (typeof ehailingDestLng !== 'undefined' && ehailingDestLng) ? ehailingDestLng : window.ehailingDestLng;
 
-      if (userDropOffDestination) {
-          closeModal('destinationPromptPopup');
+    if (activeDestLat && activeDestLng && commuterLat && commuterLng) {
+        tripDistKm = calculateDistance(commuterLat, commuterLng, activeDestLat, activeDestLng) * 1.3;
+    }
+    window.calculatedTripDistance = tripDistKm;
 
-          if (map && commuterLat && commuterLng) {
-              map.flyTo({ center:[commuterLng, commuterLat], zoom: 16.5, essential: true });
-          }
+    // Standard Private Ride: Base R30.00 + R8.00/km (Min R35.00)
+    const standardPrice = Math.max(35, 30 + (tripDistKm * 8.00));
+    
+    // Asiye Club Shared Pool: (Standard Private Ride + 10%) divided by 3 passengers (Min R20.00)
+    const clubPrice = Math.max(20, Math.round((standardPrice * 1.1) / 3));
+    
+    // Asiye XL (Disabled)
+    const xlPrice = 0;
 
-          if (window.currentRideMode === 'ehailing' || window.isAsiyeGoMode) {
-              findAsiyeGoTaxis();
-          } else {
-              findMinibusTaxis();
-          }
-      } else {
-          showGenericMessage('Destination Required', 'Please enter a destination.', 'fa-map-marker-alt', 'icon-info');
-      }
-  };
+    window.calculatedTripPrice = Math.round(standardPrice);
 
-  document.addEventListener('DOMContentLoaded', () => {
-      window.setupDestAutocomplete();
-  });
+    openModal('taxiListSheet');
 
-  // Override the main search button
-  const findDestBtn = document.getElementById('findTaxisByDestinationButton');
-  if(findDestBtn) findDestBtn.onclick = window.findTaxisFlow;
+    if (isDeliveryMode) {
+        if (typeof window.findNearestAsiyeGoDriver === 'function') {
+            window.findNearestAsiyeGoDriver(true);
+        }
+    } else {
+        if (typeof window.populateEHailingCategories === 'function') {
+            window.populateEHailingCategories(Math.round(standardPrice), Math.round(clubPrice), xlPrice);
+        }
+    }
+};
 
+window.findEHailingCabs = window.findAsiyeGoTaxis; // Compatibility wrapper
 
 
-  // 4. E-Hailing Core Engine
+// =======================================================================
+// 4. MAPBOX POI-OVERDRIVE SEARCH ENGINE & INPUT LISTENER
+// =======================================================================
+window.setupDestAutocomplete = function() {
+    const destInput = document.getElementById('uberDestInput');
+    const pickupInput = document.getElementById('uberPickupInput');
+
+    let searchTimeout = null;
+
+    // Live Keyboard Listener
+    window.handleImmediateInput = function(e, type) {
+        const query = e.target.value;
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        // Erase old coordinates the moment the user types a new address
+        if (type === 'destination') {
+            window.ehailingDestLat = null;
+            window.ehailingDestLng = null;
+            window.userDropOffDestination = query;
+        }
+
+        if (!query || query.trim().length < 2) {
+            if (typeof window.restoreDefaultSuggestions === 'function') window.restoreDefaultSuggestions();
+        } else {
+            if (typeof window.showSearchingIndicator === 'function') window.showSearchingIndicator();
+            searchTimeout = setTimeout(() => {
+                performLiveSearch(query, type);
+            }, 350);
+        }
+    };
+
+    // Bind inputs robustly
+    if (destInput) {
+        const newDestInput = destInput.cloneNode(true);
+        destInput.parentNode.replaceChild(newDestInput, destInput);
+        newDestInput.addEventListener('input', (e) => window.handleImmediateInput(e, 'destination'));
+    }
+
+    if (pickupInput) {
+        const newPickupInput = pickupInput.cloneNode(true);
+        pickupInput.parentNode.replaceChild(newPickupInput, pickupInput);
+        newPickupInput.addEventListener('input', (e) => window.handleImmediateInput(e, 'pickup'));
+    }
+
+    // Fetch Mapbox Data
+    function performLiveSearch(query, type) {
+        let cleanQuery = query.toLowerCase().replace(/\s+(near\s+me|nearby|close\s+by)\s*$/i, '').trim();
+
+        const proximityParam = (window.commuterLng && window.commuterLat) 
+            ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+
+        const poiUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&types=poi${proximityParam}&limit=10`;
+        const addressUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=address,neighborhood,locality${proximityParam}&limit=5`;
+
+        Promise.all([
+            fetch(poiUrl).then(res => res.json()).catch(() => ({features: []})),
+            fetch(addressUrl).then(res => res.json()).catch(() => ({features: []}))
+        ])
+        .then(([poiData, addressData]) => {
+            let finalFeatures = [];
+            const seenIds = new Set();
+
+            // Local Hardcoded locations first
+            if (typeof saKeyLocations !== 'undefined') {
+                saKeyLocations.forEach(loc => {
+                    if (loc.name.toLowerCase().includes(cleanQuery)) {
+                        finalFeatures.push({
+                            type: 'Feature',
+                            geometry: { coordinates: [loc.lng, loc.lat] },
+                            place_name: loc.name,
+                            text: loc.name,
+                            properties: { category: loc.type }
+                        });
+                        seenIds.add(loc.name.toLowerCase());
+                    }
+                });
+            }
+
+            // Mapbox POIs
+            if (poiData.features) {
+                poiData.features.forEach(f => {
+                    const nameLower = (f.text || "").toLowerCase();
+                    if (!seenIds.has(nameLower)) {
+                        seenIds.add(nameLower);
+                        finalFeatures.push(f);
+                    }
+                });
+            }
+
+            // Mapbox Streets/Suburbs
+            if (addressData.features) {
+                addressData.features.forEach(f => {
+                    const nameLower = (f.text || "").toLowerCase();
+                    if (!seenIds.has(nameLower)) {
+                        seenIds.add(nameLower);
+                        finalFeatures.push(f);
+                    }
+                });
+            }
+
+            if (finalFeatures.length === 0) {
+                const listDiv = document.getElementById('uber-suggestions-list');
+                if (listDiv) listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;">No matching locations found</div>`;
+            } else {
+                window.renderUberSuggestions(finalFeatures, type);
+            }
+        }).catch(err => {
+            if (typeof window.restoreDefaultSuggestions === 'function') window.restoreDefaultSuggestions();
+        });
+    }
+};
+
   window.findEHailingCabs = async function() {
       const container = document.getElementById('taxiListContainer');
       if(container) container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><p>Finding affordable e-Hailing cabs...</p></div>`;
@@ -23339,7 +23924,44 @@ window.calculateParcelPricing = function() {
       findAsiyeGoTaxis(true);
   };
 
+/**
+ * Searches Mapbox POI database by name/keyword alone (e.g., "KFC" or "Church")
+ * @param {string} poiName - The keyword or name of the business/landmark
+ * @param {Array} userCoords - Optional user coordinates [lng, lat] to bias results nearby
+ * @returns {Promise<Array>} List of matching place features
+ */
+window.searchPOIByName = function(poiName, userCoords = null) {
+    if (!poiName || poiName.trim().length < 2) {
+        return Promise.resolve([]);
+    }
 
+    const accessToken = mapboxgl.accessToken;
+    const country = 'za'; // Limit results to South Africa
+    const types = 'poi';  // Strictly limit search to Points of Interest (business/malls/churches)
+    
+    // Bias search results to locations closest to the user's current coordinates
+    const proximity = (userCoords && userCoords.length === 2) 
+        ? `&proximity=${userCoords[0]},${userCoords[1]}` 
+        : (commuterLng && commuterLat) ? `&proximity=${commuterLng},${commuterLat}` : '';
+
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(poiName)}.json?access_token=${accessToken}&country=${country}&types=${types}${proximity}&limit=10`;
+
+    return fetch(url)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            // Mapbox returns matching POI features containing name, address, and coordinates
+            return data.features || [];
+        })
+        .catch(error => {
+            console.error("Mapbox POI search failed:", error);
+            return [];
+        });
+};
   window.populateHandlerListSheet = function(handlers) {
       const sheet = document.getElementById('taxiListSheet');
       if (!sheet) return;
@@ -24076,21 +24698,152 @@ function updatePaymentButtons(taxiId, selectedMethod) {
         }
     }
 }
+
+// =======================================================================
+// 1. REPLACED: CHOOSE RIDE CATEGORIES (Reads pickup value instantly)
+// =======================================================================
+window.populateEHailingCategories = function(standardPrice, clubPrice, xlPrice) {
+    const sheet = document.getElementById('taxiListSheet');
+    if (!sheet) return;
+
+    var fName = window.commuterData?.name || 'Passenger';
+    var dropOffText = window.userDropOffDestination || "Destination";
+    
+    window.selectedRideCategory = 'club';
+    window.calculatedTripPrice = clubPrice;
+    
+    const promoRemaining = window.commuterData?.promoRemaining || 0;
+    const promoValue = window.commuterData?.promoValue || 25;
+    window.selectedPaymentMethod = 'cash'; 
+    
+    const availableCredit = parseFloat(window.commuterData?.credits || 0);
+
+    sheet.innerHTML = `
+        <div class="sheet-handle-wrapper" id="taxiSheetDragHandle" style="padding-bottom: 0; background: #111; border-radius: 35px 35px 0 0;">
+            <div class="sheet-handle-bar" style="width: 40px; height: 5px; background: rgba(255,255,255,0.5); margin-top: 10px;"></div>
+        </div>
+
+        <div class="gocab-top-section" style="background: linear-gradient(135deg, #111 0%, #333 100%) !important; box-shadow: 0 10px 25px rgba(0,0,0,0.4);">
+            <div class="gocab-user-row">
+                <div class="gocab-user-info">
+                    <div style="width: 45px; height: 45px; border-radius: 50%; overflow: hidden; border: 2px solid #555; background:#222; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:1.2rem;">
+                        ${fName.charAt(0).toUpperCase()}
+                    </div>
+                    <div class="gocab-greeting">
+                        <p style="color: #aaa !important;">Private & Shared Rides</p>
+                        <h4 style="color: #fff !important;">Asiye Go</h4>
+                    </div>
+                </div>
+                <button class="gocab-bell-btn" onclick="closeModal('taxiListSheet'); showModernDashboard();" style="background: rgba(255,255,255,0.1) !important; color: white !important; border:none;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="gocab-location-bar" style="margin-top: -20px; z-index:20; display: flex; flex-direction: column; gap: 8px; align-items: stretch; padding: 12px 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 6px;">
+                <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-right: 10px; flex: 1;">
+                    <span style="font-size: 0.65rem; color: #888; font-weight: 800; text-transform: uppercase;">Pickup Location</span>
+                    <span style="font-size: 0.9rem; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="gocabPickupText">Current Location</span>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-right: 10px; flex: 1;">
+                    <span style="font-size: 0.65rem; color: #888; font-weight: 800; text-transform: uppercase;">Drop-off Destination</span>
+                    <span style="font-size: 0.9rem; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(dropOffText)}</span>
+                </div>
+                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); setTimeout(() => { showDestinationSearchMode(); }, 300);" style="background: none; border: none; color: #007BFF; font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                    <i class="fas fa-edit"></i> Change
+                </button>
+            </div>
+        </div>
+
+        <div id="taxiListContainer" style="padding: 10px 20px 100px 20px;">
+            <h4 style="margin: 0 0 15px 0; color: #333; font-weight: 800;">Choose a ride</h4>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                <div id="cat-club" class="category-card selected" onclick="selectCategory('club', ${clubPrice})" style="border: 2px solid #007BFF; background: #eef4ff; border-radius: 16px; padding: 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="width: 60px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #007BFF;">
+                            <i class="fas fa-users"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #007BFF;">Asiye Club (Shared)</h4>
+                            <div style="font-size: 0.8rem; color: #007BFF; font-weight: 600;"><i class="fas fa-clock"></i> Shared Pool &bull; Max 3 Passengers &bull; 10 minutes waiting time</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 1.3rem; font-weight: 900; color: #007BFF;">R${clubPrice}</div>
+                </div>
+
+                <div id="cat-standard" class="category-card" onclick="selectCategory('standard', ${standardPrice})" style="border: 2px solid transparent; background: #f8f9fa; border-radius: 16px; padding: 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <img src="data/carIcon.jpg" onerror="this.src='https://cdn3d.iconscout.com/3d/premium/thumb/car-4994273-4161869.png'" style="width: 60px; height: auto; mix-blend-mode: multiply;">
+                        <div>
+                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #111;">Asiye Go (Private)</h4>
+                            <div style="font-size: 0.8rem; color: #666; font-weight: 600;"><i class="fas fa-user"></i> Go Now &bull;Direct &bull; No Waiting</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 1.3rem; font-weight: 900; color: #111;">R${standardPrice}</div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                <button class="btn" id="payCashBtn" onclick="selectPayment('cash')" style="border-radius: 12px; background: #f8f9fa; color: #555; border: 1px solid #ddd; padding: 12px; font-weight: 800; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+                    <div><i class="fas fa-money-bill-wave"></i> Cash</div>
+                    ${promoRemaining > 0 ? `<div class="promo-text-inline" style="font-size: 0.75rem; color: #28a745; font-weight: 900;">PROMO: -R${promoValue}</div>` : ''}
+                </button>
+                <button class="btn" id="payCardBtn" onclick="selectPayment('card')" style="border-radius: 12px; background: #f8f9fa; color: #555; border: 1px solid #ddd; padding: 12px; font-weight: 800; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
+                    <div><i class="fas fa-credit-card"></i> Card (R${availableCredit.toFixed(2)})</div>
+                    ${promoRemaining > 0 ? `<div class="promo-text-inline" style="font-size: 0.75rem; color: #28a745; font-weight: 900;">PROMO: -R${promoValue}</div>` : ''}
+                </button>
+            </div>
+
+            <button class="btn" id="payPromoBtn" onclick="togglePromoCodeInput()" style="width: 100%; border-radius: 12px; border: 1.5px dashed #007BFF; color: #007BFF; background: transparent; padding: 12px; font-weight: 800; font-size: 0.85rem; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
+                <i class="fas fa-tag"></i> Use Promo Code
+            </button>
+
+            <div id="promoCodeInputSection" style="display: none; margin-bottom: 15px;">
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="manualPromoCodeField" placeholder="Enter Promo Code" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; font-weight: bold; text-transform: uppercase;">
+                    <button class="btn btn-primary" onclick="applyManualPromoCode()" style="padding: 12px 18px; border-radius: 10px; font-weight: 800; background: #007BFF; color: white;">Apply</button>
+                </div>
+            </div>
+
+            <button id="mainRequestRideBtn" class="gocab-book-btn" onclick="requestAsiyeGoRide()" style="width: 100%; background: #000 !important; color: white !important; padding: 18px !important; font-size: 1.1rem !important; border-radius: 16px !important; box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important; border: none;">
+                Request Ride
+            </button>
+        </div>
+    `;
+    
+    // Instantly map the visible pickup address value synchronously
+    const pickupInputEl = document.getElementById('uberPickupInput');
+    const gocabPickupTextEl = document.getElementById('gocabPickupText');
+    if (gocabPickupTextEl && pickupInputEl && pickupInputEl.value) {
+        gocabPickupTextEl.textContent = pickupInputEl.value.split(',')[0].trim();
+    }
+
+    const mainActionSheet = document.getElementById('mainActionSheet');
+    if (mainActionSheet) mainActionSheet.style.display = 'none';
+    
+    selectPayment(window.selectedPaymentMethod);
+
+    setTimeout(() => { 
+        if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag(); 
+    }, 100);
+};
+
+// =======================================================================
+// 2. REPLACED: DRIVER FOUND POPUP (Syncs pickup address value)
+// =======================================================================
 window.showAsiyeGoDriverFound = async function(taxi, priceStr) {
     const sheet = document.getElementById('taxiListSheet');
     if (!sheet) return;
 
-    // CRITICAL FIX: Refresh commuterData before using it
     if (userId) {
         const freshSnapshot = await firebase.database().ref('commuters/' + userId).once('value');
         const freshData = freshSnapshot.val();
-        if (freshData) {
-            if (window.commuterData) {
-                Object.assign(window.commuterData, freshData);
-            } else {
-                window.commuterData = freshData;
-            }
-            console.log("Refreshed commuterData before driver found:", window.commuterData);
+        if (freshData && window.commuterData) {
+            Object.assign(window.commuterData, freshData);
         }
     }
 
@@ -24103,7 +24856,6 @@ window.showAsiyeGoDriverFound = async function(taxi, priceStr) {
     const etaMins = Math.ceil((taxi.distance || 0.5) * 2.5);
     const arrivalTime = new Date(Date.now() + etaMins * 60000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Get the calculated fare
     var basePrice = window.calculatedTripPrice;
     if (!basePrice || basePrice === 0) {
         const match = priceStr.match(/R(\d+)/);
@@ -24115,21 +24867,10 @@ window.showAsiyeGoDriverFound = async function(taxi, priceStr) {
         window.calculatedTripPrice = basePrice;
     }
 
-    console.log("Base fare calculated:", basePrice);
-
-    // CRITICAL FIX: Get promo data from refreshed commuterData
     const promoRemaining = window.commuterData?.promoRemaining || 0;
     const promoValue = window.commuterData?.promoValue || 25;
     const availableCredit = parseFloat(window.commuterData?.credits || 0);
 
-    console.log("Promo data from commuterData:", {
-        promoRemaining,
-        promoValue,
-        availableCredit,
-        fullCommuterData: window.commuterData
-    });
-
-    // Determine if promo should be applied
     var appliedPromoAmount = 0;
     var finalPrice = basePrice;
     var promoApplied = false;
@@ -24140,68 +24881,46 @@ window.showAsiyeGoDriverFound = async function(taxi, priceStr) {
         finalPrice = basePrice - appliedPromoAmount;
         promoApplied = true;
         remainingAfterUse = promoRemaining - 1;
-        window.selectedPaymentMethod = 'cash'; // Default to cash, promo applies automatically
+        window.selectedPaymentMethod = 'cash';
         window.appliedCreditAmount = appliedPromoAmount;
-        console.log(`✅ Promo applied: -R${appliedPromoAmount}, Final: R${finalPrice}, Remaining: ${remainingAfterUse}`);
     } else {
         window.selectedPaymentMethod = 'cash';
         window.appliedCreditAmount = 0;
-        console.log("❌ No promo available, using cash. promoRemaining =", promoRemaining);
     }
 
-    // Build the fare display HTML - SHOWING ALL THREE AMOUNTS
     var fareHtml = '';
- // Build the fare display HTML - FIXED encoding issues
+    if (promoApplied && appliedPromoAmount > 0) {
+        fareHtml = `
+            <div style="text-align: center; width: 100%;">
+                <div style="font-size: 0.7rem; color: #888; font-weight: 700; margin-bottom: 5px;">ESTIMATED FARE</div>
+                <div style="font-size: 1rem; color: #999; text-decoration: line-through; margin-bottom: 3px;">R${basePrice}</div>
+                <div style="font-size: 0.85rem; color: #dc3545; margin-bottom: 5px; font-weight: 600;">- R${appliedPromoAmount.toFixed(2)} Promo</div>
+                <div style="font-size: 1.6rem; font-weight: 900; color: #28a745; margin-top: 3px;">R${finalPrice}</div>
+                ${remainingAfterUse > 0 ? `<div style="font-size: 0.7rem; color: #FFC107; margin-top: 5px; font-weight: 600;"><i class="fas fa-gift" style="margin-right: 3px;"></i> ${remainingAfterUse} promo rides left</div>` : ''}
+            </div>
+        `;
+    } else {
+        fareHtml = `
+            <div style="text-align: center; width: 100%;">
+                <div style="font-size: 0.7rem; color: #888; font-weight: 700; margin-bottom: 5px;">ESTIMATED FARE</div>
+                <div style="font-size: 1.6rem; font-weight: 900; color: #28a745;">R${basePrice}</div>
+            </div>
+        `;
+    }
 
-if (promoApplied && appliedPromoAmount > 0) {
-    fareHtml = `
-        <div style="text-align: center; width: 100%;">
-            <div style="font-size: 0.7rem; color: #888; font-weight: 700; margin-bottom: 5px;">ESTIMATED FARE</div>
-            <div style="font-size: 1rem; color: #999; text-decoration: line-through; margin-bottom: 3px;">R${basePrice}</div>
-            <div style="font-size: 0.85rem; color: #dc3545; margin-bottom: 5px; font-weight: 600;">- R${appliedPromoAmount.toFixed(2)} Promo</div>
-            <div style="font-size: 1.6rem; font-weight: 900; color: #28a745; margin-top: 3px;">R${finalPrice}</div>
-            ${remainingAfterUse > 0 ? `<div style="font-size: 0.7rem; color: #FFC107; margin-top: 5px; font-weight: 600;"><i class="fas fa-gift" style="margin-right: 3px;"></i> ${remainingAfterUse} promo ride${remainingAfterUse > 1 ? 's' : ''} left!</div>` : '<div style="font-size: 0.7rem; color: #888; margin-top: 5px;">Last promo ride</div>'}
-        </div>
-    `;
-} else if (promoRemaining > 0) {
-    fareHtml = `
-        <div style="text-align: center; width: 100%;">
-            <div style="font-size: 0.7rem; color: #888; font-weight: 700; margin-bottom: 5px;">ESTIMATED FARE</div>
-            <div style="font-size: 1.6rem; font-weight: 900; color: #28a745;">R${basePrice}</div>
-            <div style="font-size: 0.7rem; color: #FFC107; margin-top: 5px;"><i class="fas fa-tag" style="margin-right: 3px;"></i> ${promoRemaining} promo rides available</div>
-        </div>
-    `;
-} else {
-    fareHtml = `
-        <div style="text-align: center; width: 100%;">
-            <div style="font-size: 0.7rem; color: #888; font-weight: 700; margin-bottom: 5px;">ESTIMATED FARE</div>
-            <div style="font-size: 1.6rem; font-weight: 900; color: #28a745;">R${basePrice}</div>
-        </div>
-    `;
-}
+    // Instantly map the visible pickup address value synchronously
+    const pickupInputEl = document.getElementById('uberPickupInput');
+    var pickupAddress = (pickupInputEl && pickupInputEl.value && pickupInputEl.value !== "Fetching location...") 
+        ? pickupInputEl.value.split(',')[0].trim() 
+        : "Current Location";
 
-    // Get pickup address
-    var pickupAddress = "Current Location";
-    try {
-        pickupAddress = await getAddressFromCoordsPromise(commuterLng, commuterLat);
-        pickupAddress = pickupAddress.split(',')[0];
-    } catch(e) {}
-
-    // Get actual destination address
     var destText = "Destination not set";
     if (window.userDropOffDestination && window.userDropOffDestination !== "As Directed" && window.userDropOffDestination !== "Not Specified") {
         destText = window.userDropOffDestination.split(',')[0].trim();
-    } else if (typeof userDropOffDestination !== 'undefined' && userDropOffDestination && userDropOffDestination !== "As Directed") {
-        destText = userDropOffDestination.split(',')[0].trim();
     }
 
     const getValidImg = typeof getValidImageUrl === 'function' ? getValidImageUrl : (url) => url;
 
-    // Credit button text
-    // Credit button text - Use Font Awesome icon instead of emoji
-var creditButtonText = promoRemaining > 0 ? 'Use Promo' : 'Walvar Credit';
-var creditButtonValue = promoRemaining > 0 ? `R${promoValue} (${promoRemaining} left)` : `R${availableCredit.toFixed(2)}`;
-var creditButtonIcon = promoRemaining > 0 ? '<i class="fas fa-tag" style="margin-right: 5px;"></i>' : '<i class="fas fa-wallet" style="margin-right: 5px;"></i>';
     sheet.innerHTML = `
         <div class="sheet-handle-wrapper" id="taxiSheetDragHandle"><div class="sheet-handle-bar"></div></div>
         <div id="taxiListContainer" style="padding: 15px 20px 140px 20px; background: #fff; flex: 1; overflow-y: auto;">
@@ -24240,19 +24959,6 @@ var creditButtonIcon = promoRemaining > 0 ? '<i class="fas fa-tag" style="margin
                 </div>
             </div>
 
-
-<div style="margin-bottom: 20px; padding: 12px 15px; background: #f8f9fa; border-radius: 12px; border: 1px solid #eee;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div>
-            <span style="font-size: 11px; color: #888; font-weight: 700; text-transform: uppercase;"><i class="fas fa-map-marker-alt"></i> Driver's Current Location</span>
-            <div id="driverCurrentLocationText" style="font-size: 13px; font-weight: 600; color: #111; margin-top: 4px;">Fetching location...</div>
-        </div>
-        <button id="centerOnDriverBtn" class="btn-sm" style="background: #007BFF; color: white; border: none; border-radius: 20px; padding: 6px 12px; font-size: 11px; cursor: pointer;" onclick="centerMapOnDriver()">
-            <i class="fas fa-crosshairs"></i> Show on Map
-        </button>
-    </div>
-</div>
-
             <div style="position: relative; padding-left: 30px; margin-bottom: 25px;">
                 <div style="position: absolute; left: 5px; top: 5px; bottom: 5px; width: 2px; background: #eee;"></div>
                 <div style="position: relative; margin-bottom: 15px;">
@@ -24278,8 +24984,6 @@ var creditButtonIcon = promoRemaining > 0 ? '<i class="fas fa-tag" style="margin
                 </div>
             </div>
 
-            <!-- PAYMENT SECTION -->
-           <!-- PAYMENT SECTION -->
             <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 15px;">
                 <div style="display: flex; gap: 10px;">
                     <button class="btn" id="payCashBtn_${taxi.taxiId}" onclick="selectPaymentAndProceed('cash', '${taxi.taxiId}', 'ride')" style="flex: 1; border-radius: 10px; background: ${window.selectedPaymentMethod === 'cash' ? '#28a745' : 'transparent'}; color: ${window.selectedPaymentMethod === 'cash' ? 'white' : '#555'}; border: ${window.selectedPaymentMethod === 'cash' ? 'none' : '1px solid #ddd'}; padding: 12px; font-weight: 800; cursor: pointer;">
@@ -24300,11 +25004,6 @@ var creditButtonIcon = promoRemaining > 0 ? '<i class="fas fa-tag" style="margin
     `;
 
     if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
-
-    // Final debug
-    setTimeout(() => {
-        console.log("Final promo check - promoRemaining:", window.commuterData?.promoRemaining);
-    }, 100);
 };
 
 window.showEHailingConfirmationPopup = function(taxiId) {
@@ -24722,27 +25421,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 // Add this function to your code (it's missing/incomplete)
-window.calculateDynamicPrice = function(distanceKm, activeDriversCount) {
-    const baseFare = 12.00;
-    const ratePerKm = 8.00;
-    const minFare = 25.00;
 
-    var multiplier = 1.0;
-    if (activeDriversCount === 0) {
-        multiplier = 1.5;
-    } else if (activeDriversCount <= 2) {
-        multiplier = 1.5;
-    } else if (activeDriversCount <= 5) {
-        multiplier = 1.2;
-    }
-
-    window.isSurgeActive = multiplier > 1.0;
-    var price = (baseFare + (distanceKm * ratePerKm)) * multiplier;
-    return Math.round(Math.max(minFare, price));
-};
-
-
-// Global tracking variables
 
 // =======================================================================
 // FIX 1: DYNAMIC COMMUTER POOLING UI & "RIDE NOW" OPTION
@@ -25014,7 +25693,11 @@ window.ensureTripActive = function() {
     }, 30000);
 };
 
+// =======================================================================
+// RIDE CATEGORY SELECTION (Fixes the Button Price Not Updating)
+// =======================================================================
 window.selectCategory = function(cat, price) {
+    // 1. Reset all cards to unselected state
     document.querySelectorAll('.category-card').forEach(el => {
         el.style.border = '2px solid transparent';
         el.style.background = '#f8f9fa';
@@ -25028,6 +25711,7 @@ window.selectCategory = function(cat, price) {
         });
     });
 
+    // 2. Highlight the selected card
     const el = document.getElementById('cat-' + cat);
     if (el) {
         el.style.border = '2px solid #007BFF';
@@ -25042,23 +25726,27 @@ window.selectCategory = function(cat, price) {
         });
     }
 
+    // 3. Update the global variables
     window.selectedRideCategory = cat;
     window.calculatedTripPrice = price;
-};
 
+    // 4. CRITICAL FIX: Force the Payment Button to refresh and show the new price!
+    if (typeof window.selectPayment === 'function') {
+        window.selectPayment(window.selectedPaymentMethod || 'cash');
+    }
+};
 window.selectPayment = function(method) {
     window.selectedPaymentMethod = method;
     const cashBtn = document.getElementById('payCashBtn');
     const cardBtn = document.getElementById('payCardBtn');
     const walletWarning = document.getElementById('walletBalanceWarning');
 
-    // Reset styles
+    // Reset payment button styles
     [cashBtn, cardBtn].forEach(btn => {
         if (btn) {
             btn.style.background = '#f8f9fa';
             btn.style.color = '#555';
             btn.style.border = '1px solid #ddd';
-            // Reset any inline promo texts to their default green
             const promoText = btn.querySelector('.promo-text-inline');
             if (promoText) promoText.style.color = '#28a745';
         }
@@ -25066,23 +25754,23 @@ window.selectPayment = function(method) {
 
     if (walletWarning) walletWarning.style.display = 'none';
 
-    const fare = window.calculatedTripPrice || 25;
+    // Grab the LATEST price that was selected by the category click
+    const fare = window.calculatedTripPrice || 45; // Defaulting to the R45 minimum
     const availableCredit = parseFloat(window.commuterData?.credits || 0);
     const promoRemaining = window.commuterData?.promoRemaining || 0;
     const promoValue = window.commuterData?.promoValue || 25;
 
-    // Automatically determine final amount if promo is active
+    // Apply promo deductions if applicable
     let finalPrice = fare;
     if (promoRemaining > 0) {
         finalPrice = Math.max(0, fare - promoValue);
     }
 
-    // Apply active color
+    // Apply active color to Cash or Card
     if (method === 'cash' && cashBtn) {
         cashBtn.style.background = '#28a745';
         cashBtn.style.color = 'white';
         cashBtn.style.border = 'none';
-        // Make promo text readable when button background turns green
         const promoText = cashBtn.querySelector('.promo-text-inline');
         if (promoText) promoText.style.color = 'white';
     } else if (method === 'card' && cardBtn) {
@@ -25092,6 +25780,7 @@ window.selectPayment = function(method) {
         const promoText = cardBtn.querySelector('.promo-text-inline');
         if (promoText) promoText.style.color = 'white';
         
+        // Show warning if wallet is insufficient for Card payment
         if (availableCredit < finalPrice && walletWarning) {
             walletWarning.style.display = 'block';
             walletWarning.innerHTML = `
@@ -25101,7 +25790,7 @@ window.selectPayment = function(method) {
         }
     }
 
-    // Update main button using the exact ID
+    // CRITICAL: Update the Main Request Ride Button text to match the selected category
     const mainBtn = document.getElementById('mainRequestRideBtn');
     if (mainBtn) {
         const methodLabel = method === 'card' ? 'CARD' : 'CASH';
@@ -25112,204 +25801,8 @@ window.selectPayment = function(method) {
         }
     }
 };
-       window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
-    window.currentRideMode = isDeliveryMode ? 'delivery' : 'ehailing';
-    window.isAsiyeGoMode = true;
+  
 
-    var tripDistKm = 5;
-    var activeDestLat = (typeof ehailingDestLat !== 'undefined' && ehailingDestLat) ? ehailingDestLat : window.ehailingDestLat;
-    var activeDestLng = (typeof ehailingDestLng !== 'undefined' && ehailingDestLng) ? ehailingDestLng : window.ehailingDestLng;
-
-    if (activeDestLat && activeDestLng && commuterLat && commuterLng) {
-        tripDistKm = calculateDistance(commuterLat, commuterLng, activeDestLat, activeDestLng) * 1.3;
-    }
-    window.calculatedTripDistance = tripDistKm;
-
-    // Standard Private Ride: Base R12 + R8.00/km (Min R25)
-    const standardPrice = Math.max(25, 12 + (tripDistKm * 8.00));
-    
-    // Asiye Club Shared Pool: (Standard Private Ride + 10%) divided by 3 passengers (Min R20)
-    const clubPrice = Math.max(20, Math.round((standardPrice * 1.1) / 3));
-    
-    // Asiye XL (Disabled)
-    const xlPrice = 0;
-
-    window.calculatedTripPrice = Math.round(standardPrice);
-
-    openModal('taxiListSheet');
-
-    if (isDeliveryMode) {
-        if (typeof window.findNearestAsiyeGoDriver === 'function') {
-            window.findNearestAsiyeGoDriver(true);
-        }
-    } else {
-        if (typeof window.populateEHailingCategories === 'function') {
-            window.populateEHailingCategories(Math.round(standardPrice), Math.round(clubPrice), xlPrice);
-        }
-    }
-};
-
-window.populateEHailingCategories = function(standardPrice, clubPrice, xlPrice) {
-    const sheet = document.getElementById('taxiListSheet');
-    if (!sheet) return;
-
-    var fName = window.commuterData?.name || 'Passenger';
-    var dropOffText = window.userDropOffDestination || "Destination";
-    
-    // REQUIREMENT 1: Pre-select Asiye Club Shared Pool by default
-    // REQUIREMENT 1: Pre-select Asiye Club Shared Pool by default
-    window.selectedRideCategory = 'club';
-    window.calculatedTripPrice = clubPrice;
-    
-    // Default payment method setup (Promo applies automatically now)
-    const promoRemaining = window.commuterData?.promoRemaining || 0;
-    const promoValue = window.commuterData?.promoValue || 25;
-    window.selectedPaymentMethod = 'cash'; 
-    
-    const availableCredit = parseFloat(window.commuterData?.credits || 0);
-
-    // Build the dynamic UI
-    sheet.innerHTML = `
-        <div class="sheet-handle-wrapper" id="taxiSheetDragHandle" style="padding-bottom: 0; background: #111; border-radius: 35px 35px 0 0;">
-            <div class="sheet-handle-bar" style="width: 40px; height: 5px; background: rgba(255,255,255,0.5); margin-top: 10px;"></div>
-        </div>
-
-        <div class="gocab-top-section" style="background: linear-gradient(135deg, #111 0%, #333 100%) !important; box-shadow: 0 10px 25px rgba(0,0,0,0.4);">
-            <div class="gocab-user-row">
-                <div class="gocab-user-info">
-                    <div style="width: 45px; height: 45px; border-radius: 50%; overflow: hidden; border: 2px solid #555; background:#222; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:1.2rem;">
-                        ${fName.charAt(0).toUpperCase()}
-                    </div>
-                    <div class="gocab-greeting">
-                        <p style="color: #aaa !important;">Private & Shared Rides</p>
-                        <h4 style="color: #fff !important;">Asiye Go</h4>
-                    </div>
-                </div>
-                <button class="gocab-bell-btn" onclick="closeModal('taxiListSheet'); showModernDashboard();" style="background: rgba(255,255,255,0.1) !important; color: white !important; border:none;">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        </div>
-
-        <!-- REQUIREMENT 3: Dual Location Header displaying both Pickup and Drop-off with working edit buttons -->
-        <div class="gocab-location-bar" style="margin-top: -20px; z-index:20; display: flex; flex-direction: column; gap: 8px; align-items: stretch; padding: 12px 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 6px;">
-                <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-right: 10px; flex: 1;">
-                    <span style="font-size: 0.65rem; color: #888; font-weight: 800; text-transform: uppercase;">Pickup Location</span>
-                    <span style="font-size: 0.9rem; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="gocabPickupText">Current Location</span>
-                </div>
-              
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-right: 10px; flex: 1;">
-                    <span style="font-size: 0.65rem; color: #888; font-weight: 800; text-transform: uppercase;">Drop-off Destination</span>
-                    <span style="font-size: 0.9rem; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(dropOffText)}</span>
-                </div>
-                <!-- FIXED Change Button -->
-                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); setTimeout(() => { showDestinationSearchMode(); }, 300);" style="background: none; border: none; color: #007BFF; font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                    <i class="fas fa-edit"></i> Change
-                </button>
-            </div>
-        </div>
-
-        <div id="taxiListContainer" style="padding: 10px 20px 100px 20px;">
-            <h4 style="margin: 0 0 15px 0; color: #333; font-weight: 800;">Choose a ride</h4>
-            
-            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
-                <!-- Asiye Club Category (Pre-selected) -->
-                <div id="cat-club" class="category-card selected" onclick="selectCategory('club', ${clubPrice})" style="border: 2px solid #007BFF; background: #eef4ff; border-radius: 16px; padding: 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div style="width: 60px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #007BFF;">
-                            <i class="fas fa-users"></i>
-                        </div>
-                        <div>
-                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #007BFF;">Asiye Club (Shared)</h4>
-                            <div style="font-size: 0.8rem; color: #007BFF; font-weight: 600;"><i class="fas fa-clock"></i> Shared Pool &bull; Max 3 Passengers &bull; 10 minutes waiting time</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 1.3rem; font-weight: 900; color: #007BFF;">R${clubPrice}</div>
-                </div>
-
-                <!-- Standard Category (Private) -->
-                <div id="cat-standard" class="category-card" onclick="selectCategory('standard', ${standardPrice})" style="border: 2px solid transparent; background: #f8f9fa; border-radius: 16px; padding: 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <img src="data/carIcon.jpg" onerror="this.src='https://cdn3d.iconscout.com/3d/premium/thumb/car-4994273-4161869.png'" style="width: 60px; height: auto; mix-blend-mode: multiply;">
-                        <div>
-                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #111;">Asiye Go (Private)</h4>
-                            <div style="font-size: 0.8rem; color: #666; font-weight: 600;"><i class="fas fa-user"></i> Go Now &bull;Direct &bull; No Waiting</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 1.3rem; font-weight: 900; color: #111;">R${standardPrice}</div>
-                </div>
-
-                <!-- XL Pool Category (Disabled) -->
-                <div id="cat-xl" class="category-card" style="border: 2px solid transparent; background: #f1f3f5; border-radius: 16px; padding: 15px; display: flex; align-items: center; justify-content: space-between; cursor: not-allowed; opacity: 0.65;">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <img src="data/quantum.png" style="width: 60px; height: auto; mix-blend-mode: multiply; filter: grayscale(100%);">
-                        <div>
-                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #888;">Asiye XL</h4>
-                            <div style="font-size: 0.8rem; color: #dc3545; font-weight: 700;"><i class="fas fa-ban"></i> Not available in this area</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 1.3rem; font-weight: 900; color: #888;">--</div>
-                </div>
-            </div>
-
-            <!-- REQUIREMENT 2: Distinct Cash, Promo, and Card/Wallet Buttons -->
-         
-            <!-- DISTINCT CASH AND CARD PAYMENT BUTTONS -->
-         
-<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-    <button class="btn" id="payCashBtn" onclick="selectPayment('cash')" style="border-radius: 12px; background: #f8f9fa; color: #555; border: 1px solid #ddd; padding: 12px; font-weight: 800; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-        <div><i class="fas fa-money-bill-wave"></i> Cash</div>
-        ${promoRemaining > 0 ? `<div class="promo-text-inline" style="font-size: 0.75rem; color: #28a745; font-weight: 900; transition: color 0.2s;">PROMO: -R${promoValue}</div>` : ''}
-    </button>
-    <button class="btn" id="payCardBtn" onclick="selectPayment('card')" style="border-radius: 12px; background: #f8f9fa; color: #555; border: 1px solid #ddd; padding: 12px; font-weight: 800; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-        <div><i class="fas fa-credit-card"></i> Card (R${availableCredit.toFixed(2)})</div>
-        ${promoRemaining > 0 ? `<div class="promo-text-inline" style="font-size: 0.75rem; color: #28a745; font-weight: 900; transition: color 0.2s;">PROMO: -R${promoValue}</div>` : ''}
-    </button>
-</div>
-
-            <!-- MANUAL PROMO CODE TRIGGER -->
-            <button class="btn" id="payPromoBtn" onclick="togglePromoCodeInput()" style="width: 100%; border-radius: 12px; border: 1.5px dashed #007BFF; color: #007BFF; background: transparent; padding: 12px; font-weight: 800; font-size: 0.85rem; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
-                <i class="fas fa-tag"></i> Use Promo Code
-            </button>
-
-            <!-- INLINE PROMO INPUT PANEL -->
-            <!-- INLINE PROMO INPUT PANEL -->
-<div id="promoCodeInputSection" style="display: none; margin-bottom: 15px; animation: fadeIn 0.2s ease;">
-    <div style="display: flex; gap: 8px;">
-        <input type="text" id="manualPromoCodeField" placeholder="Enter Promo Code or Voucher" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; font-weight: bold; text-transform: uppercase; background: #f8f9fa !important; color: #111 !important; font-size: 0.9rem;">
-        <button class="btn btn-primary" onclick="applyManualPromoCode()" style="padding: 12px 18px; border-radius: 10px; font-weight: 800; background: #007BFF; color: white; border: none; cursor: pointer; font-size: 0.85rem;">Apply</button>
-    </div>
-</div>
-
-            <!-- Insufficient Wallet warning layout -->
-            <div id="walletBalanceWarning" style="display: none; background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 10px 15px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-bottom: 15px;"></div>
-
-            <!-- ADDED UNIQUE ID TO THIS BUTTON -->
-            <button id="mainRequestRideBtn" class="gocab-book-btn" onclick="requestAsiyeGoRide()" style="width: 100%; background: #000 !important; color: white !important; padding: 18px !important; font-size: 1.1rem !important; border-radius: 16px !important; box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important; border: none;">
-                Request Ride
-            </button>
-        </div>
-    `;
-    
-    // Resolve pickup address text asynchronously
-    getAddressFromCoordsPromise(commuterLng, commuterLat).then(addr => {
-        const el = document.getElementById('gocabPickupText');
-        if (el) el.textContent = addr.split(',')[0].trim();
-    });
-
-    const mainActionSheet = document.getElementById('mainActionSheet');
-    if (mainActionSheet) mainActionSheet.style.display = 'none';
-    
-    // Trigger proper styling highlights based on preselected variables
-    selectPayment(window.selectedPaymentMethod);
-
-    setTimeout(() => { 
-        if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag(); 
-    }, 100);
-};
 
 window.cancelCurrentRequest = async function() {
     if (!window.currentRequestId) {
@@ -26587,25 +27080,21 @@ window.requestAsiyeGoRide = async function() {
 
     let promoDeduction = 0;
     let walletDeduction = 0;
-    let newPromoRemaining = promoRemaining;
 
-    // 1. Promo ALWAYS applies first
+    // Calculate potential deductions without writing them to database yet
     if (promoRemaining > 0) {
         promoDeduction = Math.min(promoValue, fare);
-        newPromoRemaining--;
     }
 
     let remainingFare = Math.max(0, fare - promoDeduction);
 
-    // 2. If Card selected, check if we have enough
     if (window.selectedPaymentMethod === 'card' && remainingFare > 0) {
         if (availableCredit < remainingFare) {
-            showGenericMessage("Insufficient Funds", "Your card balance is too low to cover the rest of the fare. Please select Cash or Top Up.", "fa-wallet", "icon-warning");
+            showGenericMessage("Insufficient Funds", "Your card balance is too low. Please select Cash or Top Up.", "fa-wallet", "icon-warning");
             openModal('taxiListSheet'); 
             return;
         }
         walletDeduction = remainingFare;
-        remainingFare = 0; // Fully paid by card
     }
 
     let totalAppliedCredit = promoDeduction + walletDeduction;
@@ -26641,9 +27130,6 @@ window.requestAsiyeGoRide = async function() {
 
     var finalDest = window.userDropOffDestination || "As Directed";
 
-    // ---------------------------------------------------------
-    // POOLING LOGIC: Search for existing pool within 5km
-    // ---------------------------------------------------------
     let joinedExistingPoolId = null;
 
     if (isPooling) {
@@ -26657,7 +27143,7 @@ window.requestAsiyeGoRide = async function() {
                         const dist = calculateDistance(commuterLat, commuterLng, req.poolCenterLat, req.poolCenterLng);
                         if (dist <= 5) {
                             joinedExistingPoolId = child.key;
-                            return true; // Break loop
+                            return true;
                         }
                     }
                 }
@@ -26681,13 +27167,9 @@ window.requestAsiyeGoRide = async function() {
     };
 
     if (joinedExistingPoolId) {
-        // JOIN EXISTING POOL
-        console.log("Joined existing pool:", joinedExistingPoolId);
         currentRequestId = joinedExistingPoolId;
         await database.ref(`requests/${joinedExistingPoolId}/passengers/${userId}`).set(passengerData);
-        
     } else {
-        // CREATE NEW REQUEST (Private or New Pool)
         const requestNode = database.ref("requests").push();
         currentRequestId = requestNode.key;
 
@@ -26701,7 +27183,7 @@ window.requestAsiyeGoRide = async function() {
             commuterProfilePic: window.commuterData?.profile_picture_url || "",
             calculatedPrice: fare,
             paymentMethod: passengerData.paymentMethod,
-            appliedCredit: totalAppliedCredit, // <--- FIXED HERE
+            appliedCredit: totalAppliedCredit, 
             finalAmount: passengerData.finalAmount,
             tripDistance: window.calculatedTripDistance || 0,
             commuterLocation: { latitude: commuterLat, longitude: commuterLng },
@@ -26714,10 +27196,10 @@ window.requestAsiyeGoRide = async function() {
             timestamp: firebase.database.ServerValue.TIMESTAMP
         };
 
-       if (isPooling) {
-            requestData.expiresAt = Date.now() + (10 * 60000); // 10 minute timeout
-            requestData.minCapacity = 2; // Starts pool sequence if at least 2 passengers join
-            requestData.maxCapacity = 3; // Hard limit at 3 passengers
+        if (isPooling) {
+            requestData.expiresAt = Date.now() + (10 * 60000); 
+            requestData.minCapacity = 2; 
+            requestData.maxCapacity = 3; 
             requestData.originalPerPersonPrice = fare;
             requestData.poolCenterLat = commuterLat;
             requestData.poolCenterLng = commuterLng;
@@ -26726,9 +27208,6 @@ window.requestAsiyeGoRide = async function() {
         }
         await requestNode.set(requestData);
 
-        // ==============================================================
-        // 🚨 CRITICAL FIX: BROADCAST "ASIYE GO" REQUEST TO NEARBY DRIVERS
-        // ==============================================================
         if (!isPooling) {
             database.ref('taxis').once('value').then(snap => {
                 if (snap.exists()) {
@@ -26736,7 +27215,7 @@ window.requestAsiyeGoRide = async function() {
                         const driver = child.val();
                         if (driver.vehicleType === 'ehailing' && driver.isOnline && !driver.isFull && driver.latitude && driver.longitude) {
                             const dist = calculateDistance(commuterLat, commuterLng, driver.latitude, driver.longitude);
-                            if (dist <= 15) { // Notify online drivers within 15km
+                            if (dist <= 15) {
                                 database.ref(`notifications/taxis/${child.key}`).push({
                                     type: 'passenger',
                                     title: 'New Asiye Go Request!',
@@ -26756,23 +27235,19 @@ window.requestAsiyeGoRide = async function() {
         }
     }
 
-    // Deduct credits and track request locally
-    const newCreditBalance = Math.max(0, availableCredit - totalAppliedCredit);
-    
+    // Only associate trip ID locally. No debit transaction is dispatched yet.
     await database.ref(`commuters/${userId}`).update({
-        currentRequest: currentRequestId,
-        promoRemaining: newPromoRemaining,
-        credits: newCreditBalance
+        currentRequest: currentRequestId
     });
     
     if (window.commuterData) {
-        window.commuterData.promoRemaining = newPromoRemaining;
-        window.commuterData.credits = newCreditBalance;
         window.commuterData.currentRequest = currentRequestId;
     }
 
     listenForRequestStatus(currentRequestId);
-};// =======================================================================
+};
+
+// =======================================================================
 // DYNAMIC COMMUTER POOLING UI & "RIDE NOW" MATH
 // =======================================================================
 
@@ -26830,56 +27305,43 @@ window.listenForRequestStatus = function(reqId) {
     
     console.log("📡 Commuter: Listening to live request:", reqId);
     
-    // Detach old listener if any
     if (window.currentRequestStatusListener && window.activeListenerReqId) {
         database.ref('requests/' + window.activeListenerReqId).off('value', window.currentRequestStatusListener);
     }
     
     window.activeListenerReqId = reqId;
     
-    window.currentRequestStatusListener = database.ref('requests/' + reqId).on('value', (snapshot) => {
+    window.currentRequestStatusListener = database.ref('requests/' + reqId).on('value', async (snapshot) => {
         const reqData = snapshot.val();
         
         if (!reqData) {
-            console.warn("Request deleted from database.");
             if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
             return;
         }
 
-        // Handle club pooling specific data extraction
         let myTripData = reqData;
         if (reqData.type === 'club' && reqData.passengers && typeof userId !== 'undefined' && reqData.passengers[userId]) {
             myTripData = reqData.passengers[userId];
         }
 
-        // --- RESOLVE STATUS WITH PROPER PRIORITY ---
         const masterStatus = reqData.status;
         const passengerStatus = myTripData.status;
-        
         let currentStatus = passengerStatus || masterStatus;
         
         const onboardStatuses = ['passenger_onboard', 'picked_up', 'in_transit'];
         const activeTripStates = ['accepted', 'driver_on_way', 'passenger_here', 'arrived', 'picking_up_others'];
 
-        // Onboard status must take absolute priority over master status
         if (onboardStatuses.includes(passengerStatus)) {
             currentStatus = passengerStatus;
         } else if (activeTripStates.includes(masterStatus)) {
             currentStatus = masterStatus;
         }
         
-        // Track state changes to prevent infinite re-rendering loops
         const savedState = localStorage.getItem('trackedTripState_' + reqId);
         if (savedState !== currentStatus) {
-            console.log(`🔄 Trip state changed: ${savedState} -> ${currentStatus}`);
             localStorage.setItem('trackedTripState_' + reqId, currentStatus);
         }
 
-        // ==========================================
-        // STATE ROUTER
-        // ==========================================
-        
-        // STATE A: POOLING / PENDING (Waiting for passengers)
         if (currentStatus === 'pooling' || (reqData.type === 'club' && currentStatus === 'pending')) {
             const popup = document.getElementById('pendingRequestPopup');
             if (popup && !popup.classList.contains('open')) {
@@ -26896,7 +27358,7 @@ window.listenForRequestStatus = function(reqId) {
                 const rideNowCost = baseFare + ((maxCap - passCount) * baseFare);
 
                 let dynamicHeadline = "Pooling Passengers...";
-                let statusMsg = `You are passenger #${passCount}. Waiting for ${minCap - passCount} more passenger${(minCap - passCount) > 1 ? 's' : ''} to join...`;
+                let statusMsg = `You are passenger #${passCount}. Waiting for ${minCap - passCount} more passengers to join...`;
                 
                 if (passCount > 1 && passCount < minCap) {
                     dynamicHeadline = `${passCount} Passengers Joined!`;
@@ -26926,7 +27388,6 @@ window.listenForRequestStatus = function(reqId) {
                             <span style="background: #007BFF; color: white; padding: 3px 8px; border-radius: 8px; font-size: 0.8rem; font-weight: bold;">R${baseFare} each</span>
                         </div>
                         <p style="color:#ccc; font-size:0.9rem; margin: 0 0 10px 0; line-height: 1.4;">${statusMsg}</p>
-                        
                         ${(!reqData.forceDispatch && passCount < maxCap) ? `
                         <div style="background: #333; padding: 10px; border-radius: 8px; border-left: 3px solid #f8961e;">
                             <p style="color:#f8961e; font-size:0.8rem; margin: 0; font-weight: 600;">Don't want to wait? Leave now by paying for the empty seats. You pay: R${rideNowCost}.</p>
@@ -26945,25 +27406,25 @@ window.listenForRequestStatus = function(reqId) {
                 if (defaultCancel) defaultCancel.style.display = 'none';
             }
         }
-        
-        // STATE B: ACCEPTED & ON ROUTE
         else if (onboardStatuses.includes(currentStatus) || activeTripStates.includes(currentStatus)) {
-            // Close pending screens
             const pendingPopup = document.getElementById('pendingRequestPopup');
             if (pendingPopup && pendingPopup.classList.contains('open') && typeof closeModal === 'function') {
                 closeModal('pendingRequestPopup');
             }
-            
-            // Re-render Tracking Screen
             if (typeof window.showDriverAcceptedPopup === 'function') {
                 window.showDriverAcceptedPopup(reqData.taxiId, { requestKey: reqId });
             }
         }
-        
-        // STATE C: COMPLETED
-      // STATE C: COMPLETED
         else if (currentStatus === 'completed') {
+            // Unbind listener so completion steps are not executed iteratively
+            database.ref('requests/' + reqId).off('value', window.currentRequestStatusListener);
+            window.currentRequestStatusListener = null;
+
+            // Trigger the deduction atomic transaction
+            await window.deductWalletOnCompletion(reqId);
+
             if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
+            
             if (typeof window.showDropOffPopup === 'function') {
                 window.showDropOffPopup({
                     paidAmount: myTripData.paidAmount || myTripData.price || reqData.calculatedPrice,
@@ -26975,13 +27436,10 @@ window.listenForRequestStatus = function(reqId) {
                 });
             }
             
-            // --- TRIGGER REFERRAL COMMISSION ONLY UPON RIDE COMPLETION ---
             if (typeof window.processFirstTripReferralReward === 'function') {
                 window.processFirstTripReferralReward();
             }
         }
-        
-        // STATE D: CANCELLED / REJECTED
         else if (currentStatus.includes('cancelled') || currentStatus === 'rejected') {
             if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
             if (typeof showGenericMessage === 'function') {
@@ -26989,17 +27447,78 @@ window.listenForRequestStatus = function(reqId) {
             }
         }
     });
-};// 3. OVERRIDE PROCEED WITH BOOKING TO ENSURE LISTENER STARTS IMMEDIATELY
-const originalProceedWithBooking = window.proceedWithBooking;
-window.proceedWithBooking = async function(taxiId) {
-    if (typeof originalProceedWithBooking === 'function') {
-        await originalProceedWithBooking(taxiId);
+};
+
+window.deductWalletOnCompletion = function(reqId) {
+    if (!reqId || !userId) return Promise.resolve(false);
+
+    const deductionLockKey = `processed_deduction_${reqId}`;
+    if (localStorage.getItem(deductionLockKey)) {
+        console.log("Deduction already processed for this request ID.");
+        return Promise.resolve(true);
     }
-    
-    // Ensure the new robust listener is absolutely fired
-    if (window.currentRequestId) {
-        window.listenForRequestStatus(window.currentRequestId);
-    }
+
+    return database.ref(`requests/${reqId}`).once('value').then(snap => {
+        const req = snap.val();
+        if (!req) return false;
+
+        // Isolate passenger profile values if dealing with pooling
+        let myTripData = req;
+        if (req.type === 'club' && req.passengers && req.passengers[userId]) {
+            myTripData = req.passengers[userId];
+        }
+
+        const appliedCredit = parseFloat(myTripData.appliedCredit || 0);
+        if (appliedCredit <= 0) {
+            localStorage.setItem(deductionLockKey, "true");
+            return true; 
+        }
+
+        const commuterRef = database.ref(`commuters/${userId}`);
+        
+        return commuterRef.transaction(currentProfile => {
+            if (!currentProfile) return currentProfile;
+
+            // Initialize properties safely if not defined
+            const promoRemaining = currentProfile.promoRemaining || 0;
+            const credits = parseFloat(currentProfile.credits || 0);
+
+            // Deduct promo count if applicable
+            if (promoRemaining > 0 && myTripData.paymentMethod === 'cash') {
+                currentProfile.promoRemaining = promoRemaining - 1;
+            }
+
+            // Deduct numeric wallet credits
+            currentProfile.credits = Math.max(0, credits - appliedCredit);
+
+            return currentProfile;
+        }, (error, committed, snapshot) => {
+            if (error) {
+                console.error("Deduction transaction error:", error);
+            } else if (committed) {
+                localStorage.setItem(deductionLockKey, "true");
+                const freshData = snapshot.val();
+                if (window.commuterData && freshData) {
+                    window.commuterData.credits = freshData.credits;
+                    window.commuterData.promoRemaining = freshData.promoRemaining;
+                }
+                
+                // Add ledger transaction to earnings list
+                database.ref(`commuters/${userId}/earnings`).push({
+                    id: 'deduct_' + Date.now(),
+                    type: 'withdrawal',
+                    amount: appliedCredit,
+                    description: 'Trip Fare Payment',
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    status: 'completed'
+                });
+
+                if (typeof updatePromoWalletDisplay === 'function') updatePromoWalletDisplay();
+                if (typeof updateSideMenuData === 'function') updateSideMenuData();
+                console.log("Transaction successfully debited upon completion.");
+            }
+        });
+    });
 };
 // =======================================================================
 // COMMUTER APP: LIVE TRIP TRACKING & SYNCHRONIZATION
@@ -27962,6 +28481,100 @@ window.processFirstTripReferralReward = function() {
         }
     });
 };
+
+// =======================================================================
+// MAPBOX REVERSE GEOCODER (Converts GPS to Street Address)
+// =======================================================================
+window.getAddressFromCoordsPromise = function(lng, lat) {
+    return new Promise((resolve, reject) => {
+        if (!lng || !lat || isNaN(lng) || isNaN(lat)) {
+            reject("Invalid coordinates");
+            return;
+        }
+        
+        // Use Mapbox Geocoding API to find the address
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=address,poi,neighborhood,locality,place&limit=1`;
+        
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.features && data.features.length > 0) {
+                    resolve(data.features[0].place_name);
+                } else {
+                    resolve("Unknown Location");
+                }
+            })
+            .catch(error => {
+                console.error("Reverse geocoding error:", error);
+                reject(error);
+            });
+    });
+};
+
+// =======================================================================
+// FAIL-SAFE REAL-TIME GEOLOCATION & ADDRESS RESOLVER
+// =======================================================================
+window.getRealTimeCommuterAddress = async function() {
+    var lat = window.commuterLat || commuterLat;
+    var lng = window.commuterLng || commuterLng;
+
+    // Fallback to local storage if global runtime variables are not yet ready
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+        lat = parseFloat(localStorage.getItem('lastLat'));
+        lng = parseFloat(localStorage.getItem('lastLng'));
+    }
+
+    // Standard South African default fallback if all telemetry fails
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+        lat = -26.2041;
+        lng = 28.0473;
+    }
+
+    try {
+        const address = await getAddressFromCoordsPromise(lng, lat);
+        if (address && address !== "Unknown Location" && address !== "Location Unavailable") {
+            return address.split(',')[0].trim();
+        }
+    } catch (e) {
+        console.warn("Telemetry fallback geocoding failed:", e);
+    }
+
+    return "Current Location";
+};
+
+// =======================================================================
+// INITIALIZE DUAL INPUTS (With Fail-Safe Telemetry Sync)
+// =======================================================================
+window.initDualGeocoders = async function() {
+    const destContainer = document.getElementById('uber-dest-container');
+    const pickupContainer = document.getElementById('uber-pickup-container');
+
+    if (destContainer) {
+        destContainer.innerHTML = `
+            <input type="text" id="uberDestInput" class="mapboxgl-ctrl-geocoder--input" 
+                   placeholder="Where to?" 
+                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
+    }
+
+    if (pickupContainer) {
+        pickupContainer.innerHTML = `
+            <input type="text" id="uberPickupInput" class="mapboxgl-ctrl-geocoder--input" 
+                   placeholder="Current Location" 
+                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
+    }
+
+    window.setupDestAutocomplete();
+
+    const pickupInput = document.getElementById('uberPickupInput');
+    if (pickupInput) {
+        pickupInput.value = "Fetching current address...";
+        
+        // Execute the fail-safe real-time address resolution
+        const realAddress = await window.getRealTimeCommuterAddress();
+        pickupInput.value = realAddress;
+    }
+};
+
 </script>
 </body>
-</html> 
+</html>

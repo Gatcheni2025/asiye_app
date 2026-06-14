@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Asiye</string>
-    <string name="mapbox_access_token">__MAPBOX_PUBLIC_TOKEN__
+    <string name="mapbox_access_token">__MAPBOX_PUBLIC_TOKEN__</string>
+</resources>

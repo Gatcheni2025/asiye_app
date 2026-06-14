@@ -698,7 +698,28 @@
     const auth = firebase.auth(), db = firebase.database(), storage = firebase.storage();
     let currentUser = null, currentLocation = null, locationWatch = null, availableDeliveries = [], myDeliveries = [], selectedDelivery = null, deliveryMap = null, isOnline = true, selectedPackageQuantity = 10, selectedBagSize = 'S', selectedAddress = null, selectedIdFront, selectedIdBack, selectedProof;
     const wholesalePrices = { S: 35, M: 45, L: 60, XL: 120 };
-    const mapToken = '__MAPBOX_PUBLIC_TOKEN__"Online mode activated");
+    const mapToken = 'pk.eyJ1IjoiZ29zb3V0aGFmcmljYSIsImEiOiJjbTM4ajZmdmowc2JnMmlxeHF5bzB1dnJlIn0.CV71_oh-Tnag84kUE4K0ZQ';
+
+    function showToast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.innerText = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 3000); }
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function escapeHtml(s) { if(!s) return ''; return String(s).replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+    function distance(lat1,lng1,lat2,lng2) { const R=6371; const dLat=(lat2-lat1)*Math.PI/180, dLon=(lng2-lng1)*Math.PI/180; const a=Math.sin(dLat/2)**2+Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2; return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a)); }
+
+    function startTracking(){
+        if(!navigator.geolocation) return;
+        if(locationWatch) navigator.geolocation.clearWatch(locationWatch);
+        locationWatch = navigator.geolocation.watchPosition(pos => {
+            currentLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            if(currentUser && isOnline) db.ref(`handlers/${currentUser.uid}`).update({ latitude: currentLocation.lat, longitude: currentLocation.lng, lastSeen: Date.now() });
+            if(document.getElementById('available-view').classList.contains('active')) refreshAvailableDeliveries();
+        }, err=>console.warn, {enableHighAccuracy:true});
+    }
+
+    function toggleOnlineStatus(){
+        isOnline = !isOnline;
+        const toggle = document.getElementById('onlineToggle');
+        if(isOnline){
+            toggle.classList.add('active'); document.getElementById('statusText').innerText='🟢 Online'; startTracking(); showToast("Online mode activated");
         } else {
             toggle.classList.remove('active'); document.getElementById('statusText').innerText='⚪ Offline'; if(locationWatch) navigator.geolocation.clearWatch(locationWatch); db.ref(`handlers/${currentUser.uid}`).update({ isOnline: false }); showToast("Offline mode");
         }
