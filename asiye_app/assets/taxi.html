@@ -4013,22 +4013,7 @@ model-viewer {
         </button>
     </div>
     <!-- Service Preferences Section -->
-    <div style="text-align: left; margin: 20px 0; padding: 15px; background: var(--gray-100); border-radius: var(--border-radius);">
-        <h4 style="margin-top: 0; display: flex; align-items: center; gap: 8px;">
-            <i class="fas fa-cog"></i> Service Preferences
-        </h4>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
-            <span>Accept Parcel Deliveries</span>
-            <label class="switch">
-                <input type="checkbox" id="parcelServiceToggle">
-                <span class="slider round"></span>
-            </label>
-        </div>
-        <div id="parcelPriceSetting" style="display: none;">
-            <label for="parcelPriceSettingInput">Parcel Price (R)</label>
-            <input type="number" id="parcelPriceSettingInput" placeholder="e.g., 15">
-        </div>
-    </div>
+
     <!-- ========================================== -->
     <!-- NEW: LEGAL & ACCOUNT DELETION SECTION      -->
     <!-- ========================================== -->
@@ -4580,7 +4565,7 @@ Retake Photo
             const database = firebase.database();
             const auth = firebase.auth();
             const storage = firebase.storage();
-            mapboxgl.accessToken = '__MAPBOX_PUBLIC_TOKEN__';
+            mapboxgl.accessToken = 'pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw';
 
             // =================================================================
             // NEW: SUBSCRIPTION MANAGEMENT VARIABLES AND FUNCTIONS
@@ -11539,56 +11524,26 @@ function initializeRequestListener() {
        // =================================================================
     // 2. FIXED REQUEST POPUP RENDERER
     // =================================================================
-  window.renderRequestPopup = function(popup, req, distance, locationName) {
-    // SAFETY CHECK: Make sure popup exists
-    if (!popup || !popup.innerHTML) {
-        console.error("Popup element not found for rendering");
-        return;
-    }
+ window.renderRequestPopup = function(popup, req, distance, locationName) {
+    if (!popup) return;
     
     window.passengerLocations = window.passengerLocations || new Map();
     window.passengerLocations.set(req.key, locationName);
 
     const streetAddress = req.pickupAddress ? req.pickupAddress : locationName.split(',')[0].trim();
-    const destination = (req.destination && req.destination !== "As Directed" && req.destination !== "Not Specified") ? req.destination.split(',')[0] : "Route";
-
-    const calculatedPrice = req.calculatedPrice ? Math.round(parseFloat(req.calculatedPrice)) : 15;
-    const payMethod = req.paymentMethod || 'cash';
-    const appliedCredit = req.appliedCredit || 0;
-    const tripDist = req.tripDistance ? parseFloat(req.tripDistance).toFixed(1) : distance.toFixed(1);
+    const destination = (req.destination && req.destination !== "As Directed") ? req.destination.split(',')[0] : "Route";
+    
+    // 1. The price the passenger is offering
+    const passengerOffer = req.calculatedPrice ? Math.round(parseFloat(req.calculatedPrice)) : 25;
+    
+    // 2. Calculate what the System would normally charge (Normal Price)
+    // Formula: R30 base + R8 per km (Min R35) - same as index.html
+    const tripDist = parseFloat(req.tripDistance || 0);
+    const normalPrice = Math.round(Math.max(35, 30 + (tripDist * 8.00)));
 
     const picHtml = req.commuterProfilePic
         ? `<img src="${req.commuterProfilePic}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`
         : `<i class="fas fa-user" style="font-size: 2.2rem; color: #28a745;"></i>`;
-
-    const isCard = payMethod.toLowerCase() === 'card';
-    const isCreditPromo = payMethod.toLowerCase() === 'credit' && appliedCredit > 0;
-    
-    const payColor = isCard ? '#007BFF' : (isCreditPromo ? '#FFC107' : '#28a745');
-    const payBg = isCard ? '#e6f2ff' : (isCreditPromo ? '#fff3cd' : '#e8f5e9');
-    const payIcon = isCard ? 'fa-credit-card' : (isCreditPromo ? 'fa-gift' : 'fa-money-bill-wave');
-    const payText = isCard ? 'PREPAID CARD' : (isCreditPromo ? 'PROMO APPLIED' : 'CASH PAYMENT');
-
-    // Create a special message for promo bookings
-    var promoHtml = '';
-    if (isCreditPromo) {
-        var cashToCollect = Math.max(0, calculatedPrice - appliedCredit);
-        promoHtml = `
-            <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px; border: 1px solid #ffeeba; text-align: center;">
-                <i class="fas fa-gift"></i> <strong>Promo Booking:</strong> Passenger pays R${cashToCollect} cash. You receive +R${appliedCredit.toFixed(2)} to your wallet.
-            </div>
-        `;
-    }
-
-    // Safely fetch rating without breaking the UI
-    if (req.commuterId) {
-        database.ref('commuters/' + req.commuterId).once('value').then(snap => {
-            var rating = "5.0";
-            if (snap.exists() && snap.val().averageRating) rating = parseFloat(snap.val().averageRating).toFixed(1);
-            const rSpan = document.getElementById(`card-rating-${req.key}`);
-            if (rSpan) rSpan.innerHTML = `<i class="fas fa-star" style="color: #ffc107;"></i> ${rating}`;
-        }).catch(() => {});
-    }
 
     popup.innerHTML = `
         <button class="popup-close" onclick="rejectRequest()">&times;</button>
@@ -11599,55 +11554,66 @@ function initializeRequestListener() {
                         ${picHtml}
                     </div>
                     <div>
-                        <h3 style="margin: 0; font-weight: 900; font-size: 1.2rem; color: #111;">
-                            ${escapeHtml(req.commuterName)}
-                        </h3>
-                        <span id="card-rating-${req.key}" style="font-size: 0.8rem; background: #f8f9fa; padding: 2px 6px; border-radius: 8px; border: 1px solid #ddd; color: #555; display: inline-block; margin-top: 4px;"><i class="fas fa-spinner fa-spin" style="color: #ccc;"></i></span>
+                        <h3 style="margin: 0; font-weight: 900; font-size: 1.2rem; color: #111;">${escapeHtml(req.commuterName)}</h3>
+                        <span style="font-size: 0.8rem; color: #666;">${distance.toFixed(1)} km away</span>
                     </div>
                 </div>
-                <div style="text-align: right;">
-                    <span style="font-size: 1.6rem; font-weight: 900; color: ${payColor === '#FFC107' ? '#d39e00' : payColor}; display: block; line-height: 1;">R${calculatedPrice}</span>
-                    <span style="font-size: 0.7rem; color: ${payColor === '#FFC107' ? '#d39e00' : payColor}; background: ${payBg}; padding: 2px 6px; border-radius: 6px; font-weight: bold; border: 1px solid ${payColor};"><i class="fas ${payIcon}"></i> ${payText}</span>
+            </div>
+
+            <!-- PRICE COMPARISON BOX -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                <div style="background: #f8f9fa; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #eee;">
+                    <div style="font-size: 0.65rem; color: #888; font-weight: 800;">NORMAL PRICE</div>
+                    <div style="font-size: 1.2rem; font-weight: 800; color: #555;">R${normalPrice}</div>
+                </div>
+                <div style="background: #eef4ff; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #007BFF;">
+                    <div style="font-size: 0.65rem; color: #007BFF; font-weight: 800;">PASSENGER OFFER</div>
+                    <div style="font-size: 1.4rem; font-weight: 900; color: #28a745;">R${passengerOffer}</div>
                 </div>
             </div>
             
-            ${promoHtml}
-
             <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #eee;">
-                <div style="display: flex; gap: 12px; margin-bottom: 15px; align-items: flex-start;">
-                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #fff0f0; color: #dc3545; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </div>
-                    <div>
-                        <div style="font-size: 0.75rem; color: #888; font-weight: 800;">PICK UP (${tripDist} km away)</div>
-                        <div style="font-weight: 800; color: #111; font-size: 1rem;">${escapeHtml(streetAddress)}</div>
-                    </div>
+                <div style="display: flex; gap: 12px; margin-bottom: 10px;">
+                    <i class="fas fa-map-marker-alt" style="color: #dc3545; width: 15px;"></i>
+                    <div style="font-size: 0.9rem; color: #333;">${escapeHtml(streetAddress)}</div>
                 </div>
-
-                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #e6f2ff; color: #007BFF; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <i class="fas fa-flag-checkered"></i>
-                    </div>
-                    <div>
-                        <div style="font-size: 0.75rem; color: #888; font-weight: 800;">DROP OFF</div>
-                        <div style="font-weight: 800; color: #111; font-size: 1rem;">${escapeHtml(destination)}</div>
-                    </div>
+                <div style="display: flex; gap: 12px;">
+                    <i class="fas fa-flag-checkered" style="color: #007BFF; width: 15px;"></i>
+                    <div style="font-size: 0.9rem; color: #333;">${escapeHtml(destination)}</div>
                 </div>
             </div>
 
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-danger" style="flex: 1; border-radius: 16px; font-weight: 800; padding: 16px; background: #fff0f0; color: #dc3545; border: none;" onclick="rejectRequest()">Decline</button>
-                <button class="btn btn-success" style="flex: 2; border-radius: 16px; font-weight: 800; padding: 16px; background: #007BFF; border: none; box-shadow: 0 6px 15px rgba(0,123,255,0.3);" onclick="acceptRequest()"><i class="fas fa-check"></i> Accept Ride</button>
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-danger" style="flex: 1; border-radius: 12px; background:#fff0f0; color:#dc3545; border:1px solid #ffcdd2;" onclick="rejectRequest()">Decline</button>
+                
+                <!-- Counter Logic -->
+                <button class="btn" style="flex: 1; border-radius: 12px; background:#fff4e5; color:#f8961e; border:1px solid #ffe8cc; font-weight:800;" 
+                        onclick="showCounterInput('${req.key}', ${passengerOffer}, ${normalPrice})">Counter</button>
+                
+                <button class="btn btn-success" style="flex: 1.5; border-radius: 12px; background:#007BFF; color:white; border:none; font-weight:800;" 
+                        onclick="acceptRequest()">Accept R${passengerOffer}</button>
             </div>
         </div>
     `;
     
-    // Safely open popup
-    if (typeof openPopup === 'function') {
-        openPopup('commuterRequestPopup');
-    } else if (popup) {
-        popup.classList.add('open');
-        popup.style.display = 'block';
+    openPopup('commuterRequestPopup');
+};
+
+// Driver Counter Input helper
+window.showCounterInput = function(reqKey, offer, normal) {
+    const suggestion = Math.max(offer + 10, normal);
+    const newPrice = prompt(`Passenger offered R${offer}. System normal is R${normal}. \n\nEnter your counter offer (R):`, suggestion);
+    
+    if (newPrice && !isNaN(newPrice)) {
+        database.ref(`requests/${reqKey}`).update({
+            status: 'counter_offered',
+            calculatedPrice: parseInt(newPrice),
+            taxiId: userId, // Ensure only THIS driver is in the negotiation
+            driverName: (taxiData.name + " " + (taxiData.surname || "")).trim()
+        }).then(() => {
+            closeActivePopup();
+            showCommunicationBanner(`Counter offer of R${newPrice} sent!`, "success");
+        });
     }
 };      window.startNavigationForPassengerByKey = function(passengerKey) {
         const passenger = acceptedPassengers.find(p => p.key === passengerKey);
@@ -18709,16 +18675,19 @@ function startNavigationForPassengerPickup(lat, lng, name, idx) {
     // We will reuse the function but with a special flag for club pickup
     showDirectionsOnMap(lat, lng, `Pick up ${name}`, null, 'pickup');
 }
+// --- COMPLETE FUNCTION FOR taxi.html ---
 window.openCommuterRequestPopup = function(req) {
     console.log("📞 openCommuterRequestPopup called with request:", req);
 
-    if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) {
-        console.log("Popup already showing, ignoring.");
-        return;
-    }
+    if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) return;
 
     window.isShowingRequestPopup = true;
     window.currentShowingRequestId = req.key;
+
+    // 1. Calculate System Price vs Passenger Offer
+    const tripDist = parseFloat(req.tripDistance || 0);
+    const normalPrice = Math.round(Math.max(35, 30 + (tripDist * 8.00)));
+    const passengerOffer = req.calculatedPrice || 25;
 
     let popup = document.getElementById('commuterRequestPopup');
     if (!popup) {
@@ -18728,128 +18697,92 @@ window.openCommuterRequestPopup = function(req) {
         document.body.appendChild(popup);
     }
 
-    // Force absolute styling so the popup is on top and fully interactive
+    // Ensure popup is visible and styled as a card
     popup.style.cssText = `
         display: block !important; visibility: visible !important; opacity: 1 !important;
         position: fixed !important; top: 50% !important; left: 50% !important;
         transform: translate(-50%, -50%) !important; background: white !important;
-        border-radius: 20px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important;
+        border-radius: 20px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.4) !important;
         width: 90% !important; max-width: 420px !important; max-height: 85vh !important;
-        overflow-y: auto !important; z-index: 2147483647 !important; padding: 0 !important;
-        pointer-events: auto !important;
+        overflow-y: auto !important; z-index: 100000 !important; padding: 0 !important;
     `;
-    popup.classList.add('open');
-
-    let overlay = document.getElementById('popupOverlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'popupOverlay';
-        document.body.appendChild(overlay);
-    }
-    overlay.style.cssText = `
-        display: block !important; visibility: visible !important; opacity: 1 !important;
-        background: rgba(0,0,0,0.6) !important; position: fixed !important; top: 0 !important;
-        left: 0 !important; width: 100% !important; height: 100% !important;
-        z-index: 2147483646 !important; pointer-events: auto !important;
-    `;
-    overlay.classList.add('open');
-
-    const topBanners = document.getElementById('top-notifications-container');
-    if (topBanners) topBanners.style.display = 'none';
-
-    let distance = 0;
-    if (taxiData && taxiData.latitude && req.commuterLocation) {
-        distance = calculateDistance(taxiData.latitude, taxiData.longitude, req.commuterLocation.latitude, req.commuterLocation.longitude);
-    }
-
-    const streetAddress = req.pickupAddress || 'Near your location';
-    const destination = (req.destination && req.destination !== "As Directed" && req.destination !== "Not Specified") ? req.destination.split(',')[0] : "Route";
-    const calculatedPrice = req.calculatedPrice ? Math.round(parseFloat(req.calculatedPrice)) : 25;
-    const payMethod = req.paymentMethod || 'cash';
-    const appliedCredit = req.appliedCredit || 0;
-    const finalAmount = Math.max(0, calculatedPrice - appliedCredit);
-    
-    const isCard = payMethod.toLowerCase() === 'card';
-    const isCreditPromo = payMethod.toLowerCase() === 'credit' && appliedCredit > 0;
-    
-    const payColor = isCard ? '#007BFF' : (isCreditPromo ? '#FFC107' : '#28a745');
-    const payBg = isCard ? '#e6f2ff' : (isCreditPromo ? '#fff3cd' : '#e8f5e9');
-    const payIcon = isCard ? 'fa-credit-card' : (isCreditPromo ? 'fa-gift' : 'fa-money-bill-wave');
-    const payText = isCard ? 'PREPAID CARD' : (isCreditPromo ? 'PROMO APPLIED' : 'CASH PAYMENT');
-
-    let promoHtml = '';
-    if (isCreditPromo && appliedCredit > 0) {
-        promoHtml = `
-            <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px; border: 1px solid #ffeeba; text-align: center;">
-                <i class="fas fa-gift"></i> <strong>Promo Booking:</strong> Passenger pays R${finalAmount} cash. You receive +R${appliedCredit.toFixed(2)} to your wallet.
-            </div>
-        `;
-    }
-
-    const picHtml = req.commuterProfilePic
-        ? `<img src="${req.commuterProfilePic}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`
-        : `<i class="fas fa-user" style="font-size: 2.2rem; color: #28a745;"></i>`;
 
     popup.innerHTML = `
-        <button class="popup-close" onclick="rejectRequestAndClose()" style="position: absolute; right: 15px; top: 15px; font-size: 1.5rem; background: none; border: none; cursor: pointer; color: #999; z-index: 10;">&times;</button>
-        <div style="padding: 10px; text-align: left;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <div style="width: 55px; height: 55px; border-radius: 50%; background: #e8f5e9; display: flex; align-items: center; justify-content: center; border: 2px solid #28a745; overflow: hidden;">
-                        ${picHtml}
-                    </div>
-                    <div>
-                        <h3 style="margin: 0; font-weight: 900; font-size: 1.2rem; color: #111;">${escapeHtml(req.commuterName)}</h3>
-                    </div>
-                </div>
-                <div style="text-align: right;">
-                    <span style="font-size: 1.6rem; font-weight: 900; color: ${payColor === '#FFC107' ? '#d39e00' : payColor}; display: block; line-height: 1;">R${calculatedPrice}</span>
-                    <span style="font-size: 0.7rem; color: ${payColor === '#FFC107' ? '#d39e00' : payColor}; background: ${payBg}; padding: 2px 6px; border-radius: 6px; font-weight: bold; border: 1px solid ${payColor};"><i class="fas ${payIcon}"></i> ${payText}</span>
-                </div>
-            </div>
+        <button class="popup-close" onclick="closeRequestPopupNow()" style="position: absolute; right: 15px; top: 15px;">&times;</button>
+        <div style="padding: 20px; text-align: left;">
+            <h3 style="margin: 0 0 15px 0; font-weight: 800; color: #111;">Asiye Go Request</h3>
             
-            ${promoHtml}
-
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #eee;">
-                <div style="display: flex; gap: 12px; margin-bottom: 15px; align-items: flex-start;">
-                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #fff0f0; color: #dc3545; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </div>
-                    <div>
-                        <div style="font-size: 0.75rem; color: #888; font-weight: 800;">PICK UP (${distance.toFixed(1)} km away)</div>
-                        <div style="font-weight: 800; color: #111; font-size: 1rem;">${escapeHtml(streetAddress)}</div>
-                    </div>
+            <!-- Comparison Box -->
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <div style="flex: 1; background: #f8f9fa; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #eee;">
+                    <div style="font-size: 0.65rem; color: #888; font-weight: 800;">NORMAL PRICE</div>
+                    <div style="font-size: 1.1rem; font-weight: 800; color: #444;">R${normalPrice}</div>
                 </div>
-                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #e6f2ff; color: #007BFF; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <i class="fas fa-flag-checkered"></i>
-                    </div>
-                    <div>
-                        <div style="font-size: 0.75rem; color: #888; font-weight: 800;">DROP OFF</div>
-                        <div style="font-weight: 800; color: #111; font-size: 1rem;">${escapeHtml(destination)}</div>
-                    </div>
+                <div style="flex: 1; background: #e8f5e9; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #28a745;">
+                    <div style="font-size: 0.65rem; color: #28a745; font-weight: 800;">OFFER</div>
+                    <div style="font-size: 1.1rem; font-weight: 900; color: #28a745;">R${passengerOffer}</div>
                 </div>
             </div>
 
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-danger" style="flex: 1; border-radius: 16px; font-weight: 800; padding: 16px; background: #fff0f0; color: #dc3545; border: none; cursor: pointer;" onclick="rejectRequestAndClose()">Decline</button>
-                <button class="btn btn-success" style="flex: 2; border-radius: 16px; font-weight: 800; padding: 16px; background: #007BFF; border: none; box-shadow: 0 6px 15px rgba(0,123,255,0.3); color: white; cursor: pointer;" onclick="acceptRequestAndClose()"><i class="fas fa-check"></i> Accept Ride</button>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 16px; border: 1px solid #eee; margin-bottom: 20px;">
+                <div style="font-weight: 800; color: #111; margin-bottom:5px;">${escapeHtml(req.commuterName)}</div>
+                <div style="font-size: 0.85rem; color: #666;"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(req.pickupAddress)}</div>
+            </div>
+
+            <!-- BUTTONS -->
+            <div style="display: flex; gap: 8px;">
+                <button class="btn btn-danger" style="flex: 1; border-radius: 12px; padding: 14px; font-weight:bold;" onclick="rejectRequestAndClose()">Decline</button>
+                
+                <button class="btn" style="flex: 1; background: #fff4e5; color: #f8961e; border: 1px solid #ffe8cc; border-radius: 12px; padding: 14px; font-weight: 800;" 
+                        onclick="showCounterPrompt('${req.key}', ${passengerOffer}, ${normalPrice})">Counter</button>
+                
+                <button class="btn btn-success" style="flex: 1.5; background: #007BFF; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800;" 
+                        onclick="executeDriverAccept('${req.key}')">Accept R${passengerOffer}</button>
             </div>
         </div>
     `;
 
-    if (window.requestPopupTimeout) clearTimeout(window.requestPopupTimeout);
-    window.requestPopupTimeout = setTimeout(() => {
-        if (window.isShowingRequestPopup) {
-            closeRequestPopupNow();
-            showCommunicationBanner("Request timed out", "warning");
-        }
-    }, 60000);
-
-    window.safeVibrate([500, 200, 500]);
-    try { new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3').play().catch(()=>{}); } catch(e){}
+    // Correct function call for your file
+    openPopup('commuterRequestPopup');
 };
 
+// Driver Accept Logic
+window.executeDriverAccept = function(reqKey) {
+    database.ref('requests/' + reqKey).transaction((currentData) => {
+        if (currentData === null || currentData.status !== 'pending') return;
+        currentData.status = 'accepted';
+        currentData.taxiId = userId;
+        currentData.driverName = (taxiData.name + " " + (taxiData.surname || "")).trim();
+        currentData.driverPhone = taxiData.phone || '';
+        currentData.acceptedAt = firebase.database.ServerValue.TIMESTAMP;
+        return currentData;
+    }, (error, committed) => {
+        if (committed) {
+            database.ref(`taxis/${userId}`).update({ currentRequest: reqKey });
+            closeRequestPopupNow();
+            showCommunicationBanner("Trip Accepted!", "success");
+        } else {
+            showCommunicationBanner("Trip no longer available", "danger");
+            closeRequestPopupNow();
+        }
+    });
+};
+
+// Driver Counter Logic
+window.showCounterPrompt = function(reqKey, offer, normal) {
+    const newPrice = prompt(`Passenger offered R${offer}. System normal is R${normal}. Enter your price (R):`, Math.max(offer + 5, normal));
+    if (newPrice && !isNaN(newPrice)) {
+        database.ref(`requests/${reqKey}`).update({
+            status: 'counter_offered',
+            calculatedPrice: parseInt(newPrice),
+            taxiId: userId,
+            driverName: (taxiData.name + " " + (taxiData.surname || "")).trim()
+        }).then(() => {
+            closeRequestPopupNow();
+            showCommunicationBanner(`Counter offer of R${newPrice} sent!`, "success");
+        });
+    }
+};
 window.openCommuterRequestPopupWithCount = window.openCommuterRequestPopup; // Mapping safety
 window.ignoredClubRequests = window.ignoredClubRequests || {};
 
@@ -21012,6 +20945,38 @@ window.joinAndShareDriverAffiliate = async function() {
             affiliateSharingLock = false;
         }, 1000);
     }
+};
+window.showCounterInput = function(reqKey, currentPrice) {
+    const newPrice = prompt("Enter your counter offer (R):", currentPrice + 10);
+    if (newPrice && !isNaN(newPrice)) {
+        submitCounterOffer(reqKey, parseInt(newPrice));
+    }
+};
+
+window.submitCounterOffer = function(reqKey, price) {
+    const btn = document.querySelector('.btn-outline');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+    database.ref(`requests/${reqKey}`).update({
+        status: 'counter_offered',
+        calculatedPrice: price,
+        taxiId: userId, // Lock this driver to the request while passenger decides
+        driverName: `${taxiData.name} ${taxiData.surname || ''}`.trim()
+    }).then(() => {
+        closeActivePopup();
+        showCommunicationBanner(`Counter offer of R${price} sent! Waiting for passenger...`, "info");
+        
+        // Notify the passenger specifically
+        database.ref(`requests/${reqKey}`).once('value').then(snap => {
+            const commuterId = snap.val().commuterId;
+            database.ref(`notifications/commuters/${commuterId}`).push({
+                type: 'counter_offer',
+                message: `Driver offered R${price} for your ride.`,
+                price: price,
+                requestId: reqKey
+            });
+        });
+    });
 };
 </script>
 

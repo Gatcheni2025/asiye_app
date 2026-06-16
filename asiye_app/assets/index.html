@@ -1523,7 +1523,11 @@ input:focus {
     height: auto;
      cursor: default;
     pointer-events: none; /* Allows clicking map through the empty space */
-    z-index: 50 !important; /* Ensure it sits above taxi icons */
+    z-index: 10005 !important; /* Ensure it sits above taxi icons */
+}
+
+#homePickupBubble {
+    z-index: 9999 !important; /* Keep below 10000 */
 }
 /* The floating text bubble "You" */
 .marker-card {
@@ -2917,6 +2921,10 @@ background: transparent;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+background-color: #222222 !important;
+}
+#taxiListSheet .modal-content {
+    background-color: #222222 !important;
 }
 
 
@@ -6102,9 +6110,12 @@ img:before {
 
     /* Appearance */
     background: #141414 !important; /* Dark Theme */
-    border: 1px solid #333 !important;
+  
     border-radius: 24px !important;
     box-shadow: 0 25px 60px rgba(0,0,0,0.6) !important;
+
+ background-color: #1e1e1e !important;
+    border: 1px solid #333 !important;
 
     /* Layout */
     display: flex !important;
@@ -6158,9 +6169,10 @@ img:before {
 #geocoder-container .mapboxgl-ctrl-geocoder--input,
 #parcel-geocoder-container .mapboxgl-ctrl-geocoder--input,
 #pickup-geocoder-container .mapboxgl-ctrl-geocoder--input {
-    background-color: #1f1f1f !important; /* Dark Grey Background */
     color: #ffffff !important;           /* White Text */
-    caret-color: #007BFF !important;     /* Blue Cursor */
+    caret-color: #007BFF !important;     /* Blue Cursor */ 
+background-color: #2c2c2c !important;
+    border: 1px solid #555 !important;
 }
 
 /* 2. Style the Container Box */
@@ -7105,8 +7117,13 @@ canvas {
 }
 
 /* Ensure popups have enough space so the menu doesn't block content */
+/* Fix bottom padding since Nav Bar is removed */
 .popup-body, .modal-content, #taxiListContainer {
-    padding-bottom: 120px !important;
+    padding-bottom: max(20px, env(safe-area-inset-bottom)) !important;
+}
+
+#homeSheetDragHandle:active {
+    cursor: grabbing;
 }
 /* =======================================================================
    END: GOCAB FLOATING BOTTOM NAVIGATION
@@ -7162,9 +7179,6 @@ canvas {
 }
 
 /* Ensure content doesn't hide behind the new floating bottom nav */
-.popup-body, .modal-content, #taxiListContainer {
-    padding-bottom: max(120px, calc(100px + env(safe-area-inset-bottom))) !important;
-}
 
 /* 2 & 3. New "You are here" Location Bar */
 .gocab-location-bar {
@@ -7767,23 +7781,8 @@ canvas {
 }
 
 /* Make inputs Large, Bold, and easy to read */
-.uber-geocoder .mapboxgl-ctrl-geocoder--input {
-    background-color: transparent !important;
-    color: #ffffff !important;
-    font-size: 1.15rem !important;
-    padding: 0 35px 0 0 !important; /* Space on right for the clear 'X' */
-    height: 38px !important;
-    font-weight: 500 !important;
-    outline: none !important;
-    box-shadow: none !important;
-    caret-color: #276EF1 !important;
-}
 
-/* Bright, readable placeholder */
-.uber-geocoder .mapboxgl-ctrl-geocoder--input::placeholder {
-    color: #888888 !important;
-    font-weight: 500 !important;
-}
+
 
 /* Hide default mapbox search icon so it acts like a normal input */
 .uber-geocoder .mapboxgl-ctrl-geocoder--icon-search {
@@ -8156,6 +8155,159 @@ canvas {
 #genericMessagePopup.force-hotspot .popup-close {
     display: none !important;
 }
+
+/* InDrive-Style Bottom Sheet Elements */
+.indrive-sheet {
+    background-color: #222222 !important;
+    border-radius: 24px 24px 0 0 !important;
+    border: 1px solid #333 !important;
+}
+
+.indrive-grid-card {
+    transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.indrive-grid-card:active {
+    transform: scale(0.95);
+    background: #444 !important;
+}
+
+.suggestion-item:hover {
+    background-color: #2a2a2a;
+    border-radius: 8px;
+}
+
+/* Ensure the taxiListSheet (which becomes the Negotiate sheet) is dark */
+#taxiListSheet {
+    background: #222222 !important;
+    border-radius: 24px 24px 0 0 !important;
+}
+
+/* --- FIX: HOME BOTTOM SHEET SPECIFIC OVERRIDES --- */
+#homeBottomSheet {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none !important; /* Lets you click the map */
+}
+
+#homeSheetContent {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+    border-radius: 24px 24px 0 0 !important;
+    pointer-events: auto !important; /* Lets you click the dashboard */
+}
+
+/* FIX 1: Set Pickup Location Geocoder Styling */
+#changeLocationPopup .mapboxgl-ctrl-geocoder {
+    background-color: #2C2C2E !important;
+    border: 1px solid #3A3A3C !important;
+    border-radius: 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2) !important;
+}
+#changeLocationPopup .mapboxgl-ctrl-geocoder--input {
+    color: #ffffff !important;
+    font-size: 1.1rem !important;
+    padding-left: 40px !important;
+}
+#changeLocationPopup .mapboxgl-ctrl-geocoder--icon {
+    fill: #A1A1AA !important;
+}
+#changeLocationPopup .mapboxgl-ctrl-geocoder--suggestions {
+    background-color: #2C2C2E !important;
+    border: 1px solid #3A3A3C !important;
+    border-radius: 12px !important;
+    z-index: 999999 !important;
+}
+#changeLocationPopup .mapboxgl-ctrl-geocoder--suggestion {
+    color: #ffffff !important;
+    border-bottom: 1px solid #3A3A3C !important;
+    padding: 12px 15px !important;
+}
+#changeLocationPopup .mapboxgl-ctrl-geocoder--suggestion:hover {
+    background-color: #3A3A3C !important;
+}
+
+/* FIX 2: Ensure "You" Marker is ABOVE the Floating Bubble */
+.modern-user-marker {
+    z-index: 10005 !important; /* Must be higher than the bubble (10000) */
+}
+
+#topupAmount:focus {
+    border-color: #007BFF !important;
+    outline: none !important;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1) !important;
+}
+
+/* iOS Style Toggle Switch */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 26px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider.round {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #3A3A3C;
+  transition: .3s;
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .3s;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+input:checked + .slider {
+  background-color: #30D158;
+}
+
+input:checked + .slider:before {
+  transform: translateX(24px);
+}
+/* Professional Search Box Styling */
+.uber-geocoder .mapboxgl-ctrl-geocoder--input {
+    background: transparent !important;
+    color: white !important;
+    font-size: 1.1rem !important;
+    font-weight: 500 !important;
+    padding: 0 !important;
+    height: 30px !important;
+    border: none !important;
+    outline: none !important;
+}
+
+.uber-geocoder .mapboxgl-ctrl-geocoder--input::placeholder {
+    color: #666 !important;
+}
+
+#uber-suggestions-list .suggestion-item:active {
+    background-color: #1a1a1a;
+    border-radius: 12px;
+}
+
     </style>
 </head>
 <body>
@@ -8178,95 +8330,9 @@ canvas {
         <button class="btn btn-danger btn-sm" onclick="cancelCurrentRequest()">Cancel Trip</button>
     </div>
 </div>
-<!-- Enhanced Preloader -->
-<!-- PREMIUM PRELOADER START -->
-
 
 <!-- === START: MODERN HOME DASHBOARD OVERLAY === -->
-<div id="modernHomeDashboard" class="home-dashboard-overlay">
 
-    <div class="home-top-header">
-        <img src="data/AsiyeNew.png" id="homeProfilePic" class="home-profile-pic" alt="Profile" onclick="openSideMenu()">
-        <div style="display: flex; align-items: center; gap: 10px;">
-
-            <!-- NEW: Driver Verification Button -->
-            <button onclick="openDriverVerificationSearch()" style="background: linear-gradient(135deg, #28a745, #20c997); border: none; border-radius: 50%; width: 45px; height: 45px; color: white; box-shadow: 0 4px 10px rgba(40,167,69,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;" title="Verify a Driver">
-                <i class="fas fa-user-check"></i>
-            </button>
-
-            <!-- Rewards Button -->
-            <button onclick="showPromosModal()" style="background: linear-gradient(135deg, #FFC107, #FF9800); border: none; border-radius: 50%; width: 45px; height: 45px; color: white; box-shadow: 0 4px 10px rgba(255,193,7,0.3); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;" title="Rewards & Promos">
-                <i class="fas fa-gift"></i>
-            </button>
-
-            <div class="home-weather-widget">
-                <div class="home-weather-temp" id="weatherTemp">--&#176;C</div>
-                <div class="home-weather-desc" id="weatherDesc">Loading weather...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Greeting -->
-    <div class="home-greeting-section">
-        <div class="home-greeting-text">
-            <!-- Adjusted font size to fit full names cleanly -->
-            <h1 id="homeGreetingName" style="font-size: 1.3rem; letter-spacing: -0.2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">Welcome!</h1>
-            <p>Great to see you.</p>
-        </div>
-       <div class="home-header-actions">
-    <!-- Receipt Icon: Payment Notices -->
-    <button class="home-header-btn" onclick="showPaymentNotices()"><i class="fas fa-receipt"></i></button>
-    
-    <!-- Bell Icon: General Notices (Now with Red Dot) -->
-    <button class="home-header-btn" style="position: relative;" onclick="showGeneralNotices()">
-        <i class="far fa-bell"></i>
-        <!-- Red Dot Badge -->
-        <span id="bellUnreadBadge" style="position: absolute; top: 10px; right: 12px; width: 10px; height: 10px; background: #dc3545; border-radius: 50%; border: 2px solid white;"></span>
-    </button>
-</div>
-    </div>
-
-
-    <div class="home-services-grid">
-        <!-- 1. Handlers -->
-        <div class="home-service-card" onclick="openHandlers()">
-            <img src="data/handler.svg" alt="Handler" onerror="this.src='data/AsiyeNew.png'" style="filter: drop-shadow(0 10px 10px rgba(0,0,0,0.15)); width: 100%; height: 70px; object-fit: contain;">
-            <div>
-                <h3>Handlers</h3>
-                <p>Same day rank-to-rank courier</p>
-            </div>
-        </div>
-
-        <!-- 2. Asiye Go (e-Hailing) -->
-        <div class="home-service-card" onclick="openAsiyeGoTaxis()">
-            <img src="data/car.svg" alt="Asiye Go" style="border-radius: 12px; width: 100%; height: 75px; object-fit: contain;" onerror="this.src='https://cdn3d.iconscout.com/3d/premium/thumb/car-4994273-4161869.png'">
-            <div>
-                <h3>Asiye Go</h3>
-                <p>Private e-hailing</p>
-            </div>
-        </div>
-
-        <!-- 3. Asiye Delivery (Replaces old Courier & Parcels) -->
-        <div class="home-service-card" onclick="openAsiyeDelivery()">
-            <img src="data/courier.jpg" alt="Asiye Delivery" style="mix-blend-mode: multiply; filter: contrast(1.1); width: 100%; height: 70px; object-fit: contain;" onerror="this.src='https://cdn3d.iconscout.com/3d/premium/thumb/delivery-box-4994282-4161878.png'">
-            <div>
-                <h3>Asiye Delivery</h3>
-                <p>Fast door-to-door delivery</p>
-            </div>
-        </div>
-
-        <!-- 4. Safety Center -->
-        <div class="home-service-card" onclick="openSafetyCenter()">
-            <img src="data/safe.svg" alt="Safety Center" style="mix-blend-mode: multiply; filter: drop-shadow(0 8px 15px rgba(220, 53, 69, 0.2)); width: 100%; height: 70px; object-fit: contain;">
-            <div>
-                <h3>Safety Center</h3>
-                <p>Tracking PIN & Panic</p>
-            </div>
-        </div>
-    </div>    <!-- === END: MODERN HOME DASHBOARD OVERLAY === -->
-
-
-</div>
 <!-- === END: MODERN HOME DASHBOARD OVERLAY === -->
 
 <div id="promosModal" class="modal-overlay">
@@ -8285,6 +8351,73 @@ canvas {
         <div id="promoListContainer" style="display: flex; flex-direction: column; gap: 12px; max-height: 50vh; overflow-y: auto;">
             <!-- Rendered by JS -->
             <div class="spinner" style="margin: 20px auto; border-left-color: #FFC107;"></div>
+        </div>
+    </div>
+</div>
+
+<!-- NEW HOME BOTTOM SHEET (IMAGE 1) -->
+<!-- NEW HOME BOTTOM SHEET (DRAGGABLE) -->
+<!-- FLOATING "WHERE FROM" BUBBLE -->
+<div id="homePickupBubble" style="position: fixed; top: 120px; left: 50%; transform: translateX(-50%); background: #222222; color: white; padding: 12px 24px; border-radius: 20px; z-index: 10000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; align-items: center; cursor: pointer; border: 1px solid #444;" onclick="openModal('changeLocationPopup')">
+    <span style="font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Where from</span>
+    <span id="homeCurrentAddress" style="font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">Fetching...</span>
+</div>
+
+<!-- NEW HOME BOTTOM SHEET (TALLER) -->
+<!-- BEAUTIFIED DRAGGABLE DASHBOARD (IMAGE 1 STYLE) -->
+<div id="homeBottomSheet" class="modal-overlay open" style="display: flex; align-items: flex-end; background: transparent; z-index: 10000; pointer-events: none; position: fixed; bottom: 0; left: 0; width: 100vw; height: 100vh;">
+    
+    <div class="modal-content indrive-sheet" id="homeSheetContent" style="pointer-events: auto; background: #1C1C1E !important; padding: 0 20px 20px 20px !important; border-radius: 28px 28px 0 0 !important; width: 100%; height: 65vh; display: flex; flex-direction: column; transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s ease-out; box-shadow: 0 -5px 30px rgba(0,0,0,0.5); border: 1px solid #333 !important;">  
+        <!-- DRAG HANDLE -->
+        <div id="homeSheetDragHandle" style="width: 100%; padding: 15px 0; cursor: grab; display: flex; justify-content: center; flex-shrink: 0; touch-action: none;">
+            <div class="sheet-handle" style="width: 48px; height: 6px; background: #48484A; border-radius: 6px;"></div>
+        </div>
+        
+        <!-- SCROLLABLE CONTENT -->
+        <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px; -webkit-overflow-scrolling: touch;">
+            
+            <!-- Search Bar (Pill Style) -->
+            <div class="indrive-search-bar" onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #000000; padding: 18px 20px; border-radius: 20px; display: flex; align-items: center; gap: 15px; cursor: pointer; margin-bottom: 25px; border: 1px solid #3A3A3C; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                <i class="fas fa-search" style="color: #0A84FF; font-size: 1.3rem;"></i>
+                <span style="color: #EBEBF5; font-size: 1.15rem; font-weight: 700;">Where to & for how much?</span>
+            </div>
+
+            <!-- Suggested Locations -->
+            <div style="margin-bottom: 25px;">
+                <div class="suggestion-item" onclick="quickSelectDest('Gateway Theatre of Shopping')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
+                    <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-map-marker-alt" style="color: #98989D; font-size: 1rem;"></i>
+                    </div>
+                    <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem;">Gateway Theatre of Shopping</span>
+                </div>
+                <div class="suggestion-item" onclick="quickSelectDest('Pavilion Shopping Centre')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
+                    <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-map-marker-alt" style="color: #98989D; font-size: 1rem;"></i>
+                    </div>
+                    <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem;">Pavilion Shopping Centre</span>
+                </div>
+            </div>
+
+            <!-- 4 Grid Items (Modern iOS/App Style) -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
+                <div onclick="openHandlers()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
+                    <i class="fas fa-people-carry" style="color: #FF9F0A; font-size: 1.8rem;"></i>
+                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Handlers</span>
+                </div>
+                <div onclick="openSafetyCenter()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
+                    <i class="fas fa-shield-alt" style="color: #30D158; font-size: 1.8rem;"></i>
+                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Safety</span>
+                </div>
+                <div onclick="openAsiyeDelivery()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
+                    <i class="fas fa-box-open" style="color: #0A84FF; font-size: 1.8rem;"></i>
+                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Asiye Delivery</span>
+                </div>
+                <div onclick="showPaymentNotices()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
+                    <i class="fas fa-wallet" style="color: #BF5AF2; font-size: 1.8rem;"></i>
+                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Wallet & Receipts</span>
+                </div>
+            </div>
+
         </div>
     </div>
 </div>
@@ -8328,7 +8461,7 @@ canvas {
         </div>
     </div>
 
-    <!-- Menu Items List -->
+ 
     <!-- Menu Items List -->
     <div class="menu-items-scroll">
         <!-- Affiliates Menu Item (Add this before the divider) -->
@@ -8436,7 +8569,7 @@ canvas {
     </div>
 </div>
 
-<!-- Driver Verification Search Popup -->
+
 <!-- Driver Verification Search Popup -->
 <div id="driverVerificationSearchPopup" class="modal-overlay">
     <div class="modal-content" style="background: #ffffff !important; color: #111 !important; border-radius: 24px; padding: 25px; max-width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
@@ -8575,47 +8708,29 @@ canvas {
         </div>
     </div>
 </div>
-<div id="changeLocationPopup" class="modal-overlay"><div class="modal-content"><h3>Set Pickup Location</h3><div id="pickup-geocoder-container"></div></div></div>
-<!-- This popup is now deprecated in favor of dashboardActionPopup
-<div id="actionChoicePopup" class="modal-overlay"><div class="modal-content"><img src="data/AsiyeNew.png" alt="Asiye Logo" style="width: 80px; height: 80px; margin-bottom: 20px; border-radius: 20px; object-fit: cover;"><h3>What would you like to do?</h3><div class="modal-buttons" style="flex-direction: column; align-items: stretch;"><button id="chooseRideBtn" class="btn btn-primary" style="display: flex; align-items: center; justify-content: center; gap: 8px;"><img src="data/quantum.png" alt="Taxi Icon" style="width: 28px; height: 24px;"><span>Catch a Taxi</span></button><button id="chooseParcelBtn" class="btn btn-light" style="margin-top: 10px;"><i class="fas fa-box-open"></i> Send a Parcel</button>
-</div></div></div>
--->
-<!-- Inside index.html #destinationPromptPopup -->
-<div id="destinationPromptPopup" class="modal-overlay">
-    <div class="modal-content">
-        <h3>var us find you a taxi close by</h3>
-
-        <!-- VIEW 1: Initial Buttons -->
-        <div id="destInitialView" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
-
-            <!-- Button 1: Find Taxis Near Me (Broadcasting) -->
-            <button class="btn btn-primary" onclick="handleFindTaxisNearMe()" style="padding: 15px; font-size: 1.1em; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <i class="fas fa-map-marker-alt"></i> Find taxis near me
+<!-- FIX 1: SET PICKUP LOCATION POPUP -->
+<div id="changeLocationPopup" class="modal-overlay">
+    <div class="modal-content" style="background: #1C1C1E !important; height: 100vh !important; max-height: 100vh !important; border-radius: 0 !important; padding: 0 !important; display: flex; flex-direction: column;">
+        
+        <div class="popup-fixed-header" style="background: #000000 !important; border-bottom: 1px solid #333 !important; display: flex; align-items: center; padding: 15px 20px;">
+            <button class="back-btn" onclick="closeModal('changeLocationPopup'); showModernDashboard();" style="color: #0A84FF; background: transparent; border: none; font-size: 1.2rem; padding-right: 15px; display: flex; align-items: center; gap: 5px;">
+                <i class="fas fa-chevron-left"></i> Home
             </button>
-
-            <!-- Button 2: Search by Destination -->
-            <button class="btn btn-light" onclick="showDestinationSearchMode()" style="padding: 15px; font-size: 1.1em; border: 1px solid #444; color: white; background: #222; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <i class="fas fa-search"></i> Search by destination
-            </button>
-
+            <h3 style="color: #fff; margin:0; flex-grow: 1; text-align: center; font-size: 1.2rem; font-weight: 700; padding-right: 60px;">Set Pickup Location</h3>
         </div>
-
-        <!-- VIEW 2: Search Input (Hidden by default) -->
-        <div id="destSearchView" style="display: none; flex-direction: column; gap: 15px; width: 100%;">
-            <p style="color: #ccc; margin: 0 0 5px 0;">Enter your destination:</p>
-
-            <!-- Geocoder Container -->
-            <div id="geocoder-container"></div>
-
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-light" onclick="resetDestinationPopup()" style="flex: 1;">Back</button>
-                <button id="findTaxisByDestinationButton" class="btn btn-primary" style="flex: 2;">Find Taxis</button>
+        
+        <div style="padding: 20px; flex: 1;">
+            <label style="color: #A1A1AA; font-size: 0.85rem; font-weight: 700; text-transform: uppercase; margin-bottom: 10px; display: block;">Search Address</label>
+            <div id="pickup-geocoder-container" style="border-radius: 16px; overflow: visible; position: relative;"></div>
+            
+            <div style="margin-top: 30px; text-align: center;">
+                <div style="width: 60px; height: 60px; background: rgba(10, 132, 255, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px auto;">
+                    <i class="fas fa-map-pin" style="font-size: 1.8rem; color: #0A84FF;"></i>
+                </div>
+                <h4 style="color: white; margin: 0 0 10px 0; font-weight: 700;">Precise Pickup</h4>
+                <p style="color: #A1A1AA; font-size: 0.9rem; line-height: 1.5; margin: 0;">Type the exact name of a building, taxi rank, or street address so drivers can locate you easily.</p>
             </div>
         </div>
-
-
-        <!-- Parcel Button (Always Visible) -->
-
     </div>
 </div>
 <!-- REPLACED PARCEL DESTINATION POPUP -->
@@ -8702,61 +8817,71 @@ canvas {
 <div id="profilePopup" class="modal-overlay"><div class="modal-content"><div class="profile-pic-container" id="profilePicContainer"></div><h3 id="profilePopupName">Loading...</h3><div id="profilePopupDetails" class="details-section"></div><div id="profileSettingsContainer"></div><div class="modal-buttons"><button class="btn btn-light" onclick="closeAllPopups()">Close</button></div></div></div>
 
 <!-- SAFETY CENTER POPUP -->
-<!-- SAFETY CENTER POPUP -->
-<!-- SAFETY CENTER POPUP -->
+<!-- BEAUTIFIED SAFETY CENTER POPUP -->
 <div id="safetyCenterPopup" class="modal-overlay">
-    <div class="modal-content" style="background: #1e1e1e !important; color: white !important; border: 1px solid #333; max-width: 500px; padding: 0 !important; border-radius: 24px; overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
-        <div class="popup-fixed-header" style="background: #000; border-bottom: 1px solid #333; display: flex; justify-content: space-between; padding: 15px 20px;">
-            <h3 style="margin: 0; color: white;"><i class="fas fa-shield-alt" style="color: #28a745;"></i> Safety Center</h3>
-            <button onclick="closeModal('safetyCenterPopup'); showModernDashboard();" style="background: none; border: none; color: white; font-size: 1.5rem; cursor:pointer;">&times;</button>
+    <div class="modal-content" style="background: #1C1C1E !important; color: white !important; border: none; max-width: 500px; padding: 0 !important; border-radius: 0; width: 100vw; height: 100vh; overflow: hidden; display: flex; flex-direction: column;">
+        
+        <!-- Header -->
+        <div style="background: #000000; border-bottom: 1px solid #333; display: flex; align-items: center; padding: 15px 20px;">
+            <button onclick="closeModal('safetyCenterPopup'); showModernDashboard();" style="background: transparent; border: none; color: #0A84FF; font-size: 1.2rem; cursor:pointer; display: flex; align-items: center; gap: 5px;">
+                <i class="fas fa-chevron-left"></i> Home
+            </button>
+            <h3 style="margin: 0; color: white; flex-grow: 1; text-align: center; font-weight: 700; font-size: 1.2rem; padding-right: 60px;">Safety Center</h3>
         </div>
 
-        <div style="padding: 20px; overflow-y: auto;">
-            <!-- 1. Verify Driver PIN -->
-            <div style="background: #2a2a2a; border-radius: 16px; padding: 20px; margin-bottom: 15px; border: 1px solid #444;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <div>
-                        <strong style="font-size: 1.05rem; color: white;">Require Pickup PIN</strong>
-                        <div style="font-size: 0.8rem; color: #aaa; margin-top: 4px;">Driver must enter your PIN to start trip</div>
+        <div style="padding: 20px; overflow-y: auto; flex: 1;">
+            
+            <!-- PIN SECTION -->
+            <div style="background: #2C2C2E; border-radius: 16px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="background: rgba(48, 209, 88, 0.2); width: 40px; height: 40px; border-radius: 10px; display: flex; justify-content: center; align-items: center;">
+                            <i class="fas fa-key" style="color: #30D158; font-size: 1.2rem;"></i>
+                        </div>
+                        <div>
+                            <strong style="font-size: 1.05rem; color: #EBEBF5; display: block;">Require Pickup PIN</strong>
+                            <span style="font-size: 0.85rem; color: #98989D;">Driver must enter PIN to start trip</span>
+                        </div>
                     </div>
                     <label class="switch">
                         <input type="checkbox" id="pickupPinToggle" onchange="togglePickupPin(this)">
-                        <span class="slider round" style="background-color: #555;"></span>
+                        <span class="slider round" style="background-color: #48484A;"></span>
                     </label>
                 </div>
-                <div id="activePinDisplay" style="display: none; margin-top: 15px; text-align: center; background: #111; padding: 15px; border-radius: 12px; border: 1px dashed #555;">
-                    <div style="font-size: 0.75rem; color: #888; margin-bottom: 5px;">YOUR SECURE TRIP PIN</div>
-                    <div id="tripPinValue" style="font-size: 2.2rem; color: #F9A826; letter-spacing: 8px; font-weight: 900; font-family: monospace;">----</div>
+                <div id="activePinDisplay" style="display: none; margin-top: 15px; text-align: center; background: #1C1C1E; padding: 15px; border-radius: 12px;">
+                    <div style="font-size: 0.75rem; color: #98989D; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">Your Secure Trip PIN</div>
+                    <div id="tripPinValue" style="font-size: 2.5rem; color: #0A84FF; letter-spacing: 10px; font-weight: 900; font-family: monospace;">----</div>
                 </div>
             </div>
 
-            <!-- 2. Family & Friends Tracker (Enhanced) -->
-            <div style="background: #2a2a2a; border-radius: 16px; padding: 20px; margin-bottom: 15px; border: 1px solid #444;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <div>
-                        <strong style="font-size: 1.05rem; color: white;">Emergency Contacts</strong>
-                        <div style="font-size: 0.8rem; color: #aaa; margin-top: 4px;">Notify family & admin in case of emergency</div>
+            <!-- EMERGENCY CONTACTS -->
+            <div style="background: #2C2C2E; border-radius: 16px; padding: 16px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                    <div style="background: rgba(10, 132, 255, 0.2); width: 40px; height: 40px; border-radius: 10px; display: flex; justify-content: center; align-items: center;">
+                        <i class="fas fa-user-friends" style="color: #0A84FF; font-size: 1.2rem;"></i>
                     </div>
-                    <i class="fas fa-user-friends" style="color: #007BFF; font-size: 1.8rem;"></i>
+                    <div>
+                        <strong style="font-size: 1.05rem; color: #EBEBF5; display: block;">Emergency Contacts</strong>
+                        <span style="font-size: 0.85rem; color: #98989D;">Notify family in case of emergency</span>
+                    </div>
                 </div>
 
                 <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                    <input type="tel" id="familyMemberPhone" placeholder="Asiye Phone Number (e.g., 0712345678)" style="flex: 1; padding: 12px; border-radius: 12px; border: 1px solid #555; background: #111; color: white;">
-                    <button class="btn btn-primary" onclick="addFamilyMember()" style="padding: 12px 20px; border-radius: 12px; font-weight: bold; background: #007BFF; border: none; color: white;">Add</button>
+                    <input type="tel" id="familyMemberPhone" placeholder="Phone Number (e.g. 071...)" style="flex: 1; padding: 14px; border-radius: 12px; border: 1px solid #3A3A3C; background: #1C1C1E; color: white; font-size: 1rem;">
+                    <button class="btn btn-primary" onclick="addFamilyMember()" style="padding: 0 20px; border-radius: 12px; font-weight: 800; background: #0A84FF; border: none; color: white;">Add</button>
                 </div>
-
-                <div id="familyMembersList" style="display: flex; flex-direction: column; gap: 10px;">
-                    <!-- Dynamically populated -->
-                </div>
+                <div id="familyMembersList" style="display: flex; flex-direction: column; gap: 10px;"></div>
             </div>
 
-            <!-- 3. Emergency Panic Button (Improved) -->
-            <button id="emergencyPanicBtn" class="btn" onclick="openEmergencyAlert()" style="width: 100%; background: #dc3545; color: white; padding: 18px; border-radius: 16px; font-weight: 900; font-size: 1.1rem; border: none; box-shadow: 0 4px 15px rgba(220, 53, 69, 0.4);">
+            <!-- PANIC BUTTON -->
+            <button id="emergencyPanicBtn" onclick="openEmergencyAlert()" style="width: 100%; background: #FF3B30; color: white; padding: 20px; border-radius: 16px; font-weight: 900; font-size: 1.2rem; border: none; box-shadow: 0 4px 15px rgba(255, 59, 48, 0.3); display: flex; justify-content: center; align-items: center; gap: 10px;">
                 <i class="fas fa-exclamation-triangle"></i> EMERGENCY PANIC
             </button>
         </div>
     </div>
-</div><div id="earningsDashboardPopup" class="modal-overlay">
+</div>
+
+<div id="earningsDashboardPopup" class="modal-overlay">
     <div class="modal-content" style="background: #f8f9fa;">
         <div class="popup-header" style="background: transparent; border: none;">
             <h3 style="margin: 0; color: #333;">My Earnings</h3>
@@ -9175,21 +9300,6 @@ canvas {
     </div>
 </div>
 <!-- GOCAB FLOATING BOTTOM NAVIGATION -->
-<nav class="gocab-bottom-nav" id="gocabBottomNav">
-    <div class="nav-item active" onclick="handleNavClick(this, 'home')">
-        <i class="fas fa-home"></i>
-    </div>
-    <div class="nav-item" onclick="handleNavClick(this, 'trips')">
-        <i class="fas fa-calendar-alt"></i>
-    </div>
-    <div class="nav-item" onclick="handleNavClick(this, 'deliveries')">
-        <i class="fas fa-box"></i>
-    </div>
-    <div class="nav-item" onclick="handleNavClick(this, 'profile')">
-        <i class="fas fa-user"></i>
-    </div>
-</nav>
-
 
 
 <!-- === HANDLER BOOKING POPUP === -->
@@ -9376,6 +9486,55 @@ canvas {
         </div>
     </div>
 </div>
+
+<!-- FLOATING TOP ROUTE HEADER (IMAGE 2) -->
+<div id="floatingRouteHeader" style="display: none; position: fixed; top: 15px; left: 15px; right: 15px; z-index: 20000; flex-direction: column; gap: 8px;">
+    <div style="background: #222; border-radius: 16px; padding: 12px 15px; display: flex; align-items: center; justify-content: space-between; color: white;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-user" style="color: #fff;"></i>
+            <div id="floatingPickupText" style="font-weight: 600;">Current Location</div>
+        </div>
+        <span style="background: #444; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem;">Entrance</span>
+    </div>
+    <div style="background: #222; border-radius: 16px; padding: 12px 15px; display: flex; align-items: center; justify-content: space-between; color: white;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <i class="fas fa-flag" style="color: #fff;"></i>
+            <div style="display: flex; flex-direction: column;">
+                <span id="floatingDestText" style="font-weight: 600;">Destination</span>
+                <span style="color: #888; font-size: 0.8rem;">~14 min.</span>
+            </div>
+        </div>
+        <i class="fas fa-plus" style="color: #888;"></i>
+    </div>
+</div>
+
+
+<!-- BEAUTIFIED ROUTE SEARCH MODAL -->
+<!-- PROFESSIONAL INTEGRATED ROUTE MODAL -->
+<div id="destinationPromptPopup" class="modal-overlay" style="align-items: flex-end !important; background: rgba(0,0,0,0.7) !important;">
+    <div class="modal-content" style="background: #1C1C1E !important; border-radius: 28px 28px 0 0 !important; padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 500px !important; height: auto; max-height: 100vh; overflow: hidden; display: flex; flex-direction: column; border: none !important; box-shadow: 0 -10px 40px rgba(0,0,0,0.5) !important;">
+        
+        <!-- INITIAL VIEW -->
+        <div id="destInitialView" style="padding: 30px 25px; text-align: center;">
+            <div style="width: 40px; height: 5px; background: #3A3A3C; border-radius: 10px; margin: -10px auto 25px auto;"></div>
+            <h3 style="color: white !important; font-weight: 800; margin-bottom: 25px; font-size: 1.4rem; letter-spacing: -0.5px;">Where to?</h3>
+            
+            <div id="geocoder-container" style="margin-bottom: 25px; border-radius: 16px; overflow: hidden;"></div>
+            
+            <button class="btn btn-primary" onclick="showDestinationSearchMode()" style="width: 100%; padding: 18px; background: #FFFFFF !important; color: #000000 !important; border-radius: 16px; font-weight: 800; border: none; font-size: 1.05rem;">
+                <i class="fas fa-search" style="margin-right: 10px;"></i> Search Destination
+            </button>
+            
+            <button class="btn btn-light" onclick="closeModal('destinationPromptPopup'); showModernDashboard();" style="width: 100%; background: transparent !important; color: #8E8E93 !important; border: none; margin-top: 15px; font-weight: 600;">Close</button>
+        </div>
+
+        <!-- SEARCH VIEW (Deep Search) -->
+        <div id="destSearchView" style="display: none; flex-direction: column; height: 100vh; background: #1C1C1E !important;">
+            <!-- Injected by JS -->
+        </div>
+
+    </div>
+</div>
 <script>
     function launchNativeNav(lat, lng) {
     if (window.AndroidNav) {
@@ -9524,7 +9683,7 @@ if (!firebase.apps.length) {
           const database = firebase.database();
           const auth = firebase.auth();
           const storage = firebase.storage();
-          mapboxgl.accessToken = '__MAPBOX_PUBLIC_TOKEN__';
+          mapboxgl.accessToken = 'pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw';
           // Global variables
           // Global variables
           var map, geocoder, pickupGeocoder, parcelGeocoder, userId, commuterData, userMarker;
@@ -10605,73 +10764,7 @@ window.lockPhoneModalOpen = function() {
       };
       document.body.appendChild(btn);
   }
-  function initializeMapAndLocation() {
-      console.log("Starting background location tracking...");
-
-      const savedLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
-      const savedLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
-
-      commuterLat = savedLat;
-      commuterLng = savedLng;
-
-      if (!map) {
-          startMap([commuterLng, commuterLat]);
-      }
-
-      if (map && map.loaded()) {
-          centerMapOnUserLocation();
-          enableFollowMode();
-      } else if (map) {
-          map.once('load', () => {
-              centerMapOnUserLocation();
-              enableFollowMode();
-          });
-      }
-
-      if (typeof createRecenterButton === 'function') createRecenterButton();
-
-      if (navigator.geolocation) {
-          if (window.locationWatchId) navigator.geolocation.clearWatch(window.locationWatchId);
-
-          window.locationWatchId = navigator.geolocation.watchPosition(
-              (position) => {
-                  const lat = position.coords.latitude;
-                  const lng = position.coords.longitude;
-
-                  if (isNaN(lat) || isNaN(lng)) return;
-
-                  commuterLat = lat;
-                  commuterLng = lng;
-               localStorage.setItem('lastLat', lat);
-                  localStorage.setItem('lastLng', lng);
-                  // TRIGGER WEATHER FETCH
-                  const dashboard = document.getElementById('modernHomeDashboard');
-                  if (dashboard && dashboard.style.display !== 'none' && !dashboard.classList.contains('hidden')) {
-                      if (typeof fetchRealWeather === 'function') fetchRealWeather(lat, lng);
-                  }
-
-                  if (map && map.isStyleLoaded()) {
-                      // FIX: Safely create or update the physical marker
-                      if (!userMarker && typeof setupUserMarker === 'function') {
-                          setupUserMarker([lng, lat]);
-                      } else if (userMarker) {
-                          userMarker.setLngLat([lng, lat]);
-                      }
-
-                      // Handle Camera Follow Mode smoothly
-                      if (typeof followModeActive !== 'undefined' && followModeActive) {
-                          map.easeTo({ center: [lng, lat], duration: 1000, essential: true });
-                      }
-                  }
-
-                  if (typeof setupEnhancedSearch === 'function') setupEnhancedSearch();
-              },
-              (err) => { console.warn(`GPS Watch Error: ${err.message}`); },
-              { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-          );
-      }
-  }
-  function startMap(coords) {
+    function startMap(coords) {
       map = new mapboxgl.Map({
           container: 'map',
           style: 'mapbox://styles/mapbox/standard',
@@ -10751,35 +10844,17 @@ const webPreloader = document.getElementById('solidPreloader');
 // GUARANTEE HOME DASHBOARD VISIBILITY ON LOAD
 // =================================================================
 
- window.showModernDashboard = function() {
-    const dashboard = document.getElementById('modernHomeDashboard');
-    if (dashboard) {
-        // Force absolute visibility and layer priority
-        dashboard.style.setProperty('display', 'flex', 'important');
-        dashboard.style.setProperty('z-index', '80000', 'important');
-        dashboard.style.setProperty('opacity', '1', 'important');
-        dashboard.style.setProperty('pointer-events', 'auto', 'important');
-        dashboard.classList.remove('hidden');
+ 
 
-        // Fetch real weather using current coordinates if available
-        if (window.commuterLat && window.commuterLng) {
-            if (typeof fetchRealWeather === 'function') fetchRealWeather(window.commuterLat, window.commuterLng);
-        }
-    }
-};
-
-window.hideModernDashboard = function() {
-    const dashboard = document.getElementById('modernHomeDashboard');
-    if (dashboard) {
-        dashboard.classList.add('hidden');
-        dashboard.style.setProperty('opacity', '0', 'important');
-        dashboard.style.setProperty('pointer-events', 'none', 'important');
-        setTimeout(() => {
-            dashboard.style.setProperty('display', 'none', 'important');
-        }, 400);
-    }
-};
-  function updateDashboardUserInfo() {
+// Quick selection helper for the new home screen suggestions
+window.quickSelectDest = function(destName) {
+    window.userDropOffDestination = destName;
+    openModal('destinationPromptPopup');
+    showDestinationSearchMode();
+    const destInput = document.getElementById('uberDestInput');
+    if (destInput) destInput.value = destName;
+    setTimeout(() => { findTaxisFlow(); }, 500);
+};  function updateDashboardUserInfo() {
       if (window.commuterData) {
           // Fetch Name and Surname to display "Welcome, [Full Name]"
           var fName = window.commuterData.name || window.commuterData.firstName || '';
@@ -10822,63 +10897,7 @@ if (progressBar && progressText) {
           }
       }
   }
-  window.showPaymentNotices = function() {
-      closeAllPopups();
-      const popup = document.getElementById('genericMessagePopup');
 
-      // Setup UI Shell
-      popup.innerHTML = `
-          <div class="modal-content" style="background:#fff !important; max-width: 400px !important; margin: auto !important; padding: 25px !important; border-radius: 24px !important; text-align: left !important; height: auto !important; max-height: 85vh; overflow-y: auto;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-                  <h3 style="color:#111; margin:0; font-weight:800;"><i class="fas fa-receipt" style="color:#007BFF;"></i> Payment Receipts</h3>
-                  <button onclick="closeModal('genericMessagePopup')" style="background:none; border:none; font-size:1.5rem; color:#888;">&times;</button>
-              </div>
-              <div id="paymentNoticesList"><div class="spinner" style="margin: 20px auto;"></div></div>
-          </div>
-      `;
-      openModal('genericMessagePopup');
-
-      if(!userId) return;
-
-      // Fetch Completed Trips
-      database.ref('requests').orderByChild('commuterId').equalTo(userId).once('value', snap => {
-          var html = '';
-          if(snap.exists()) {
-              var payments = [];
-              snap.forEach(c => {
-                  var val = c.val();
-                  if(val.status === 'completed' && val.paidAmount) payments.push(val);
-              });
-
-              payments.sort((a,b) => b.completedAt - a.completedAt);
-
-              if(payments.length === 0) {
-                  html = '<p style="text-align:center; color:#888;">No payment history found.</p>';
-              } else {
-                  payments.forEach(p => {
-                      var date = new Date(p.completedAt).toLocaleDateString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-                      html += `
-                          <div style="background:#f8f9fa; padding:15px; border-radius:12px; margin-bottom:12px; border:1px solid #eee;">
-                              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                  <strong style="color:#333; font-size:1rem;">${p.driverName || 'Driver'}</strong>
-                                  <strong style="color:#28a745; font-size:1.1rem;">R${parseFloat(p.paidAmount).toFixed(2)}</strong>
-                              </div>
-                              <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#666;">
-                                  <span>${date}</span>
-                                  <span style="background:#eef4ff; color:#007BFF; padding:2px 8px; border-radius:6px; font-weight:bold;">${p.paymentMethod || 'Cash'}</span>
-                              </div>
-                          </div>`;
-                  });
-              }
-          } else {
-              html = '<p style="text-align:center; color:#888;">No payment history found.</p>';
-          }
-          document.getElementById('paymentNoticesList').innerHTML = html;
-      });
-  };
- // =======================================================================
-// UPDATED: NOTIFICATIONS POPUP (Now houses the Loyalty Tracker)
-// =======================================================================
 // =======================================================================
 // UPDATED: NOTIFICATIONS POPUP (Fixed Text Visibility)
 // =======================================================================
@@ -14818,9 +14837,7 @@ window.showDropOffPopup = function(reqData) {
               document.getElementById('routeDirections').innerHTML = `<p><strong>Updated ETA:</strong> ${routeData.eta} min</p><p><strong>Distance:</strong> ${routeData.distance} km</p>`;
           }
 
-     // =======================================================================
-// 1. REPLACED: INITIALIZE DUAL INPUTS (Native HTML Inputs)
-// =======================================================================
+
 // =======================================================================
 // 1. INITIALIZE DUAL INPUTS (Native HTML Inputs)
 // =======================================================================
@@ -14908,9 +14925,7 @@ window.showSearchingIndicator = function() {
     `;
 };
 
-// =======================================================================
-// RENDER COMPREHENSIVE CATEGORIES & ICONS
-// =======================================================================
+
 // =======================================================================
 // RENDER COMPREHENSIVE CATEGORIES & ICONS (MAPBOX VERSION)
 // =======================================================================
@@ -14918,85 +14933,69 @@ window.renderUberSuggestions = function(features, type) {
     const listDiv = document.getElementById('uber-suggestions-list');
     if (!listDiv) return;
 
-    if (!features || features.length === 0) {
-        listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;">No matching locations found</div>`;
-        return;
-    }
-
-    var html = '';
-    const escHtml = (text) => text ? text.toString().replace(/[&<>"']/g, m => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[m])) : '';
+    let html = '';
 
     features.forEach(f => {
-        const placeName = f.text || (f.place_name ? f.place_name.split(',')[0] : 'Location');
-        const fullAddress = f.place_name || placeName;
-
-        var addressSubtitle = fullAddress.replace(placeName, '').replace(/^,\s*/, '').trim();
-        if (!addressSubtitle) addressSubtitle = "South Africa";
-
-        var distStr = "";
-        if (window.commuterLat && window.commuterLng && f.geometry && f.geometry.coordinates) {
-            const d = calculateDistance(window.commuterLat, window.commuterLng, f.geometry.coordinates[1], f.geometry.coordinates[0]);
-            distStr = d < 1 ? (d * 1000).toFixed(0) + " m" : d.toFixed(1) + " km";
-        }
-
-        const safeFullAddress = escHtml(fullAddress);
-        const nameLower = placeName.toLowerCase();
+        const name = f.text || f.place_name.split(',')[0];
+        const fullAddress = f.place_name;
         
-        const fProperties = f.properties || {};
-        const categories = (fProperties.category || '').toLowerCase();
-        const description = (fProperties.description || '').toLowerCase();
-        const maki = (fProperties.maki || '').toLowerCase();
-        const placeTypes = f.place_type || [];
+        // Clean up the subtitle so it doesn't repeat the name
+        let addressSubtitle = fullAddress.replace(name + ", ", "").replace(name, "");
+        if (!addressSubtitle || addressSubtitle.trim() === "") addressSubtitle = "Nearby Area";
 
-        // --- Icon categorization logic ---
-        const isSettlement = placeTypes.includes('neighborhood') || placeTypes.includes('locality') || nameLower.includes('township') || nameLower.includes('village');
-        const isFood = nameLower.includes('kfc') || nameLower.includes('mcdonald') || categories.includes('restaurant') || categories.includes('food');
-        const isEducation = nameLower.includes('school') || nameLower.includes('college') || categories.includes('school');
-        const isRetail = nameLower.includes('shop') || nameLower.includes('mall') || nameLower.includes('supermarket') || categories.includes('shop');
-        const isWorship = nameLower.includes('church') || categories.includes('church');
-        const isMedical = nameLower.includes('hospital') || nameLower.includes('clinic') || categories.includes('hospital');
+        // --- ENHANCED ICON DETECTOR ---
+        let icon = "fa-map-marker-alt";
+        let color = "#fff";
+        let category = (f.properties?.category || "").toLowerCase();
+        let maki = (f.properties?.maki || "").toLowerCase(); // Mapbox icon tags
+        let nameLower = name.toLowerCase();
 
-        var iconClass = "fa-map-marker-alt";
-        var colorHex = "#888888";
-
-        if (description.includes('rank') || description.includes('taxi')) {
-            iconClass = "fa-taxi"; colorHex = "#FFC107"; 
-        } else if (isEducation) {
-            iconClass = "fa-graduation-cap"; colorHex = "#007BFF"; 
-        } else if (isFood) {
-            iconClass = "fa-utensils"; colorHex = "#e63946"; 
-        } else if (isRetail) {
-            iconClass = "fa-shopping-bag"; colorHex = "#2a9d8f"; 
-        } else if (isWorship) {
-            iconClass = "fa-church"; colorHex = "#4f5d75"; 
-        } else if (isMedical) {
-            iconClass = "fa-hospital"; colorHex = "#38b000"; 
-        } else if (placeTypes.includes('poi')) {
-            iconClass = "fa-building"; colorHex = "#495057";
+        // Schools / Universities
+        if (nameLower.includes("school") || nameLower.includes("university") || nameLower.includes("college") || category.includes("education")) {
+            icon = "fa-graduation-cap";
+            color = "#007BFF";
         }
+        // Hospitals / Clinics
+        else if (nameLower.includes("hospital") || nameLower.includes("clinic") || nameLower.includes("mediclinic") || category.includes("medical") || maki.includes("hospital")) {
+            icon = "fa-hospital";
+            color = "#FF3B30";
+        }
+        // Malls / Shopping
+        else if (nameLower.includes("mall") || nameLower.includes("shopping") || nameLower.includes("plaza") || nameLower.includes("centre") || category.includes("retail") || maki.includes("shop")) {
+            icon = "fa-shopping-bag";
+            color = "#34C759";
+        }
+        // Churches / Religious
+        else if (nameLower.includes("church") || nameLower.includes("mosque") || nameLower.includes("temple") || category.includes("religion") || maki.includes("religious")) {
+            icon = "fa-church";
+            color = "#AF52DE";
+        }
+        // Banks
+        else if (nameLower.includes("bank") || nameLower.includes("atm") || category.includes("finance")) {
+            icon = "fa-university";
+            color = "#FFD60A";
+        }
+
+        const safeAddress = fullAddress.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
         html += `
-        <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
-             onclick="window.selectUberSuggestion('${type}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${safeFullAddress}')">
-            <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
-                <i class="fas ${iconClass}" style="font-size: 1.2rem; margin-bottom: 4px; color: ${colorHex} !important;"></i>
-                <span style="font-size: 0.75rem; color: #888;">${distStr}</span>
+        <div style="display: flex; align-items: center; padding: 15px 0; border-bottom: 1px solid #262626; cursor: pointer;"
+             onclick="window.selectUberSuggestion('${type}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${safeAddress}')">
+            <div style="width: 50px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <div style="width: 36px; height: 36px; background: #262626; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #333;">
+                    <i class="fas ${icon}" style="font-size: 1rem; color: ${color} !important;"></i>
+                </div>
             </div>
-            <div style="flex: 1; margin-left: 10px; overflow: hidden;">
-                <div style="color: #ffffff; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escHtml(placeName)}</div>
-                <div style="color: #888888; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escHtml(addressSubtitle)}</div>
+            <div style="flex: 1; margin-left: 12px; overflow: hidden; text-align: left;">
+                <div style="color: #ffffff; font-size: 1.05rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                <div style="color: #8e8e93; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${addressSubtitle}</div>
             </div>
-        </div>
-        `;
+        </div>`;
     });
 
     listDiv.innerHTML = html;
-};       // =======================================================================
-// GLOBAL HOISTED AUTOCOMPLETE HELPERS
-// =======================================================================
-// =======================================================================
-// SELECTION HANDLING (Saves Coordinates for Pricing Math)
-// =======================================================================
+};
+
 function restoreDefaultSuggestions() {
     const listDiv = document.getElementById('uber-suggestions-list');
     if (!listDiv) return;
@@ -15031,45 +15030,8 @@ function restoreDefaultSuggestions() {
 }
 window.restoreDefaultSuggestions = restoreDefaultSuggestions;
 
-// =======================================================================
-// INITIALIZE DUAL INPUTS (Native HTML Inputs)
-// =======================================================================
-window.initDualGeocoders = async function() {
-    const destContainer = document.getElementById('uber-dest-container');
-    const pickupContainer = document.getElementById('uber-pickup-container');
 
-    if (destContainer) {
-        destContainer.innerHTML = `
-            <input type="text" id="uberDestInput" class="mapboxgl-ctrl-geocoder--input" 
-                   placeholder="Where to?" 
-                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
-    }
 
-    if (pickupContainer) {
-        pickupContainer.innerHTML = `
-            <input type="text" id="uberPickupInput" class="mapboxgl-ctrl-geocoder--input" 
-                   placeholder="Current Location" 
-                   style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
-    }
-
-    window.setupDestAutocomplete();
-
-    try {
-        const pickupInput = document.getElementById('uberPickupInput');
-        if (pickupInput) {
-            pickupInput.value = "Fetching location...";
-            const currentAddr = await getAddressFromCoordsPromise(commuterLng, commuterLat);
-            pickupInput.value = currentAddr.split(',')[0].trim();
-        }
-    } catch (e) {
-        const pickupInput = document.getElementById('uberPickupInput');
-        if (pickupInput) pickupInput.value = "Current Location";
-    }
-};
-
-// =======================================================================
-// AUTOCOMPLETE SEARCH ENGINE (Direct Mapbox Geocoding Fetch)
-// =======================================================================
 // =======================================================================
 // MAPBOX POI-OVERDRIVE SEARCH ENGINE & INPUT LISTENER
 // =======================================================================
@@ -15102,18 +15064,12 @@ window.initDualGeocoders = async function() {
 // 5. REPLACED: CONFIRM TAXI FLOW (Native Input Parser)
 // =======================================================================
 window.findTaxisFlow = function() {
-    if (typeof isTripLive === 'function' && isTripLive()) {
-        return;
-    }
+    if (typeof isTripLive === 'function' && isTripLive()) return;
 
     const destSearchView = document.getElementById('destSearchView');
-    let input;
-
-    if (destSearchView && destSearchView.style.display !== 'none') {
-        input = document.getElementById('uberDestInput');
-    } else {
-        input = document.querySelector('#geocoder-container .mapboxgl-ctrl-geocoder--input');
-    }
+    let input = (destSearchView && destSearchView.style.display !== 'none') 
+        ? document.getElementById('uberDestInput') 
+        : document.querySelector('#geocoder-container .mapboxgl-ctrl-geocoder--input');
 
     if (input && input.value.trim() !== "") {
         userDropOffDestination = input.value;
@@ -15121,21 +15077,21 @@ window.findTaxisFlow = function() {
 
     if (userDropOffDestination) {
         closeModal('destinationPromptPopup');
-
         if (map && commuterLat && commuterLng) {
             map.flyTo({ center: [commuterLng, commuterLat], zoom: 16.5, essential: true });
         }
-
-        if (window.currentRideMode === 'ehailing' || window.isAsiyeGoMode) {
-            findAsiyeGoTaxis();
-        } else {
-            findMinibusTaxis();
-        }
+        // ONLY call Asiye Go (e-Hailing)
+        findAsiyeGoTaxis(); 
     } else {
         showGenericMessage('Destination Required', 'Please enter a destination.', 'fa-map-marker-alt', 'icon-info');
     }
 };
 
+window.handleFindTaxisNearMe = function() {
+    closeModal('destinationPromptPopup');
+    // ONLY call Asiye Go (e-Hailing)
+    findAsiyeGoTaxis();
+};
 // =======================================================================
 // 6. ENHANCED SEARCH PROXIMITY SAFE WRAPPER
 // =======================================================================
@@ -15298,57 +15254,155 @@ function setupEnhancedSearch() {
   // UNIFIED SAFETY CENTER LOGIC
   // =======================================================================
 
-  window.openSafetyCenter = function() {
-      if (!userId || !commuterData) {
-          showGenericMessage("Login Required", "Please login to access safety features.", "fa-lock", "icon-warning");
-          return;
-      }
+ window.openSafetyCenter = function() {
+    if (!userId || !commuterData) {
+        showGenericMessage("Login Required", "Please login to access safety features.", "fa-lock", "icon-warning");
+        return;
+    }
 
-      // 1. Hide dashboard and close other popups so this is visible
-      closeAllPopups();
-      hideModernDashboard();
+    closeAllPopups();
+    hideModernDashboard();
 
-      const safetyModal = document.getElementById('safetyCenterPopup');
-      if (!safetyModal) return;
+    const popup = document.getElementById('genericMessagePopup');
+    
+    // Force Centered Overlay Reset
+    popup.className = 'modal-overlay open';
+    popup.style.cssText = `display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 200000 !important; background: rgba(0,0,0,0.85) !important; align-items: center !important; justify-content: center !important; position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh; margin: 0 !important; padding: 0 !important;`;
 
-      // 2. Ensure styling matches dark theme explicitly
-      const content = safetyModal.querySelector('.modal-content');
-      if (content) {
-          content.style.backgroundColor = "#1a1a1a";
-          content.style.color = "#ffffff";
-      }
+    const isPinEnabled = commuterData.requirePin === true;
 
-      // 3. Set the PIN toggle switch state
-      const toggle = document.getElementById('pickupPinToggle');
-      if (toggle) toggle.checked = commuterData.requirePin === true;
+    popup.innerHTML = `
+        <div style="background: #1C1C1E !important; width: 92% !important; max-width: 450px !important; border-radius: 28px !important; display: flex !important; flex-direction: column !important; max-height: 90vh !important; overflow: hidden !important; box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important; border: 1px solid #333 !important;">
+            
+            <!-- HEADER -->
+            <div style="background: #000000; border-bottom: 1px solid #333; display: flex; align-items: center; padding: 18px 20px; flex-shrink: 0;">
+                <button onclick="closeModal('genericMessagePopup'); showModernDashboard();" style="background: transparent; border: none; color: #0A84FF; font-size: 1rem; cursor:pointer; font-weight:700; display: flex; align-items: center; gap: 5px;">
+                    <i class="fas fa-chevron-left"></i> Home
+                </button>
+                <h3 style="margin: 0; color: white !important; flex-grow: 1; text-align: center; font-weight: 800; font-size: 1.1rem; padding-right: 60px;">Safety Center</h3>
+            </div>
 
-      const pinDisplay = document.getElementById('activePinDisplay');
-      const pinValue = document.getElementById('tripPinValue');
+            <!-- SCROLLABLE CONTENT -->
+            <div style="flex: 1; overflow-y: auto; padding: 20px; -webkit-overflow-scrolling: touch;">
+                
+                <!-- 1. PICKUP PIN CARD -->
+                <div style="background: #2C2C2E; border-radius: 20px; padding: 18px; margin-bottom: 20px; border: 1px solid #3A3A3C;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <div style="background: rgba(48, 209, 88, 0.15); width: 44px; height: 44px; border-radius: 12px; display: flex; justify-content: center; align-items: center;">
+                                <i class="fas fa-shield-check" style="color: #30D158; font-size: 1.3rem;"></i>
+                            </div>
+                            <div>
+                                <strong style="font-size: 1rem; color: #EBEBF5; display: block;">Verify Your Ride</strong>
+                                <span style="font-size: 0.8rem; color: #98989D;">Use a PIN to start every trip</span>
+                            </div>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="safetyPinToggle" ${isPinEnabled ? 'checked' : ''} onchange="window.updateSafetyPinPreference(this)">
+                            <span class="slider round"></span>
+                        </label>
+                    </div>
+                    
+                    <div id="safetyActivePinBox" style="display: ${isPinEnabled ? 'block' : 'none'}; margin-top: 15px; text-align: center; background: #1C1C1E; padding: 15px; border-radius: 14px; border: 1px dashed #444;">
+                        <div style="font-size: 0.7rem; color: #98989D; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 1px;">Current Secure PIN</div>
+                        <div id="safetyPinValue" style="font-size: 2rem; color: #30D158; letter-spacing: 10px; font-weight: 900; font-family: monospace;">${commuterData.pickupPin || '----'}</div>
+                    </div>
+                </div>
 
-      // 4. Check if the user is in an active trip to show the PIN
-      if (currentRequestId) {
-          database.ref('requests/' + currentRequestId).once('value').then(snap => {
-              const req = snap.val();
-              if (req && req.requirePin && req.pickupPin && pinDisplay && pinValue) {
-                  pinDisplay.style.display = 'block';
-                  pinValue.style.color = "#FFC107"; // Gold for PIN
-                  pinValue.textContent = req.pickupPin;
-              } else if (pinDisplay) {
-                  pinDisplay.style.display = 'none';
-              }
+                <!-- 2. EMERGENCY CONTACTS CARD -->
+                <div style="background: #2C2C2E; border-radius: 20px; padding: 18px; margin-bottom: 20px; border: 1px solid #3A3A3C;">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="background: rgba(10, 132, 255, 0.15); width: 44px; height: 44px; border-radius: 12px; display: flex; justify-content: center; align-items: center;">
+                            <i class="fas fa-user-friends" style="color: #0A84FF; font-size: 1.3rem;"></i>
+                        </div>
+                        <div>
+                            <strong style="font-size: 1rem; color: #EBEBF5; display: block;">Trusted Contacts</strong>
+                            <span style="font-size: 0.8rem; color: #98989D;">Share trip status automatically</span>
+                        </div>
+                    </div>
 
-              // Open modal and load family list
-              openModal('safetyCenterPopup');
-              setTimeout(loadFamilyMembers, 300);
-          });
-      } else {
-          if (pinDisplay) pinDisplay.style.display = 'none';
+                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                        <input type="tel" id="safetyContactInput" placeholder="Enter Phone (071...)" style="flex: 1; padding: 14px; border-radius: 12px; border: 1px solid #3A3A3C; background: #1C1C1E; color: white; font-size: 0.95rem; outline: none;">
+                        <button onclick="window.addSafetyContact()" style="padding: 0 20px; border-radius: 12px; font-weight: 800; background: #0A84FF; border: none; color: white; cursor: pointer;">Add</button>
+                    </div>
+                    
+                    <div id="safetyContactsList" style="display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Injected by loadFamilyMembers -->
+                    </div>
+                </div>
 
-          // Open modal and load family list
-          openModal('safetyCenterPopup');
-          setTimeout(loadFamilyMembers, 300);
-      }
-  };  window.addFamilyMember = async function() {
+                <!-- 3. PANIC BUTTON -->
+                <button onclick="window.triggerPanic()" style="width: 100%; background: #FF3B30; color: white; padding: 20px; border-radius: 20px; font-weight: 900; font-size: 1.1rem; border: none; box-shadow: 0 10px 25px rgba(255, 59, 48, 0.3); display: flex; justify-content: center; align-items: center; gap: 12px; cursor: pointer; transition: transform 0.2s;">
+                    <i class="fas fa-exclamation-triangle"></i> EMERGENCY PANIC
+                </button>
+
+                <p style="text-align: center; color: #666; font-size: 0.75rem; margin-top: 20px; line-height: 1.4;">
+                    Asiye Safety Shield is active.<br>Your location is encrypted and shared with verified partners only.
+                </p>
+
+            </div>
+        </div>
+    `;
+
+    // Initialize the contacts list
+    window.loadSafetyContacts();
+};
+
+window.loadSafetyContacts = function() {
+    const listDiv = document.getElementById('safetyContactsList');
+    if (!listDiv || !userId) return;
+
+    database.ref(`commuters/${userId}/family`).on('value', snapshot => {
+        if (!snapshot.exists()) {
+            listDiv.innerHTML = '<div style="color:#666; font-size:0.8rem; text-align:center; padding: 10px;">No contacts added yet.</div>';
+            return;
+        }
+
+        var html = '';
+        snapshot.forEach(child => {
+            const memberId = child.key;
+            const member = child.val();
+            html += `
+                <div style="background: #1C1C1E; padding: 12px 15px; border-radius: 14px; border: 1px solid #3A3A3C; display: flex; justify-content: space-between; align-items: center; animation: fadeIn 0.3s ease;">
+                    <div>
+                        <div style="color: #fff; font-weight: 700; font-size: 0.9rem;">${escapeHtml(member.name)}</div>
+                        <div style="color: #888; font-size: 0.75rem;">${escapeHtml(member.phone)}</div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="window.testEmergencyAlert('${memberId}', '${escapeHtml(member.name)}', '${escapeHtml(member.phone)}')" style="background: rgba(255,255,255,0.05); color: #0A84FF; border: none; padding: 8px 12px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; cursor: pointer;">Test</button>
+                        <button onclick="window.removeFamilyMember('${memberId}')" style="background: rgba(255,59,48,0.1); color: #FF3B30; border: none; padding: 8px 12px; border-radius: 10px; font-size: 0.7rem; font-weight: 700; cursor: pointer;">Remove</button>
+                    </div>
+                </div>
+            `;
+        });
+        listDiv.innerHTML = html;
+    });
+};
+
+window.addSafetyContact = function() {
+    const input = document.getElementById('safetyContactInput');
+    const phone = input.value.trim();
+    if (phone.length < 10) {
+        showToast("Enter a valid phone number", "danger");
+        return;
+    }
+    // Reuse your existing addFamilyMember logic here
+    window.addFamilyMember(phone); 
+    input.value = '';
+};
+
+window.updateSafetyPinPreference = function(toggle) {
+    const isEnabled = toggle.checked;
+    const pinBox = document.getElementById('safetyActivePinBox');
+    
+    database.ref(`commuters/${userId}`).update({ requirePin: isEnabled }).then(() => {
+        commuterData.requirePin = isEnabled;
+        if (pinBox) pinBox.style.display = isEnabled ? 'block' : 'none';
+        showToast(isEnabled ? "PIN Security Enabled" : "PIN Security Disabled", "success");
+    });
+};
+
+  window.addFamilyMember = async function() {
       const phoneInput = document.getElementById('familyMemberPhone');
       const phone = phoneInput.value.trim();
 
@@ -16764,52 +16818,7 @@ window.removeFamilyMember = async function(memberId) {
           openModal('locationConfirmPopup');
       }, 200);
   }
-     window.refreshLocationDisplay = async function() {
-      const addrEl = document.getElementById("passengerLocationAddress");
-      if (!addrEl) return;
-
-      addrEl.textContent = "Fetching current address...";
-
-      var lat = commuterLat;
-      var lng = commuterLng;
-
-      if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
-          if (navigator.geolocation) {
-              try {
-                  const position = await new Promise((resolve, reject) => {
-                      navigator.geolocation.getCurrentPosition(resolve, reject, {
-                          enableHighAccuracy: false,
-                          timeout: 10000, // 10s timeout
-                          maximumAge: 60000 // allow cached
-                      });
-                  });
-                  lat = position.coords.latitude;
-                  lng = position.coords.longitude;
-                  commuterLat = lat;
-                  commuterLng = lng;
-              } catch (e) {
-                  lat = -26.2041;
-                  lng = 28.0473;
-              }
-          }
-      }
-
-      if (isNaN(lat) || isNaN(lng)) {
-          lat = -26.2041;
-          lng = 28.0473;
-      }
-
-      try {
-          const address = await getAddressFromCoordsPromise(lng, lat);
-          addrEl.textContent = address;
-          if (typeof userMarker !== 'undefined' && userMarker) {
-              userMarker.setLngLat([lng, lat]);
-          }
-      } catch (e) {
-          addrEl.textContent = "Unable to get address";
-      }
-  };
-
+     
   function showGenericMessage(title, message, iconClass, iconColorClass) {
       const popup = document.getElementById('genericMessagePopup');
 
@@ -17729,38 +17738,56 @@ window.confirmAccountDeletion = async function() {
   }
 
 
-   window.restoreDefaultSuggestions = function() {
+ window.restoreDefaultSuggestions = function() {
     const listDiv = document.getElementById('uber-suggestions-list');
-    if (!listDiv) return;
+    if (!listDiv || !window.commuterLat || !window.commuterLng) {
+        console.warn("Location not ready for suggestions.");
+        return;
+    }
 
-    var places = saKeyLocations.slice(0, 5);
-    var html = '';
+    // 1. Map locations to include calculated distance
+    const nearbyPlaces = saKeyLocations
+        .map(p => {
+            const dist = calculateDistance(window.commuterLat, window.commuterLng, p.lat, p.lng);
+            return { ...p, currentDist: dist };
+        })
+        // 2. Filter: Only keep those within 30km
+        .filter(p => p.currentDist <= 30)
+        // 3. Sort by nearest first
+        .sort((a, b) => a.currentDist - b.currentDist)
+        // 4. Take top 6
+        .slice(0, 6);
 
-    places.forEach(p => {
-        const safeAddress = p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    let html = '';
 
-        var distStr = "";
-        if (commuterLat && commuterLng) {
-            const d = calculateDistance(commuterLat, commuterLng, p.lat, p.lng);
-            distStr = d < 1 ? (d * 1000).toFixed(0) + " m" : d.toFixed(1) + " km";
-        }
+    if (nearbyPlaces.length === 0) {
+        html = `<div style="padding: 20px; text-align: center; color: #666; font-size: 0.9rem;">
+                    <i class="fas fa-map-marked-alt" style="margin-bottom:10px; font-size:1.5rem;"></i><br>
+                    No major landmarks within 30km.<br>Start typing to search.
+                </div>`;
+    } else {
+        nearbyPlaces.forEach(p => {
+            const safeAddress = p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            const distStr = p.currentDist < 1 ? (p.currentDist * 1000).toFixed(0) + " m" : p.currentDist.toFixed(1) + " km";
 
-        html += `
-        <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
-             onclick="window.selectUberSuggestion('destination', ${p.lng}, ${p.lat}, '${safeAddress}')">
-            <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
-                <i class="far fa-clock" style="font-size: 1.2rem; margin-bottom: 4px; color: #fff;"></i>
-                <span style="font-size: 0.75rem; color: #888;">${distStr}</span>
-            </div>
-            <div style="flex: 1; margin-left: 10px; overflow: hidden;">
-                <div style="color: white; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
-                <div style="color: #888; font-size: 0.9rem;">Suggested</div>
-            </div>
-        </div>
-        `;
-    });
+            html += `
+            <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #262626; cursor: pointer;"
+                 onclick="window.selectUberSuggestion('destination', ${p.lng}, ${p.lat}, '${safeAddress}')">
+                <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
+                    <i class="fas fa-map-pin" style="font-size: 1.1rem; margin-bottom: 4px; color: #fff;"></i>
+                    <span style="font-size: 0.7rem; color: #666; font-weight: 700;">${distStr}</span>
+                </div>
+                <div style="flex: 1; margin-left: 10px; overflow: hidden;">
+                    <div style="color: white; font-size: 1.05rem; font-weight: 600; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
+                    <div style="color: #666; font-size: 0.85rem;">Landmark</div>
+                </div>
+            </div>`;
+        });
+    }
     listDiv.innerHTML = html;
-};
+}; 
+
+
       function updateSliderDots(slider) {
           const width = slider.clientWidth;
           const scrollLeft = slider.scrollLeft;
@@ -17782,146 +17809,64 @@ window.confirmAccountDeletion = async function() {
   var activeInputType = 'destination'; // Tracks which input the user is currently typing in
   window.activeSearchType = 'destination'; // Safely track which box user is typing in
 
-  window.showDestinationSearchMode = function() {
-      const popup = document.getElementById('destinationPromptPopup');
-      const content = popup.querySelector('.modal-content');
+ 
 
-      const mainHeading = content.querySelector('h3');
-      if (mainHeading) mainHeading.style.display = 'none';
+// ==========================================
+// THE CORE FIX FOR THE BACK BUTTON
+// ==========================================
+window.resetDestinationPopup = function() {
+    console.log("Cleaning up and returning to Home Dashboard...");
+    
+    // 1. Close the modal completely
+    closeModal('destinationPromptPopup');
+    
+    // 2. Show the Dashboard again
+    showModernDashboard();
 
-      content.style.height = "100vh";
-      content.style.maxHeight = "100vh";
-      content.style.borderRadius = "0";
-      content.style.padding = "max(15px, env(safe-area-inset-top)) 20px 20px 20px";
-      content.style.backgroundColor = "#111111";
-
-      document.getElementById('destInitialView').style.display = 'none';
-
-      const destSearchView = document.getElementById('destSearchView');
-      destSearchView.style.display = 'flex';
-      destSearchView.style.height = '100%';
-      destSearchView.style.flexDirection = 'column';
-
-      // FIX: ONLY INJECT HTML ONCE! This stops the inputs from breaking.
-      if (!destSearchView.innerHTML.includes('uber-dest-container')) {
-          destSearchView.innerHTML = `
-              <div style="display:flex; align-items:center; margin-bottom: 20px; flex-shrink:0;">
-                  <i class="fas fa-arrow-left" onclick="resetDestinationPopup()" style="font-size:1.4rem; color: #fff; cursor:pointer; padding: 5px 15px 5px 0;"></i>
-                  <h3 style="margin:0; color:#fff; font-weight:600; font-size: 1.3rem;">Plan your ride</h3>
-              </div>
-              <div style="display:flex; gap: 10px; margin-bottom: 15px; flex-shrink:0;">
-                  <div style="background: #2a2a2a; border-radius: 20px; padding: 8px 14px; display: flex; align-items: center; gap: 8px; color: white; font-size: 0.9rem; font-weight: 500;">
-                      <i class="far fa-clock"></i> Pickup now <i class="fas fa-chevron-down" style="font-size: 0.7rem; color: #aaa;"></i>
-                  </div>
-                  <div style="background: #2a2a2a; border-radius: 20px; padding: 8px 14px; display: flex; align-items: center; gap: 8px; color: white; font-size: 0.9rem; font-weight: 500;">
-                      <i class="fas fa-user"></i> For me <i class="fas fa-chevron-down" style="font-size: 0.7rem; color: #aaa;"></i>
-                  </div>
-              </div>
-              <div style="display: flex; align-items: flex-start; gap: 10px; flex-shrink:0; margin-bottom: 20px;">
-                  <div style="flex: 1; border: 2px solid #fff; border-radius: 16px; background: #1a1a1a; display: flex; padding: 12px 10px;">
-                      <div style="display: flex; flex-direction: column; align-items: center; width: 20px; padding-top: 5px;">
-                          <div style="width: 8px; height: 8px; border-radius: 50%; background: #ccc; position: relative; flex-shrink:0;">
-                              <div style="position:absolute; top:2px; left:2px; width:4px; height:4px; background:#1a1a1a; border-radius:50%;"></div>
-                          </div>
-                          <div style="width: 2px; flex: 1; background: #444; margin: 4px 0; min-height: 25px;"></div>
-                          <div style="width: 8px; height: 8px; background: #fff; flex-shrink:0; margin-bottom: 8px;"></div>
-                      </div>
-                      <div style="flex: 1; display: flex; flex-direction: column; margin-left: 10px;">
-                          <div id="uber-pickup-container" class="uber-geocoder"></div>
-                          <div style="height: 1px; background: #333; margin: 6px 0;"></div>
-                          <div id="uber-dest-container" class="uber-geocoder"></div>
-                      </div>
-                  </div>
-                  <button style="width: 45px; height: 45px; border-radius: 50%; background: #2a2a2a; border: none; color: white; font-size: 1.5rem; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink:0; margin-top: 15px;">+</button>
-              </div>
-              <div id="uber-suggestions-list" style="flex: 1; overflow-y: auto; padding-right: 5px;"></div>
-              <button id="findTaxisByDestinationButton" class="gocab-book-btn" style="display:none; background: #276EF1 !important; width: 100%; padding: 18px; font-size: 1.1rem; flex-shrink:0; margin-top: 10px;">
-                  Confirm Route
-              </button>
-          `;
-          window.initDualGeocoders();
-      }
-
-      window.restoreDefaultSuggestions();
-
-      // Auto-focus the input cleanly
-      setTimeout(() => {
-          const destInput = document.querySelector('#uber-dest-container input');
-          if (destInput) {
-              destInput.focus();
-              if (!destInput.value) window.restoreDefaultSuggestions();
-          }
-      }, 400);
-  };
-
+    // 3. Reset the internal state of this modal for the next time it's opened
+    setTimeout(() => {
+        const content = document.querySelector('#destinationPromptPopup .modal-content');
+        if (content) {
+            content.style.height = "auto";
+            content.style.maxHeight = "100vh";
+            content.style.borderRadius = "28px 28px 0 0";
+            content.style.padding = "0";
+        }
+        document.getElementById('destInitialView').style.display = 'block';
+        document.getElementById('destSearchView').style.display = 'none';
+    }, 400); 
+};
   // Hook local places into the API search
-  window.forwardGeocoder = function(query) {
-      const matchingFeatures =[];
-      const lowerQuery = query.toLowerCase();
-
-      for (const loc of saKeyLocations) {
-          if (loc.name.toLowerCase().includes(lowerQuery)) {
-              const feature = {
-                  type: 'Feature',
-                  geometry: { type: 'Point', coordinates:[loc.lng, loc.lat] },
-                  place_name: loc.name,
-                  place_type: ['poi'],
-                  text: loc.name,
-                  properties: { title: loc.name, description: loc.type },
-                  center: [loc.lng, loc.lat]
-              };
-              matchingFeatures.push(feature);
-          }
-      }
-      return matchingFeatures.slice(0, 2);
-  };
- 
-  // The setupDestAutocomplete function was missing its declaration in your snippet!
-  // =======================================================================
-// BULLETPROOF DIRECT GEOCIDING SEARCH & POI RENDERING ENGINE
-// =======================================================================
 
 
- 
+ window.forwardGeocoder = function(query) {
+    const matchingFeatures = [];
+    const lowerQuery = query.toLowerCase();
 
-  window.restoreDefaultSuggestions = function() {
-      const listDiv = document.getElementById('uber-suggestions-list');
-      if (!listDiv) return;
+    for (const loc of saKeyLocations) {
+        // 1. Check if name matches search query
+        if (loc.name.toLowerCase().includes(lowerQuery)) {
+            // 2. Calculate distance to user
+            const dist = calculateDistance(window.commuterLat, window.commuterLng, loc.lat, loc.lng);
+            
+            // 3. Filter: Only allow if within 30km
+            if (dist <= 30) {
+                const feature = {
+                    type: 'Feature',
+                    geometry: { type: 'Point', coordinates: [loc.lng, loc.lat] },
+                    place_name: loc.name,
+                    text: loc.name,
+                    center: [loc.lng, loc.lat]
+                };
+                matchingFeatures.push(feature);
+            }
+        }
+    }
+    // Return only top 3 to keep list clean
+    return matchingFeatures.slice(0, 3);
+}; // Braced closed
 
-      var places = saKeyLocations.slice(0, 5);
-      var html = '';
-
-      places.forEach(p => {
-          const safeAddress = p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-          var distStr = "";
-          if (commuterLat && commuterLng) {
-              const d = calculateDistance(commuterLat, commuterLng, p.lat, p.lng);
-              distStr = d < 1 ? (d * 1000).toFixed(0) + " m" : d.toFixed(1) + " km";
-          }
-
-          html += `
-          <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
-               onclick="window.selectUberSuggestion('destination', ${p.lng}, ${p.lat}, '${safeAddress}')">
-              <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
-                  <i class="far fa-clock" style="font-size: 1.2rem; margin-bottom: 4px; color: #fff;"></i>
-                  <span style="font-size: 0.75rem; color: #888;">${distStr}</span>
-              </div>
-              <div style="flex: 1; margin-left: 10px; overflow: hidden;">
-                  <div style="color: white; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
-                  <div style="color: #888; font-size: 0.9rem;">Suggested</div>
-              </div>
-          </div>
-          `;
-      });
-      listDiv.innerHTML = html;
-  };
-
-  // Ensure it is bound after modal injection
-  document.addEventListener('DOMContentLoaded', () => {
-      setupDestAutocomplete();
-  });
-  window.resetDestinationPopup = function() {
+   window.resetDestinationPopup = function() {
       const popup = document.getElementById('destinationPromptPopup');
       const content = popup.querySelector('.modal-content');
 
@@ -17964,72 +17909,8 @@ window.confirmAccountDeletion = async function() {
       </div>
       `;
   }
-  window.restoreDefaultSuggestions = function(query = '') {
-      const listDiv = document.getElementById('uber-suggestions-list');
-      if (!listDiv) return;
-
-      var places = saKeyLocations;
-
-      // Filter locations based on the typed input
-      if (query && query.trim() !== '') {
-          const lowerQuery = query.toLowerCase();
-          places = saKeyLocations.filter(loc =>
-              loc.name.toLowerCase().includes(lowerQuery)
-          );
-      } else {
-          // Show up to 4 items by default if the input is empty
-          places = saKeyLocations.slice(0, 4);
-      }
-
-      var html = '';
-
-      if (places.length === 0) {
-          html = '<div style="padding: 16px; color: #888; text-align: center;">No matching locations found</div>';
-      } else {
-          places.forEach(p => {
-              const safeAddress = `${p.name}`.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-              html += `
-              <div style="display: flex; align-items: center; padding: 16px 0; border-bottom: 1px solid #222; cursor: pointer;"
-                   onclick="selectUberSuggestion('destination', ${p.lng}, ${p.lat}, '${safeAddress}')">
-                  <div style="width: 45px; display: flex; flex-direction: column; align-items: center; color: #888; flex-shrink: 0;">
-                      <i class="far fa-clock" style="font-size: 1.2rem; margin-bottom: 4px; color: #fff;"></i>
-                      <span style="font-size: 0.75rem; color: #888;">${p.type || 'loc'}</span>
-                  </div>
-                  <div style="flex: 1; margin-left: 10px; overflow: hidden;">
-                      <div style="color: white; font-size: 1.05rem; font-weight: 500; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${p.name}</div>
-                  </div>
-              </div>
-              `;
-          });
-      }
-
-      listDiv.innerHTML = html;
-  };
-
-
-  // Variable to block Mapbox from messing with our list while we are auto-filling addresses
-  var isGeocodingSetup = true;
-  // Ensure you use the right proximity settings
-
-
-      /**
-       * ACTION: Handles "Find taxis near me" click
-       * Closes popup and searches for broadcasting taxis immediately
-       */
-   window.handleFindTaxisNearMe = function() {
-      closeModal('destinationPromptPopup');
-      // Strictly route to the correct search engine
-      if (window.currentRideMode === 'ehailing' || window.isAsiyeGoMode) {
-          findAsiyeGoTaxis();
-      } else {
-          findMinibusTaxis();
-      }
-  };
-
-
-
-
+ 
+  
   // =====================================================================
 // UNIFIED, FREEZE-PROOF MODAL MANAGER
 // =====================================================================
@@ -20803,7 +20684,7 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
       openModal('genericMessagePopup');
 
       // Initialize map
-      mapboxgl.accessToken = '__MAPBOX_PUBLIC_TOKEN__';
+      mapboxgl.accessToken = 'pk.eyJ1IjoiZ29zb3V0aGFmcmljYSIsImEiOiJjbTM4ajZmdmowc2JnMmlxeHF5bzB1dnJlIn0.CV71_oh-Tnag84kUE4K0ZQ';
       trackingMap = new mapboxgl.Map({
           container: 'trackingMapContainer',
           style: 'mapbox://styles/mapbox/streets-v12',
@@ -21260,76 +21141,7 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
     });
 };
 
-  // =======================================================================
-  // 2. WALvar TOP UP IN PAYMENT RECEIPTS
-  // =======================================================================
-  window.showPaymentNotices = function() {
-      closeAllPopups();
-      const popup = document.getElementById('genericMessagePopup');
-
-      const currentBalance = (commuterData && commuterData.credits) ? commuterData.credits : 0;
-
-      popup.innerHTML = `
-          <div class="modal-content" style="background:#fff !important; max-width: 400px !important; margin: auto !important; padding: 25px !important; border-radius: 24px !important; text-align: left !important; height: auto !important; max-height: 85vh; overflow-y: auto;">
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
-                  <h3 style="color:#111; margin:0; font-weight:800;"><i class="fas fa-wallet" style="color:#007BFF;"></i> Walvar & Receipts</h3>
-                  <button onclick="closeModal('genericMessagePopup')" style="background:none; border:none; font-size:1.5rem; color:#888; cursor:pointer;">&times;</button>
-              </div>
-
-              <!-- TOP UP SECTION -->
-              <div style="background: #eef4ff; border-radius: 16px; padding: 15px; margin-bottom: 25px; border: 1px solid #cce0ff;">
-                  <h4 style="color: #007BFF; margin: 0 0 10px 0; font-size: 1rem; font-weight:800;"><i class="fas fa-credit-card"></i> Top Up Wallet</h4>
-                  <p style="font-size: 0.85rem; color: #555; margin-bottom: 10px;">Available Balance: <strong style="color:#111; font-size:1.1rem;">R${currentBalance.toFixed(2)}</strong></p>
-                  <div style="display: flex; gap: 10px;">
-                      <input type="number" id="topupAmount" placeholder="Amount (Min R100)" min="100" style="flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #b3d4ff; background: #fff; font-weight: bold; color: #111;">
-                      <button class="btn btn-primary" onclick="initiateWalletTopUp()" style="border-radius: 8px; font-weight: bold; padding:0 20px; background:#007BFF; border:none; color:white;">Top Up</button>
-                  </div>
-              </div>
-
-              <h4 style="color:#555; font-size:0.9rem; text-transform:uppercase; margin-bottom:15px; font-weight:800;">Recent Payments</h4>
-              <div id="paymentNoticesList"><div class="spinner" style="margin: 20px auto; border-left-color:#007BFF;"></div></div>
-          </div>
-      `;
-      openModal('genericMessagePopup');
-
-      if(!userId) return;
-
-      // Load History
-      database.ref('requests').orderByChild('commuterId').equalTo(userId).once('value', snap => {
-          var html = '';
-          if(snap.exists()) {
-              var payments =[];
-              snap.forEach(c => {
-                  var val = c.val();
-                  if(val.status === 'completed' && val.paidAmount) payments.push(val);
-              });
-              payments.sort((a,b) => b.completedAt - a.completedAt);
-
-              if(payments.length === 0) {
-                  html = '<p style="text-align:center; color:#888;">No payment history found.</p>';
-              } else {
-                  payments.forEach(p => {
-                      var date = new Date(p.completedAt).toLocaleDateString([], {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-                      html += `
-                          <div style="background:#f8f9fa; padding:15px; border-radius:12px; margin-bottom:12px; border:1px solid #eee;">
-                              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                                  <strong style="color:#333; font-size:1rem;">${p.driverName || 'Driver'}</strong>
-                                  <strong style="color:#28a745; font-size:1.1rem;">R${parseFloat(p.paidAmount).toFixed(2)}</strong>
-                              </div>
-                              <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#666;">
-                                  <span>${date}</span>
-                                  <span style="background:#eef4ff; color:#007BFF; padding:2px 8px; border-radius:6px; font-weight:bold;">${p.paymentMethod || 'Cash'}</span>
-                              </div>
-                          </div>`;
-                  });
-              }
-          } else {
-              html = '<p style="text-align:center; color:#888;">No payment history found.</p>';
-          }
-          document.getElementById('paymentNoticesList').innerHTML = html;
-      });
-  };
-
+  
   window.initiateWalletTopUp = function() {
       const amountInput = document.getElementById('topupAmount');
       const amount = parseFloat(amountInput.value);
@@ -21831,15 +21643,13 @@ window.findEHailingCabs = window.findAsiyeGoTaxis; // Compatibility wrapper
 window.setupDestAutocomplete = function() {
     const destInput = document.getElementById('uberDestInput');
     const pickupInput = document.getElementById('uberPickupInput');
-
     let searchTimeout = null;
 
-    // Live Keyboard Listener
+    // 1. Live Keyboard Listener
     window.handleImmediateInput = function(e, type) {
         const query = e.target.value;
         if (searchTimeout) clearTimeout(searchTimeout);
 
-        // Erase old coordinates the moment the user types a new address
         if (type === 'destination') {
             window.ehailingDestLat = null;
             window.ehailingDestLng = null;
@@ -21847,16 +21657,16 @@ window.setupDestAutocomplete = function() {
         }
 
         if (!query || query.trim().length < 2) {
-            if (typeof window.restoreDefaultSuggestions === 'function') window.restoreDefaultSuggestions();
+            window.restoreDefaultSuggestions();
         } else {
-            if (typeof window.showSearchingIndicator === 'function') window.showSearchingIndicator();
+            window.showSearchingIndicator();
             searchTimeout = setTimeout(() => {
                 performLiveSearch(query, type);
             }, 350);
         }
     };
 
-    // Bind inputs robustly
+    // 2. Input Re-binding
     if (destInput) {
         const newDestInput = destInput.cloneNode(true);
         destInput.parentNode.replaceChild(newDestInput, destInput);
@@ -21869,74 +21679,67 @@ window.setupDestAutocomplete = function() {
         newPickupInput.addEventListener('input', (e) => window.handleImmediateInput(e, 'pickup'));
     }
 
-    // Fetch Mapbox Data
+    // 3. Corrected Search Engine (Removed 'landmark' to fix 422 error)
     function performLiveSearch(query, type) {
-        let cleanQuery = query.toLowerCase().replace(/\s+(near\s+me|nearby|close\s+by)\s*$/i, '').trim();
+        let cleanQuery = query.toLowerCase().trim();
+        
+        // Proper proximity formatting
+        const proximity = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+        
+        // types=poi covers Malls, Schools, Clinics, Churches, and Businesses
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=poi,address${proximity}&limit=12`;
 
-        const proximityParam = (window.commuterLng && window.commuterLat) 
-            ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+        fetch(url)
+            .then(res => {
+                if (!res.ok) throw new Error('API Error');
+                return res.json();
+            })
+            .then(data => {
+                if (data.features) {
+                    // Combine with local hardcoded locations (Malls/Ranks)
+                    const localMatches = saKeyLocations.filter(loc => 
+                        loc.name.toLowerCase().includes(cleanQuery)
+                    ).map(loc => ({
+                        text: loc.name,
+                        place_name: loc.name + ", South Africa",
+                        geometry: { coordinates: [loc.lng, loc.lat] },
+                        properties: { category: loc.type }
+                    }));
 
-        const poiUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&types=poi${proximityParam}&limit=10`;
-        const addressUrl = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=address,neighborhood,locality${proximityParam}&limit=5`;
+                    let combined = [...localMatches, ...data.features];
 
-        Promise.all([
-            fetch(poiUrl).then(res => res.json()).catch(() => ({features: []})),
-            fetch(addressUrl).then(res => res.json()).catch(() => ({features: []}))
-        ])
-        .then(([poiData, addressData]) => {
-            let finalFeatures = [];
-            const seenIds = new Set();
+                    // Filter for 30km radius & remove duplicates
+                    const seen = new Set();
+                    const filteredResults = combined.filter(f => {
+                        const dist = calculateDistance(
+                            window.commuterLat, 
+                            window.commuterLng, 
+                            f.geometry.coordinates[1], 
+                            f.geometry.coordinates[0]
+                        );
+                        
+                        const isDuplicate = seen.has(f.text.toLowerCase());
+                        seen.add(f.text.toLowerCase());
+                        
+                        return dist <= 30 && !isDuplicate;
+                    });
 
-            // Local Hardcoded locations first
-            if (typeof saKeyLocations !== 'undefined') {
-                saKeyLocations.forEach(loc => {
-                    if (loc.name.toLowerCase().includes(cleanQuery)) {
-                        finalFeatures.push({
-                            type: 'Feature',
-                            geometry: { coordinates: [loc.lng, loc.lat] },
-                            place_name: loc.name,
-                            text: loc.name,
-                            properties: { category: loc.type }
-                        });
-                        seenIds.add(loc.name.toLowerCase());
+                    const listDiv = document.getElementById('uber-suggestions-list');
+                    if (!listDiv) return;
+
+                    if (filteredResults.length === 0) {
+                        listDiv.innerHTML = `<div style="padding: 20px; color: #666; text-align: center;">No matches found within 30km.</div>`;
+                    } else {
+                        window.renderUberSuggestions(filteredResults, type);
                     }
-                });
-            }
-
-            // Mapbox POIs
-            if (poiData.features) {
-                poiData.features.forEach(f => {
-                    const nameLower = (f.text || "").toLowerCase();
-                    if (!seenIds.has(nameLower)) {
-                        seenIds.add(nameLower);
-                        finalFeatures.push(f);
-                    }
-                });
-            }
-
-            // Mapbox Streets/Suburbs
-            if (addressData.features) {
-                addressData.features.forEach(f => {
-                    const nameLower = (f.text || "").toLowerCase();
-                    if (!seenIds.has(nameLower)) {
-                        seenIds.add(nameLower);
-                        finalFeatures.push(f);
-                    }
-                });
-            }
-
-            if (finalFeatures.length === 0) {
-                const listDiv = document.getElementById('uber-suggestions-list');
-                if (listDiv) listDiv.innerHTML = `<div style="padding: 20px; color: #888; text-align: center;">No matching locations found</div>`;
-            } else {
-                window.renderUberSuggestions(finalFeatures, type);
-            }
-        }).catch(err => {
-            if (typeof window.restoreDefaultSuggestions === 'function') window.restoreDefaultSuggestions();
-        });
-    }
-};
-
+                }
+            })
+            .catch(err => {
+                console.error("Geocoding failed:", err);
+                window.restoreDefaultSuggestions();
+            });
+    } // performLiveSearch closed
+}; // setupDestAutocomplete closed correctly
   window.findEHailingCabs = async function() {
       const container = document.getElementById('taxiListContainer');
       if(container) container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><p>Finding affordable e-Hailing cabs...</p></div>`;
@@ -22839,56 +22642,129 @@ window.setupDestAutocomplete = function() {
 
 
 
-  window.centerMapOnUserLocation = function() {
-      if (!map) return;
+ window.centerMapOnUserLocation = function() {
+    if (!map) return;
 
-      if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-              (position) => {
-                  const { latitude, longitude } = position.coords;
-                  commuterLat = latitude;
-                  commuterLng = longitude;
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                commuterLat = latitude;
+                commuterLng = longitude;
 
-                  // Fly to user location
-                  map.flyTo({
-                      center: [longitude, latitude],
-                      zoom: 16,
-                      speed: 1.2,
-                      curve: 1,
-                      essential: true
-                  });
+                // Fly to user location WITH PADDING
+                map.flyTo({
+                    center: [longitude, latitude],
+                    zoom: 16,
+                    speed: 1.2,
+                    curve: 1,
+                    padding: { bottom: window.getMapBottomPadding() }, // <-- FIX: Pushes marker up
+                    essential: true
+                });
 
-                  // Update or create user marker
-                  if (!userMarker && typeof setupUserMarker === 'function') {
-                      setupUserMarker([longitude, latitude]);
-                  } else if (userMarker) {
-                      userMarker.setLngLat([longitude, latitude]);
-                  }
-              },
-              (error) => {
-                  console.warn("GPS Timeout/Error. Using cached or default location.");
-                  // Graceful fallback without breaking the app
-                  const fallbackLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
-                  const fallbackLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
+                // Update or create user marker
+                if (!userMarker && typeof setupUserMarker === 'function') {
+                    setupUserMarker([longitude, latitude]);
+                } else if (userMarker) {
+                    userMarker.setLngLat([longitude, latitude]);
+                }
+            },
+            (error) => {
+                console.warn("GPS Timeout/Error. Using cached or default location.");
+                const fallbackLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
+                const fallbackLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
 
-                  commuterLat = fallbackLat;
-                  commuterLng = fallbackLng;
+                commuterLat = fallbackLat;
+                commuterLng = fallbackLng;
 
-                  map.flyTo({ center: [commuterLng, commuterLat], zoom: 14 });
+                map.flyTo({ 
+                    center: [commuterLng, commuterLat], 
+                    zoom: 14,
+                    padding: { bottom: window.getMapBottomPadding() } // <-- FIX
+                });
 
-                  if (!userMarker && typeof setupUserMarker === 'function') {
-                      setupUserMarker([commuterLng, commuterLat]);
-                  } else if (userMarker) {
-                      userMarker.setLngLat([commuterLng, commuterLat]);
-                  }
-              },
-              // CRITICAL FIX: Increased timeout to 15 seconds, allow 60-second cached positions
-              { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-          );
-      }
-  };
-  // Add this function to handle radius expansion search
-  // Add this function to handle radius expansion search
+                if (!userMarker && typeof setupUserMarker === 'function') {
+                    setupUserMarker([commuterLng, commuterLat]);
+                } else if (userMarker) {
+                    userMarker.setLngLat([commuterLng, commuterLat]);
+                }
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
+    }
+};
+
+function initializeMapAndLocation() {
+    console.log("Starting background location tracking...");
+
+    const savedLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
+    const savedLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
+
+    commuterLat = savedLat;
+    commuterLng = savedLng;
+
+    if (!map) {
+        startMap([commuterLng, commuterLat]);
+    }
+
+    if (map && map.loaded()) {
+        centerMapOnUserLocation();
+        enableFollowMode();
+    } else if (map) {
+        map.once('load', () => {
+            centerMapOnUserLocation();
+            enableFollowMode();
+        });
+    }
+
+    if (typeof createRecenterButton === 'function') createRecenterButton();
+
+    if (navigator.geolocation) {
+        if (window.locationWatchId) navigator.geolocation.clearWatch(window.locationWatchId);
+
+        window.locationWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                commuterLat = lat;
+                commuterLng = lng;
+                localStorage.setItem('lastLat', lat);
+                localStorage.setItem('lastLng', lng);
+
+                const dashboard = document.getElementById('modernHomeDashboard');
+                if (dashboard && dashboard.style.display !== 'none' && !dashboard.classList.contains('hidden')) {
+                    if (typeof fetchRealWeather === 'function') fetchRealWeather(lat, lng);
+                }
+
+                if (map && map.isStyleLoaded()) {
+                    if (!userMarker && typeof setupUserMarker === 'function') {
+                        setupUserMarker([lng, lat]);
+                    } else if (userMarker) {
+                        userMarker.setLngLat([lng, lat]);
+                    }
+
+                    // Handle Camera Follow Mode smoothly WITH PADDING
+                    if (typeof followModeActive !== 'undefined' && followModeActive) {
+                        map.easeTo({ 
+                            center: [lng, lat], 
+                            padding: { bottom: window.getMapBottomPadding() }, // <-- FIX
+                            duration: 1000, 
+                            essential: true 
+                        });
+                    }
+                }
+
+                if (typeof setupEnhancedSearch === 'function') setupEnhancedSearch();
+            },
+            (err) => { console.warn(`GPS Watch Error: ${err.message}`); },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    }
+}
+
    async function findTaxisWithRadiusExpansion(requestType = 'passenger') {
       console.log("Starting radius expansion search...");
 
@@ -24702,135 +24578,163 @@ function updatePaymentButtons(taxiId, selectedMethod) {
 // =======================================================================
 // 1. REPLACED: CHOOSE RIDE CATEGORIES (Reads pickup value instantly)
 // =======================================================================
-window.populateEHailingCategories = function(standardPrice, clubPrice, xlPrice) {
-    const sheet = document.getElementById('taxiListSheet');
-    if (!sheet) return;
+// Global variables for negotiation
 
-    var fName = window.commuterData?.name || 'Passenger';
-    var dropOffText = window.userDropOffDestination || "Destination";
-    
-    window.selectedRideCategory = 'club';
-    window.calculatedTripPrice = clubPrice;
-    
-    const promoRemaining = window.commuterData?.promoRemaining || 0;
-    const promoValue = window.commuterData?.promoValue || 25;
-    window.selectedPaymentMethod = 'cash'; 
-    
-    const availableCredit = parseFloat(window.commuterData?.credits || 0);
+// 🟢 ADD: Functions to handle the math and submitting the ride
+
+window.baseCalculatedFare = 0;
+window.currentNegotiatedFare = 0;
+window.populateEHailingCategories = function(standardPrice, clubPrice, xlPrice) {
+    // 1. Define the element correctly
+    const sheet = document.getElementById('taxiListSheet');
+    if (!sheet) {
+        console.error("Critical Error: taxiListSheet element not found in HTML.");
+        return;
+    }
+
+    window.baseCalculatedFare = standardPrice;
+    window.currentNegotiatedFare = standardPrice;
+    window.selectedRideCategory = 'standard'; 
+    window.calculatedTripPrice = standardPrice;
+
+    // Force Premium Dark Theme
+    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
 
     sheet.innerHTML = `
-        <div class="sheet-handle-wrapper" id="taxiSheetDragHandle" style="padding-bottom: 0; background: #111; border-radius: 35px 35px 0 0;">
-            <div class="sheet-handle-bar" style="width: 40px; height: 5px; background: rgba(255,255,255,0.5); margin-top: 10px;"></div>
-        </div>
-
-        <div class="gocab-top-section" style="background: linear-gradient(135deg, #111 0%, #333 100%) !important; box-shadow: 0 10px 25px rgba(0,0,0,0.4);">
-            <div class="gocab-user-row">
-                <div class="gocab-user-info">
-                    <div style="width: 45px; height: 45px; border-radius: 50%; overflow: hidden; border: 2px solid #555; background:#222; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:1.2rem;">
-                        ${fName.charAt(0).toUpperCase()}
-                    </div>
-                    <div class="gocab-greeting">
-                        <p style="color: #aaa !important;">Private & Shared Rides</p>
-                        <h4 style="color: #fff !important;">Asiye Go</h4>
-                    </div>
-                </div>
-                <button class="gocab-bell-btn" onclick="closeModal('taxiListSheet'); showModernDashboard();" style="background: rgba(255,255,255,0.1) !important; color: white !important; border:none;">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-        </div>
-
-        <div class="gocab-location-bar" style="margin-top: -20px; z-index:20; display: flex; flex-direction: column; gap: 8px; align-items: stretch; padding: 12px 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #eee; padding-bottom: 6px;">
-                <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-right: 10px; flex: 1;">
-                    <span style="font-size: 0.65rem; color: #888; font-weight: 800; text-transform: uppercase;">Pickup Location</span>
-                    <span style="font-size: 0.9rem; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="gocabPickupText">Current Location</span>
-                </div>
-            </div>
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; margin-right: 10px; flex: 1;">
-                    <span style="font-size: 0.65rem; color: #888; font-weight: 800; text-transform: uppercase;">Drop-off Destination</span>
-                    <span style="font-size: 0.9rem; font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(dropOffText)}</span>
-                </div>
-                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); setTimeout(() => { showDestinationSearchMode(); }, 300);" style="background: none; border: none; color: #007BFF; font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                    <i class="fas fa-edit"></i> Change
-                </button>
-            </div>
-        </div>
-
-        <div id="taxiListContainer" style="padding: 10px 20px 100px 20px;">
-            <h4 style="margin: 0 0 15px 0; color: #333; font-weight: 800;">Choose a ride</h4>
+        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
+        
+        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch;">
             
-            <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
-                <div id="cat-club" class="category-card selected" onclick="selectCategory('club', ${clubPrice})" style="border: 2px solid #007BFF; background: #eef4ff; border-radius: 16px; padding: 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <div style="width: 60px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 2rem; color: #007BFF;">
+            <!-- HEADER WITH BACK BUTTON -->
+            <div style="display:flex; align-items:center; margin-bottom: 20px;">
+                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Choose a ride</h4>
+            </div>
+
+            <!-- RIDE OPTIONS -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+                
+                <div id="cat-club" onclick="selectCategory('club', ${clubPrice})" style="border: 2.5px solid transparent; background: #2c2c2e; border-radius: 18px; padding: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 44px; height: 44px; background: rgba(255,159,10,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #FF9F0A;">
                             <i class="fas fa-users"></i>
                         </div>
                         <div>
-                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #007BFF;">Asiye Club (Shared)</h4>
-                            <div style="font-size: 0.8rem; color: #007BFF; font-weight: 600;"><i class="fas fa-clock"></i> Shared Pool &bull; Max 3 Passengers &bull; 10 minutes waiting time</div>
+                            <div style="font-weight: 700; font-size: 1rem;">Asiye Club</div>
+                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared ride</div>
                         </div>
                     </div>
-                    <div style="font-size: 1.3rem; font-weight: 900; color: #007BFF;">R${clubPrice}</div>
+                    <div style="font-size: 1.1rem; font-weight: 800;">R${clubPrice}</div>
                 </div>
 
-                <div id="cat-standard" class="category-card" onclick="selectCategory('standard', ${standardPrice})" style="border: 2px solid transparent; background: #f8f9fa; border-radius: 16px; padding: 15px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 15px;">
-                        <img src="data/carIcon.jpg" onerror="this.src='https://cdn3d.iconscout.com/3d/premium/thumb/car-4994273-4161869.png'" style="width: 60px; height: auto; mix-blend-mode: multiply;">
-                        <div>
-                            <h4 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #111;">Asiye Go (Private)</h4>
-                            <div style="font-size: 0.8rem; color: #666; font-weight: 600;"><i class="fas fa-user"></i> Go Now &bull;Direct &bull; No Waiting</div>
+                <div id="cat-standard" onclick="selectCategory('standard', ${standardPrice})" style="border: 2.5px solid #c5ff00; background: #2c2c2e; border-radius: 18px; padding: 14px; cursor: pointer;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                             <div style="width: 44px; height: 44px; background: rgba(197,255,0,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #c5ff00;">
+                                <i class="fas fa-car"></i>
+                            </div>
+                            <div>
+                                <div style="font-weight: 700; font-size: 1rem;">Asiye Go</div>
+                                <div style="font-size: 0.75rem; color: #8e8e93;">Private ride</div>
+                            </div>
                         </div>
+                        <div style="font-size: 1.1rem; font-weight: 800; color: #c5ff00;">R${standardPrice}</div>
                     </div>
-                    <div style="font-size: 1.3rem; font-weight: 900; color: #111;">R${standardPrice}</div>
+
+                    <div id="negotiatorBox" style="background: #1c1c1e; border-radius: 14px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+                        <button onclick="adjustFare(-5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">-</button>
+                        <div style="text-align: center;">
+                            <div id="negotiatedFareDisplay" style="font-size: 1.5rem; font-weight: 900; color: #ffffff !important;">R${window.currentNegotiatedFare}</div>
+                            <div style="font-size: 0.65rem; color: #8e8e93; text-transform: uppercase;">Your offer</div>
+                        </div>
+                        <button onclick="adjustFare(5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">+</button>
+                    </div>
                 </div>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-                <button class="btn" id="payCashBtn" onclick="selectPayment('cash')" style="border-radius: 12px; background: #f8f9fa; color: #555; border: 1px solid #ddd; padding: 12px; font-weight: 800; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-                    <div><i class="fas fa-money-bill-wave"></i> Cash</div>
-                    ${promoRemaining > 0 ? `<div class="promo-text-inline" style="font-size: 0.75rem; color: #28a745; font-weight: 900;">PROMO: -R${promoValue}</div>` : ''}
-                </button>
-                <button class="btn" id="payCardBtn" onclick="selectPayment('card')" style="border-radius: 12px; background: #f8f9fa; color: #555; border: 1px solid #ddd; padding: 12px; font-weight: 800; font-size: 0.85rem; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;">
-                    <div><i class="fas fa-credit-card"></i> Card (R${availableCredit.toFixed(2)})</div>
-                    ${promoRemaining > 0 ? `<div class="promo-text-inline" style="font-size: 0.75rem; color: #28a745; font-weight: 900;">PROMO: -R${promoValue}</div>` : ''}
-                </button>
-            </div>
-
-            <button class="btn" id="payPromoBtn" onclick="togglePromoCodeInput()" style="width: 100%; border-radius: 12px; border: 1.5px dashed #007BFF; color: #007BFF; background: transparent; padding: 12px; font-weight: 800; font-size: 0.85rem; margin-bottom: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
-                <i class="fas fa-tag"></i> Use Promo Code
-            </button>
-
-            <div id="promoCodeInputSection" style="display: none; margin-bottom: 15px;">
-                <div style="display: flex; gap: 8px;">
-                    <input type="text" id="manualPromoCodeField" placeholder="Enter Promo Code" style="flex: 1; padding: 12px; border-radius: 10px; border: 1px solid #ddd; font-weight: bold; text-transform: uppercase;">
-                    <button class="btn btn-primary" onclick="applyManualPromoCode()" style="padding: 12px 18px; border-radius: 10px; font-weight: 800; background: #007BFF; color: white;">Apply</button>
+            <!-- PROMO SECTION -->
+            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
+                <div id="promoCodeInputSection" style="display: none; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="manualPromoCodeField" placeholder="Enter code" style="flex: 1; background: #2c2c2e !important; border: 1px solid #3a3a3c !important; color: white !important; border-radius: 10px; padding: 10px;">
+                        <button onclick="applyManualPromoCode()" style="background: #0A84FF; border: none; color: white; border-radius: 10px; padding: 0 15px; font-weight: 700;">Apply</button>
+                    </div>
+                </div>
+                <div onclick="togglePromoCodeInput()" style="color: #0A84FF; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-tag"></i> <span>Add promo code</span>
                 </div>
             </div>
 
-            <button id="mainRequestRideBtn" class="gocab-book-btn" onclick="requestAsiyeGoRide()" style="width: 100%; background: #000 !important; color: white !important; padding: 18px !important; font-size: 1.1rem !important; border-radius: 16px !important; box-shadow: 0 8px 20px rgba(0,0,0,0.2) !important; border: none;">
-                Request Ride
+            <!-- EXPLANATION -->
+            <div id="ride-explanation" style="background: rgba(255,255,255,0.03); border-radius: 12px; padding: 12px; margin-bottom: 15px; font-size: 0.85rem; color: #8e8e93; line-height: 1.4; text-align: center;">
+                Your private ride, your price. Offer what you're willing to pay and wait for drivers to accept.
+            </div>
+
+            <!-- ACTION BUTTON -->
+            <button id="findOffersBtn" onclick="submitNegotiatedRide()" style="width: 100%; background: #c5ff00; color: #000; font-weight: 900; font-size: 1.1rem; padding: 16px; border-radius: 16px; border: none; cursor: pointer;">
+                Find offers
             </button>
         </div>
     `;
     
-    // Instantly map the visible pickup address value synchronously
-    const pickupInputEl = document.getElementById('uberPickupInput');
-    const gocabPickupTextEl = document.getElementById('gocabPickupText');
-    if (gocabPickupTextEl && pickupInputEl && pickupInputEl.value) {
-        gocabPickupTextEl.textContent = pickupInputEl.value.split(',')[0].trim();
+    // FIX: Using 'sheet' instead of 'modal' to prevent ReferenceError
+    if (!sheet.classList.contains('open')) sheet.classList.add('open');
+    
+    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
+};
+
+window.selectCategory = function(cat, price) {
+    window.selectedRideCategory = cat;
+    const isStandard = (cat === 'standard');
+    window.calculatedTripPrice = isStandard ? window.currentNegotiatedFare : price;
+
+    const clubCard = document.getElementById('cat-club');
+    const stdCard = document.getElementById('cat-standard');
+    const negotiatorBox = document.getElementById('negotiatorBox');
+    const explanationEl = document.getElementById('ride-explanation');
+    const btn = document.getElementById('findOffersBtn');
+
+    if (isStandard) {
+        stdCard.style.border = '2px solid #c5ff00';
+        clubCard.style.border = '2px solid transparent';
+        negotiatorBox.style.display = 'flex';
+        explanationEl.innerText = "Your private ride, your price. Offer what you're willing to pay and wait for drivers to accept.";
+        btn.innerHTML = 'Find offers';
+        btn.style.background = '#c5ff00';
+    } else {
+        clubCard.style.border = '2px solid #FF9F0A';
+        stdCard.style.border = '2px solid transparent';
+        negotiatorBox.style.display = 'none';
+        explanationEl.innerText = "Share this ride with up to 2 other passengers heading the same way. Low cost, but might involve small wait times.";
+        btn.innerHTML = `Book Asiye Club (R${price})`;
+        btn.style.background = '#FF9F0A';
+    }
+};
+window.adjustFare = function(amount) {
+    // Cannot bid lower than (Base Fare - R15), absolute min R20
+    let minAllowed = window.baseCalculatedFare - 15;
+    if (minAllowed < 20) minAllowed = 20; 
+
+    window.currentNegotiatedFare += amount;
+    
+    if (window.currentNegotiatedFare < minAllowed) {
+        window.currentNegotiatedFare = minAllowed;
+        showToast("Minimum fare reached", "warning");
     }
 
-    const mainActionSheet = document.getElementById('mainActionSheet');
-    if (mainActionSheet) mainActionSheet.style.display = 'none';
-    
-    selectPayment(window.selectedPaymentMethod);
-
-    setTimeout(() => { 
-        if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag(); 
-    }, 100);
+    // Update UI & Global Price
+    document.getElementById('negotiatedFareDisplay').innerText = `R${window.currentNegotiatedFare}`;
+    window.calculatedTripPrice = window.currentNegotiatedFare;
 };
+
+window.submitNegotiatedRide = function() {
+    // Transition to searching mode
+    document.getElementById('floatingRouteHeader').style.display = 'none';
+    requestAsiyeGoRide(); // Call your existing booking logic
+};
+
 
 // =======================================================================
 // 2. REPLACED: DRIVER FOUND POPUP (Syncs pickup address value)
@@ -25693,48 +25597,7 @@ window.ensureTripActive = function() {
     }, 30000);
 };
 
-// =======================================================================
-// RIDE CATEGORY SELECTION (Fixes the Button Price Not Updating)
-// =======================================================================
-window.selectCategory = function(cat, price) {
-    // 1. Reset all cards to unselected state
-    document.querySelectorAll('.category-card').forEach(el => {
-        el.style.border = '2px solid transparent';
-        el.style.background = '#f8f9fa';
-        el.classList.remove('selected');
-        const h4 = el.querySelector('h4');
-        if (h4) h4.style.color = '#111';
-        const divs = el.querySelectorAll('div');
-        divs.forEach(div => {
-            if (div.style.fontSize === '0.8rem' || div.style.fontSize === '0.85rem') div.style.color = '#666';
-            if (div.style.fontSize === '1.3rem' || div.style.fontSize === '1.2rem') div.style.color = '#111';
-        });
-    });
 
-    // 2. Highlight the selected card
-    const el = document.getElementById('cat-' + cat);
-    if (el) {
-        el.style.border = '2px solid #007BFF';
-        el.style.background = '#eef4ff';
-        el.classList.add('selected');
-        const h4 = el.querySelector('h4');
-        if (h4) h4.style.color = '#007BFF';
-        const divs = el.querySelectorAll('div');
-        divs.forEach(div => {
-            if (div.style.fontSize === '0.8rem' || div.style.fontSize === '0.85rem') div.style.color = '#007BFF';
-            if (div.style.fontSize === '1.3rem' || div.style.fontSize === '1.2rem') div.style.color = '#007BFF';
-        });
-    }
-
-    // 3. Update the global variables
-    window.selectedRideCategory = cat;
-    window.calculatedTripPrice = price;
-
-    // 4. CRITICAL FIX: Force the Payment Button to refresh and show the new price!
-    if (typeof window.selectPayment === 'function') {
-        window.selectPayment(window.selectedPaymentMethod || 'cash');
-    }
-};
 window.selectPayment = function(method) {
     window.selectedPaymentMethod = method;
     const cashBtn = document.getElementById('payCashBtn');
@@ -25970,6 +25833,85 @@ window.proceedWithBooking = async function(taxiId) {
     if (window.currentRequestId) {
         window.listenForRequestStatus(window.currentRequestId);
     }
+};
+
+// --- COMPLETE FUNCTION FOR index.html ---
+window.listenForRequestStatus = function(reqId) {
+    if (!reqId) return;
+    
+    if (window.currentRequestStatusListener && window.activeListenerReqId) {
+        database.ref('requests/' + window.activeListenerReqId).off('value', window.currentRequestStatusListener);
+    }
+    
+    window.activeListenerReqId = reqId;
+    
+    window.currentRequestStatusListener = database.ref('requests/' + reqId).on('value', async (snapshot) => {
+        const reqData = snapshot.val();
+        if (!reqData) return;
+
+        const currentStatus = reqData.status;
+
+        // 1. HANDLE COUNTER OFFER (Price Negotiation)
+        if (currentStatus === 'counter_offered') {
+            closeModal('pendingRequestPopup'); // Stop the radar pulse
+            
+            const popup = document.getElementById('genericMessagePopup');
+            popup.innerHTML = `
+                <div class="modal-content" style="text-align: center; padding: 30px; background: white !important; border-radius: 24px;">
+                    <div style="width: 70px; height: 70px; background: #fff3cd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                        <i class="fas fa-handshake" style="font-size: 2.5rem; color: #f8961e;"></i>
+                    </div>
+                    <h3 style="color:#111 !important; font-weight:800;">Price Negotiation</h3>
+                    <p style="color:#666 !important;"><b>${reqData.driverName}</b> offered a counter price:</p>
+                    
+                    <div style="font-size: 4rem; font-weight: 900; color: #28a745; margin: 15px 0; letter-spacing: -2px;">R${reqData.calculatedPrice}</div>
+                    
+                    <div style="display: flex; gap: 10px; width: 100%;">
+                        <button class="btn btn-light" style="flex: 1; border-radius:12px;" onclick="cancelPendingRequest()">Decline</button>
+                        <button class="btn btn-success" style="flex: 2; border-radius:12px; background:#007BFF !important; color:white; font-weight:900;" 
+                                onclick="window.acceptCounterOffer('${reqId}', ${reqData.calculatedPrice})">Accept & Book</button>
+                    </div>
+                </div>
+            `;
+            openModal('genericMessagePopup');
+            return;
+        }
+
+        // 2. HANDLE ACCEPTANCE (Direct or accepted Counter)
+        if (['accepted', 'driver_on_way', 'arrived', 'passenger_here', 'passenger_onboard', 'in_transit'].includes(currentStatus)) {
+            closeModal('pendingRequestPopup');
+            closeModal('genericMessagePopup'); 
+            
+            if (typeof window.showDriverAcceptedPopup === 'function') {
+                window.showDriverAcceptedPopup(reqData.taxiId, { requestKey: reqId });
+            }
+        }
+
+        // 3. HANDLE COMPLETION
+        else if (currentStatus === 'completed') {
+            database.ref('requests/' + reqId).off('value', window.currentRequestStatusListener);
+            if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
+            if (typeof window.showDropOffPopup === 'function') {
+                window.showDropOffPopup({
+                    amount: reqData.calculatedPrice,
+                    driverName: reqData.driverName,
+                    taxiId: reqData.taxiId
+                });
+            }
+        }
+    });
+};
+
+// Passenger Helper to accept the price
+window.acceptCounterOffer = function(reqId, finalPrice) {
+    database.ref(`requests/${reqId}`).update({
+        status: 'accepted',
+        calculatedPrice: finalPrice,
+        finalAmount: finalPrice,
+        acceptedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        closeModal('genericMessagePopup');
+    });
 };
 window.proceedWithBooking = async function(taxiId) {
     if (!userId) {
@@ -27300,154 +27242,6 @@ window.activeListenerReqId = null;
 window.currentRequestStatusListener = null;
 window.activeListenerReqId = null;
 
-window.listenForRequestStatus = function(reqId) {
-    if (!reqId) return;
-    
-    console.log("📡 Commuter: Listening to live request:", reqId);
-    
-    if (window.currentRequestStatusListener && window.activeListenerReqId) {
-        database.ref('requests/' + window.activeListenerReqId).off('value', window.currentRequestStatusListener);
-    }
-    
-    window.activeListenerReqId = reqId;
-    
-    window.currentRequestStatusListener = database.ref('requests/' + reqId).on('value', async (snapshot) => {
-        const reqData = snapshot.val();
-        
-        if (!reqData) {
-            if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
-            return;
-        }
-
-        let myTripData = reqData;
-        if (reqData.type === 'club' && reqData.passengers && typeof userId !== 'undefined' && reqData.passengers[userId]) {
-            myTripData = reqData.passengers[userId];
-        }
-
-        const masterStatus = reqData.status;
-        const passengerStatus = myTripData.status;
-        let currentStatus = passengerStatus || masterStatus;
-        
-        const onboardStatuses = ['passenger_onboard', 'picked_up', 'in_transit'];
-        const activeTripStates = ['accepted', 'driver_on_way', 'passenger_here', 'arrived', 'picking_up_others'];
-
-        if (onboardStatuses.includes(passengerStatus)) {
-            currentStatus = passengerStatus;
-        } else if (activeTripStates.includes(masterStatus)) {
-            currentStatus = masterStatus;
-        }
-        
-        const savedState = localStorage.getItem('trackedTripState_' + reqId);
-        if (savedState !== currentStatus) {
-            localStorage.setItem('trackedTripState_' + reqId, currentStatus);
-        }
-
-        if (currentStatus === 'pooling' || (reqData.type === 'club' && currentStatus === 'pending')) {
-            const popup = document.getElementById('pendingRequestPopup');
-            if (popup && !popup.classList.contains('open')) {
-                if (typeof openModal === 'function') openModal('pendingRequestPopup');
-            }
-
-            const msgEl = document.getElementById('requestingMessage');
-            if (msgEl) {
-                const passCount = reqData.passengers ? Object.keys(reqData.passengers).length : 1;
-                const maxCap = 3; 
-                const minCap = 2; 
-                
-                const baseFare = myTripData.originalPrice || myTripData.price || reqData.originalPerPersonPrice || 25;
-                const rideNowCost = baseFare + ((maxCap - passCount) * baseFare);
-
-                let dynamicHeadline = "Pooling Passengers...";
-                let statusMsg = `You are passenger #${passCount}. Waiting for ${minCap - passCount} more passengers to join...`;
-                
-                if (passCount > 1 && passCount < minCap) {
-                    dynamicHeadline = `${passCount} Passengers Joined!`;
-                    statusMsg = `Another passenger joined! Need ${minCap - passCount} more to start automatically.`;
-                } else if (passCount >= minCap) {
-                    dynamicHeadline = `Pool Minimum Reached!`;
-                    statusMsg = `Waiting for a driver to accept the ride.`;
-                }
-
-                if (reqData.forceDispatch) {
-                    dynamicHeadline = `Dispatching Driver!`;
-                    statusMsg = `Connecting to nearest driver...`;
-                }
-
-                msgEl.innerHTML = `
-                    <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.15);">
-                        <div class="radar-ring ring-1" style="border-color: #007BFF;"></div>
-                        <div class="logo-circle" style="box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);">
-                            <i class="fas fa-users" style="color: #007BFF; font-size: 24px;"></i>
-                        </div>
-                    </div>
-                    <div style="font-weight:900; color:#fff; font-size:1.4rem; margin-bottom:5px;">${dynamicHeadline}</div>
-                    
-                    <div style="background: #2a2a2a; padding: 15px; border-radius: 16px; margin-top: 15px; border: 1px solid #444; text-align: left;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <span style="color:#007BFF; font-size:1.1rem; font-weight:900;">${passCount} of ${maxCap} Joined</span>
-                            <span style="background: #007BFF; color: white; padding: 3px 8px; border-radius: 8px; font-size: 0.8rem; font-weight: bold;">R${baseFare} each</span>
-                        </div>
-                        <p style="color:#ccc; font-size:0.9rem; margin: 0 0 10px 0; line-height: 1.4;">${statusMsg}</p>
-                        ${(!reqData.forceDispatch && passCount < maxCap) ? `
-                        <div style="background: #333; padding: 10px; border-radius: 8px; border-left: 3px solid #f8961e;">
-                            <p style="color:#f8961e; font-size:0.8rem; margin: 0; font-weight: 600;">Don't want to wait? Leave now by paying for the empty seats. You pay: R${rideNowCost}.</p>
-                        </div>
-                        ` : ''}
-                    </div>
-                    <div style="display: flex; gap: 10px; margin-top: 20px; width: 100%;">
-                        <button class="btn btn-danger" onclick="cancelPendingRequest()" style="flex: 1; padding: 14px; border-radius: 12px; font-weight: bold; background: #333; border: 1px solid #555;">Cancel</button>
-                        ${(!reqData.forceDispatch && passCount < maxCap) ? `
-                        <button id="rideNowPoolBtn" class="btn btn-success" onclick="rideNowPayFull('${reqData.key || reqId}', ${rideNowCost})" style="flex: 1.5; padding: 14px; border-radius: 12px; font-weight: 900; background: #28a745; border: none; color: white;">Ride Now (R${rideNowCost})</button>
-                        ` : ''}
-                    </div>
-                `;
-                
-                const defaultCancel = document.getElementById('cancelRequestBtn');
-                if (defaultCancel) defaultCancel.style.display = 'none';
-            }
-        }
-        else if (onboardStatuses.includes(currentStatus) || activeTripStates.includes(currentStatus)) {
-            const pendingPopup = document.getElementById('pendingRequestPopup');
-            if (pendingPopup && pendingPopup.classList.contains('open') && typeof closeModal === 'function') {
-                closeModal('pendingRequestPopup');
-            }
-            if (typeof window.showDriverAcceptedPopup === 'function') {
-                window.showDriverAcceptedPopup(reqData.taxiId, { requestKey: reqId });
-            }
-        }
-        else if (currentStatus === 'completed') {
-            // Unbind listener so completion steps are not executed iteratively
-            database.ref('requests/' + reqId).off('value', window.currentRequestStatusListener);
-            window.currentRequestStatusListener = null;
-
-            // Trigger the deduction atomic transaction
-            await window.deductWalletOnCompletion(reqId);
-
-            if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
-            
-            if (typeof window.showDropOffPopup === 'function') {
-                window.showDropOffPopup({
-                    paidAmount: myTripData.paidAmount || myTripData.price || reqData.calculatedPrice,
-                    paymentMethod: myTripData.paymentMethod || reqData.paymentMethod || 'cash',
-                    driverId: reqData.taxiId,
-                    driverName: reqData.driverName || 'Your Driver',
-                    finalAmount: myTripData.finalAmount || reqData.finalAmount,
-                    appliedCredit: myTripData.appliedCredit || reqData.appliedCredit || 0
-                });
-            }
-            
-            if (typeof window.processFirstTripReferralReward === 'function') {
-                window.processFirstTripReferralReward();
-            }
-        }
-        else if (currentStatus.includes('cancelled') || currentStatus === 'rejected') {
-            if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
-            if (typeof showGenericMessage === 'function') {
-                showGenericMessage("Trip Cancelled", "The trip has been cancelled.", "fa-times-circle", "icon-danger");
-            }
-        }
-    });
-};
 
 window.deductWalletOnCompletion = function(reqId) {
     if (!reqId || !userId) return Promise.resolve(false);
@@ -28543,12 +28337,13 @@ window.getRealTimeCommuterAddress = async function() {
 };
 
 // =======================================================================
-// INITIALIZE DUAL INPUTS (With Fail-Safe Telemetry Sync)
+// INITIALIZE DUAL INPUTS (Professional Uber/Bolt Style)
 // =======================================================================
 window.initDualGeocoders = async function() {
     const destContainer = document.getElementById('uber-dest-container');
     const pickupContainer = document.getElementById('uber-pickup-container');
 
+    // 1. Inject Destination Input
     if (destContainer) {
         destContainer.innerHTML = `
             <input type="text" id="uberDestInput" class="mapboxgl-ctrl-geocoder--input" 
@@ -28556,6 +28351,7 @@ window.initDualGeocoders = async function() {
                    style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
     }
 
+    // 2. Inject Pickup Input
     if (pickupContainer) {
         pickupContainer.innerHTML = `
             <input type="text" id="uberPickupInput" class="mapboxgl-ctrl-geocoder--input" 
@@ -28563,18 +28359,318 @@ window.initDualGeocoders = async function() {
                    style="background: transparent !important; color: white !important; border: none !important; width: 100% !important; font-size: 1.15rem !important; font-weight: 500 !important; outline: none !important; padding: 0 !important; height: 38px !important;">`;
     }
 
-    window.setupDestAutocomplete();
+    // 3. Initialize Autocomplete Listeners
+    if (typeof window.setupDestAutocomplete === 'function') {
+        window.setupDestAutocomplete();
+    }
 
+    // 4. Try to resolve physical address for the Pickup field
     const pickupInput = document.getElementById('uberPickupInput');
     if (pickupInput) {
-        pickupInput.value = "Fetching current address...";
+        // Show "Fetching..." state briefly
+        pickupInput.value = "Fetching location...";
+
+        try {
+            // Use current GPS coordinates
+            let lat = window.commuterLat || commuterLat;
+            let lng = window.commuterLng || commuterLng;
+
+            if (lat && lng) {
+                const currentAddr = await getAddressFromCoordsPromise(lng, lat);
+                // Only take the first part of the address (e.g., "123 Bree St")
+                pickupInput.value = currentAddr.split(',')[0].trim();
+            } else {
+                pickupInput.value = "Current Location";
+            }
+        } catch (e) {
+            console.warn("Geocoding failed, falling back to text:", e);
+            pickupInput.value = "Current Location";
+        }
+    }
+};
+window.showModernDashboard = function() {
+    // Hide the floating header if returning home
+    const floatingHeader = document.getElementById('floatingRouteHeader');
+    if(floatingHeader) floatingHeader.style.display = 'none';
+    
+    // Show the "Where from" bubble
+    const pickupBubble = document.getElementById('homePickupBubble');
+    if(pickupBubble) pickupBubble.style.display = 'flex'; 
+    
+    const dashboard = document.getElementById('homeBottomSheet');
+    const sheetContent = document.getElementById('homeSheetContent');
+    
+    if (dashboard) {
+        // CRITICAL FIX: Add the open class and force opacity to 1 so it becomes visible again
+        dashboard.classList.add('open');
+        dashboard.style.setProperty('display', 'flex', 'important');
+        dashboard.style.setProperty('opacity', '1', 'important');
+        dashboard.style.setProperty('visibility', 'visible', 'important');
+        dashboard.style.setProperty('z-index', '10000', 'important');
+    }
+    
+    // INCREASED HEIGHT to 65vh to prevent cutoff
+    if (sheetContent) {
+        sheetContent.style.height = '65vh'; 
+    }
+    
+    if (typeof window.refreshLocationDisplay === 'function') window.refreshLocationDisplay();
+    if (typeof window.initHomeSheetDrag === 'function') window.initHomeSheetDrag();
+};
+
+window.hideModernDashboard = function() {
+    const dashboard = document.getElementById('homeBottomSheet');
+    if (dashboard) {
+        dashboard.classList.remove('open');
+        dashboard.style.setProperty('display', 'none', 'important');
+    }
+    const pickupBubble = document.getElementById('homePickupBubble');
+    if(pickupBubble) pickupBubble.style.display = 'none';
+};
+
+window.initHomeSheetDrag = function() {
+    const sheetContent = document.getElementById('homeSheetContent');
+    if (!sheetContent) return;
+    let startY = 0, startHeight = 0, isDragging = false;
+
+    const onTouchStart = (e) => {
+        startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+        startHeight = sheetContent.offsetHeight;
+        isDragging = true;
+        sheetContent.style.transition = 'none'; 
+    };
+
+    const onTouchMove = (e) => {
+        if (!isDragging) return;
+        e.preventDefault(); 
+        const currentY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+        let newHeight = startHeight + (startY - currentY);
+        const vh = window.innerHeight;
+        if (newHeight > vh * 0.85) newHeight = vh * 0.85;
+        if (newHeight < vh * 0.25) newHeight = vh * 0.25;
+        sheetContent.style.height = `${newHeight}px`;
+    };
+
+    const onTouchEnd = () => {
+        if (!isDragging) return;
+        isDragging = false;
+        sheetContent.style.transition = 'transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s ease-out';
+        const vh = window.innerHeight;
+        const currentHeight = sheetContent.offsetHeight;
         
-        // Execute the fail-safe real-time address resolution
-        const realAddress = await window.getRealTimeCommuterAddress();
-        pickupInput.value = realAddress;
+        // ADJUSTED SNAP THRESHOLDS FOR THE TALLER 65VH DASHBOARD
+        if (currentHeight > vh * 0.75) sheetContent.style.height = '85vh'; 
+        else if (currentHeight < vh * 0.45) sheetContent.style.height = '25vh'; 
+        else sheetContent.style.height = '65vh'; 
+
+        setTimeout(() => {
+            if (map && commuterLat && commuterLng && followModeActive) {
+                map.easeTo({
+                    center: [commuterLng, commuterLat],
+                    padding: { bottom: window.getMapBottomPadding() },
+                    duration: 500,
+                    essential: true
+                });
+            }
+        }, 350); 
+    };
+
+    const cleanHandle = document.getElementById('homeSheetDragHandle');
+    cleanHandle.addEventListener('touchstart', onTouchStart, { passive: false });
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+    document.addEventListener('touchend', onTouchEnd);
+};
+window.hideModernDashboard = function() {
+    const dashboard = document.getElementById('homeBottomSheet');
+    if (dashboard) dashboard.style.setProperty('display', 'none', 'important');
+    document.getElementById('homePickupBubble').style.display = 'none'; // Hide bubble
+};
+
+// Update this existing function to set the bubble text
+window.refreshLocationDisplay = async function() {
+    const addrEl = document.getElementById("passengerLocationAddress");
+    const bubbleEl = document.getElementById("homeCurrentAddress"); // NEW
+    
+    let lat = commuterLat || -26.2041;
+    let lng = commuterLng || 28.0473;
+
+    try {
+        const address = await getAddressFromCoordsPromise(lng, lat);
+        const shortAddr = address.split(',')[0].trim();
+        if (addrEl) addrEl.textContent = address;
+        if (bubbleEl) bubbleEl.textContent = shortAddr; // Populate bubble
+        if (userMarker) userMarker.setLngLat([lng, lat]);
+    } catch (e) {
+        if (bubbleEl) bubbleEl.textContent = "Unable to get address";
     }
 };
 
+// =======================================================================
+// 1. WALLET & RECEIPTS POPUP (FIXED & BEAUTIFIED)
+// =======================================================================
+window.showPaymentNotices = function() {
+    closeAllPopups();
+    const popup = document.getElementById('genericMessagePopup');
+    if (!popup) return;
+
+    popup.className = 'modal-overlay open';
+    popup.style.cssText = `display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 200000 !important; background: rgba(0,0,0,0.85) !important; align-items: center !important; justify-content: center !important; position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh; margin: 0 !important; padding: 0 !important;`;
+
+    const currentBalance = (window.commuterData && window.commuterData.credits) ? window.commuterData.credits : 0;
+
+    popup.innerHTML = `
+        <div id="walletInternalCard" style="background: #ffffff !important; width: 92% !important; max-width: 400px !important; border-radius: 28px !important; padding: 0 !important; margin: 0 !important; display: flex !important; flex-direction: column !important; max-height: 85vh !important; overflow: hidden !important; box-shadow: 0 20px 50px rgba(0,0,0,0.5) !important; transform: translateY(0) !important;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding: 20px 25px; border-bottom: 1px solid #f0f0f0; background: white; flex-shrink: 0;">
+                <h3 style="color:#111 !important; margin:0; font-weight:800; font-size: 1.25rem;"><i class="fas fa-wallet" style="color:#007BFF;"></i> Wallet & Receipts</h3>
+                <button onclick="closeModal('genericMessagePopup'); showModernDashboard();" style="background:#f5f5f5; border:none; width: 34px; height: 34px; border-radius:50%; color:#000; font-size: 1.5rem; display:flex; align-items:center; justify-content:center; cursor:pointer;">&times;</button>
+            </div>
+            <div style="flex: 1; overflow-y: auto; padding: 25px; -webkit-overflow-scrolling: touch;">
+                <div style="background: linear-gradient(135deg, #eef4ff 0%, #ffffff 100%); border-radius: 20px; padding: 20px; margin-bottom: 25px; border: 1px solid #cce0ff;">
+                    <h4 style="color: #007BFF !important; margin: 0 0 12px 0; font-size: 1rem; font-weight:800;"><i class="fas fa-credit-card"></i> Top Up Wallet</h4>
+                    <p style="font-size: 0.85rem; color: #555 !important; margin-bottom: 12px;">Available Balance: <strong style="color:#111 !important; font-size:1.2rem;">R${currentBalance.toFixed(2)}</strong></p>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <div style="position: relative; flex: 1;">
+                           <span style="position: absolute; left: 12px; top: 12px; font-weight: 800; color: #111;">R</span>
+                           <input type="number" id="topupAmount" placeholder="Min 100" min="100" style="width: 100%; padding: 12px 12px 12px 30px !important; border-radius: 12px; border: 1px solid #b3d4ff !important; background: #fff !important; font-weight: bold !important; color: #111 !important; font-size: 1rem !important; height: 48px !important;">
+                        </div>
+                        <button class="btn btn-primary" onclick="initiateWalletTopUp()" style="height: 48px; border-radius: 12px; font-weight: 800; padding:0 20px; background:#007BFF !important; border:none !important; color:white !important;">Add</button>
+                    </div>
+                </div>
+                <h4 style="color:#111 !important; font-size:0.85rem; text-transform:uppercase; margin-bottom:15px; font-weight:900; border-left: 4px solid #007BFF; padding-left: 10px;">Recent Payments</h4>
+                <div id="paymentNoticesList"><div style="text-align:center; padding: 20px;"><i class="fas fa-spinner fa-spin" style="color: #007BFF; font-size: 1.5rem;"></i></div></div>
+                <div style="height: 20px;"></div>
+            </div>
+        </div>
+    `;
+
+    if(!userId) return;
+    database.ref('requests').orderByChild('commuterId').equalTo(userId).limitToLast(10).once('value', snap => {
+        const listEl = document.getElementById('paymentNoticesList');
+        if(!listEl) return;
+        let html = '';
+        if(snap.exists()) {
+            let payments = [];
+            snap.forEach(c => { if(c.val().status === 'completed') payments.push(c.val()); });
+            payments.sort((a,b) => (b.completedAt || 0) - (a.completedAt || 0));
+            if(payments.length === 0) {
+                html = '<p style="text-align:center; color:#999; font-size: 0.9rem;">No payment history found.</p>';
+            } else {
+                payments.forEach(p => {
+                    const date = new Date(p.completedAt || p.timestamp).toLocaleDateString([], {month:'short', day:'numeric'});
+                    html += `<div style="background:#fff; padding:12px; border-radius:16px; margin-bottom:12px; border: 1px solid #f1f1f1; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.02);"><div style="display: flex; align-items: center; gap: 12px;"><div style="width: 36px; height: 36px; background: #eef4ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #007BFF;"><i class="fas fa-car"></i></div><div><strong style="color:#111 !important; font-size:0.9rem; display: block;">${escapeHtml(p.driverName || 'Asiye Trip')}</strong><span style="font-size:0.7rem; color:#888;">${date} &bull; ${p.paymentMethod || 'Cash'}</span></div></div><strong style="color:#28a745 !important; font-size:1.1rem;">R${parseFloat(p.paidAmount || p.calculatedPrice || 0).toFixed(2)}</strong></div>`;
+                });
+            }
+        } else {
+            html = '<p style="text-align:center; color:#999;">No history available.</p>';
+        }
+        listEl.innerHTML = html;
+    });
+};
+
+// =======================================================================
+// 2. ROUTE SEARCH & DESTINATION LOGIC (FIXED & BORDERLESS)
+// =======================================================================
+window.showDestinationSearchMode = function() {
+    const popup = document.getElementById('destinationPromptPopup');
+    if (!popup) return;
+    const content = popup.querySelector('.modal-content');
+    content.style.height = "100vh";
+    content.style.maxHeight = "100vh";
+    content.style.borderRadius = "0";
+    content.style.padding = "max(15px, env(safe-area-inset-top)) 20px 20px 20px";
+    document.getElementById('destInitialView').style.display = 'none';
+    const searchView = document.getElementById('destSearchView');
+    searchView.style.display = 'flex';
+
+    searchView.innerHTML = `
+        <div style="display:flex; align-items:center; margin-bottom: 25px; flex-shrink:0;">
+            <button onclick="resetDestinationPopup()" style="background: #2C2C2E; border: none; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;"><i class="fas fa-arrow-left"></i></button>
+            <h3 style="margin:0; color:#fff !important; font-weight:800; font-size: 1.2rem; flex: 1; text-align: center; padding-right: 42px;">Route Details</h3>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 12px; flex-shrink:0; margin-bottom: 20px;">
+            <div style="flex: 1; border-radius: 20px; background: #2C2C2E; display: flex; padding: 18px 15px; border: none; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+                <div style="display: flex; flex-direction: column; align-items: center; width: 24px; padding-top: 10px;">
+                    <div style="width: 10px; height: 10px; border-radius: 50%; background: #98989D; flex-shrink:0;"></div>
+                    <div style="width: 2px; flex: 1; background: #3A3A3C; margin: 4px 0; min-height: 25px;"></div>
+                    <div style="width: 10px; height: 10px; background: #0A84FF; flex-shrink:0; border-radius: 2px;"></div>
+                </div>
+                <div style="flex: 1; display: flex; flex-direction: column; margin-left: 12px;">
+                    <div id="uber-pickup-container" class="uber-geocoder"></div>
+                    <div style="height: 1px; background: #3A3A3C; margin: 10px 0;"></div>
+                    <div id="uber-dest-container" class="uber-geocoder"></div>
+                </div>
+            </div>
+        </div>
+        <div id="uber-suggestions-list" style="flex: 1; overflow-y: auto; padding-bottom: 20px;"></div>
+        <button id="findTaxisByDestinationButton" class="gocab-book-btn" style="display:none; background: #FFFFFF !important; color: #000000 !important; width: 100%; padding: 18px; font-size: 1.1rem; border-radius: 18px; margin-top: 10px; font-weight: 900; border:none;">Confirm Route</button>
+    `;
+    window.initDualGeocoders();
+    window.restoreDefaultSuggestions();
+    setTimeout(() => { const destInput = document.getElementById('uberDestInput'); if (destInput) destInput.focus(); }, 400);
+};
+
+window.resetDestinationPopup = function() {
+    closeModal('destinationPromptPopup');
+    showModernDashboard();
+    setTimeout(() => {
+        const content = document.querySelector('#destinationPromptPopup .modal-content');
+        if (content) { content.style.height = "auto"; content.style.maxHeight = "100vh"; content.style.borderRadius = "28px 28px 0 0"; content.style.padding = "0"; }
+        document.getElementById('destInitialView').style.display = 'block';
+        document.getElementById('destSearchView').style.display = 'none';
+    }, 400); 
+};
+
+// =======================================================================
+// 3. FINAL FOOTER HELPERS (ENSURES ALL BRACES CLOSED)
+// =======================================================================
+window.getMapBottomPadding = function() {
+    const sheetContent = document.getElementById('homeSheetContent');
+    const taxiSheet = document.getElementById('taxiListSheet');
+    if (taxiSheet && taxiSheet.classList.contains('open')) { return taxiSheet.offsetHeight + 20; }
+    if (sheetContent) { return sheetContent.offsetHeight + 20; }
+    return window.innerHeight * 0.6;
+};
+
+window.showCounterToPassenger = function(reqId, newPrice, driverName) {
+    // Prevent duplicate popups
+    if (document.getElementById('counterOfferPopup')) return;
+
+    const popup = document.getElementById('genericMessagePopup');
+    popup.innerHTML = `
+        <div class="modal-content" style="text-align: center; padding: 25px; background: white !important;">
+            <div style="width: 60px; height: 60px; background: #fff3cd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                <i class="fas fa-handshake" style="font-size: 2rem; color: #FF9800;"></i>
+            </div>
+            <h3 style="color:#111 !important;">Price Negotiation</h3>
+            <p style="color:#666 !important;"><b>${driverName}</b> has countered your offer. They are asking for:</p>
+            
+            <div style="font-size: 3rem; font-weight: 900; color: #28a745; margin: 15px 0;">R${newPrice}</div>
+            
+            <div style="display: flex; gap: 10px; width: 100%;">
+                <button class="btn btn-light" style="flex: 1;" onclick="cancelPendingRequest()">Decline</button>
+                <button class="btn btn-success" style="flex: 2; background:#28a745 !important;" 
+                        onclick="confirmCounterOffer('${reqId}', ${newPrice})">Accept & Book</button>
+            </div>
+        </div>
+    `;
+    openModal('genericMessagePopup');
+};
+
+window.confirmCounterOffer = function(reqId, finalPrice) {
+    const btn = document.querySelector('#genericMessagePopup .btn-success');
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Finalizing...';
+
+    // Update the request to 'accepted' so the driver's tracking starts
+    database.ref(`requests/${reqId}`).update({
+        status: 'accepted',
+        calculatedPrice: finalPrice,
+        finalAmount: finalPrice // Sync final amount
+    }).then(() => {
+        closeModal('genericMessagePopup');
+        showCommunicationBanner("Price agreed! Driver is on the way.", "success");
+        // The existing tracking logic in index.html will automatically take over
+    });
+};
 </script>
 </body>
 </html>
