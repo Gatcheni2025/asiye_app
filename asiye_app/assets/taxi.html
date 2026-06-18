@@ -9004,7 +9004,7 @@ function escapeHtml(text) {
     var lastRawPoint = null; // Store the previous raw GPS coordinate
     var userWalkingMarker = null; // New marker for the person walking
 
-    function startLocationUpdates() {
+   function startLocationUpdates() {
     if (!navigator.geolocation) return;
 
     const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
@@ -9112,43 +9112,35 @@ function escapeHtml(text) {
             }
 
             // CAMERA TRACKING (HEADING ALIGNMENT UPDATE)
-           // CONTINUOUS CAMERA TRACKING (VEHICLE-HEADING UP)
-if (map) {
-    if (navActive) {
-        if (window.navDestination) {
-            const distToDest = calculateDistance(snappedCoords[1], snappedCoords[0], window.navDestination[1], window.navDestination[0]) * 1000;
-            if (distToDest < 150) {
-                triggerFinalApproach(window.navDestination[0], window.navDestination[1]);
-            }
-        }
+            if (map) {
+                if (navActive) {
+                    if (window.navDestination) {
+                        const distToDest = calculateDistance(snappedCoords[1], snappedCoords[0], window.navDestination[1], window.navDestination[0]) * 1000;
+                        if (distToDest < 150) {
+                            triggerFinalApproach(window.navDestination[0], window.navDestination[1]);
+                        }
+                    }
 
-        // Only auto-update the camera viewport if the driver is not manually exploring the map
-        if (!finalApproachTriggered && window.isCameraLockedToVehicle) {
-            map.easeTo({
-                center: snappedCoords,
-                bearing: roadBearing, // Rotates the map dynamically
-                pitch: 60,
-                duration: 1000,
-                easing: (t) => t
-            });
-        }
-    } else if (!window.hotspotModeActive) { 
-        // Standard Mode: Match map rotation with the car's direction of travel
-        map.easeTo({
-            center: snappedCoords,
-            bearing: roadBearing, 
-            duration: 1000
-        });
-    }
-} else if (!window.hotspotModeActive) { 
-                    // Standard Mode: Keep centering and orienting map with direction of travel
+                    // Only auto-update the camera viewport if the driver is not manually exploring the map
+                    if (!finalApproachTriggered && window.isCameraLockedToVehicle) {
+                        map.easeTo({
+                            center: snappedCoords,
+                            bearing: roadBearing, // Rotates the map dynamically
+                            pitch: 60,
+                            duration: 1000,
+                            easing: (t) => t
+                        });
+                    }
+                } else if (!window.hotspotModeActive) { 
+                    // Standard Mode: Match map rotation with the car's direction of travel
                     map.easeTo({
                         center: snappedCoords,
-                        bearing: roadBearing, // Aligns camera with heading even outside active navigation
+                        bearing: roadBearing, 
                         duration: 1000
                     });
                 }
             }
+            
             lastSnappedPoint = snappedCoords;
 
         } catch (err) {
@@ -9166,7 +9158,9 @@ if (map) {
             }
         }
     }, (err) => console.warn("GPS tracking error:", err), geoOptions);
-}    function updateTaxiOnMap(coords, bearing, distanceToRoad, rawCoords) {
+}
+
+    function updateTaxiOnMap(coords, bearing, distanceToRoad, rawCoords) {
         // This is a simplified version - your startLocationUpdates now handles this
         if (taxiMarker) {
             taxiMarker.setLngLat(coords);
