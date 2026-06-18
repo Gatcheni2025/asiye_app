@@ -312,9 +312,7 @@
             <button class="action-btn" onclick="showStep1('email')">
                 <i class="fas fa-envelope"></i> Sign up with Email
             </button>
-            <button class="action-btn" onclick="showStep1('phone')">
-                <i class="fas fa-phone-alt"></i> Sign up with Phone
-            </button>
+        
 
             <div style="margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">
                 By continuing, you agree to our <a href="javascript:void(0)" onclick="showTOS('terms')" style="color: #fff; text-decoration: none; font-weight: 600;">Terms</a> & <a href="javascript:void(0)" onclick="showTOS('privacy')" style="color: #fff; text-decoration: none; font-weight: 600;">Privacy</a>.
@@ -364,10 +362,11 @@
                     <input type="password" id="confirmPasswordInput" class="modern-input" placeholder="Confirm Password" autocomplete="new-password">
                 </div>
 
-                <div class="input-wrapper">
+            <div class="input-wrapper">
                     <select id="accountTypeInput" class="modern-input" onchange="handleAccountTypeChange()">
                         <option value="" disabled selected>Select Account Type</option>
                         <option value="ehailing">Asiye Go Driver (e-Hailing)</option>
+                        <option value="minibus">Minibus Taxi Driver</option>
                         <option value="handler">Handler Account (Courier)</option>
                     </select>
                 </div>
@@ -603,7 +602,7 @@
         const query = input.value.trim();
         if (query.length < 3) { resultsBox.style.display = 'none'; return; }
         debounceTimer = setTimeout(() => {
-            const token = "__MAPBOX_PUBLIC_TOKEN__";
+            const token = "pk.eyJ1IjoiZ29zb3V0aGFmcmljYSIsImEiOiJjbW80OG16b2kxNnphMnFyMGRjcnZzMG15In0.uq4JASBTHH4Z2TZoMoj5jQ";
             fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${token}&country=za&types=place,locality&limit=5`)
                 .then(res => res.json()).then(data => {
                     resultsBox.innerHTML = '';
@@ -669,7 +668,7 @@
 
             const name = document.getElementById('nameInput')?.value?.trim() || "";
             const surname = document.getElementById('surnameInput')?.value?.trim() || "";
-            const accountType = document.getElementById('accountTypeInput')?.value;
+            const accountType = document.getElementById('accountTypeInput')?.value; 
             const city = document.getElementById('operatingCityInput')?.value?.trim() || "";
 
             const pwd = document.getElementById('passwordInput')?.value || "";
@@ -690,23 +689,23 @@
                     uid = socialUser.uid;
                     email = socialUser.email || "";
                     phone = socialUser.phoneNumber || "";
-                }
+                } 
                 else if (currentMode === 'email') {
                     if (!pwd) throw new Error("Please enter a password.");
                     validatePassword(pwd, confirmPwd);
-
+                    
                     email = window.verifiedEmail || document.getElementById('emailInput')?.value?.trim() || "";
                     const cred = await auth.createUserWithEmailAndPassword(email, pwd);
                     uid = cred.user.uid;
                     hashedPassword = await sha256(pwd);
-                }
+                } 
                 else {
                     if(otp.length !== 6) throw new Error("Please enter the 6-digit SMS code.");
                     if (!pwd) throw new Error("Please enter a password.");
                     validatePassword(pwd, confirmPwd);
-
+                    
                     phone = window.verifiedPhone || document.getElementById('phoneInput')?.value?.trim() || "";
-
+                    
                     const phoneCred = firebase.auth.PhoneAuthProvider.credential(confirmationResult.verificationId, otp);
                     const cred = await auth.signInWithCredential(phoneCred);
                     uid = cred.user.uid;
@@ -727,7 +726,7 @@
                     timestamp: firebase.database.ServerValue.TIMESTAMP
                 };
 
-                let dbTable = "taxis";
+                let dbTable = "taxis"; 
                 if (accountType === 'ehailing' || accountType === 'minibus') {
                     payload.vehicleMake = document.getElementById('vehicleMakeInput')?.value?.trim() || "";
                     payload.vehicleModel = document.getElementById('vehicleModelInput')?.value?.trim() || "";
@@ -760,7 +759,7 @@
                         if (normalizedPhone.startsWith('0')) {
                             normalizedPhone = '27' + normalizedPhone.substring(1);
                         }
-
+                        
                         await fetch('https://app.asiye.cloud/whatsapp_bot.php', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -774,7 +773,7 @@
                 // SHOW SUCCESS AND PUSH TO TAXI APP WITH ONBOARDING FLAG
                 const overlay = document.getElementById('successOverlay');
                 if (overlay) overlay.style.display = 'flex';
-
+                
                 setTimeout(() => window.location.replace('taxi.html?onboarding=true'), 2000);
 
             } catch (error) {
@@ -797,7 +796,7 @@
         if (!navigator.onLine) return showError("No internet connection.");
         errorMessage.style.display = 'none';
         setLoading(true, `${providerName}-btn`);
-
+        
         const bridge = window.Asiye || window.Android;
         if (bridge?.postMessage) {
             bridge.postMessage(providerName === 'google' ? "triggerGoogleSignIn" : "triggerAppleSignIn");
@@ -847,11 +846,11 @@
                 document.getElementById('surnameInput').value = parts.slice(1).join(' ') || '';
             }
 
-            socialUser = user;
-            currentMode = provider;
+            socialUser = user; 
+            currentMode = provider; 
             showStep2(provider);
-        } catch (e) {
-            showError(e.message);
+        } catch (e) { 
+            showError(e.message); 
             setLoading(false, `${provider}-btn`);
         }
     }
@@ -883,9 +882,9 @@
         if(p1 !== p2) throw new Error("Passwords do not match.");
     }
 
-    function showError(msg) {
-        errorMessage.textContent = msg;
-        errorMessage.style.display = 'block';
+    function showError(msg) { 
+        errorMessage.textContent = msg; 
+        errorMessage.style.display = 'block'; 
         document.querySelector('.container').scrollTop = 0;
     }
 

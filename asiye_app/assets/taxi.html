@@ -9005,159 +9005,168 @@ function escapeHtml(text) {
     var userWalkingMarker = null; // New marker for the person walking
 
     function startLocationUpdates() {
-        if (!navigator.geolocation) return;
+    if (!navigator.geolocation) return;
 
-        const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+    const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
 
-        window.locationWatchId = navigator.geolocation.watchPosition(async (position) => {
-            // 1. Extract speed here alongside lat, lng, and heading
-            const { latitude, longitude, heading, speed } = position.coords;
-            const rawCoords = [longitude, latitude];
+    window.locationWatchId = navigator.geolocation.watchPosition(async (position) => {
+        // 1. Extract speed alongside lat, lng, and heading from the GPS sensor
+        const { latitude, longitude, heading, speed } = position.coords;
+        const rawCoords = [longitude, latitude];
 
-            // 2. UPDATE WAZE SPEEDOMETER (Convert m/s to km/h)
-            const speedEl = document.getElementById('navSpeed');
-            if (speedEl) {
-                var currentSpeed = (speed !== null && !isNaN(speed)) ? speed : 0;
-                var speedKmh = Math.round(currentSpeed * 3.6);
-                if (speedKmh < 0) speedKmh = 0;
-                speedEl.textContent = speedKmh;
+        // 2. Update speedometer (Convert m/s to km/h)
+        const speedEl = document.getElementById('navSpeed');
+        if (speedEl) {
+            var currentSpeed = (speed !== null && !isNaN(speed)) ? speed : 0;
+            var speedKmh = Math.round(currentSpeed * 3.6);
+            if (speedKmh < 0) speedKmh = 0;
+            speedEl.textContent = speedKmh;
+        }
+
+        // 3. Use heading from GPS if available, otherwise calculate from path delta
+        var finalHeading = heading;
+
+        if (lastSnappedPoint && (!heading || heading === 0)) {
+            const prevCoords = lastSnappedPoint;
+            const dx = longitude - prevCoords[0];
+            const dy = latitude - prevCoords[1];
+            if (Math.abs(dx) > 0.000001 || Math.abs(dy) > 0.000001) {
+                finalHeading = Math.atan2(dx, dy) * 180 / Math.PI;
+                if (finalHeading < 0) finalHeading += 360;
             }
+        }
 
-            // 3. Use heading from GPS if available, otherwise calculate from movement
-            var finalHeading = heading;
+        try {
+            const radius = 25;
+            const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${longitude},${latitude};${longitude},${latitude}?access_token=${mapboxgl.accessToken}&radiuses=${radius};${radius}&geometries=geojson`;
+            const response = await fetch(url);
+            const data = await response.json();
 
-            if (lastSnappedPoint && (!heading || heading === 0)) {
-                const prevCoords = lastSnappedPoint;
-                const dx = longitude - prevCoords[0];
-                const dy = latitude - prevCoords[1];
-                if (Math.abs(dx) > 0.000001 || Math.abs(dy) > 0.000001) {
-                    finalHeading = Math.atan2(dx, dy) * 180 / Math.PI;
-                    if (finalHeading < 0) finalHeading += 360;
-                }
-            }
+            var snappedCoords = rawCoords;
+            var roadBearing = finalHeading || 0;
 
-            try {
-                const radius = 25;
-                const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${longitude},${latitude};${longitude},${latitude}?access_token=${mapboxgl.accessToken}&radiuses=${radius};${radius}&geometries=geojson`;
-                const response = await fetch(url);
-                const data = await response.json();
-
-                var snappedCoords = rawCoords;
-                var roadBearing = finalHeading || 0;
-
-                if (data.code === 'Ok' && data.matchings && data.matchings.length > 0) {
-                    snappedCoords = data.matchings[0].geometry.coordinates[0];
-                    if (data.matchings[0].geometry.coordinates.length > 1) {
-                        const p1 = data.matchings[0].geometry.coordinates[0];
-                        const p2 = data.matchings[0].geometry.coordinates[data.matchings[0].geometry.coordinates.length - 1];
-                        if (p1 && p2) {
-                            const dx = p2[0] - p1[0];
-                            const dy = p2[1] - p1[1];
-                            if (Math.abs(dx) > 0.000001 || Math.abs(dy) > 0.000001) {
-                                roadBearing = Math.atan2(dx, dy) * 180 / Math.PI;
-                                if (roadBearing < 0) roadBearing += 360;
-                            }
+            if (data.code === 'Ok' && data.matchings && data.matchings.length > 0) {
+                snappedCoords = data.matchings[0].geometry.coordinates[0];
+                if (data.matchings[0].geometry.coordinates.length > 1) {
+                    const p1 = data.matchings[0].geometry.coordinates[0];
+                    const p2 = data.matchings[0].geometry.coordinates[data.matchings[0].geometry.coordinates.length - 1];
+                    if (p1 && p2) {
+                        const dx = p2[0] - p1[0];
+                        const dy = p2[1] - p1[1];
+                        if (Math.abs(dx) > 0.000001 || Math.abs(dy) > 0.000001) {
+                            roadBearing = Math.atan2(dx, dy) * 180 / Math.PI;
+                            if (roadBearing < 0) roadBearing += 360;
                         }
                     }
                 }
+            }
 
-                const distanceToRoad = calculateDistance(latitude, longitude, snappedCoords[1], snappedCoords[0]) * 1000;
+            const distanceToRoad = calculateDistance(latitude, longitude, snappedCoords[1], snappedCoords[0]) * 1000;
 
-                // Update taxi marker position AND rotation
-                if (taxiMarker) {
-                    animateMarkerTo(taxiMarker, snappedCoords, roadBearing, 1000);
+            // Update taxi marker position AND rotation
+            if (taxiMarker) {
+                animateMarkerTo(taxiMarker, snappedCoords, roadBearing, 1000);
+            } else {
+                createTaxiMarker(snappedCoords, roadBearing);
+            }
+
+            // Update walking indicator
+            if (distanceToRoad > 10) {
+                if (!userWalkingMarker) {
+                    const el = document.createElement('div');
+                    el.innerHTML = `<div style="width: 12px; height: 12px; background: #4361ee; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5);"></div>`;
+                    userWalkingMarker = new mapboxgl.Marker({ element: el }).setLngLat(rawCoords).addTo(map);
                 } else {
-                    createTaxiMarker(snappedCoords, roadBearing);
+                    userWalkingMarker.setLngLat(rawCoords);
                 }
+            } else if (userWalkingMarker) {
+                userWalkingMarker.remove();
+                userWalkingMarker = null;
+            }
 
-                // Update walking indicator
-                if (distanceToRoad > 10) {
-                    if (!userWalkingMarker) {
-                        const el = document.createElement('div');
-                        el.innerHTML = `<div style="width: 12px; height: 12px; background: #4361ee; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(0,0,0,0.5);"></div>`;
-                        userWalkingMarker = new mapboxgl.Marker({ element: el }).setLngLat(rawCoords).addTo(map);
+            // Update label UI state
+            if (taxiMarker) {
+                const markerElement = taxiMarker.getElement();
+                const labelDiv = markerElement.querySelector('.taxi-marker-label');
+                if (labelDiv) {
+                    const statusSpan = labelDiv.querySelector('span');
+                    if (distanceToRoad > 10) {
+                        if (statusSpan) statusSpan.textContent = `WALKING (${Math.round(distanceToRoad)}m)`;
+                        labelDiv.style.background = '#f72585';
                     } else {
-                        userWalkingMarker.setLngLat(rawCoords);
-                    }
-                } else if (userWalkingMarker) {
-                    userWalkingMarker.remove();
-                    userWalkingMarker = null;
-                }
-
-                // Update label
-                if (taxiMarker) {
-                    const markerElement = taxiMarker.getElement();
-                    const labelDiv = markerElement.querySelector('.taxi-marker-label');
-                    if (labelDiv) {
-                        const statusSpan = labelDiv.querySelector('span');
-                        if (distanceToRoad > 10) {
-                            if (statusSpan) statusSpan.textContent = `WALKING (${Math.round(distanceToRoad)}m)`;
-                            labelDiv.style.background = '#f72585';
-                        } else {
-                            const isFull = taxiData && taxiData.isFull;
-                            if (statusSpan) statusSpan.textContent = isFull ? "FULL" : "LOADING";
-                            labelDiv.style.background = isFull ? '#f72585' : '#28a745';
-                        }
+                        const isFull = taxiData && taxiData.isFull;
+                        if (statusSpan) statusSpan.textContent = isFull ? "FULL" : "LOADING";
+                        labelDiv.style.background = isFull ? '#f72585' : '#28a745';
                     }
                 }
+            }
 
-                // Save to Firebase
-                if (userId) {
-                    database.ref('taxis/' + userId).update({
-                        latitude: snappedCoords[1],
-                        longitude: snappedCoords[0],
-                        heading: roadBearing,
-                        lastSeen: firebase.database.ServerValue.TIMESTAMP
-                    });
-                }
+            // Save updated coordinates to Firebase
+            if (userId) {
+                database.ref('taxis/' + userId).update({
+                    latitude: snappedCoords[1],
+                    longitude: snappedCoords[0],
+                    heading: roadBearing,
+                    lastSeen: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
 
-                // CONTINUOUS CAMERA TRACKING (NORTH-UP LOCK)
-              // CONTINUOUS CAMERA TRACKING (NORTH-UP LOCK)
-                if (map) {
-                    if (navActive) {
-                        if (window.navDestination) {
-                            const distToDest = calculateDistance(snappedCoords[1], snappedCoords[0], window.navDestination[1], window.navDestination[0]) * 1000;
-                            if (distToDest < 150) {
-                                triggerFinalApproach(window.navDestination[0], window.navDestination[1]);
-                            }
-                        }
+            // CAMERA TRACKING (HEADING ALIGNMENT UPDATE)
+           // CONTINUOUS CAMERA TRACKING (VEHICLE-HEADING UP)
+if (map) {
+    if (navActive) {
+        if (window.navDestination) {
+            const distToDest = calculateDistance(snappedCoords[1], snappedCoords[0], window.navDestination[1], window.navDestination[0]) * 1000;
+            if (distToDest < 150) {
+                triggerFinalApproach(window.navDestination[0], window.navDestination[1]);
+            }
+        }
 
-                        if (!finalApproachTriggered) {
-                            map.easeTo({
-                                center: snappedCoords,
-                                bearing: 0,
-                                pitch: 60,
-                                duration: 1000,
-                                easing: (t) => t
-                            });
-                        }
-                    } else if (!window.hotspotModeActive) { // 🚨 CRITICAL FIX: Don't pull camera if checking hotspots!
-                        // Standard Mode: Keep North Up and Center
-                        map.easeTo({
-                            center: snappedCoords,
-                            bearing: 0,
-                            duration: 1000
-                        });
-                    }
-                }                lastSnappedPoint = snappedCoords;
-
-            } catch (err) {
-                console.warn("Snapping failed, using raw GPS:", err);
-                if (taxiMarker) {
-                    animateMarkerTo(taxiMarker, rawCoords, finalHeading || 0, 1000);
-                }
-                if (userId) {
-                    database.ref('taxis/' + userId).update({
-                        latitude: latitude,
-                        longitude: longitude,
-                        heading: finalHeading || 0,
-                        lastSeen: firebase.database.ServerValue.TIMESTAMP // FIXED TYPO HERE
+        // Only auto-update the camera viewport if the driver is not manually exploring the map
+        if (!finalApproachTriggered && window.isCameraLockedToVehicle) {
+            map.easeTo({
+                center: snappedCoords,
+                bearing: roadBearing, // Rotates the map dynamically
+                pitch: 60,
+                duration: 1000,
+                easing: (t) => t
+            });
+        }
+    } else if (!window.hotspotModeActive) { 
+        // Standard Mode: Match map rotation with the car's direction of travel
+        map.easeTo({
+            center: snappedCoords,
+            bearing: roadBearing, 
+            duration: 1000
+        });
+    }
+} else if (!window.hotspotModeActive) { 
+                    // Standard Mode: Keep centering and orienting map with direction of travel
+                    map.easeTo({
+                        center: snappedCoords,
+                        bearing: roadBearing, // Aligns camera with heading even outside active navigation
+                        duration: 1000
                     });
                 }
             }
-        }, (err) => console.warn("GPS error:", err), geoOptions);
-    }
-    function updateTaxiOnMap(coords, bearing, distanceToRoad, rawCoords) {
+            lastSnappedPoint = snappedCoords;
+
+        } catch (err) {
+            console.warn("Snapping failed, using raw GPS coordinates:", err);
+            if (taxiMarker) {
+                animateMarkerTo(taxiMarker, rawCoords, finalHeading || 0, 1000);
+            }
+            if (userId) {
+                database.ref('taxis/' + userId).update({
+                    latitude: latitude,
+                    longitude: longitude,
+                    heading: finalHeading || 0,
+                    lastSeen: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+        }
+    }, (err) => console.warn("GPS tracking error:", err), geoOptions);
+}    function updateTaxiOnMap(coords, bearing, distanceToRoad, rawCoords) {
         // This is a simplified version - your startLocationUpdates now handles this
         if (taxiMarker) {
             taxiMarker.setLngLat(coords);
@@ -19932,6 +19941,7 @@ window.finalizeCompleteRide = function(key, index, rating) {
 // 7. EXIT NAVIGATION GRACEFULLY
 window.exitNavigation = function() {
     navActive = false;
+    window.hasInitializedNavCamera = false; // Reset the state flag for the next route session
 
     if (window.navRecalculateInterval) {
         clearInterval(window.navRecalculateInterval);
@@ -19958,17 +19968,15 @@ window.exitNavigation = function() {
         window.toggleTaxiNavigationMarker(false);
     }
 
-    // BRING BACK THE DASHBOARD TRIP CARD
+    // Bring back the active dashboard card if passengers exist
     const tripCard = document.getElementById('ehailingActiveTripCard');
     if (tripCard && acceptedPassengers && acceptedPassengers.length > 0) {
-        // Only show if there's someone actively waiting
         const actives = acceptedPassengers.filter(p => !['completed', 'cancelled_by_driver', 'cancelled_by_commuter', 'cancelled_by_admin', 'rejected'].includes(p.status));
         if (actives.length > 0) {
             tripCard.style.display = 'block';
         }
     }
 };
-
 window.safeVibrate = function(pattern) {
     try {
         if (navigator.userActivation && navigator.userActivation.hasBeenActive) {
@@ -20400,11 +20408,7 @@ window.showDriverAcceptedPopup = async function(taxiId, restoredState = null) {
     }
 };
 
-// =======================================================================
-// LIVE MAPBOX TURN-BY-TURN NAVIGATION SYSTEM
-// =======================================================================
 window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passengerData = null, routeType = 'pickup') {
-    // 1. Close all open popups/overlays to bring the map navigation to the front
     if (typeof closeActivePopup === 'function') closeActivePopup();
 
     let startLngLat = [window.commuterLng, window.commuterLat];
@@ -20430,11 +20434,11 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
     navMapContainer.appendChild(mapDiv);
     navActive = true;
     window.hasInitializedNavCamera = false;
+    window.isCameraLockedToVehicle = true; // Auto-lock camera to forward heading on start
 
     let pKey = passengerData ? (passengerData.key || passengerData.requestId || passengerData.id || '') : '';
     let pSubKey = (passengerData && passengerData.subKey) ? passengerData.subKey : '';
 
-    // Action button logic
     let actionBtnHtml = '';
     let distanceToTarget = 9999;
     const isTargetValid = targetLat && targetLng && !isNaN(targetLat) && !isNaN(targetLng);
@@ -20443,7 +20447,6 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
         distanceToTarget = calculateDistance(startLngLat[1], startLngLat[0], targetLat, targetLng) * 1000;
     }
 
-    // Generate dynamic button indicators
     if (routeType === 'pickup') {
         let seqLabel = passengerData && passengerData.pickupSequenceLabel ? passengerData.pickupSequenceLabel : 'passenger';
         if (isTargetValid && distanceToTarget <= 150) {
@@ -20478,8 +20481,9 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
         </div>
 
         <div class="mb-right-panel">
-            <div class="mb-fab" onclick="if(window.map && window.commuterLng) map.flyTo({center: [window.commuterLng, window.commuterLat], zoom: 19, pitch: 60})">
-                <i class="fas fa-location-arrow" style="color: #2962FF;"></i>
+            <!-- Directional Forward Recenter FAB -->
+            <div class="mb-fab" id="recenterNavBtn" onclick="window.recenterNavigationCamera()" style="transition: all 0.3s ease;">
+                <i class="fas fa-location-arrow" style="color: #2962FF; transform: rotate(-45deg);"></i>
             </div>
             <div class="mb-fab" onclick="window.openChat('${passengerData?.commuterId}', '${escapeHtml(passengerData?.commuterName)}')">
                 <i class="fas fa-comment-dots" style="color: #4cc9f0;"></i>
@@ -20518,7 +20522,14 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
             if (typeof window.drawRoute === 'function') window.drawRoute(route.geometry, guidanceText);
 
             if (!window.hasInitializedNavCamera && window.map) {
-                window.map.easeTo({ center: startLngLat, pitch: 60, zoom: 19, duration: 2000 });
+                const currentBearing = (taxiData && typeof taxiData.heading !== 'undefined') ? taxiData.heading : 0;
+                window.map.easeTo({ 
+                    center: startLngLat, 
+                    pitch: 60, 
+                    bearing: currentBearing, 
+                    zoom: 19, 
+                    duration: 2000 
+                });
                 window.hasInitializedNavCamera = true;
             }
 
@@ -20535,7 +20546,6 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
             if(distEl) distEl.textContent = `${kms} km`;
             if(etaEl) etaEl.textContent = arrival.getHours() + ":" + String(arrival.getMinutes()).padStart(2, '0');
 
-            // Turn-by-Turn Step Calculation
             if (route.legs[0].steps.length > 1) {
                 const nextStep = route.legs[0].steps[1];
                 const turnStreetEl = document.getElementById('wazeTurnStreet');
@@ -20548,7 +20558,6 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
                 if(turnIconEl && typeof getTurnIcon === 'function') turnIconEl.innerHTML = getTurnIcon(nextStep.maneuver.type + (nextStep.maneuver.modifier ? ' ' + nextStep.maneuver.modifier : ''));
             }
 
-            // Live Button Distance updates
             let currentDist = calculateDistance(startLngLat[1], startLngLat[0], targetLat, targetLng) * 1000;
             const btn = document.getElementById('wazeActionBtn');
             if (btn) {
@@ -20575,9 +20584,49 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
     };
 
     fetchRoute();
+    
+    // Listen for manual user interactions to release the locked tracking state
+    if (window.map) {
+        window.map.on('dragstart', () => {
+            if (navActive && window.isCameraLockedToVehicle) {
+                window.isCameraLockedToVehicle = false;
+                const recenterBtn = document.getElementById('recenterNavBtn');
+                if (recenterBtn) {
+                    recenterBtn.style.background = '#2962FF'; // Glow button background blue
+                    recenterBtn.querySelector('i').style.color = '#ffffff'; // Switch arrow to white
+                }
+            }
+        });
+    }
+
     if (window.navRecalculateInterval) clearInterval(window.navRecalculateInterval);
     window.navRecalculateInterval = setInterval(fetchRoute, 8000);
 };
+
+window.recenterNavigationCamera = function() {
+    window.isCameraLockedToVehicle = true;
+    
+    const recenterBtn = document.getElementById('recenterNavBtn');
+    if (recenterBtn) {
+        recenterBtn.style.background = 'rgba(28, 28, 30, 0.95)'; // Reset to standard dark theme
+        recenterBtn.querySelector('i').style.color = '#2962FF'; // Reset arrow to blue
+    }
+    
+    if (!map || !taxiLngLat) return;
+    
+    const currentBearing = (taxiData && typeof taxiData.heading !== 'undefined') ? taxiData.heading : 0;
+    
+    map.easeTo({
+        center: taxiLngLat,
+        zoom: 19,
+        pitch: 60,
+        bearing: currentBearing, // Snap rotation back to vehicle's heading
+        duration: 1000
+    });
+    
+    showCommunicationBanner("Forward camera tracking resume", "success");
+};
+
 // ============================================
 // DRIVER HOTSPOT ENGINE (WIDE RADIUS FIX)
 // ============================================
