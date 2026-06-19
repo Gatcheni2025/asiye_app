@@ -8382,21 +8382,19 @@ input:checked + .slider:before {
                 <span style="color: #EBEBF5; font-size: 1.15rem; font-weight: 700;">Where to & for how much?</span>
             </div>
 
-            <!-- Suggested Locations -->
-            <div style="margin-bottom: 25px;">
-                <div class="suggestion-item" onclick="quickSelectDest('Gateway Theatre of Shopping')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
-                    <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-map-marker-alt" style="color: #98989D; font-size: 1rem;"></i>
-                    </div>
-                    <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem;">Gateway Theatre of Shopping</span>
-                </div>
-                <div class="suggestion-item" onclick="quickSelectDest('Pavilion Shopping Centre')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
-                    <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-map-marker-alt" style="color: #98989D; font-size: 1rem;"></i>
-                    </div>
-                    <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem;">Pavilion Shopping Centre</span>
-                </div>
-            </div>
+        <!-- Suggested Locations Container -->
+<div style="margin-bottom: 25px;">
+    <div style="color: #98989D; font-size: 0.85rem; padding: 10px 10px 5px 10px; text-align: left; font-weight: 600;">
+        SUGGESTED NEARBY
+    </div>
+    <div id="suggested-locations-list">
+        <!-- Loader shown while fetching coordinates and places -->
+        <div id="suggestions-loader" style="display: flex; align-items: center; gap: 12px; padding: 14px 10px; color: #98989D;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span style="font-size: 0.95rem;">Finding locations near you...</span>
+        </div>
+    </div>
+</div>
 
             <!-- 4 Grid Items (Modern iOS/App Style) -->
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
@@ -28671,6 +28669,131 @@ window.confirmCounterOffer = function(reqId, finalPrice) {
         // The existing tracking logic in index.html will automatically take over
     });
 };
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadNearbySuggestions();
+});
+
+function loadNearbySuggestions() {
+    const listContainer = document.getElementById('suggested-locations-list');
+
+    // Check if Geolocation is supported
+    if (!navigator.geolocation) {
+        showFallbackSuggestions("Geolocation not supported by this browser.");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        async (position) => {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            
+            try {
+                const locations = await fetchNearbyPlaces(lat, lon);
+                if (locations && locations.length > 0) {
+                    renderSuggestions(locations);
+                } else {
+                    showFallbackSuggestions("No matching locations found nearby.");
+                }
+            } catch (error) {
+                console.error("Error fetching places:", error);
+                showFallbackSuggestions("Could not load nearby locations.");
+            }
+        },
+        (error) => {
+            console.warn("Geolocation error:", error.message);
+            showFallbackSuggestions("Location access denied or unavailable.");
+        },
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+    );
+}
+
+// Queries OpenStreetMap Overpass API for schools, clinics/hospitals, and malls within a 5km (5000m) radius
+async function fetchNearbyPlaces(lat, lon) {
+    const radius = 5000; // Radius in meters
+    
+    // Overpass QL query targeting malls, schools, clinics, and hospitals
+    const query = `
+        [out:json][timeout:15];
+        (
+          node["shop"="mall"](around:${radius}, ${lat}, ${lon});
+          way["shop"="mall"](around:${radius}, ${lat}, ${lon});
+          node["amenity"="school"](around:${radius}, ${lat}, ${lon});
+          way["amenity"="school"](around:${radius}, ${lat}, ${lon});
+          node["amenity"="clinic"](around:${radius}, ${lat}, ${lon});
+          way["amenity"="clinic"](around:${radius}, ${lat}, ${lon});
+          node["amenity"="hospital"](around:${radius}, ${lat}, ${lon});
+          way["amenity"="hospital"](around:${radius}, ${lat}, ${lon});
+        );
+        out tags center 5;
+    `;
+
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+    const response = await fetch(url);
+    
+    if (!response.ok) throw new Error("Network response was not ok");
+    
+    const data = await response.json();
+    
+    // Parse response into structured objects
+    return data.elements
+        .map(element => {
+            const tags = element.tags || {};
+            const name = tags.name;
+            
+            // Determine type
+            let type = 'other';
+            if (tags.shop === 'mall') type = 'mall';
+            else if (tags.amenity === 'school') type = 'school';
+            else if (tags.amenity === 'clinic' || tags.amenity === 'hospital') type = 'clinic';
+
+            return {
+                name: name,
+                type: type
+            };
+        })
+        .filter(item => item.name); // Filter out any elements without a name
+}
+
+// Render the list items dynamically
+function renderSuggestions(locations) {
+    const listContainer = document.getElementById('suggested-locations-list');
+    listContainer.innerHTML = ''; // Clear loader
+
+    locations.forEach(loc => {
+        // Assign icons based on location type
+        let iconClass = 'fa-map-marker-alt';
+        if (loc.type === 'mall') iconClass = 'fa-shopping-bag';
+        else if (loc.type === 'school') iconClass = 'fa-graduation-cap';
+        else if (loc.type === 'clinic') iconClass = 'fa-hand-holding-medical';
+
+        const itemHtml = `
+            <div class="suggestion-item" onclick="quickSelectDest('${escapeHtml(loc.name)}')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
+                <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="fas ${iconClass}" style="color: #98989D; font-size: 1rem;"></i>
+                </div>
+                <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${loc.name}</span>
+            </div>
+        `;
+        listContainer.insertAdjacentHTML('beforeend', itemHtml);
+    });
+}
+
+// Fallback suggestions shown if geolocation fails or is denied
+function showFallbackSuggestions(reason) {
+    console.log("Using fallback suggestions:", reason);
+    const fallbackLocations = [
+        { name: "Local Mall/Shopping Centre", type: "mall" },
+        { name: "Nearest School", type: "school" },
+        { name: "Nearest Clinic", type: "clinic" }
+    ];
+    renderSuggestions(fallbackLocations);
+}
+
+// Helper utility to prevent HTML injection in dynamic content
+function escapeHtml(str) {
+    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}
 </script>
 </body>
 </html>
