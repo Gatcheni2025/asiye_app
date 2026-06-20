@@ -8929,40 +8929,36 @@ input:checked + .slider:before {
 </div>
 <!-- Account Verification Popup -->
 <!-- Free Affiliate Join Popup -->
+<!-- Invite Friends Popup -->
 <div id="accountVerificationPopup" class="modal-overlay">
     <div class="modal-content" style="text-align: center; padding: 30px;">
-        <div style="width: 80px; height: 80px; background: #fff3cd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-            <i class="fas fa-hand-holding-usd" style="font-size: 3em; color: #FFC107;"></i>
+        <div style="width: 80px; height: 80px; background: #e6f2ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+            <i class="fas fa-share-nodes" style="font-size: 3em; color: #007BFF;"></i>
         </div>
 
-        <h3 id="verificationPopupTitle" style="margin-bottom: 15px; color: #333;">Join Asiye Affiliates</h3>
+        <h3 id="verificationPopupTitle" style="margin-bottom: 15px; color: #333;">Invite & Earn R50</h3>
 
         <p id="verificationPopupText" style="margin-bottom: 15px; color: #444; font-size: 0.95rem; font-weight: 600;">
-            Start earning cash today! 💸
+            Earn R50 in cash every time you invite a friend to use Asiye! 💸
         </p>
 
         <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; font-size: 0.85rem; color: #555; border: 1px solid #e9ecef;">
-            <p style="margin: 0 0 10px 0;">
-                <i class="fas fa-play-circle" style="color: #28a745; width: 20px;"></i>
-                <strong>Watch & Earn:</strong> Get paid to watch short video ads.
+            <p style="margin: 0; color: #333; font-weight: bold;">
+                <i class="fas fa-link" style="color: #007BFF; width: 20px;"></i> Your Personal Link:
             </p>
-            <p style="margin: 0;">
-                <i class="fas fa-share-alt" style="color: #007BFF; width: 20px;"></i>
-                <strong>Share & Earn:</strong> Get R0.50 for every friend who joins using your link.
-            </p>
+            <input type="text" id="directReferralLinkInput" readonly style="width: 100%; padding: 12px; margin-top: 10px; border-radius: 8px; border: 1px solid #ccc; background: #fff; color: #111; font-weight: 800; font-size: 0.85rem; text-align: center;">
         </div>
 
         <div class="modal-buttons" style="flex-direction: column; gap: 10px;">
-            <button class="btn btn-primary" onclick="initiateAccountVerification()" style="width: 100%; font-size: 1.05rem; padding: 15px; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
-                <i class="fas fa-check-circle"></i> Join for Free
+            <button class="btn btn-primary" onclick="copyDirectReferralLink()" style="width: 100%; font-size: 1.05rem; padding: 15px; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
+                <i class="fas fa-copy"></i> Copy Link
             </button>
             <button class="btn btn-light" onclick="closeModal('accountVerificationPopup')" style="width: 100%; border: none; background: transparent; color: #888;">
-                Maybe Later
+                Close
             </button>
         </div>
     </div>
 </div>
-<!-- NEW Spend Options Popup -->
 <!-- NEW Spend Options Popup (National Voucher Store) -->
 <div id="spendOptionsPopup" class="modal-overlay">
     <div class="modal-content" style="text-align: center; padding-bottom: 30px; background: #1a1a2e !important; color: white;">
@@ -15137,7 +15133,6 @@ function setupEnhancedSearch() {
                   ? `<img src="${adData.icon}" style="width:40px; height:40px; border-radius:50%; object-fit:cover;">`
                   : `<div style="width:40px; height:40px; border-radius:50%; background:#eee; display:flex; align-items:center; justify-content:center; color:#888;">Ad</div>`;
 
-              // === UPDATED HTML BELOW ===
               const html = `
                   <div class="sponsored-ad-card" style="padding: 15px; border: 1px solid #FFC107; border-radius: 12px; background: #fff; margin-bottom: 20px;">
                       <div style="display:flex; align-items:center; gap:10px; margin-bottom: 8px;">
@@ -15155,17 +15150,12 @@ function setupEnhancedSearch() {
                       ${mediaHtml}
 
                       <div style="display:flex; gap: 10px; margin-top:15px;">
-                          <button class="btn btn-success" onclick="window.Android.requestWatchAndEarn()" style="flex: 2; font-weight:bold; background: linear-gradient(135deg, #28a745, #1e7e34);">
-                              <i class="fas fa-play-circle"></i> Watch & Earn (+R0.50)
-                          </button>
-
-                          <button class="btn btn-primary" onclick="shareReferralLink()" style="flex: 2; border: none; background: #007BFF; font-weight:bold;">
-                              <i class="fas fa-share-alt"></i> Share & Earn
+                          <button class="btn btn-primary" onclick="showAffiliateJoinPopup()" style="width: 100%; border: none; background: #007BFF; font-weight:bold; padding: 12px;">
+                              <i class="fas fa-share-alt"></i> Share & Earn R50
                           </button>
                       </div>
-                      <!-- UPDATED LIMIT TEXT HERE -->
-                      <div style="text-align:center; font-size:0.75em; color:#999; margin-top:5px;">
-                          Limit: 6 Rewards per day ÃÆÃÆÃâÃÆÃÆÃâÃâÃÆÃÆÃÆÃâÃâÃÆÃâÃâÃÂ¢ÃÆÃÆÃâÃÆÃÆÃâÃâÃâÃÆÃÆÃâÃÂ¢ÃÆÃâÃâÃâÃÆÃâÃâÃÂ¬ÃÆÃÆÃâÃÆÃÆÃâÃâÃâÃÆÃÆÃâÃâÃÆÃâÃâÃÂ¢ R0.50 per referral
+                      <div style="text-align:center; font-size:0.75em; color:#999; margin-top:8px;">
+                          Earn R50 for every friend who joins using your link!
                       </div>
                   </div>
               `;
@@ -15174,7 +15164,6 @@ function setupEnhancedSearch() {
               container.style.display = 'block';
           }
       }
-
      function attachCoreUIListeners() {
       console.log("Attaching Core UI Listeners...");
 
@@ -15730,38 +15719,7 @@ window.removeFamilyMember = async function(memberId) {
   };
 
 
-    function shareReferralLink() {
-      if (!userId) {
-          showGenericMessage("Login Required", "Please login.", "fa-lock", "icon-warning");
-          return;
-      }
-
-      const isAffiliate = isUserAffiliate();
-      closeSideMenu();
-
-      const referralLinkInput = document.getElementById('referralLinkInput');
-      const appLink = "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share";
-      referralLinkInput.value = `${appLink}&referrer=${userId}`;
-
-      openModal('promoteAndEarnPopup');
-
-      // Show appropriate message based on affiliate status
-      setTimeout(() => {
-          const titleEl = document.querySelector('.promo-title');
-          const descEl = document.querySelector('.promo-desc');
-
-          if (titleEl && descEl) {
-              if (isAffiliate) {
-                  titleEl.innerHTML = 'Invite & Earn R0.50';
-                  descEl.innerHTML = 'Share Asiye with friends! You earn R0.50 when they join using your link.';
-              } else {
-                  titleEl.innerHTML = 'Invite Friends';
-                  descEl.innerHTML = 'Share Asiye with friends! <span style="color:#FFC107;"></span>';
-              }
-          }
-      }, 100);
-  }
-
+    
   function copyReferralLink() {
       const referralInput = document.getElementById('referralLinkInput');
       const link = referralInput.value;
@@ -15788,71 +15746,7 @@ window.removeFamilyMember = async function(memberId) {
           }
       }
   }
-      /**
-       * REWARDS THE REFERRER (The person who shared the link)
-       * This is called ONLY when the NEW user successfully signs up.
-       * @param {string} referrerId - The User ID of the person who gets the money
-       */
-      function rewardReferrer(referrerId) {
-          if (!referrerId) return;
-
-          const earnAmount = 0.50; // R0.50
-          const referrerRef = database.ref('commuters/' + referrerId);
-
-          console.log(`Processing reward for Referrer: ${referrerId}`);
-
-          // 1. TRANSACTION: Safely update the numeric balances ONLY
-          // This fixes "maxretry" by keeping the transaction lightweight
-          referrerRef.transaction(function(userData) {
-              if (!userData) {
-                  // If user doesn't exist, we can't reward them, return null to abort
-                  return userData;
-              }
-
-              // Initialize if missing
-              if (!userData.credits) userData.credits = 0;
-              if (!userData.referralEarnings) userData.referralEarnings = 0;
-              if (!userData.referralCount) userData.referralCount = 0;
-              if (!userData.totalEarnings) userData.totalEarnings = 0;
-
-              // Update Math
-              userData.credits += earnAmount;
-              userData.referralEarnings += earnAmount;
-              userData.totalEarnings += earnAmount;
-              userData.referralCount += 1;
-
-              return userData;
-          }, function(error, committed, snapshot) {
-              if (error) {
-                  console.error('Reward Transaction Failed:', error);
-              } else if (committed) {
-                  console.log('Referrer Balances Updated.');
-
-                  // 2. SEPARATE ACTION: Log the history item (No transaction needed here)
-                  // This prevents the array conflict causing maxretry
-                  const newHistoryItem = {
-                      id: 'ref_' + Date.now(),
-                      type: 'referral_reward',
-                      amount: earnAmount,
-                      description: 'Friend Signed Up',
-                      timestamp: firebase.database.ServerValue.TIMESTAMP,
-                      status: 'completed'
-                  };
-
-                  // Push to earnings list directly
-                  database.ref(`commuters/${referrerId}/earnings`).push(newHistoryItem);
-
-                  // 3. Notify the Referrer
-                  database.ref(`notifications/commuters/${referrerId}`).push({
-                      type: 'referral_bonus',
-                      title: 'New Referral!',
-                      message: `A friend joined using your link. You earned R${earnAmount.toFixed(2)}!`,
-                      timestamp: firebase.database.ServerValue.TIMESTAMP
-                  });
-              }
-          });
-      }
-
+     
 
    function renderMarketStories(ads) {
       const container = document.getElementById('market-stories-container');
@@ -16033,63 +15927,140 @@ window.removeFamilyMember = async function(memberId) {
           }, 2500);
       }
 
-      /**
-       * EXECUTE REWARD (Called only after successful signup check)
-       */
-      function processReferralReward(referrerId) {
-          if (!referrerId) return;
+     
+// =======================================================
+// UPDATED: R50 REFERRAL PAYOUTS & SIMPLIFIED POPUP
+// =======================================================
 
-          console.log(`Processing reward for Referrer: ${referrerId}`);
-          const referrerRef = database.ref('commuters/' + referrerId);
-          const earnAmount = 0.50; // R0.50
+// 1. Show the Share Link Popup
+window.showAffiliateJoinPopup = function() {
+    closeSideMenu();
+    const appLink = "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share";
+    const fullLink = `${appLink}&referrer=${userId}`;
+    
+    const linkInput = document.getElementById('directReferralLinkInput');
+    if (linkInput) {
+        linkInput.value = fullLink;
+    }
+    
+    openModal('accountVerificationPopup');
+};
 
-          // 1. TRANSACTION: Only update the numeric balance (Fixes maxretry)
-          referrerRef.transaction(function(userData) {
-              if (!userData) return userData; // User doesn't exist
+// 2. Copy Link Button Logic
+window.copyDirectReferralLink = function() {
+    const linkInput = document.getElementById('directReferralLinkInput');
+    if (linkInput) {
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(linkInput.value).then(() => {
+                showGenericMessage("Copied!", "Your link is copied. Paste it to your friends and earn R50 when they sign up!", "fa-copy", "icon-success");
+            });
+        } else {
+            linkInput.select();
+            document.execCommand('copy');
+            showGenericMessage("Copied!", "Your link is copied. Paste it to your friends and earn R50 when they sign up!", "fa-copy", "icon-success");
+        }
+    }
+};
 
-              // Initialize values if missing
-              if (!userData.credits) userData.credits = 0;
-              if (!userData.referralEarnings) userData.referralEarnings = 0;
-              if (!userData.totalEarnings) userData.totalEarnings = 0;
-              if (!userData.referralCount) userData.referralCount = 0;
+// 3. Update the General Referral Share function
+window.shareReferralLink = function() {
+    if (!userId) {
+        showGenericMessage("Login Required", "Please login.", "fa-lock", "icon-warning");
+        return;
+    }
+    closeSideMenu();
+    const referralLinkInput = document.getElementById('referralLinkInput');
+    const appLink = "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share";
+    if(referralLinkInput) referralLinkInput.value = `${appLink}&referrer=${userId}`;
+    openModal('promoteAndEarnPopup');
 
-              // Perform Math
-              userData.credits += earnAmount;
-              userData.referralEarnings += earnAmount;
-              userData.totalEarnings += earnAmount;
-              userData.referralCount += 1;
+    setTimeout(() => {
+        const titleEl = document.querySelector('.promo-title');
+        const descEl = document.querySelector('.promo-desc');
+        if (titleEl && descEl) {
+            titleEl.innerHTML = 'Invite & Earn R50';
+            descEl.innerHTML = 'Share Asiye with friends! You earn R50 when they join using your link.';
+        }
+    }, 100);
+};
 
-              return userData;
-          }, function(error, committed, snapshot) {
-              if (error) {
-                  console.error('Reward Transaction Failed:', error);
-              } else if (committed) {
-                  console.log('Balance updated successfully.');
+// 4. Update Backend Function to pay R50 instead of R0.50
+window.rewardReferrer = function(referrerId) {
+    if (!referrerId) return;
 
-                  // 2. SEPARATE ACTION: Log the history (No transaction needed)
-                  const newHistoryItem = {
-                      id: 'ref_' + Date.now(),
-                      type: 'referral_reward',
-                      amount: earnAmount,
-                      description: 'Referral Bonus',
-                      timestamp: firebase.database.ServerValue.TIMESTAMP,
-                      status: 'completed'
-                  };
+    const earnAmount = 50.00; // INCREASED TO R50
+    const referrerRef = database.ref('commuters/' + referrerId);
 
-                  // Push to list directly
-                  database.ref(`commuters/${referrerId}/earnings`).push(newHistoryItem);
+    referrerRef.transaction(function(userData) {
+        if (!userData) return userData;
+        if (!userData.credits) userData.credits = 0;
+        if (!userData.referralEarnings) userData.referralEarnings = 0;
+        if (!userData.referralCount) userData.referralCount = 0;
+        if (!userData.totalEarnings) userData.totalEarnings = 0;
 
-                  // 3. Send Notification to Referrer
-                  database.ref(`notifications/commuters/${referrerId}`).push({
-                      type: 'referral_bonus',
-                      title: 'New Referral!',
-                      message: `You earned R${earnAmount.toFixed(2)} for inviting a friend!`,
-                      timestamp: firebase.database.ServerValue.TIMESTAMP
-                  });
-              }
-          });
-      }
+        userData.credits += earnAmount;
+        userData.referralEarnings += earnAmount;
+        userData.totalEarnings += earnAmount;
+        userData.referralCount += 1;
+        return userData;
+    }, function(error, committed, snapshot) {
+        if (committed) {
+            database.ref(`commuters/${referrerId}/earnings`).push({
+                id: 'ref_' + Date.now(),
+                type: 'referral_reward',
+                amount: earnAmount,
+                description: 'Friend Signed Up',
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                status: 'completed'
+            });
+            database.ref(`notifications/commuters/${referrerId}`).push({
+                type: 'referral_bonus',
+                title: 'New Referral!',
+                message: `A friend joined using your link. You earned R${earnAmount.toFixed(2)}!`,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    });
+};
 
+// 5. Update Backend Function 2 to pay R50
+window.processReferralReward = function(referrerId) {
+    if (!referrerId) return;
+
+    const referrerRef = database.ref('commuters/' + referrerId);
+    const earnAmount = 50.00; // INCREASED TO R50
+
+    referrerRef.transaction(function(userData) {
+        if (!userData) return userData; 
+        if (!userData.credits) userData.credits = 0;
+        if (!userData.referralEarnings) userData.referralEarnings = 0;
+        if (!userData.totalEarnings) userData.totalEarnings = 0;
+        if (!userData.referralCount) userData.referralCount = 0;
+
+        userData.credits += earnAmount;
+        userData.referralEarnings += earnAmount;
+        userData.totalEarnings += earnAmount;
+        userData.referralCount += 1;
+        return userData;
+    }, function(error, committed, snapshot) {
+        if (committed) {
+            database.ref(`commuters/${referrerId}/earnings`).push({
+                id: 'ref_' + Date.now(),
+                type: 'referral_reward',
+                amount: earnAmount,
+                description: 'Referral Bonus',
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                status: 'completed'
+            });
+            database.ref(`notifications/commuters/${referrerId}`).push({
+                type: 'referral_bonus',
+                title: 'New Referral!',
+                message: `You earned R${earnAmount.toFixed(2)} for inviting a friend!`,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    });
+};
     var lastWeatherFetchTime = 0;
   async function fetchRealWeather(lat, lng) {
       const now = Date.now();
@@ -28794,6 +28765,160 @@ function showFallbackSuggestions(reason) {
 function escapeHtml(str) {
     return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
+
+// =======================================================
+// FIX: R50 PENDING REFERRAL PAYOUT SYSTEM
+// =======================================================
+
+// 1. Process New Signups (Logs as PENDING instead of paying instantly)
+window.checkAndProcessNewReferral = function() {
+    if (!window.userId || !window.commuterData) return;
+
+    if (window.commuterData.referredBy && !window.commuterData.referralProcessed) {
+        const referrerId = window.commuterData.referredBy;
+
+        // Mark the signup as processed locally
+        firebase.database().ref(`commuters/${window.userId}`).update({
+            referralProcessed: true,
+            referralProcessedAt: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            window.commuterData.referralProcessed = true;
+            
+            // Create a PENDING record on the Referrer's account
+            const pendingReward = {
+                id: 'ref_pending_' + window.userId,
+                type: 'referral_reward',
+                amount: 50.00, // R50
+                description: 'Pending: Friend must complete 1st trip',
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                status: 'pending',
+                inviteeId: window.userId
+            };
+            
+            firebase.database().ref(`commuters/${referrerId}/earnings/ref_pending_${window.userId}`).set(pendingReward);
+        });
+    }
+};
+
+// 2. Background Listener: Detects when the 1st trip is completed
+window.setupFirstTripListener = function() {
+    if (!window.userId) return;
+    
+    firebase.database().ref(`commuters/${window.userId}/totalTrips`).on('value', snap => {
+        const trips = snap.val() || 0;
+        
+        // If they have completed at least 1 trip AND were referred by someone
+        if (trips > 0 && window.commuterData && window.commuterData.referredBy && !window.commuterData.firstTripReferralProcessed) {
+            window.checkFirstTripCompletion();
+        }
+    });
+};
+
+// Start the listener automatically
+setTimeout(() => { if (typeof window.setupFirstTripListener === 'function') window.setupFirstTripListener(); }, 5000);
+
+// 3. Unlock the R50 Reward
+window.checkFirstTripCompletion = function() {
+    if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
+    if (window.commuterData.firstTripReferralProcessed) return;
+
+    const referrerId = window.commuterData.referredBy; 
+
+    // Mark as processed immediately so it doesn't trigger twice
+    firebase.database().ref(`commuters/${window.userId}`).update({
+        firstTripReferralProcessed: true
+    });
+    window.commuterData.firstTripReferralProcessed = true;
+
+    const earnAmount = 50.00; // R50
+    const referrerRef = firebase.database().ref('commuters/' + referrerId);
+
+    // Securely update the referrer's wallet balances
+    referrerRef.transaction(function(userData) {
+        if (!userData) return userData;
+        if (!userData.credits) userData.credits = 0;
+        if (!userData.referralEarnings) userData.referralEarnings = 0;
+        if (!userData.totalEarnings) userData.totalEarnings = 0;
+        if (!userData.referralCount) userData.referralCount = 0;
+
+        userData.credits += earnAmount;
+        userData.referralEarnings += earnAmount;
+        userData.totalEarnings += earnAmount;
+        userData.referralCount += 1;
+        return userData;
+    }, function(error, committed, snapshot) {
+        if (committed) {
+            // Update the pending record to "Completed"
+            firebase.database().ref(`commuters/${referrerId}/earnings/ref_pending_${window.userId}`).update({
+                description: 'Friend Completed 1st Trip!',
+                status: 'completed',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+
+            // Send Push Notification to the Referrer
+            firebase.database().ref(`notifications/commuters/${referrerId}`).push({
+                type: 'referral_bonus',
+                title: 'R50 Referral Earned! 🎉',
+                message: `Your friend completed their first trip! R50 has been added to your wallet.`,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+    });
+};
+
+// 4. Update the Earnings Dashboard UI to show Pending status
+window.openEarningsDashboard = function(userData) {
+    closeSideMenu(); // Hide the sidebar
+    
+    const data = userData || window.commuterData;
+    
+    if (data) {
+        const totalCredits = data.credits || 0;
+        const adEarnings = data.adEarnings || 0;
+        const clickEarnings = data.clickEarnings || 0;
+        const referralEarnings = data.referralEarnings || 0;
+
+        const balDisplay = document.getElementById('totalBalanceDisplay');
+        const adDisplay = document.getElementById('adEarningsDisplay');
+        const clickDisplay = document.getElementById('clickEarningsDisplay');
+        const refDisplay = document.getElementById('referralEarningsDisplay');
+
+        if (balDisplay) balDisplay.textContent = `R${totalCredits.toFixed(2)}`;
+        if (adDisplay) adDisplay.textContent = `R${adEarnings.toFixed(2)}`;
+        if (clickDisplay) clickDisplay.textContent = `R${clickEarnings.toFixed(2)}`;
+        if (refDisplay) refDisplay.textContent = `R${referralEarnings.toFixed(2)}`;
+
+        const historyList = document.getElementById('earningsHistoryList');
+        if (historyList) {
+            if (data.earnings) {
+                let historyHtml = '';
+                const txs = Object.values(data.earnings).sort((a, b) => b.timestamp - a.timestamp);
+                
+                txs.forEach(tx => {
+                    const isPending = tx.status === 'pending';
+                    const isPositive = tx.amount >= 0;
+                    
+                    // Styling for Pending vs Completed
+                    const color = isPending ? '#f8961e' : (isPositive ? '#28a745' : '#111');
+                    const sign = isPositive && !isPending ? '+' : '';
+                    const amountDisplay = isPending ? `⏳ Pending` : `${sign}R${Math.abs(tx.amount).toFixed(2)}`;
+                    const opacity = isPending ? '0.6' : '1';
+
+                    historyHtml += `
+                        <div style="display: flex; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; opacity: ${opacity};">
+                            <span style="color: #555; font-weight: 600;">${tx.description || 'Reward'}</span>
+                            <strong style="color: ${color};">${amountDisplay}</strong>
+                        </div>
+                    `;
+                });
+                historyList.innerHTML = historyHtml;
+            } else {
+                historyList.innerHTML = '<div style="padding: 20px; text-align: center; color: #888; font-size: 0.9rem;"><i class="fas fa-sad-tear" style="font-size: 2rem; margin-bottom: 10px; color: #ddd;"></i><br>No earnings yet. Start sharing your link to earn!</div>';
+            }
+        }
+    }
+    openModal('earningsDashboardPopup');
+};
 </script>
 </body>
 </html>
