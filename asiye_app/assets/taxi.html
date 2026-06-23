@@ -4619,109 +4619,6 @@ var previousVerificationStatus = null;
     // =================================================================
 // 1. Show the Cancellation Reason Popup
   // REPLACE THE ENTIRE promptCancelTrip FUNCTION
-window.promptCancelTrip = function(passengerKey) {
-    // Prevent cancellation if the trip is already on route
-    const passengerIndex = acceptedPassengers.findIndex(p => p.key === passengerKey);
-    if (passengerIndex !== -1) {
-        const passenger = acceptedPassengers[passengerIndex];
-        if (passenger.status === 'passenger_onboard' || passenger.status === 'picked_up' || passenger.status === 'in_transit') {
-            showCommunicationBanner("Trip already in progress. You can only End the trip.", "danger");
-            return;
-        }
-    }
-
-    // FIX: Define confirmColor properly
-    const confirmColor = 'danger';
-    const title = "Cancel Ride?";
-    const message = "Are you sure you want to cancel this passenger?";
-    const confirmText = "Confirm Cancel";
-    const cancelText = "No, Keep Ride";
-    
-    const popup = document.getElementById('genericMessagePopup');
-    popup.innerHTML = `
-        <button class="popup-close" onclick="closeActivePopup()">&times;</button>
-        <div style="text-align: center; padding: 10px;">
-            <i class="fas fa-question-circle" style="font-size: 3.5rem; color: #dc3545; margin-bottom: 15px;"></i>
-            <h3 style="margin-bottom: 10px; color: #111;">${title}</h3>
-            <p style="color: #666; font-size: 0.95rem; margin-bottom: 25px;">${message}</p>
-            <div style="margin-bottom: 15px; text-align: left;">
-                <label style="font-weight: 700; color: #333; margin-bottom: 5px; display: block;">Reason (Optional):</label>
-                <input type="text" id="cancelReasonInput" placeholder="e.g., Passenger not responding" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd;">
-            </div>
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-outline" onclick="closeActivePopup()" style="flex: 1; border-radius: 12px; font-weight: 700;">${cancelText}</button>
-                <button class="btn btn-danger" id="confirmCancelBtn" style="flex: 1; border-radius: 12px; font-weight: 700; background: #dc3545; color: white; border: none;">${confirmText}</button>
-            </div>
-        </div>
-    `;
-    openPopup('genericMessagePopup');
-
-    document.getElementById('confirmCancelBtn').onclick = () => {
-        const reasonInput = document.getElementById('cancelReasonInput');
-        const reason = reasonInput ? reasonInput.value.trim() : "No reason provided";
-        closeActivePopup();
-        executeTripCancellation(passengerKey, reason);
-    };
-};
-
-// Add helper function to execute cancellation
-function executeTripCancellation(passengerKey, reason) {
-    const passengerIndex = acceptedPassengers.findIndex(p => p.key === passengerKey);
-    if (passengerIndex === -1) return;
-    
-    const passenger = acceptedPassengers[passengerIndex];
-    const commuterId = passenger.commuterId;
-
-    database.ref(`requests/${passengerKey}`).update({
-        status: 'cancelled_by_driver',
-        cancelReason: reason || 'No reason specified',
-        cancelledAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        if (commuterId) {
-            database.ref(`commuters/${commuterId}/currentRequest`).set(null).catch(() => {});
-            database.ref(`notifications/commuters/${commuterId}`).push({
-                type: 'ride_cancelled',
-                driverId: userId,
-                driverName: (taxiData && taxiData.name) ? taxiData.name : "Driver",
-                message: `The driver cancelled the trip. Reason: ${reason || 'Not specified'}`,
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
-                requestId: passengerKey
-            }).catch(() => {});
-        }
-
-        if (typeof removePassengerFromMap === 'function') removePassengerFromMap(passengerKey);
-        if (typeof window.clearAllRoutes === 'function') window.clearAllRoutes();
-        if (typeof window.exitNavigation === 'function') window.exitNavigation();
-
-        acceptedPassengers.splice(passengerIndex, 1);
-        if (window.passengerLocations) window.passengerLocations.delete(passengerKey);
-
-        if (acceptedPassengers.length === 0 && taxiData && taxiData.isFull) {
-            database.ref('taxis/' + userId).update({ isFull: false });
-            taxiData.isFull = false;
-        }
-
-        const tripCard = document.getElementById('ehailingActiveTripCard');
-        if (tripCard) tripCard.style.display = 'none';
-
-        if (map && taxiLngLat) {
-            map.easeTo({ pitch: 0, bearing: 0, zoom: 17, center: taxiLngLat, duration: 1500 });
-        }
-
-        activeRequest = null;
-        currentRequestId = null;
-
-        showCommunicationBanner("Trip successfully cancelled.", "success");
-        closeActivePopup();
-        if (typeof updatePassengerCounter === 'function') updatePassengerCounter();
-        if (typeof updateBottomMenu === 'function') updateBottomMenu();
-
-    }).catch(err => {
-        console.error("Firebase Cancellation failed:", err);
-        showCommunicationBanner("Failed to cancel trip. Check your connection.", "danger");
-    });
-}
-    // OVERRIDE NATIVE ALERT
     window.alert = function(message) {
         if (typeof showGenericMessage === 'function') {
             showGenericMessage("Notice", message, "fa-info-circle", "info");
@@ -4730,7 +4627,160 @@ function executeTripCancellation(passengerKey, reason) {
         }
     };
             // Add this missing function for handling successful returns from PayFast
+// =================================================================
+// UNIFIED DRIVER TRIP CANCELLATION ENGINE
+// =================================================================
 
+window.executeTripCancellation = async function(passengerKey, reason) {
+    if (!passengerKey) return;
+    
+    try {
+        const btn = document.getElementById('confirmCancelBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+            btn.disabled = true;
+        }
+
+        // 1. Update Request Node Immediately
+        await database.ref(`requests/${passengerKey}`).update({
+            status: 'cancelled_by_driver',
+            cancelReason: reason || 'No reason specified',
+            cancelledAt: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // 2. Fetch Request to get commuterId
+        const reqSnap = await database.ref(`requests/${passengerKey}`).once('value');
+        const reqData = reqSnap.val();
+
+        if (reqData && reqData.commuterId) {
+            const commuterId = reqData.commuterId;
+            
+            // 3. Clear Commuter Profile's active trip
+            await database.ref(`commuters/${commuterId}/currentRequest`).set(null);
+            
+            // 4. Send Notification explicitly pushing to the commuter
+            await database.ref(`notifications/commuters/${commuterId}`).push({
+                type: 'ride_cancelled',
+                driverId: userId,
+                driverName: (taxiData && taxiData.name) ? taxiData.name : "Driver",
+                title: "Trip Cancelled by Driver",
+                message: `The driver had to cancel the trip. Reason: ${reason || 'Not specified'}. Please request a new ride.`,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                requestId: passengerKey
+            });
+        }
+
+        // 5. Clean up Driver State in Database
+        if (userId) {
+            await database.ref(`taxis/${userId}`).update({
+                currentRequest: null,
+                isFull: false
+            });
+        }
+
+        // 6. UI Cleanup (Safely check arrays)
+        if (typeof acceptedPassengers !== 'undefined') {
+            const passengerIndex = acceptedPassengers.findIndex(p => p.key === passengerKey);
+            if (passengerIndex !== -1) acceptedPassengers.splice(passengerIndex, 1);
+        }
+        
+        if (window.passengerLocations) window.passengerLocations.delete(passengerKey);
+        if (typeof removePassengerFromMap === 'function') removePassengerFromMap(passengerKey);
+        if (typeof window.clearAllRoutes === 'function') window.clearAllRoutes();
+        if (typeof window.exitNavigation === 'function') window.exitNavigation();
+
+        if (taxiData) {
+            taxiData.currentRequest = null;
+            taxiData.isFull = false;
+        }
+        window.currentRequestId = null;
+
+        const tripCard = document.getElementById('ehailingActiveTripCard');
+        if (tripCard) tripCard.style.display = 'none';
+
+        if (typeof map !== 'undefined' && taxiLngLat) {
+            map.easeTo({ pitch: 0, bearing: 0, zoom: 17, center: taxiLngLat, duration: 1500 });
+        }
+
+        activeRequest = null;
+        
+        closeActivePopup();
+        if (typeof updatePassengerCounter === 'function') updatePassengerCounter();
+        if (typeof updateBottomMenu === 'function') updateBottomMenu();
+        if (typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
+
+        showCommunicationBanner("Trip successfully cancelled.", "success");
+
+    } catch (err) {
+        console.error("Firebase Cancellation failed:", err);
+        showCommunicationBanner("Failed to cancel trip. Check your connection.", "danger");
+        const btn = document.getElementById('confirmCancelBtn');
+        if (btn) {
+            btn.innerHTML = 'Confirm Cancel';
+            btn.disabled = false;
+        }
+    }
+};
+
+window.cancelCurrentRequest = function() {
+    const reqId = window.currentRequestId || (taxiData ? taxiData.currentRequest : null);
+    
+    if (!reqId) {
+        showCommunicationBanner("No active trip to cancel.", "warning");
+        closeActivePopup();
+        return;
+    }
+
+    showConfirmPopup(
+        "Cancel Entire Trip?",
+        "Are you sure you want to cancel this trip? The passenger will be notified.",
+        () => {
+            window.executeTripCancellation(reqId, "Driver cancelled from active tracking screen");
+        },
+        "Yes, Cancel",
+        "No, Keep Trip",
+        "danger"
+    );
+};
+
+window.promptCancelTrip = function(passengerKey) {
+    // Prevent cancellation if the trip is already on route
+    if (typeof acceptedPassengers !== 'undefined') {
+        const passengerIndex = acceptedPassengers.findIndex(p => p.key === passengerKey);
+        if (passengerIndex !== -1) {
+            const passenger = acceptedPassengers[passengerIndex];
+            if (passenger.status === 'passenger_onboard' || passenger.status === 'picked_up' || passenger.status === 'in_transit') {
+                showCommunicationBanner("Trip already in progress. You can only End the trip.", "danger");
+                return;
+            }
+        }
+    }
+
+    const popup = document.getElementById('genericMessagePopup');
+    popup.innerHTML = `
+        <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+        <div style="text-align: center; padding: 10px;">
+            <i class="fas fa-question-circle" style="font-size: 3.5rem; color: #dc3545; margin-bottom: 15px;"></i>
+            <h3 style="margin-bottom: 10px; color: #111;">Cancel Ride?</h3>
+            <p style="color: #666; font-size: 0.95rem; margin-bottom: 25px;">Are you sure you want to cancel this passenger?</p>
+            <div style="margin-bottom: 15px; text-align: left;">
+                <label style="font-weight: 700; color: #333; margin-bottom: 5px; display: block;">Reason (Optional):</label>
+                <input type="text" id="cancelReasonInput" placeholder="e.g., Passenger not responding" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ddd;">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-outline" onclick="closeActivePopup()" style="flex: 1; border-radius: 12px; font-weight: 700;">No, Keep Ride</button>
+                <button class="btn btn-danger" id="confirmCancelBtn" style="flex: 1; border-radius: 12px; font-weight: 700; background: #dc3545; color: white; border: none;">Confirm Cancel</button>
+            </div>
+        </div>
+    `;
+    openPopup('genericMessagePopup');
+
+    document.getElementById('confirmCancelBtn').onclick = () => {
+        const reasonInput = document.getElementById('cancelReasonInput');
+        const reason = reasonInput ? reasonInput.value.trim() : "No reason provided";
+        window.executeTripCancellation(passengerKey, reason);
+    };
+};
      function checkPayFastReturn() {
         const urlParams = new URLSearchParams(window.location.search);
         const paymentStatus = urlParams.get('payment_status');
@@ -5997,6 +6047,7 @@ function setupTaxiDataListener() {
 };
 
 // 2. DATABASE LISTENER (Catches requests even if push notification fails)
+// 2. DATABASE LISTENER (Catches requests even if push notification fails)
 window.listenForRequests = function() {
     if (window.isListeningForRequests || !userId) return;
     window.isListeningForRequests = true;
@@ -6018,6 +6069,12 @@ window.listenForRequests = function() {
 
         const request = { key: snapshot.key, ...snapshot.val() };
         if (request.type === 'club') return; // Handled below
+
+        // 🚨 STRICT CARD-ONLY ENFORCEMENT 🚨
+        if (driverData.forceCardOnly && request.paymentMethod === 'cash') {
+            console.log("🚫 Ignored CASH request due to Card-Only mode (Unsettled Debt).");
+            return; 
+        }
 
         const isAsiyeGoDriver = (driverData.vehicleType === 'ehailing');
         const isTargetedToMe = request.taxiId === userId;
@@ -6069,6 +6126,12 @@ window.listenForRequests = function() {
 
         const request = { key: snapshot.key, ...snapshot.val() };
         
+        // 🚨 STRICT CARD-ONLY ENFORCEMENT 🚨
+        if (driverData.forceCardOnly && request.paymentMethod === 'cash') {
+            console.log("🚫 Ignored CASH club request due to Card-Only mode.");
+            return; 
+        }
+
         // 🛑 PREVENT IGNORED POOLS FROM SHOWING AGAIN
         if (window.ignoredClubRequests && window.ignoredClubRequests[request.key]) return;
 
@@ -6085,7 +6148,6 @@ window.listenForRequests = function() {
         }
     });
 
-    // C. POOLING LIVE UPDATES
     if (window.poolChangeListener) requestsRef.off('child_changed', window.poolChangeListener);
     window.poolChangeListener = requestsRef.orderByChild('status').equalTo('pooling').on('child_changed', async (snapshot) => {
         if (!snapshot || !snapshot.exists()) return;
@@ -7830,6 +7892,8 @@ function renderRequestPopup(popup, req, distance, locationName) {
 
 // REPLACE the openParcelRequestPopup function
 window.openParcelRequestPopup = function(req) {
+if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(req)) return;
+
     const popup = document.getElementById('parcelRequestPopup');
     
     // CRITICAL FIX: Check if popup exists
@@ -11328,87 +11392,80 @@ window.acceptRequest = function() {
 
 
       // Add to taxi.html - Real-time request listener for Asiye Go
-    function setupRealTimeRequestListener() {
-        if (!userId) return;
+   function setupRealTimeRequestListener() {
+    if (!userId) return;
 
-        console.log("Setting up REAL-TIME request listener for driver...");
+    console.log("Setting up REAL-TIME request listener for driver...");
 
-        const isEhailling = taxiData && taxiData.vehicleType === 'ehailing';
+    const isEhailling = taxiData && taxiData.vehicleType === 'ehailing';
 
-        // Clear existing listener
-        if (window.requestListener) {
-            database.ref('requests').off('child_added', window.requestListener);
+    // Clear existing listener
+    if (window.requestListener) {
+        database.ref('requests').off('child_added', window.requestListener);
+    }
+
+    // Listen for new requests
+    window.requestListener = database.ref('requests').on('child_added', (snapshot) => {
+        const request = { key: snapshot.key, ...snapshot.val() };
+
+        // Only process pending requests not assigned to anyone yet
+        if (request.status !== 'pending') return;
+
+        // 🚨 STRICT CARD-ONLY ENFORCEMENT 🚨
+        if (taxiData && taxiData.forceCardOnly && request.paymentMethod === 'cash') {
+            return;
         }
 
-        // Listen for new requests
-     // Listen for new requests
-        window.requestListener = database.ref('requests').on('child_added', (snapshot) => {
-            const request = { key: snapshot.key, ...snapshot.val() };
+        // For e-hailing: match by proximity (within 3km)
+        // For minibus: match by taxiId if assigned
+        var shouldAccept = false;
 
-            // Only process pending requests not assigned to anyone yet
-            if (request.status !== 'pending') return;
+        if (isEhailling) {
+            // Calculate distance to passenger
+            if (request.commuterLocation && taxiData && taxiData.latitude) {
+                const distance = calculateDistance(
+                    taxiData.latitude, taxiData.longitude,
+                    request.commuterLocation.latitude, request.commuterLocation.longitude
+                );
+                // Accept if within 3km and not full
+                shouldAccept = distance <= 3 && taxiData.isFull !== true;
+            }
+        } else {
+            // Minibus: check if assigned to this taxi
+            shouldAccept = request.taxiId === userId;
+        }
 
-            // For e-hailing: match by proximity (within 3km)
-            // For minibus: match by taxiId if assigned
-            var shouldAccept = false;
+        if (shouldAccept && !activeRequest) {
+            activeRequest = request;
+            currentRequestId = request.key;
 
-            if (isEhailling) {
-                // Calculate distance to passenger
-                if (request.commuterLocation && taxiData && taxiData.latitude) {
-                    const distance = calculateDistance(
-                        taxiData.latitude, taxiData.longitude,
-                        request.commuterLocation.latitude, request.commuterLocation.longitude
-                    );
-                    // Accept if within 3km and not full
-                    shouldAccept = distance <= 3 && taxiData.isFull !== true;
-                }
+            // Play notification sound
+            try {
+                const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3');
+                audio.play().catch(e => console.log('Audio not supported'));
+            } catch(e) {}
+
+            // Show popup based on request type
+            if (request.type === 'parcel') {
+                if (typeof window.openParcelRequestPopup === 'function') window.openParcelRequestPopup(request);
             } else {
-                // Minibus: check if assigned to this taxi
-                shouldAccept = request.taxiId === userId;
+                if (typeof window.openCommuterRequestPopup === 'function') window.openCommuterRequestPopup(request);
             }
+        } 
+    });
 
-            if (shouldAccept && !activeRequest) {
-                activeRequest = request;
-                currentRequestId = request.key;
-
-                // Play notification sound
-                try {
-                    const audio = new Audio('https://www.soundjay.com/buttons/sounds/button-3.mp3');
-                    audio.play().catch(e => console.log('Audio not supported'));
-                } catch(e) {}
-
-                // Trigger System Tray Notification via Native Bridge
-                if (window.Android && typeof window.Android.showNotification === 'function') {
-                    const title = request.type === 'parcel' ? "New Parcel Request!" : "New Ride Request!";
-                    const body = `Incoming request within 3km. Tap to view.`;
-                    window.Android.showNotification(title, body, "DANGER");
-                }
-
-                // Show popup based on request type
-                if (request.type === 'parcel') {
-                    if (typeof window.openParcelRequestPopup === 'function') window.openParcelRequestPopup(request);
-                    else if (typeof openParcelRequestPopup === 'function') openParcelRequestPopup(request);
-                } else {
-                    if (typeof window.openCommuterRequestPopup === 'function') window.openCommuterRequestPopup(request);
-                    else if (typeof openCommuterRequestPopup === 'function') openCommuterRequestPopup(request);
-                }
-            } // <-- THIS WAS THE MISSING BRACE
-        });
-
-        // Also listen for requests that change status (cancellations)
-      // Also listen for requests that change status (cancellations)
-        database.ref('requests').on('child_changed', (snapshot) => {
-            const request = snapshot.val();
-            if (activeRequest && activeRequest.key === snapshot.key &&
-                request.status.includes('cancelled')) {
-                closeActivePopup();
-                activeRequest = null;
-                currentRequestId = null;
-                showCommunicationBanner("Passenger cancelled the request", "warning");
-            }
-        });
-    } // <--- THIS WAS THE MISSING BRACE CAUSING THE SYNTAX ERROR
-
+    // Also listen for requests that change status (cancellations)
+    database.ref('requests').on('child_changed', (snapshot) => {
+        const request = snapshot.val();
+        if (activeRequest && activeRequest.key === snapshot.key &&
+            request.status.includes('cancelled')) {
+            closeActivePopup();
+            activeRequest = null;
+            currentRequestId = null;
+            showCommunicationBanner("Passenger cancelled the request", "warning");
+        }
+    });
+}
 
 window.openMyClientsPopup = function() {
     const popup = document.getElementById('genericMessagePopup');
@@ -15820,33 +15877,30 @@ window.canDriverGoOnline = function() {
 
     if (window.isHandlerMode) return true;
 
-    // RULE 3: Debt Check (R100 or 7 Days)
     const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
     const debt = taxiData.commissionDebt || 0;
     const firstDebt = taxiData.firstDebtDate || null;
     const isOverdue = firstDebt && (Date.now() - firstDebt > SEVEN_DAYS);
 
     if (debt >= 100 || isOverdue) {
-        var msg = debt >= 100 
-            ? "Your commission debt has reached R100." 
-            : "You have an unsettled debt older than 7 days.";
-            
-        if(typeof showGenericMessage === 'function') {
-            showGenericMessage(
-                "Card Only Mode", 
-                `${msg} You are permitted to go online, but you will only receive CARD trips until the debt is settled.`, 
-                "fa-credit-card", 
-                "warning"
-            );
+        // If they already clicked "Card Only", let them go online!
+        if (window.agreedToCardOnly) {
+            database.ref('taxis/' + userId).update({ forceCardOnly: true });
+            return true; 
         }
-        database.ref('taxis/' + userId).update({ forceCardOnly: true });
+
+        // Otherwise block them
+        if (typeof showBlockingDebtModal === 'function') {
+            showBlockingDebtModal(debt);
+        }
+        return false; 
     } else {
         database.ref('taxis/' + userId).update({ forceCardOnly: false });
+        window.agreedToCardOnly = false;
     }
 
     return true;
 };
-
 function updateBannersVisibility() {
     if (!taxiData) return;
     
@@ -17319,6 +17373,8 @@ window.updateCommuterRequestPopupWithCount = function(requestData) {
 
 // Modify the openCommuterRequestPopup to include passenger count
 window.openCommuterRequestPopupWithCount = function(req) {
+ if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(req)) return;
+
     console.log("openCommuterRequestPopup called with request:", req);
 
     if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) {
@@ -17874,6 +17930,11 @@ window.setupRealTimeRequestPersistence = function() {
     database.ref('requests').orderByChild('status').equalTo('pending').on('child_added', (snapshot) => {
         const request = { key: snapshot.key, ...snapshot.val() };
         
+        // 🚨 STRICT CARD-ONLY ENFORCEMENT 🚨
+        if (taxiData && taxiData.forceCardOnly && request.paymentMethod === 'cash') {
+            return;
+        }
+
         // Check if this request is for this driver
         const isForMe = request.taxiId === userId || 
                        (request.type === 'club' && !request.taxiId);
@@ -17899,6 +17960,11 @@ window.setupRealTimeRequestPersistence = function() {
     database.ref('requests').orderByChild('status').equalTo('pooling').on('child_added', (snapshot) => {
         const request = { key: snapshot.key, ...snapshot.val() };
         
+        // 🚨 STRICT CARD-ONLY ENFORCEMENT 🚨
+        if (taxiData && taxiData.forceCardOnly && request.paymentMethod === 'cash') {
+            return;
+        }
+
         if (request.type === 'club' && (!activeRequest || activeRequest.key !== request.key)) {
             // Check distance
             const dist = calculateDistance(taxiData.latitude, taxiData.longitude, request.poolCenterLat, request.poolCenterLng);
@@ -17937,7 +18003,6 @@ window.setupRealTimeRequestPersistence = function() {
         }
     });
 };
-
 // Function 5: Fix genericMessagePopup cancel button visibility
 function fixGenericPopupButtons() {
     // This function is called periodically to ensure buttons are visible
@@ -18191,6 +18256,7 @@ function renderPassengerList(requestData) {
 
 // COMPLETE REPLACEMENT FOR showPoolingRoomPopup
 window.showPoolingRoomPopup = async function(request) {
+ if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(request)) return;
     if (!request) return;
     if (window.ignoredClubRequests && window.ignoredClubRequests[request.key]) return; // Block ignored
     if (activeRequest && activeRequest.type === 'club' && activeRequest.key !== request.key) return; // Busy
@@ -19983,128 +20049,6 @@ window.safeVibrate = function(pattern) {
     }
 };
 
-// =================================================================
-// UNIFIED DRIVER TRIP CANCELLATION ENGINE
-// =================================================================
-window.cancelCurrentRequest = function() {
-    const reqId = window.currentRequestId || (taxiData ? taxiData.currentRequest : null);
-    
-    if (!reqId && (!acceptedPassengers || acceptedPassengers.length === 0)) {
-        showCommunicationBanner("No active trip to cancel.", "warning");
-        closeActivePopup();
-        return;
-    }
-
-    // Use your custom confirmation popup design
-    showConfirmPopup(
-        "Cancel Entire Trip?",
-        "Are you sure you want to cancel this entire trip? All accepted passengers will be notified of the cancellation.",
-        async () => {
-            try {
-                const timestamp = firebase.database.ServerValue.TIMESTAMP;
-                const updates = {};
-
-                // 1. Handle Multiple Passengers (Club Pools / Groups)
-                if (acceptedPassengers && acceptedPassengers.length > 0) {
-                    acceptedPassengers.forEach(p => {
-                        const path = p.subKey ? `requests/${p.key}/passengers/${p.subKey}` : `requests/${p.key}`;
-                        updates[`${path}/status`] = 'cancelled_by_driver';
-                        updates[`${path}/cancelledAt`] = timestamp;
-                        
-                        if (p.commuterId) {
-                            updates[`commuters/${p.commuterId}/currentRequest`] = null;
-                            
-                            // Generate in-app notifications for each passenger
-                            const notifRef = database.ref(`notifications/commuters/${p.commuterId}`).push();
-                            updates[`notifications/commuters/${p.commuterId}/${notifRef.key}`] = {
-                                type: 'ride_cancelled',
-                                driverId: userId,
-                                driverName: `${taxiData.name || ''} ${taxiData.surname || ''}`.trim() || 'Driver',
-                                message: 'The driver has cancelled the trip.',
-                                timestamp: timestamp,
-                                requestId: p.key
-                            };
-                        }
-                    });
-                    
-                    // Mark the master request status
-                    const masterKey = acceptedPassengers[0].key;
-                    updates[`requests/${masterKey}/status`] = 'cancelled_by_driver';
-                    updates[`requests/${masterKey}/cancelledAt`] = timestamp;
-                } 
-                // 2. Fallback to Single Passenger (Private Rides)
-                else if (reqId) {
-                    updates[`requests/${reqId}/status`] = 'cancelled_by_driver';
-                    updates[`requests/${reqId}/cancelledAt`] = timestamp;
-                    
-                    const reqSnap = await database.ref(`requests/${reqId}`).once('value');
-                    const req = reqSnap.val();
-                    if (req && req.commuterId) {
-                        updates[`commuters/${req.commuterId}/currentRequest`] = null;
-                        const notifRef = database.ref(`notifications/commuters/${req.commuterId}`).push();
-                        updates[`notifications/commuters/${req.commuterId}/${notifRef.key}`] = {
-                            type: 'ride_cancelled',
-                            driverId: userId,
-                            driverName: `${taxiData.name || ''} ${taxiData.surname || ''}`.trim() || 'Driver',
-                            message: 'The driver has cancelled the trip.',
-                            timestamp: timestamp,
-                            requestId: reqId
-                        };
-                    }
-                }
-
-                // 3. Clear Driver currentRequest pointer in Firebase
-                if (userId) {
-                    updates[`${window.dbNode}/${userId}/currentRequest`] = null;
-                    updates[`${window.dbNode}/${userId}/isFull`] = false;
-                }
-
-                // 4. Send atomic update query to database
-                await database.ref().update(updates);
-
-                // 5. Clean up local structures
-                acceptedPassengers = [];
-                if (window.passengerLocations) window.passengerLocations.clear();
-                
-                // Clear passenger markers from map
-                if (typeof activePassengerMarkers !== 'undefined') {
-                    Object.keys(activePassengerMarkers).forEach(k => {
-                        if (activePassengerMarkers[k]) activePassengerMarkers[k].remove();
-                    });
-                    activePassengerMarkers = {};
-                }
-
-                // 6. Reset map layout, bottom controls, and cards
-                window.currentRequestId = null;
-                if (taxiData) {
-                    taxiData.currentRequest = null;
-                    taxiData.isFull = false;
-                }
-
-                const tripCard = document.getElementById('ehailingActiveTripCard');
-                if (tripCard) tripCard.style.display = 'none';
-
-                if (typeof window.exitNavigation === 'function') window.exitNavigation();
-                if (typeof window.clearAllRoutes === 'function') window.clearAllRoutes();
-                if (typeof updatePassengerCounter === 'function') updatePassengerCounter();
-                if (typeof updateBottomMenu === 'function') updateBottomMenu();
-
-                closeActivePopup();
-                showCommunicationBanner("Trip successfully cancelled.", "success");
-                
-                // Update workspace state
-                window.updateUIWithTaxiData();
-
-            } catch (err) {
-                console.error("Cancellation Transaction Failed:", err);
-                showCommunicationBanner("Failed to cancel trip. Please check your connection.", "danger");
-            }
-        },
-        "Yes, Cancel",
-        "No, Keep Trip",
-        "danger"
-    );
-};
 
 // =======================================================================
 // UNIFIED DRIVER TRACKING POPUP (Live Waypoints & Onboard Actions)
@@ -21020,6 +20964,255 @@ window.submitCounterOffer = function(reqKey, price) {
             });
         });
     });
+};
+
+// ==================== DRIVER DEBT SETTLEMENT (FORCES OFFLINE) ====================
+
+let debtWatcherStarted = false;
+
+// === Real-time Debt Watcher ===
+window.startDebtWatcher = function() {
+    if (!userId || debtWatcherStarted) return;
+    debtWatcherStarted = true;
+
+    database.ref(`taxis/${userId}/commissionDebt`).on('value', (snap) => {
+        const debt = parseFloat(snap.val()) || 0;
+
+        // Update dashboard display
+        const debtContainer = document.getElementById('dashDebtContainer');
+        const debtDisplay = document.getElementById('dashDebt');
+        if (debtContainer && debtDisplay) {
+            debtDisplay.textContent = debt.toFixed(2);
+            debtContainer.style.display = debt > 0 ? 'block' : 'none';
+        }
+
+        // If debt >= 100 but they agreed to Card Only mode, let them stay online
+        if (debt >= 100) {
+            if (!window.agreedToCardOnly) {
+                forceDriverOffline(debt);
+            }
+        } else {
+            // Debt is cleared - reset bypass and unlock features
+            window.agreedToCardOnly = false; 
+            database.ref(`taxis/${userId}`).update({ forceCardOnly: false });
+            
+            const modal = document.getElementById('debtSettlementModal');
+            if (modal) modal.remove();
+            enableGoOnlineButton();
+        }
+    });
+};// === Force driver offline + show blocking modal ===
+function forceDriverOffline(debtAmount) {
+    // 1. Show blocking modal
+    showBlockingDebtModal(debtAmount);
+
+    // 2. Force driver offline in database
+    database.ref(`taxis/${userId}`).update({
+        isOnline: false,
+        broadcastActive: false,
+        lastDebtBlock: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // 3. Stop any active broadcast/location sharing
+    if (typeof stopLocationBroadcast === 'function') {
+        stopLocationBroadcast();
+    }
+
+    // 4. Disable Go Online button
+    disableGoOnlineButton(true);
+
+    // 5. Show warning banner
+    showCommunicationBanner("You have been taken offline due to unsettled debt.", "danger");
+}
+
+// === Blocking Modal (cannot be closed) ===
+// === Blocking Modal (cannot be closed unless an option is chosen) ===
+// === Blocking Modal (cannot be closed unless an option is chosen) ===
+function showBlockingDebtModal(debtAmount) {
+    const existing = document.getElementById('debtSettlementModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'debtSettlementModal';
+    modal.style.cssText = `
+        position:fixed; top:0; left:0; width:100%; height:100%;
+        background:rgba(0,0,0,0.97); z-index:9999999; display:flex;
+        align-items:center; justify-content:center; padding:20px;
+    `;
+
+    modal.innerHTML = `
+        <div style="background:white; width:100%; max-width:420px; border-radius:24px; padding:30px 25px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.6);">
+            <div style="width:80px; height:80px; background:#fff3cd; border-radius:50%; margin:0 auto 20px; display:flex; align-items:center; justify-content:center;">
+                <i class="fas fa-exclamation-triangle" style="font-size:42px; color:#f39c12;"></i>
+            </div>
+            
+            <h2 style="color:#c0392b; font-weight:900; margin-bottom:10px;">Settlement Required</h2>
+            
+            <p style="color:#555; font-size:1.05rem; margin-bottom:25px;">
+                You owe <strong style="color:#c0392b;">R${debtAmount.toFixed(2)}</strong> in commission.<br>
+                You have been taken <strong>offline</strong> and cannot receive new bookings.
+            </p>
+
+            <button onclick="settleDriverDebtNow(${debtAmount})" 
+                    style="width:100%; background:#28a745; color:white; border:none; padding:18px; border-radius:16px; font-weight:900; font-size:1.1rem; margin-bottom:12px; cursor:pointer; box-shadow: 0 4px 15px rgba(40,167,69,0.3);">
+                <i class="fas fa-credit-card"></i> Settle Now via Card
+            </button>
+
+            <!-- NEW CARD ONLY BUTTON -->
+            <button onclick="acceptCardOnlyMode()" 
+                    style="width:100%; background:#007BFF; color:white; border:none; padding:18px; border-radius:16px; font-weight:900; font-size:1.1rem; margin-bottom:12px; cursor:pointer; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
+                <i class="fas fa-mobile-alt"></i> Accept card payments only
+            </button>
+
+            <p style="font-size:0.8rem; color:#999; margin-top:10px; line-height: 1.4;">
+                Choose to settle now to receive all bookings, or drive in "Card Only" mode where your debt will be deducted automatically from digital trips.
+            </p>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+// === Disable Go Online button ===
+function disableGoOnlineButton(disable) {
+    const btn = document.getElementById('dashMainGoOnlineBtn');
+    if (!btn) return;
+
+    if (disable) {
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        btn.style.pointerEvents = 'none';
+        btn.innerHTML = `<i class="fas fa-lock"></i> Settle Debt to Go Online`;
+    } else {
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+        btn.innerHTML = `<i class="fas fa-power-off"></i> Go Online`;
+    }
+}
+
+function enableGoOnlineButton() {
+    disableGoOnlineButton(false);
+}
+
+// === Settlement ===
+// === Settlement ===
+window.settleDriverDebtNow = async function(debtAmount) {
+    const btns = document.querySelectorAll('#debtSettlementModal button');
+    if (btns[0]) {
+        btns[0].innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting to PayFast...';
+        btns[0].disabled = true;
+    }
+
+    // FIX: Trigger the official PayFast commission debt payment function
+    if (typeof window.payCommissionDebt === 'function') {
+        // Mock the event object so payCommissionDebt can attach its loader
+        const mockEvent = { target: btns[0] };
+        window.payCommissionDebt(mockEvent);
+    } else {
+        alert("Payment gateway not found. Please refresh the app.");
+    }
+};
+// === Add debt only on CASH rides ===
+window.addCashRideDebt = async function(rideAmount) {
+    if (!userId || !rideAmount) return;
+    const commission = parseFloat(rideAmount) * 0.12;
+
+    await database.ref(`taxis/${userId}/unsettledDebt`).transaction(current => {
+        return (parseFloat(current) || 0) + commission;
+    });
+};
+
+// === Start watcher ===
+setTimeout(() => {
+    if (userId) window.startDebtWatcher();
+}, 3000);
+
+// ==================== END DEBT SETTLEMENT ====================
+
+// ==================== PROTECT "GO ONLINE" BUTTON FROM DEBT ====================
+setTimeout(() => {
+    const goOnlineBtn = document.getElementById('dashMainGoOnlineBtn');
+    
+    if (goOnlineBtn) {
+        const originalClick = goOnlineBtn.onclick;
+
+        goOnlineBtn.onclick = async function(event) {
+            if (!userId) return;
+
+            // If the driver is ALREADY online, let them go OFFline without checking debt
+            if (taxiData && taxiData.isOnline) {
+                if (typeof originalClick === 'function') originalClick.call(this, event);
+                return;
+            }
+
+            try {
+                const debtSnap = await database.ref(`taxis/${userId}/commissionDebt`).once('value'); 
+                const currentDebt = parseFloat(debtSnap.val()) || 0;
+
+                // Check debt, but let them pass if they activated Card Only mode
+                if (currentDebt >= 100 && !window.agreedToCardOnly) {
+                    showBlockingDebtModal(currentDebt);
+                    return; 
+                }
+
+                if (typeof originalClick === 'function') {
+                    originalClick.call(this, event);
+                }
+            } catch (err) {
+                console.error("Debt check failed:", err);
+                if (typeof originalClick === 'function') originalClick.call(this, event);
+            }
+        };
+    }
+}, 4000);// Also make sure the debt watcher is running
+setTimeout(() => {
+    if (userId && typeof window.startDebtWatcher === 'function') {
+        window.startDebtWatcher();
+    }
+}, 5000);
+
+// ==================== END PROTECTION ====================
+
+// === Card Only Mode Activation ===
+window.acceptCardOnlyMode = async function() {
+    const btns = document.querySelectorAll('#debtSettlementModal button');
+    if (btns[1]) {
+        btns[1].innerHTML = '<i class="fas fa-spinner fa-spin"></i> Activating...';
+        btns[1].disabled = true;
+    }
+
+    // 1. Set local bypass flag to stop the modal from reappearing
+    window.agreedToCardOnly = true;
+
+    // 2. Force Card Only in database so the commuter app hides the cash option
+    await database.ref(`taxis/${userId}`).update({
+        forceCardOnly: true
+    });
+    if (taxiData) taxiData.forceCardOnly = true;
+
+    // 3. Remove the blocking modal
+    const modal = document.getElementById('debtSettlementModal');
+    if (modal) modal.remove();
+
+    showCommunicationBanner("Card Only Mode Active. You will only receive digital payments.", "info");
+
+    // 4. Re-enable the dashboard button and open the Setup Trip Screen
+    enableGoOnlineButton();
+    if (typeof window.openSetupTripPopup === 'function') {
+        window.openSetupTripPopup();
+    }
+};
+// 🚨 STRICT DEBT GATEKEEPER 🚨
+window.isRequestAllowed = function(req) {
+    if (!taxiData || !taxiData.forceCardOnly) return true; // Driver has no debt
+    if (!req) return true;
+    
+    const payMethod = (req.paymentMethod || 'cash').toString().toLowerCase();
+    if (payMethod === 'cash') {
+        console.warn("🚫 BLOCKED: Cash ride ignored due to Card-Only mode.");
+        return false;
+    }
+    return true;
 };
 </script>
 
