@@ -17,15 +17,61 @@ import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 
 bool _isFirebaseInitialized = false;
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+
+  // Show local notification for background data messages
+  RemoteNotification? notification = message.notification;
+  AndroidNotification? android = message.notification?.android;
+
+  if (notification != null || message.data.isNotEmpty) {
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'asiye_danger_channel',
+      'High Priority Alerts',
+      description: 'Used for new trip requests and urgent alerts.',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+
+    await flutterLocalNotificationsPlugin.show(
+      id: notification.hashCode,
+      title: notification?.title ?? message.data['title'] ?? 'Asiye',
+      body: notification?.body ?? message.data['message'] ?? message.data['body'] ?? 'New update',
+      notificationDetails: NotificationDetails(
+        android: AndroidNotificationDetails(
+          channel.id,
+          channel.name,
+          channelDescription: channel.description,
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: android?.smallIcon ?? '@mipmap/ic_launcher',
+          playSound: true,
+          enableVibration: true,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      payload: jsonEncode(message.data),
+    );
+  }
+
   debugPrint("Handling a background message: ${message.messageId}");
 }
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   try {
     await Firebase.initializeApp().timeout(const Duration(seconds: 5));
     _isFirebaseInitialized = true;
@@ -53,7 +99,6 @@ class AsiyeMainShell extends StatefulWidget {
 
 class _AsiyeMainShellState extends State<AsiyeMainShell> {
   WebViewController? _controller;
-  final FlutterLocalNotificationsPlugin _localNotifications = FlutterLocalNotificationsPlugin();
   StreamSubscription<Position>? _positionSubscription;
 
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
@@ -338,10 +383,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     if (!_isFirebaseInitialized) return;
 
     const AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
+        AndroidInitializationSettings('@mipmap/ic_launcher');
 
     const DarwinInitializationSettings initializationSettingsDarwin =
-    DarwinInitializationSettings(
+        DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
       requestSoundPermission: true,
@@ -352,11 +397,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       iOS: initializationSettingsDarwin,
     );
 
-    await _localNotifications.initialize(
+    await flutterLocalNotificationsPlugin.initialize(
       settings: initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse details) {
         if (details.payload != null) {
-          _controller?.runJavaScript("if(typeof window.onNotificationClicked === 'function') { window.onNotificationClicked(${details.payload}); }");
+          _controller?.runJavaScript(
+              "if(typeof window.onNotificationClicked === 'function') { window.onNotificationClicked(${details.payload}); }");
         }
       },
     );
@@ -377,7 +423,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       enableVibration: true,
     );
 
-    await _localNotifications
+    await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
@@ -385,25 +431,29 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
 
-      if (notification != null) {
-        _localNotifications.show(
-          id: notification.hashCode,
-          title: notification.title,
-          body: notification.body,
-          notificationDetails: NotificationDetails(
-            android: android != null ? AndroidNotificationDetails(
-              channel.id,
-              channel.name,
-              channelDescription: channel.description,
-              importance: channel.importance,
-              priority: Priority.high,
-              icon: android.smallIcon,
-            ) : null,
-            iOS: const DarwinNotificationDetails(presentAlert: true, presentBadge: true, presentSound: true),
+      flutterLocalNotificationsPlugin.show(
+        id: notification.hashCode,
+        title: notification?.title ?? message.data['title'] ?? 'Asiye',
+        body: notification?.body ?? message.data['message'] ?? message.data['body'] ?? 'New update',
+        notificationDetails: NotificationDetails(
+          android: AndroidNotificationDetails(
+            channel.id,
+            channel.name,
+            channelDescription: channel.description,
+            importance: Importance.max,
+            priority: Priority.high,
+            icon: android?.smallIcon ?? '@mipmap/ic_launcher',
+            playSound: true,
+            enableVibration: true,
           ),
-          payload: jsonEncode(message.data),
-        );
-      }
+          iOS: const DarwinNotificationDetails(
+            presentAlert: true,
+            presentBadge: true,
+            presentSound: true,
+          ),
+        ),
+        payload: jsonEncode(message.data),
+      );
 
       _controller?.runJavaScript("if(typeof window.onPushNotificationReceived === 'function') { window.onPushNotificationReceived(${jsonEncode(message.data)}); }");
     });
@@ -570,11 +620,20 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       importance: Importance.max,
       priority: Priority.high,
       icon: '@mipmap/ic_launcher',
+      playSound: true,
+      enableVibration: true,
     );
 
-    NotificationDetails platformDetails = const NotificationDetails(android: androidDetails);
+    NotificationDetails platformDetails = const NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
 
-    await _localNotifications.show(
+    await flutterLocalNotificationsPlugin.show(
       id: DateTime.now().millisecond,
       title: title,
       body: body,
