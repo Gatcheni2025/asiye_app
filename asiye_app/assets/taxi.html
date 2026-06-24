@@ -4500,6 +4500,33 @@ Retake Photo
 
     <script>
 
+// --- URL CLEANER & REFERRAL CATCHER ---
+    (function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const refParam = urlParams.get('ref') || urlParams.get('referrer');
+        const driverRef = urlParams.get('driverRef');
+
+        if (refParam) {
+            if (refParam.startsWith('adshare_')) {
+                localStorage.setItem('pendingAdReferral', refParam);
+            } else {
+                // SAVES THE AMBASSADOR / USER REFERRAL CODE HERE
+                localStorage.setItem('pendingReferral', refParam); 
+            }
+        }
+        
+        // Capture Driver Reference Request
+        if (driverRef) {
+            localStorage.setItem('pendingDriverRef', driverRef);
+        }
+
+        // Clean URL to look neat
+        if (window.location.search.includes('state=') || window.location.search.includes('code=') || window.location.search.includes('ref=') || window.location.search.includes('driverRef=')) {
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    })();
+const ANDROID_STORE_LINK = "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share";
+const IOS_STORE_LINK = "https://apps.apple.com/za/app/asiye/id6765691149";
 
         // --- SOUTH AFRICAN KEY LOCATIONS DATABASE (RANKS & MALLS) ---
         const saKeyLocations = [
@@ -4867,7 +4894,7 @@ async function initializeApp(uid) {
         }
 
         if (snapshot && snapshot.exists()) {
-document.getElementById('solidPreloader').style.display = 'none';
+            document.getElementById('solidPreloader').style.display = 'none';
             taxiData = snapshot.val();
             window.isHandlerMode = (window.dbNode === 'handlers' || taxiData.type === 'handler' || taxiData.role === 'handler');
 
@@ -4880,6 +4907,13 @@ document.getElementById('solidPreloader').style.display = 'none';
             
             // Setup real-time listener for taxi data changes
             if (typeof setupTaxiDataListener === 'function') setupTaxiDataListener();
+
+            // --- PROCESS BINARY REFERRAL COUNTS ---
+            const pendingRef = localStorage.getItem('pendingReferral');
+            if (pendingRef && !taxiData.binaryCountsProcessed) {
+                window.processPendingReferralCounters(userId, pendingRef);
+                localStorage.removeItem('pendingReferral');
+            }
 
             // =====================================================
             // CRITICAL FIX: AGGRESSIVE ONBOARDING INTERCEPTOR
@@ -11505,16 +11539,14 @@ window.shareDigitalBusinessCard = async function() {
         return;
     }
 
-    const referralLink = `https://asiye.cloud/invite.html?driver=${userId}`;
     const driverName = `${taxiData.name || 'Asiye'} ${taxiData.surname || 'Driver'}`.trim();
     const vehicleInfo = taxiData.vehicleType === 'ehailing'
         ? 'Asiye Go Partner'
         : (taxiData.assignedRank ? `Minibus at ${taxiData.assignedRank}` : 'Minibus Driver');
     const rating = taxiData.averageRating ? parseFloat(taxiData.averageRating).toFixed(1) : '5.0';
 
-    const shareText = `🚖 Ride with ${driverName} on Asiye!\n\n⭐ Rating: ${rating}\n🚐 Vehicle: ${vehicleInfo}\n\nUse this link to request me directly:\n${referralLink}\n\n`;
+    const shareText = `🚖 Ride with ${driverName} on Asiye!\n\n⭐ Rating: ${rating}\n🚐 Vehicle: ${vehicleInfo}\n\nDownload the app and use my invite code [${userId}] to request me directly:\n🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n🍏 iOS: ${IOS_STORE_LINK}\n\n`;
 
-    // Trigger the Native App Drawer via Flutter
     if (window.Android && window.Android.postMessage) {
         window.Android.postMessage(JSON.stringify({action: 'share', text: shareText}));
     } 
@@ -12286,56 +12318,91 @@ function initMiniTrackingMap(taxiId, userLat, userLng) {
     const timestamp = firebase.database.ServerValue.TIMESTAMP;
     const payType = (payMethod || 'cash').toLowerCase();
 
-    // ---------------------------------------------------------
-    // 1. COMMUTER AMBASSADOR ROYALTY & R5 FIRST TRIP BONUS
+  // ---------------------------------------------------------
+    // 1. BINARY MULTI-TIER COMMISSIONS (4% L1, 3% L2)
     // ---------------------------------------------------------
     if (passenger.commuterId) {
         database.ref(`commuters/${passenger.commuterId}`).once('value').then(async snap => {
             if (snap.exists()) {
                 const commuter = snap.val();
-                const totalTripsCompleted = (commuter.totalTrips || 0) + 1;
                 
                 if (commuter.referredBy) {
-                    const referrerPhone = commuter.referredBy;
-                    const ambSnap = await database.ref('commuters').orderByChild('phone').equalTo(referrerPhone).once('value');
-                    if (ambSnap.exists()) {
-                        let ambassadorId = null;
-                        ambSnap.forEach(child => { ambassadorId = child.key; });
+                    const l1Rate = 0.04; // 4% Level 1
+                    const l2Rate = 0.03; // 3% Level 2
+                    
+                    let l1Id = null;
+                    let l1Data = null;
 
-                        if (ambassadorId && ambassadorId !== passenger.commuterId) {
-                            const ambassadorRef = database.ref(`commuters/${ambassadorId}`);
-                            const passiveRoyalty = commission * 0.10; // 10% of Asiye's 12%
-                            let totalReward = passiveRoyalty;
-                            let rewardDesc = `Royalty (10% of fee) for ${commuter.name}'s ride`;
+                    // Resolve Level 1 ID by referralCode, phone, or UID
+                    const l1CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(commuter.referredBy).once('value');
+                    const l1PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(commuter.referredBy).once('value');
+                    
+                    if (l1CodeQuery.exists()) {
+                        l1CodeQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+                    } else if (l1PhoneQuery.exists()) {
+                        l1PhoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+                    } else {
+                        const uidSnap = await database.ref(`commuters/${commuter.referredBy}`).once('value');
+                        if (uidSnap.exists()) { l1Id = uidSnap.key; l1Data = uidSnap.val(); }
+                    }
 
-                            let isFirstTrip = false;
-                            if (!commuter.firstTripReferralProcessed) {
-                                totalReward += 5.00;
-                                rewardDesc = `R5 First Trip Bonus + Royalty for ${commuter.name}`;
-                                isFirstTrip = true;
-                                database.ref(`commuters/${passenger.commuterId}`).update({ firstTripReferralProcessed: true });
+                    if (l1Id && l1Id !== passenger.commuterId) {
+                        const l1Amount = finalFare * l1Rate;
+                        
+                        // Pay Level 1 (4%)
+                        await database.ref(`commuters/${l1Id}`).transaction(data => {
+                            if (data) {
+                                data.credits = (data.credits || 0) + l1Amount;
+                                data.referralEarnings = (data.referralEarnings || 0) + l1Amount;
+                                data.totalEarnings = (data.totalEarnings || 0) + l1Amount;
+                            }
+                            return data;
+                        });
+                        await database.ref(`commuters/${l1Id}/earnings`).push({
+                            id: 'royalty_l1_' + Date.now(),
+                            type: 'referral_reward',
+                            amount: l1Amount,
+                            description: `L1 Commission (4%) from ${commuter.name || 'Passenger'}`,
+                            timestamp: firebase.database.ServerValue.TIMESTAMP,
+                            status: 'completed'
+                        });
+
+                        // Resolve Level 2 ID
+                        if (l1Data && l1Data.referredBy) {
+                            let l2Id = null;
+                            const l2CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(l1Data.referredBy).once('value');
+                            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
+                            
+                            if (l2CodeQuery.exists()) {
+                                l2CodeQuery.forEach(child => { l2Id = child.key; });
+                            } else if (l2PhoneQuery.exists()) {
+                                l2PhoneQuery.forEach(child => { l2Id = child.key; });
+                            } else {
+                                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
+                                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
                             }
 
-                            ambassadorRef.transaction(ambData => {
-                                if (ambData) {
-                                    ambData.credits = (ambData.credits || 0) + totalReward;
-                                    ambData.referralEarnings = (ambData.referralEarnings || 0) + totalReward;
-                                    ambData.totalEarnings = (ambData.totalEarnings || 0) + totalReward;
-                                    if (isFirstTrip) ambData.referralCount = (ambData.referralCount || 0) + 1;
-                                }
-                                return ambData;
-                            }, (error, committed) => {
-                                if (committed) {
-                                    database.ref(`commuters/${ambassadorId}/earnings`).push({
-                                        id: 'royalty_' + Date.now(),
-                                        type: 'referral_reward',
-                                        amount: totalReward,
-                                        description: rewardDesc,
-                                        timestamp: firebase.database.ServerValue.TIMESTAMP,
-                                        status: 'completed'
-                                    });
-                                }
-                            });
+                            if (l2Id && l2Id !== l1Id && l2Id !== passenger.commuterId) {
+                                const l2Amount = finalFare * l2Rate;
+                                
+                                // Pay Level 2 (3%)
+                                await database.ref(`commuters/${l2Id}`).transaction(data => {
+                                    if (data) {
+                                        data.credits = (data.credits || 0) + l2Amount;
+                                        data.referralEarnings = (data.referralEarnings || 0) + l2Amount;
+                                        data.totalEarnings = (data.totalEarnings || 0) + l2Amount;
+                                    }
+                                    return data;
+                                });
+                                await database.ref(`commuters/${l2Id}/earnings`).push({
+                                    id: 'royalty_l2_' + Date.now(),
+                                    type: 'referral_reward',
+                                    amount: l2Amount,
+                                    description: `L2 Commission (3%) from network ride`,
+                                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                                    status: 'completed'
+                                });
+                            }
                         }
                     }
                 }
@@ -20894,10 +20961,11 @@ window.joinAndShareDriverAffiliate = async function() {
         const iosStore = "https://apps.apple.com/us/app/asiye/id6765691149";
 
         // Step 4: Construct the Referral Message
+        // Step 4: Construct the Referral Message
         const shareText = `Hi! I'm making money driving with Asiye.\n\n` +
-                          `Join me and let's earn together. Download the Asiye Driver app and use my ID [${userId}] when you register so we are connected:\n\n` +
-                          `🤖 Android: ${androidStore}\n\n` +
-                          `🍏 iOS: ${iosStore}`;
+                          `Join me and let's earn together. Download the Asiye Driver app and use my invite code [${userId}] when you register so we are connected:\n\n` +
+                          `🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n\n` +
+                          `🍏 iOS: ${IOS_STORE_LINK}`;
 
         // Step 5: Execute Share
         if (navigator.share) {
@@ -21213,6 +21281,106 @@ window.isRequestAllowed = function(req) {
         return false;
     }
     return true;
+};
+
+// === BINARY NETWORK PROCESSOR (LEVEL 1 & LEVEL 2) ===
+// === BINARY NETWORK PROCESSOR (LEVEL 1 & LEVEL 2) ===
+window.processPendingReferralCounters = async function(newUserId, referrerCode) {
+    if (!referrerCode || newUserId === referrerCode) return;
+
+    // Determine which database node to update (commuters or taxis)
+    const dbNode = window.dbNode || 'commuters';
+    const userRef = database.ref(`${dbNode}/${newUserId}`);
+    
+    const snap = await userRef.once('value');
+    const userData = snap.val() || {};
+
+    // Don't process twice
+    if (userData.binaryCountsProcessed) return;
+
+    // 1. Mark as processed for the new user
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: referrerCode 
+    });
+    
+    if (window.commuterData) {
+        window.commuterData.referredBy = referrerCode;
+        window.commuterData.binaryCountsProcessed = true;
+    } else if (window.taxiData) {
+        window.taxiData.referredBy = referrerCode;
+        window.taxiData.binaryCountsProcessed = true;
+    }
+
+    // 2. --- FIND LEVEL 1 AMBASSADOR ---
+    let l1Id = null;
+    let l1Data = null;
+    
+    // Look up referrer by Code, Phone, or UID
+    const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
+    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
+    
+    if (codeQuery.exists()) {
+        codeQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else if (phoneQuery.exists()) {
+        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else {
+        const uidQuery = await database.ref(`commuters/${referrerCode}`).once('value');
+        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
+    }
+
+    // 3. --- UPDATE LEVEL 1 ---
+    if (l1Id) {
+        await database.ref(`commuters/${l1Id}`).transaction(data => {
+            if (data) {
+                data.level1_invites = (data.level1_invites || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1;
+            }
+            return data;
+        });
+
+        // Pay R50 Bonus for successful signup
+        await database.ref(`commuters/${l1Id}`).transaction(data => {
+            if (data) {
+                data.credits = (data.credits || 0) + 50.00;
+                data.referralEarnings = (data.referralEarnings || 0) + 50.00;
+                data.totalEarnings = (data.totalEarnings || 0) + 50.00;
+            }
+            return data;
+        });
+        
+        await database.ref(`commuters/${l1Id}/earnings`).push({
+            id: 'ref_l1_' + Date.now(),
+            type: 'referral_reward',
+            amount: 50.00,
+            description: `L1 Direct Invite Bonus (${userData.name || 'User'})`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            status: 'completed'
+        });
+
+        // 4. --- UPDATE LEVEL 2 (Invite of an Invite) ---
+        if (l1Data && l1Data.referredBy) {
+            let l2Id = null;
+            const l2CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(l1Data.referredBy).once('value');
+            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
+            
+            if (l2CodeQuery.exists()) {
+                l2CodeQuery.forEach(child => { l2Id = child.key; });
+            } else if (l2PhoneQuery.exists()) {
+                l2PhoneQuery.forEach(child => { l2Id = child.key; });
+            } else {
+                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
+                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
+            }
+
+            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
+                await database.ref(`commuters/${l2Id}`).transaction(data => {
+                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
+                    return data;
+                });
+            }
+        }
+    }
 };
 </script>
 

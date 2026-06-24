@@ -9982,8 +9982,6 @@ if (!firebase.apps.length) {
           const auth = firebase.auth();
           const storage = firebase.storage();
           mapboxgl.accessToken = 'pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw';
-          // Global variables
-          // Global variables
           var map, geocoder, pickupGeocoder, parcelGeocoder, userId, commuterData, userMarker;
 
           var selectedAdAddress = { text: '', coordinates: null };
@@ -10010,10 +10008,8 @@ var requestStatusListener = null;
       var currentAdIdForShare = null; // Also fixes Issue #4
 
 
-          // ==========================================
-  // CRITICAL: DEFINE FUNCTIONS BEFORE THEY'RE USED
-  // ==========================================
-
+      const ANDROID_STORE_LINK = "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share";
+const IOS_STORE_LINK = "https://apps.apple.com/za/app/asiye/id6765691149";
   // Global flag to prevent multiple simultaneous watches
   window.isWatchingAd = false;
 
@@ -10167,6 +10163,7 @@ function initializeSession() {
 // =================================================================
 // 2. FIXED: APP INITIALIZATION (Corrected Function Name)
 // =================================================================
+
 function initializeApp(uid) {
     userId = uid;
     setupNotificationListeners();
@@ -10187,6 +10184,13 @@ function initializeApp(uid) {
                 updateSideMenuData();
             }
           
+            // --- PROCESS BINARY REFERRAL COUNTS ---
+            const pendingRef = localStorage.getItem('pendingReferral');
+            if (pendingRef && !commuterData.binaryCountsProcessed) {
+                window.processPendingReferralCounters(userId, pendingRef);
+                localStorage.removeItem('pendingReferral');
+            }
+
             // --- UNIFIED ONBOARDING GATEWAY ---
             if (!commuterData.onboardingComplete) {
                 console.log("🛡️ Onboarding incomplete. Activating multi-step setup...");
@@ -10202,7 +10206,6 @@ function initializeApp(uid) {
                 // Already onboarded: Load standard map features and trip check
                 initializeUserEarnings();
                 
-                // FIX: Corrected function name here 👇
                 if (typeof processNewUserReferral === 'function') {
                     processNewUserReferral();
                 }
@@ -10236,7 +10239,103 @@ function initializeApp(uid) {
         handleUserNotFound();
     });
 }
+window.processPendingReferralCounters = async function(newUserId, referrerCode) {
+    if (!referrerCode || newUserId === referrerCode) return;
 
+    // Determine which database node to update (commuters or taxis)
+    const dbNode = window.dbNode || 'commuters';
+    const userRef = database.ref(`${dbNode}/${newUserId}`);
+    
+    const snap = await userRef.once('value');
+    const userData = snap.val() || {};
+
+    // Don't process twice
+    if (userData.binaryCountsProcessed) return;
+
+    // 1. Mark as processed for the new user
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: referrerCode 
+    });
+    
+    if (window.commuterData) {
+        window.commuterData.referredBy = referrerCode;
+        window.commuterData.binaryCountsProcessed = true;
+    } else if (window.taxiData) {
+        window.taxiData.referredBy = referrerCode;
+        window.taxiData.binaryCountsProcessed = true;
+    }
+
+    // 2. --- FIND LEVEL 1 AMBASSADOR ---
+    let l1Id = null;
+    let l1Data = null;
+    
+    // Look up referrer by Code, Phone, or UID
+    const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
+    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
+    
+    if (codeQuery.exists()) {
+        codeQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else if (phoneQuery.exists()) {
+        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else {
+        const uidQuery = await database.ref(`commuters/${referrerCode}`).once('value');
+        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
+    }
+
+    // 3. --- UPDATE LEVEL 1 ---
+    if (l1Id) {
+        await database.ref(`commuters/${l1Id}`).transaction(data => {
+            if (data) {
+                data.level1_invites = (data.level1_invites || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1;
+            }
+            return data;
+        });
+
+        // Pay R50 Bonus for successful signup
+        await database.ref(`commuters/${l1Id}`).transaction(data => {
+            if (data) {
+                data.credits = (data.credits || 0) + 50.00;
+                data.referralEarnings = (data.referralEarnings || 0) + 50.00;
+                data.totalEarnings = (data.totalEarnings || 0) + 50.00;
+            }
+            return data;
+        });
+        
+        await database.ref(`commuters/${l1Id}/earnings`).push({
+            id: 'ref_l1_' + Date.now(),
+            type: 'referral_reward',
+            amount: 50.00,
+            description: `L1 Direct Invite Bonus (${userData.name || 'User'})`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            status: 'completed'
+        });
+
+        // 4. --- UPDATE LEVEL 2 (Invite of an Invite) ---
+        if (l1Data && l1Data.referredBy) {
+            let l2Id = null;
+            const l2CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(l1Data.referredBy).once('value');
+            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
+            
+            if (l2CodeQuery.exists()) {
+                l2CodeQuery.forEach(child => { l2Id = child.key; });
+            } else if (l2PhoneQuery.exists()) {
+                l2PhoneQuery.forEach(child => { l2Id = child.key; });
+            } else {
+                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
+                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
+            }
+
+            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
+                await database.ref(`commuters/${l2Id}`).transaction(data => {
+                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
+                    return data;
+                });
+            }
+        }
+    }
+};         
 window.saveEnforcedPhoneNumber = function(e) {
      if(e) {
          e.preventDefault();
@@ -15609,36 +15708,47 @@ window.removeFamilyMember = async function(memberId) {
 // =======================================================
 
 // 1. Show the Share Link Popup
+
+
 window.showAffiliateJoinPopup = function() {
     closeSideMenu();
-    const appLink = "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share";
-    const fullLink = `${appLink}&referrer=${userId}`;
-    
     const linkInput = document.getElementById('directReferralLinkInput');
-    if (linkInput) {
-        linkInput.value = fullLink;
-    }
-    
+    if (linkInput) linkInput.value = userId; // Show Code instead of URL
     openModal('accountVerificationPopup');
 };
 
-// 2. Copy Link Button Logic
-window.copyDirectReferralLink = function() {
-    const linkInput = document.getElementById('directReferralLinkInput');
-    if (linkInput) {
-        if (navigator.clipboard) {
-            navigator.clipboard.writeText(linkInput.value).then(() => {
-                showGenericMessage("Copied!", "Your link is copied. Paste it to your friends and earn R50 when they sign up!", "fa-copy", "icon-success");
-            });
-        } else {
-            linkInput.select();
-            document.execCommand('copy');
-            showGenericMessage("Copied!", "Your link is copied. Paste it to your friends and earn R50 when they sign up!", "fa-copy", "icon-success");
-        }
-    }
-};
 
-// 3. Update the General Referral Share function
+const BASE_SHARE_URL = "https://asiye.cloud/share.html?ref=";
+
+        window.shareOnWhatsApp = function() {
+            const referralLink = BASE_SHARE_URL + userId;
+            const message = `Hey! I'm making money using the Asiye App. 🚗\n\nCatch safe taxis, send parcels, and get paid just for sharing the app.\n\nJoin me here and let's earn together: ${referralLink}`;
+            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
+        }
+
+        window.shareOnFacebook = function() {
+            const referralLink = BASE_SHARE_URL + userId;
+            const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`;
+            window.open(facebookUrl, '_blank', 'width=600,height=400');
+        }
+
+        window.shareOnX = function() {
+            const referralLink = BASE_SHARE_URL + userId;
+            const text = `I'm earning cash daily just by sharing the Asiye App! Catch rides, send parcels, and get paid. 🚗💸\n\nJoin my network here:`;
+            const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(referralLink)}`;
+            window.open(url, '_blank');
+        }
+
+        window.copyDirectReferralLink = function() {
+            const referralLink = BASE_SHARE_URL + userId;
+            const shareText = `Join me on Asiye! 🚗\nTap here to download and get a bonus: ${referralLink}\n(My Invite Code: ${userId})`;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(shareText).then(() => {
+                    showGenericMessage("Copied!", "Your invite link is copied. Send it to your friends to earn R50!", "fa-copy", "icon-success");
+                });
+            }
+        };
 window.shareReferralLink = function() {
     if (!userId) {
         showGenericMessage("Login Required", "Please login.", "fa-lock", "icon-warning");
@@ -15646,8 +15756,7 @@ window.shareReferralLink = function() {
     }
     closeSideMenu();
     const referralLinkInput = document.getElementById('referralLinkInput');
-    const appLink = "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share";
-    if(referralLinkInput) referralLinkInput.value = `${appLink}&referrer=${userId}`;
+    if(referralLinkInput) referralLinkInput.value = userId; 
     openModal('promoteAndEarnPopup');
 
     setTimeout(() => {
@@ -15655,11 +15764,10 @@ window.shareReferralLink = function() {
         const descEl = document.querySelector('.promo-desc');
         if (titleEl && descEl) {
             titleEl.innerHTML = 'Invite & Earn R50';
-            descEl.innerHTML = 'Share Asiye with friends! You earn R50 when they join using your link.';
+            descEl.innerHTML = 'Share Asiye with friends! You earn R50 when they join using your invite code.';
         }
     }, 100);
 };
-
 // 4. Update Backend Function to pay R50 instead of R0.50
 window.rewardReferrer = function(referrerId) {
     if (!referrerId) return;
@@ -17069,42 +17177,10 @@ window.confirmAccountDeletion = async function() {
           window.open(whatsappUrl, '_blank');
       }
 
-      function shareOnFacebook() {
-          const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(APP_SHARE_LINK)}`;
-          window.open(facebookUrl, '_blank', 'width=600,height=400');
-      }
-
-     function shareOnX() {
-          const referralLink = document.getElementById('referralLinkInput').value;
-          const text = "I'm earning cash daily just by sharing the Asiye App! Catch rides, send parcels, and get paid. ???? Join my network here:";
-          const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(referralLink)}`;
-          window.open(url, '_blank');
-      }
+   
 
 
-      function shareOnEmail() {
-          const referralLink = document.getElementById('referralLinkInput').value;
-          const subject = "Invitation: Earn money with the Asiye App";
-          const body = `Hi,\n\nI've started using Asiye to catch taxis and send parcels safely. They have a great Promoter program where you get paid cash for sharing the app and watching ads.\n\nSign up using my link here so we can both earn:\n${referralLink}\n\nSee you there!`;
-          window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-      }
 
-        function shareOnWhatsApp() {
-          const referralLink = document.getElementById('referralLinkInput').value;
-          const message = `Hey! I'm making money using the Asiye App. ??\n\nYou can catch safe taxis, send parcels, and get paid just for sharing it with others.\n\nJoin me here and let's earn together: ${referralLink}`;
-          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-          window.open(whatsappUrl, '_blank');
-      }
-
-          /**
-           * Creates and opens a Facebook share link.
-           */
-         function shareOnFacebook() {
-          const referralLink = document.getElementById('referralLinkInput').value;
-          // Facebook strips pre-filled text, so we rely on the link preview, but we format the URL properly
-          const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}&quote=${encodeURIComponent("I'm earning money sharing the Asiye App! Download it here.")}`;
-          window.open(facebookUrl, '_blank', 'width=600,height=400');
-      }
 
           /**
            * Placeholder function for Facebook SDK integration.
@@ -26893,6 +26969,7 @@ function closeAllPopups() { window.closeAllPopups(); }
 // =================================================================
 // DYNAMIC PROMO REDEMPTION AND VALIDATION
 // =================================================================
+
 window.togglePromoCodeInput = function() {
     const section = document.getElementById('promoCodeInputSection');
     if (section) {
@@ -26903,7 +26980,121 @@ window.togglePromoCodeInput = function() {
     }
 };
 
-window.applyManualPromoCode = function() {
+// ADDED "async" HERE
+window.applyManualPromoCode = async function() {
+    const input = document.getElementById('manualPromoCodeField');
+    const rawCode = input.value.trim();
+    const code = rawCode.replace(/\s+/g, '').toUpperCase(); // Force uppercase
+
+    if (!code) {
+        showGenericMessage("Warning", "Please enter a promo code or voucher.", "fa-exclamation-triangle", "icon-warning");
+        return;
+    }
+
+    const btn = document.querySelector('#promoCodeInputSection button');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+
+    // --- CASE A: REDEEMING AN AMBASSADOR CODE (Binary Network) ---
+    if (code.startsWith('AMB-') || code.length > 20 || /^\+?\d{10,}$/.test(code)) {
+        
+        // Find the referrer by code, UID, or phone
+        const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(code).once('value');
+        const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(code).once('value');
+        const uidQuery = await database.ref(`commuters/${code}`).once('value');
+        
+        let ambId = null;
+        if (codeQuery.exists()) {
+            codeQuery.forEach(c => { ambId = c.key; });
+        } else if (phoneQuery.exists()) {
+            phoneQuery.forEach(c => { ambId = c.key; });
+        } else if (uidQuery.exists()) {
+            ambId = uidQuery.key;
+        }
+        
+        if (ambId) {
+            if (ambId === userId) {
+                showGenericMessage("Failed", "You cannot use your own referral code.", "fa-exclamation-triangle", "icon-warning");
+                if(btn){ btn.disabled = false; btn.innerHTML = 'Apply'; }
+                return;
+            }
+            if (commuterData && commuterData.referredBy) {
+                showGenericMessage("Failed", "You have already applied a referral code to your account.", "fa-exclamation-triangle", "icon-warning");
+                if(btn){ btn.disabled = false; btn.innerHTML = 'Apply'; }
+                return;
+            }
+            
+            // Give passenger R25 promo for signing up
+            await database.ref(`commuters/${userId}`).update({
+                promoRemaining: 1,
+                promoValue: 25,
+                credits: (commuterData.credits || 0) + 25,
+                referredBy: code
+            });
+            
+            // Trigger the binary count for the ambassador
+            if (typeof window.processPendingReferralCounters === 'function') {
+                window.processPendingReferralCounters(userId, code);
+            }
+            
+            showGenericMessage("Success", "Referral Code Applied! R25 ride discount unlocked.", "fa-check-circle", "icon-success");
+            document.getElementById('promoCodeInputSection').style.display = 'none';
+            if (typeof updatePromoWalletDisplay === 'function') updatePromoWalletDisplay();
+            if (typeof updateSideMenuData === 'function') updateSideMenuData();
+        } else {
+            showGenericMessage("Failed", "Invalid Referral Code.", "fa-times-circle", "icon-danger");
+        }
+        if(btn){ btn.disabled = false; btn.innerHTML = 'Apply'; }
+        return;
+    }
+
+    // --- CASE B: REDEEMING A STUDENT VOUCHER ---
+    if (code.startsWith('AS') && code.length === 8) {
+        // Find voucher in database
+        const voucherRef = database.ref(`vouchers/${code}`);
+        const snap = await voucherRef.once('value');
+        
+        if (snap.exists()) {
+            const v = snap.val();
+            
+            if (v.status === 'used') {
+                showGenericMessage("Validation Failed", "This voucher has already been used.", "fa-times-circle", "icon-danger");
+            } else if (Date.now() > v.expiresAt) {
+                showGenericMessage("Validation Failed", "This voucher has expired.", "fa-times-circle", "icon-danger");
+            } else {
+                // Apply voucher
+                await voucherRef.update({
+                    status: 'used',
+                    redeemedBy: userId,
+                    redeemedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+                
+                const promoValue = v.value || 25.00;
+                await database.ref(`commuters/${userId}`).update({
+                    promoRemaining: 1,
+                    promoValue: promoValue,
+                    credits: (commuterData.credits || 0) + promoValue,
+                    referredBy: v.ambassadorPhone
+                });
+                
+                showGenericMessage("Success", `Promo Applied! R${promoValue} ride discount unlocked.`, "fa-check-circle", "icon-success");
+                document.getElementById('promoCodeInputSection').style.display = 'none';
+            }
+        } else {
+            showGenericMessage("Failed", "Invalid voucher code.", "fa-times-circle", "icon-danger");
+        }
+        if(btn){ btn.disabled = false; btn.innerHTML = 'Apply'; }
+        return;
+    }
+
+    // Default error
+    showGenericMessage("Failed", "Invalid code format.", "fa-times-circle", "icon-danger");
+    if(btn){ btn.disabled = false; btn.innerHTML = 'Apply'; }
+};
+
+window.applyManualPromoCode = async function() {
     const input = document.getElementById('manualPromoCodeField');
     const rawCode = input.value.trim();
     const code = rawCode.replace(/\s+/g, '').toUpperCase(); // Force uppercase
@@ -26914,6 +27105,45 @@ window.applyManualPromoCode = function() {
     }
 
     const btn = document.querySelector('#promoCodeInputSection button');
+// --- CASE A: REDEEMING AN AMBASSADOR CODE (Binary Network) ---
+  if (code.startsWith('AMB-')) {
+        const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(code).once('value');
+        if (codeQuery.exists()) {
+            let ambId, ambData;
+            codeQuery.forEach(c => { ambId = c.key; ambData = c.val(); });
+            
+            if (ambId === userId) {
+                showGenericMessage("Failed", "You cannot use your own referral code.", "fa-exclamation-triangle", "icon-warning");
+                btn.disabled = false; btn.innerHTML = 'Apply'; return;
+            }
+            if (commuterData.referredBy) {
+                showGenericMessage("Failed", "You have already applied a referral code to your account.", "fa-exclamation-triangle", "icon-warning");
+                btn.disabled = false; btn.innerHTML = 'Apply'; return;
+            }
+            
+            // Give passenger R25 promo for signing up
+            await database.ref(`commuters/${userId}`).update({
+                promoRemaining: 1,
+                promoValue: 25,
+                credits: (commuterData.credits || 0) + 25,
+                referredBy: code
+            });
+            
+            // Trigger the binary count for the ambassador
+            if (typeof window.processPendingReferralCounters === 'function') {
+                window.processPendingReferralCounters(userId, code);
+            }
+            
+            showToast("Ambassador Code Applied! R25 ride discount unlocked.", "success");
+            document.getElementById('promoCodeInputSection').style.display = 'none';
+            if (typeof updatePromoWalletDisplay === 'function') updatePromoWalletDisplay();
+            if (typeof updateSideMenuData === 'function') updateSideMenuData();
+        } else {
+            showGenericMessage("Failed", "Invalid Ambassador Code.", "fa-times-circle", "icon-danger");
+        }
+        btn.disabled = false; btn.innerHTML = 'Apply';
+        return;
+    }
     const origText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
@@ -27130,6 +27360,9 @@ window.applyManualPromoCode = function() {
                 if (typeof rewardReferrer === 'function') {
                     rewardReferrer(ambassadorId);
                 }
+if (typeof window.processPendingReferralCounters === 'function') {
+                window.processPendingReferralCounters(userId, ambassadorData.phone);
+            }
 
                 showToast(`Promo Applied! R${promoValue} ride discount unlocked.`, "success");
                 document.getElementById('promoCodeInputSection').style.display = 'none';
@@ -27831,18 +28064,50 @@ function serviceUseExplanation(type) {
     return "Others";
 }
 
+
+window.showOnboardingSharePopup = function(goal, count) {
+    const popup = document.getElementById('genericMessagePopup');
+    popup.innerHTML = `
+        <div class="modal-content" style="text-align: center; padding: 30px 25px !important; background: #1e1e1e !important; color: white !important; border-radius: 24px !important; border: 1px solid #333 !important; max-width: 400px; margin: 0 auto; box-shadow: 0 20px 50px rgba(0,0,0,0.6) !important;">
+            <div style="width: 80px; height: 80px; background: rgba(40, 167, 69, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                <i class="fas fa-gift" style="font-size: 3rem; color: #28a745;"></i>
+            </div>
+            <h3 style="color: white !important; font-weight: 900; font-size: 1.4rem; margin-bottom: 10px;">Claim Your R${goal} Reward!</h3>
+            <p style="color: #ccc !important; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.55;">
+                You have selected the <strong style="color: #28a745;">R${goal} Cash Payout</strong> goal. Invite exactly <strong>${count} friends</strong> using your code to unlock your reward!
+            </p>
+            <div style="background: #121212; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; border: 1px solid #333;">
+                <span style="font-size: 0.75rem; color: #888; font-weight: bold; text-transform: uppercase;">Your Invite Code</span>
+                <input type="text" id="onboardRefLink" value="${userId}" readonly style="width: 100%; padding: 10px; margin-top: 8px; border-radius: 8px; border: 1px solid #444; background: #2c2c2c; color: white; text-align: center; font-size: 1.2rem; font-weight: bold;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+                <button class="btn btn-primary" onclick="copyOnboardRefLink()" style="width: 100%; font-weight: 800; background: #007BFF !important; border: none; padding: 15px; border-radius: 12px; color: white !important;">
+                    <i class="fas fa-copy"></i> Copy Invite Message
+                </button>
+                <button class="btn btn-success" onclick="shareOnboardWhatsApp(${goal}, ${count})" style="width: 100%; font-weight: 800; background: #25D366 !important; border: none; padding: 15px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; color: white !important;">
+                    <i class="fab fa-whatsapp"></i> Invite on WhatsApp
+                </button>
+                <button class="btn btn-light" onclick="closeModal('genericMessagePopup'); showModernDashboard();" style="width: 100%; background: transparent !important; color: #888 !important; border: none;">
+                    Skip & Go Home
+                </button>
+            </div>
+        </div>
+    `;
+    openModal('genericMessagePopup');
+};
+
 window.copyOnboardRefLink = function() {
-    const linkInput = document.getElementById('onboardRefLink');
-    if (linkInput) {
-        linkInput.select();
-        document.execCommand('copy');
-        showToast("Link copied to clipboard!", "success");
+    const shareText = `🚀 Asiye is giving cash rewards for sharing the app!\nDownload Asiye and use my invite code: ${userId}\n\n🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n🍏 iOS: ${IOS_STORE_LINK}`;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareText).then(() => {
+            showToast("Invite message copied!", "success");
+        });
     }
 };
 
-window.shareOnboardWhatsApp = function(link, goal, count) {
-    const message = `🚀 Asiye is giving R${goal} for sharing the app! Please download the Asiye App using my invite link. Every successful download helps unlock the reward. 🚗🎉\n\nLink: ${link}`;
-    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`, '_blank');
+window.shareOnboardWhatsApp = function(goal, count) {
+    const shareText = `🚀 Asiye is giving R${goal} for sharing the app! Please download the Asiye App and use my invite code: ${userId}\nEvery successful download helps unlock the reward. 🚗🎉\n\n🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n🍏 iOS: ${IOS_STORE_LINK}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
 };
 
 window.nextOnboardStep = function(stepNum) {
@@ -27964,42 +28229,6 @@ window.saveUnifiedOnboardingData = function() {
         console.error("Error in saveUnifiedOnboardingData:", err);
         showToast("Setup failed. Please check all fields.", "danger");
     }
-};
-window.showOnboardingSharePopup = function(goal, count) {
-    const sharePageUrl = "https://asiye.cloud/share.html";
-    const fullLink = `${sharePageUrl}?ref=${userId}&goal=${goal}&count=${count}`;
-    
-    const popup = document.getElementById('genericMessagePopup');
-    popup.innerHTML = `
-        <div class="modal-content" style="text-align: center; padding: 30px 25px !important; background: #1e1e1e !important; color: white !important; border-radius: 24px !important; border: 1px solid #333 !important; max-width: 400px; margin: 0 auto; box-shadow: 0 20px 50px rgba(0,0,0,0.6) !important;">
-            <div style="width: 80px; height: 80px; background: rgba(40, 167, 69, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-                <i class="fas fa-gift" style="font-size: 3rem; color: #28a745;"></i>
-            </div>
-
-            <h3 style="color: white !important; font-weight: 900; font-size: 1.4rem; margin-bottom: 10px;">Claim Your R${goal} Reward!</h3>
-            <p style="color: #ccc !important; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.55;">
-                You have selected the <strong style="color: #28a745;">R${goal} Cash Payout</strong> goal. Invite exactly <strong>${count} friends</strong> using your personal link below to unlock your reward!
-            </p>
-
-            <div style="background: #121212; padding: 15px; border-radius: 12px; margin-bottom: 20px; text-align: left; border: 1px solid #333;">
-                <span style="font-size: 0.75rem; color: #888; font-weight: bold; text-transform: uppercase;">Your Personal Invite Link</span>
-                <input type="text" id="onboardRefLink" value="${fullLink}" readonly style="width: 100%; padding: 10px; margin-top: 8px; border-radius: 8px; border: 1px solid #444; background: #2c2c2c; color: white; text-align: center; font-size: 0.85rem; font-weight: bold;">
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button class="btn btn-primary" onclick="copyOnboardRefLink()" style="width: 100%; font-weight: 800; background: #007BFF !important; border: none; padding: 15px; border-radius: 12px; color: white !important;">
-                    <i class="fas fa-copy"></i> Copy Link
-                </button>
-                <button class="btn btn-success" onclick="shareOnboardWhatsApp('${fullLink}', ${goal}, ${count})" style="width: 100%; font-weight: 800; background: #25D366 !important; border: none; padding: 15px; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; color: white !important;">
-                    <i class="fab fa-whatsapp"></i> Invite on WhatsApp
-                </button>
-                <button class="btn btn-light" onclick="closeModal('genericMessagePopup'); showModernDashboard();" style="width: 100%; background: transparent !important; color: #888 !important; border: none;">
-                    Skip & Go Home
-                </button>
-            </div>
-        </div>
-    `;
-    openModal('genericMessagePopup');
 };
 
 
@@ -28603,6 +28832,227 @@ window.closeRatingAndGoHome = function() {
 };
 
 // ==================== END RATING SYSTEM ====================
+window.processPendingReferralCounters = async function(newUserId, referrerId) {
+    if (!referrerId || newUserId === referrerId) return;
+
+    const userRef = database.ref(`commuters/${newUserId}`);
+    const snap = await userRef.once('value');
+    const userData = snap.val() || {};
+
+    if (userData.binaryCountsProcessed) return;
+
+    // Mark processed on the new user
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: referrerId 
+    });
+    if (window.commuterData) {
+        window.commuterData.referredBy = referrerId;
+        window.commuterData.binaryCountsProcessed = true;
+    }
+
+    // --- LEVEL 1 PROCESSING ---
+    let l1Id = null;
+    let l1Data = null;
+    
+    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerId).once('value');
+    if (phoneQuery.exists()) {
+        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else {
+        const uidQuery = await database.ref(`commuters/${referrerId}`).once('value');
+        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
+    }
+
+    if (l1Id) {
+        // Increment Level 1 Invites & Pay R50 bonus
+        await database.ref(`commuters/${l1Id}`).transaction(data => {
+            if (data) {
+                data.level1_invites = (data.level1_invites || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1; // Legacy support
+                data.credits = (data.credits || 0) + 50.00;
+                data.referralEarnings = (data.referralEarnings || 0) + 50.00;
+                data.totalEarnings = (data.totalEarnings || 0) + 50.00;
+            }
+            return data;
+        });
+        
+        await database.ref(`commuters/${l1Id}/earnings`).push({
+            id: 'ref_' + Date.now(),
+            type: 'referral_reward',
+            amount: 50.00,
+            description: 'Level 1 Direct Invite Bonus',
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            status: 'completed'
+        });
+
+        // --- LEVEL 2 PROCESSING (Invite of an Invite) ---
+        if (l1Data && l1Data.referredBy) {
+            let l2Id = null;
+            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
+            if (l2PhoneQuery.exists()) {
+                l2PhoneQuery.forEach(child => { l2Id = child.key; });
+            } else {
+                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
+                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
+            }
+
+            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
+                await database.ref(`commuters/${l2Id}`).transaction(data => {
+                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
+                    return data;
+                });
+            }
+        }
+    }
+};
+
+window.processPendingReferralCounters = async function(newUserId, referrerPhoneOrId) {
+    if (!referrerPhoneOrId || newUserId === referrerPhoneOrId) return;
+
+    const userRef = database.ref(`commuters/${newUserId}`);
+    const snap = await userRef.once('value');
+    const userData = snap.val() || {};
+
+    if (userData.binaryCountsProcessed) return;
+
+    // Mark processed on the new user
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: referrerPhoneOrId 
+    });
+    if (window.commuterData) {
+        window.commuterData.referredBy = referrerPhoneOrId;
+        window.commuterData.binaryCountsProcessed = true;
+    }
+
+    // --- LEVEL 1 PROCESSING ---
+    let l1Id = null;
+    let l1Data = null;
+    
+    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerPhoneOrId).once('value');
+    if (phoneQuery.exists()) {
+        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else {
+        const uidQuery = await database.ref(`commuters/${referrerPhoneOrId}`).once('value');
+        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
+    }
+
+    if (l1Id) {
+        // Increment Level 1 Invites
+        await database.ref(`commuters/${l1Id}`).transaction(data => {
+            if (data) {
+                data.level1_invites = (data.level1_invites || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1; // Legacy support
+            }
+            return data;
+        });
+
+        // --- LEVEL 2 PROCESSING (Invite of an Invite) ---
+        if (l1Data && l1Data.referredBy) {
+            let l2Id = null;
+            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
+            if (l2PhoneQuery.exists()) {
+                l2PhoneQuery.forEach(child => { l2Id = child.key; });
+            } else {
+                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
+                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
+            }
+
+            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
+                await database.ref(`commuters/${l2Id}`).transaction(data => {
+                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
+                    return data;
+                });
+            }
+        }
+    }
+};
+
+window.processPendingReferralCounters = async function(newUserId, referrerCode) {
+    if (!referrerCode || newUserId === referrerCode) return;
+
+    const userRef = database.ref(`commuters/${newUserId}`);
+    const snap = await userRef.once('value');
+    const userData = snap.val() || {};
+
+    if (userData.binaryCountsProcessed) return;
+
+    // 1. Mark as processed for the new user
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: referrerCode 
+    });
+    if (window.commuterData) {
+        window.commuterData.referredBy = referrerCode;
+        window.commuterData.binaryCountsProcessed = true;
+    }
+
+    // 2. --- LEVEL 1 PROCESSING ---
+    let l1Id = null;
+    let l1Data = null;
+    
+    // Look up the referrer by Ambassador Code, Phone, or UserID
+    const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
+    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
+    
+    if (codeQuery.exists()) {
+        codeQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else if (phoneQuery.exists()) {
+        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    } else {
+        const uidQuery = await database.ref(`commuters/${referrerCode}`).once('value');
+        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
+    }
+
+    if (l1Id) {
+        // Increment Level 1 Invites & Pay R50 bonus
+        await database.ref(`commuters/${l1Id}`).transaction(data => {
+            if (data) {
+                data.level1_invites = (data.level1_invites || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1;
+                data.credits = (data.credits || 0) + 50.00;
+                data.referralEarnings = (data.referralEarnings || 0) + 50.00;
+                data.totalEarnings = (data.totalEarnings || 0) + 50.00;
+            }
+            return data;
+        });
+        
+        await database.ref(`commuters/${l1Id}/earnings`).push({
+            id: 'ref_l1_' + Date.now(),
+            type: 'referral_reward',
+            amount: 50.00,
+            description: `Level 1 Invite: ${userData.name || 'New User'}`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            status: 'completed'
+        });
+
+        // 3. --- LEVEL 2 PROCESSING (Invite of an Invite) ---
+        if (l1Data && l1Data.referredBy) {
+            let l2Id = null;
+            const l2CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(l1Data.referredBy).once('value');
+            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
+            
+            if (l2CodeQuery.exists()) {
+                l2CodeQuery.forEach(child => { l2Id = child.key; });
+            } else if (l2PhoneQuery.exists()) {
+                l2PhoneQuery.forEach(child => { l2Id = child.key; });
+            } else {
+                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
+                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
+            }
+
+            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
+                // Increment Level 2 Invites (No immediate cash, just royalty eligibility)
+                await database.ref(`commuters/${l2Id}`).transaction(data => {
+                    if (data) {
+                        data.level2_invites = (data.level2_invites || 0) + 1;
+                    }
+                    return data;
+                });
+            }
+        }
+    }
+};
 </script>
 </body>
 </html>
