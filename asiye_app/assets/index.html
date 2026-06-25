@@ -9487,6 +9487,11 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
         
         <!-- Step 1: Profile Info -->
         <div id="onboardStep1" style="display: flex; flex-direction: column; width: 100%; height: 100%;">
+<div class="form-group" style="margin-bottom: 10px;">
+    <label style="color: #aaa; font-size: 0.75rem; font-weight: bold; text-transform: uppercase; display: block; margin-bottom: 5px;">Claim a Voucher (Optional)</label>
+    <input type="text" id="onboardReferralCode" class="form-control" placeholder="Enter Invite Code or Phone" style="background: #2c2c2c !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 12px; border-radius: 12px; font-weight: bold; text-align: center;">
+    <small style="color: #007BFF; display: block; margin-top: 5px;">Were you invited? Enter their number/code to get 20% off your ride!</small>
+</div>
             <div style="text-align: center; margin-bottom: 20px; flex-shrink: 0;">
                 <i class="fas fa-user-shield" style="color: #007BFF; font-size: 2.8rem; margin-bottom: 10px;"></i>
                 <h3 style="color: white !important; font-weight: 800; margin-bottom: 6px; font-size: 1.4rem;">Set Up Your Profile</h3>
@@ -10284,23 +10289,23 @@ window.processPendingReferralCounters = async function(newUserId, referrerCode) 
     }
 
     // 3. --- UPDATE LEVEL 1 ---
-    if (l1Id) {
+   if (l1Id) {
         await database.ref(`commuters/${l1Id}`).transaction(data => {
             if (data) {
                 data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1; 
+                // 🟢 Give 2x R25 ride vouchers
+                data.promoRemaining = (data.promoRemaining || 0) + 2;
+                data.promoValue = 25;
             }
             return data;
         });
-
-        // Pay R50 Bonus for successful signup
-        await database.ref(`commuters/${l1Id}`).transaction(data => {
-            if (data) {
-                data.credits = (data.credits || 0) + 50.00;
-                data.referralEarnings = (data.referralEarnings || 0) + 50.00;
-                data.totalEarnings = (data.totalEarnings || 0) + 50.00;
-            }
-            return data;
+        
+        await database.ref(`notifications/commuters/${l1Id}`).push({
+            type: 'referral_bonus',
+            title: 'New Referral!',
+            message: `A passenger registered using your link. You received 2x R25 ride vouchers!`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
         });
         
         await database.ref(`commuters/${l1Id}/earnings`).push({
@@ -15722,7 +15727,7 @@ const BASE_SHARE_URL = "https://asiye.cloud/share.html?ref=";
 
         window.shareOnWhatsApp = function() {
             const referralLink = BASE_SHARE_URL + userId;
-            const message = `Hey! I'm making money using the Asiye App. 🚗\n\nCatch safe taxis, send parcels, and get paid just for sharing the app.\n\nJoin me here and let's earn together: ${referralLink}`;
+            const message = `I'm earning free rides using the Asiye App. 🚗\n\nCatch safe taxis, send parcels, and get discounts just for sharing the app...: ${referralLink}`;
             const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
             window.open(whatsappUrl, '_blank');
         }
@@ -15740,15 +15745,22 @@ const BASE_SHARE_URL = "https://asiye.cloud/share.html?ref=";
             window.open(url, '_blank');
         }
 
-        window.copyDirectReferralLink = function() {
-            const referralLink = BASE_SHARE_URL + userId;
-            const shareText = `Join me on Asiye! 🚗\nTap here to download and get a bonus: ${referralLink}\n(My Invite Code: ${userId})`;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(shareText).then(() => {
-                    showGenericMessage("Copied!", "Your invite link is copied. Send it to your friends to earn R50!", "fa-copy", "icon-success");
-                });
-            }
-        };
+       window.copyDirectReferralLink = function() {
+    const referralLink = BASE_SHARE_URL + userId;
+    const shareText = `Join me on Asiye! 🚗\nTap here to download and get a bonus: ${referralLink}\n(My Invite Code: ${userId})`;
+    
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(shareText).then(() => {
+            // FIX: Added the missing comma before "fa-copy"
+            showGenericMessage(
+                "Copied!", 
+                "Your invite link is copied. Send it to your friends to earn R50 in ride vouchers!", 
+                "fa-copy", 
+                "icon-success"
+            );
+        });
+    }
+};
 window.shareReferralLink = function() {
     if (!userId) {
         showGenericMessage("Login Required", "Please login.", "fa-lock", "icon-warning");
@@ -15771,42 +15783,28 @@ window.shareReferralLink = function() {
 // 4. Update Backend Function to pay R50 instead of R0.50
 window.rewardReferrer = function(referrerId) {
     if (!referrerId) return;
-
-    const earnAmount = 50.00; // INCREASED TO R50
     const referrerRef = database.ref('commuters/' + referrerId);
 
     referrerRef.transaction(function(userData) {
         if (!userData) return userData;
-        if (!userData.credits) userData.credits = 0;
-        if (!userData.referralEarnings) userData.referralEarnings = 0;
         if (!userData.referralCount) userData.referralCount = 0;
-        if (!userData.totalEarnings) userData.totalEarnings = 0;
-
-        userData.credits += earnAmount;
-        userData.referralEarnings += earnAmount;
-        userData.totalEarnings += earnAmount;
+        
+        // 🟢 Gives 2 rides of R25 instead of R50 cash
+        userData.promoRemaining = (userData.promoRemaining || 0) + 2;
+        userData.promoValue = 25; 
         userData.referralCount += 1;
         return userData;
     }, function(error, committed, snapshot) {
         if (committed) {
-            database.ref(`commuters/${referrerId}/earnings`).push({
-                id: 'ref_' + Date.now(),
-                type: 'referral_reward',
-                amount: earnAmount,
-                description: 'Friend Signed Up',
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
-                status: 'completed'
-            });
             database.ref(`notifications/commuters/${referrerId}`).push({
                 type: 'referral_bonus',
                 title: 'New Referral!',
-                message: `A friend joined using your link. You earned R${earnAmount.toFixed(2)}!`,
+                message: `A friend joined using your link. You earned 2x R25 ride vouchers!`,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             });
         }
     });
 };
-
 // 5. Update Backend Function 2 to pay R50
 window.processReferralReward = function(referrerId) {
     if (!referrerId) return;
@@ -24119,8 +24117,9 @@ window.showAsiyeGoDriverFound = async function(taxi, priceStr) {
     var promoApplied = false;
     var remainingAfterUse = promoRemaining;
 
-    if (promoRemaining > 0) {
-        appliedPromoAmount = Math.min(promoValue, basePrice);
+   if (promoRemaining > 0) {
+        // 🟢 Apply 20% logic
+        appliedPromoAmount = window.commuterData?.promoPercentage ? Math.round(basePrice * (window.commuterData.promoPercentage / 100)) : Math.min(promoValue, basePrice);
         finalPrice = basePrice - appliedPromoAmount;
         promoApplied = true;
         remainingAfterUse = promoRemaining - 1;
@@ -24840,7 +24839,9 @@ window.selectPayment = function(method) {
 
     let finalPrice = fare;
     if (promoRemaining > 0) {
-        finalPrice = Math.max(0, fare - promoValue);
+        // 🟢 Apply 20% logic
+        let pDed = window.commuterData?.promoPercentage ? Math.round(fare * (window.commuterData.promoPercentage / 100)) : promoValue;
+        finalPrice = Math.max(0, fare - pDed);
     }
 
     if (method === 'cash') {
@@ -24957,52 +24958,93 @@ window.cancelCurrentRequest = async function() {
     );
 };
 
-// --- Helper: Cleanup trip data ---
-window.cleanupTripData = function() {
-    console.log("Cleaning up trip data & returning to dashboard...");
+// --- COMPLETE FUNCTION FOR REQUEST STATUS LISTENER ---
+window.listenForRequestStatus = function(reqId) {
+    if (!reqId) return;
     
-    // 1. Erase active request from user profile
-    if (window.currentRequestId && userId) {
-        database.ref('commuters/' + userId).update({ currentRequest: null });
-        localStorage.removeItem('currentRequestId');
-        window.currentRequestId = null;
-        if (window.commuterData) window.commuterData.currentRequest = null;
-    }
-    
-    // 2. Clear all active timers
-    if (window.waitingTimerInterval) clearInterval(window.waitingTimerInterval);
-    if (window.etaInterval) clearInterval(window.etaInterval);
-    if (window.taxiTrackingInterval) clearInterval(window.taxiTrackingInterval);
-    
-    // 3. Remove map markers
-    if (window.confirmedTaxiMarker) {
-        window.confirmedTaxiMarker.remove();
-        window.confirmedTaxiMarker = null;
-    }
-    if (window.activeTaxiMarker) {
-        window.activeTaxiMarker.remove();
-        window.activeTaxiMarker = null;
-    }
-    
-    // 4. Detach Firebase listeners
+    // Clean up old listener if one is already running
     if (window.currentRequestStatusListener && window.activeListenerReqId) {
         database.ref('requests/' + window.activeListenerReqId).off('value', window.currentRequestStatusListener);
-        window.currentRequestStatusListener = null;
-        window.activeListenerReqId = null;
     }
-    if (window.activeTripMonitor) {
-        // Find existing listener if dynamically created
-        database.ref('requests').off('value', window.activeTripMonitor);
-        window.activeTripMonitor = null;
-    }
+    
+    window.activeListenerReqId = reqId;
+    
+    window.currentRequestStatusListener = database.ref('requests/' + reqId).on('value', async (snapshot) => {
+        const reqData = snapshot.val();
+        if (!reqData) return;
 
-    // 5. Close tracking sheets and show dashboard
-    closeAllPopups();
-    if (typeof showModernDashboard === 'function') {
-        showModernDashboard();
-    }
+        const currentStatus = reqData.status;
+
+        // 🟢 CLEAR SEARCH TIMER IF STATUS CHANGED FROM PENDING/POOLING
+        // If a driver interacts with the request, stop the 7-second search loop
+        if (currentStatus !== 'pending' && currentStatus !== 'pooling') {
+            if (window.taxiSearchTimer) {
+                clearInterval(window.taxiSearchTimer);
+                window.taxiSearchTimer = null;
+            }
+        }
+
+        // 1. HANDLE COUNTER OFFER
+        if (currentStatus === 'counter_offered') {
+            closeModal('pendingRequestPopup'); 
+            const popup = document.getElementById('genericMessagePopup');
+            popup.innerHTML = `
+                <div class="modal-content" style="text-align: center; padding: 30px; background: white !important; border-radius: 24px;">
+                    <div style="width: 70px; height: 70px; background: #fff3cd; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                        <i class="fas fa-handshake" style="font-size: 2.5rem; color: #f8961e;"></i>
+                    </div>
+                    <h3 style="color:#111 !important; font-weight:800;">Price Negotiation</h3>
+                    <p style="color:#666 !important;"><b>${reqData.driverName}</b> offered a counter price:</p>
+                    <div style="font-size: 4rem; font-weight: 900; color: #28a745; margin: 15px 0; letter-spacing: -2px;">R${reqData.calculatedPrice}</div>
+                    <div style="display: flex; gap: 10px; width: 100%;">
+                        <button class="btn btn-light" style="flex: 1; border-radius:12px;" onclick="cancelPendingRequest()">Decline</button>
+                        <button class="btn btn-success" style="flex: 2; border-radius:12px; background:#007BFF !important; color:white; font-weight:900;" 
+                                onclick="window.acceptCounterOffer('${reqId}', ${reqData.calculatedPrice})">Accept & Book</button>
+                    </div>
+                </div>
+            `;
+            openModal('genericMessagePopup');
+        }
+
+        // 2. HANDLE ACCEPTANCE
+        else if (['accepted', 'driver_on_way', 'arrived', 'passenger_here', 'passenger_onboard', 'in_transit'].includes(currentStatus)) {
+            closeModal('pendingRequestPopup');
+            closeModal('genericMessagePopup'); 
+            if (typeof window.showDriverAcceptedPopup === 'function') {
+                window.showDriverAcceptedPopup(reqData.taxiId, { requestKey: reqId });
+            }
+        }
+
+        // 3. HANDLE COMPLETION
+        else if (currentStatus === 'completed') {
+            database.ref('requests/' + reqId).off('value', window.currentRequestStatusListener);
+            if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
+            if (typeof window.showDropOffPopup === 'function') {
+                window.showDropOffPopup({
+                    amount: reqData.calculatedPrice,
+                    driverName: reqData.driverName,
+                    taxiId: reqData.taxiId
+                });
+            }
+        }
+
+        // 🚨 4. HANDLE CANCELLATION BY DRIVER OR SYSTEM
+        else if (currentStatus === 'cancelled_by_driver' || currentStatus === 'cancelled_by_admin' || currentStatus === 'cancelled_by_system') {
+            database.ref('requests/' + reqId).off('value', window.currentRequestStatusListener);
+            
+            // Only show message if it wasn't the timeout (timeout shows its own UI)
+            if (reqData.cancelReason !== 'timeout') {
+                if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
+                showGenericMessage(
+                    "Trip Cancelled", 
+                    "The driver cancelled the trip. Please request a new ride.", 
+                    "fa-exclamation-triangle", 
+                    "icon-danger"
+                );
+            }
+        }
+    });
 };
-
 window.refreshPickupLocation = async function() {
     if (!commuterLat || !commuterLng) {
         window.showToast("Location not available", "danger");
@@ -25037,7 +25079,168 @@ window.showToast = function(message, type = "success") {
     setTimeout(() => toast.remove(), 2500);
 };
 
+// =======================================================================
+// TAXI SEARCH TIMEOUT & RETRY LOGIC
+// =======================================================================
+window.taxiSearchTimer = null;
+window.searchAttemptCount = 1;
 
+// =======================================================================
+// TAXI SEARCH TIMEOUT & RETRY LOGIC (7 SECONDS)
+// =======================================================================
+window.taxiSearchTimer = null;
+window.searchAttemptCount = 1;
+
+window.startTaxiSearchTimer = function(reqId) {
+    // Clear any existing timer
+    if (window.taxiSearchTimer) clearInterval(window.taxiSearchTimer);
+    window.searchAttemptCount = 1;
+
+    window.taxiSearchTimer = setInterval(() => {
+        if (!reqId) {
+            clearInterval(window.taxiSearchTimer);
+            return;
+        }
+        
+        // 1. Check current status first to avoid overwriting an accepted ride
+        database.ref(`requests/${reqId}/status`).once('value').then(snap => {
+            const status = snap.val();
+            if (status !== 'pending' && status !== 'pooling') {
+                clearInterval(window.taxiSearchTimer);
+                return; 
+            }
+
+            window.searchAttemptCount++;
+            const msgEl = document.getElementById('requestingMessage');
+
+            // 2. Attempts 2 and 3 (Update UI)
+            if (window.searchAttemptCount <= 3) {
+                if (msgEl) {
+                    msgEl.innerHTML = `
+                        <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.2);">
+                            <div class="radar-ring ring-1" style="border-color: #007BFF;"></div>
+                            <div class="radar-ring ring-2" style="border-color: #007BFF;"></div>
+                            <div class="logo-circle" style="box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);">
+                                <i class="fas fa-search-location" style="color: #007BFF; font-size: 24px;"></i>
+                            </div>
+                        </div>
+                        <div style="font-weight:900; color:#fff; font-size:1.2rem; margin-bottom:10px; padding: 0 10px;">
+                            Please wait while we find you another Asiye Driver...
+                        </div>
+                        <p style="color:#aaa; font-size:0.85rem;">Attempt ${window.searchAttemptCount} of 3</p>
+                    `;
+                }
+            } 
+            // 3. Failed after 3 attempts (Show Apology)
+            else {
+                clearInterval(window.taxiSearchTimer);
+
+                // Update DB to cancel the request via system timeout
+                database.ref(`requests/${reqId}`).update({
+                    status: 'cancelled_by_system',
+                    cancelReason: 'timeout',
+                    cancelledAt: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                // Update UI for failure
+                if (msgEl) {
+                    msgEl.innerHTML = `
+                        <div style="width: 80px; height: 80px; background: rgba(220,53,69,0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                            <i class="fas fa-car-crash" style="font-size: 3rem; color: #dc3545;"></i>
+                        </div>
+                        <div style="font-weight:900; color:#fff; font-size:1.2rem; margin-bottom:10px; line-height: 1.4;">
+                            We apologize, all drivers are currently busy.
+                        </div>
+                        <p style="color:#aaa; font-size:0.95rem; margin-bottom: 20px;">
+                            Would you like us to alert you when a driver is available?
+                        </p>
+                    `;
+                }
+
+                // Hide standard cancel button
+                const cancelBtn = document.getElementById('cancelRequestBtn');
+                if (cancelBtn) cancelBtn.style.display = 'none';
+
+                // Inject the Yes / Later Buttons safely below the message
+                let customActions = document.getElementById('timeoutActions');
+                if (!customActions) {
+                    customActions = document.createElement('div');
+                    customActions.id = 'timeoutActions';
+                    customActions.style.cssText = 'display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 300px; margin: 0 auto;';
+                    
+                    if (msgEl && msgEl.parentElement) {
+                        msgEl.parentElement.appendChild(customActions);
+                    }
+                }
+                
+                customActions.innerHTML = `
+                    <button class="btn btn-success" onclick="setupDriverAlert('${reqId}')" style="width:100%; padding:14px; border-radius:12px; font-weight:800; background:#28a745 !important; color:white; border:none;">
+                        Yes
+                    </button>
+                    <button class="btn btn-light" onclick="cleanupStaleRequestAndClose()" style="width:100%; padding:14px; border-radius:12px; font-weight:800; background:transparent; color:#888; border:1px solid #444;">
+                        I will try later
+                    </button>
+                `;
+            }
+        });
+    }, 7000); // Trigger exactly every 7 seconds
+};
+
+// Action when they click "Yes"
+window.setupDriverAlert = function(reqId) {
+    const customActions = document.getElementById('timeoutActions');
+    if (customActions) {
+        customActions.innerHTML = '<div class="spinner" style="margin: 0 auto;"></div><p style="color:#28a745; margin-top:10px;">Setting up alert...</p>';
+    }
+
+    // 🟢 SECURE WORKAROUND: Write to requests/${reqId} instead of root to bypass PERMISSION_DENIED
+    database.ref(`requests/${reqId}`).update({
+        driverAlertRequested: true,
+        driverAlertStatus: 'active',
+        driverAlertPhone: window.commuterData?.phone || '',
+        driverAlertName: window.commuterData?.name || 'Passenger',
+        driverAlertLocation: {
+            lat: window.commuterLat || -26.2041,
+            lng: window.commuterLng || 28.0473
+        },
+        driverAlertTimestamp: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        showToast("Alert set! We will notify you when drivers are free.", "success");
+        setTimeout(() => {
+            window.cleanupStaleRequestAndClose();
+        }, 2000);
+    }).catch(err => {
+        console.error("Alert setup failed:", err);
+        showToast("Failed to set alert. Please check your connection.", "danger");
+        if (customActions) {
+            customActions.innerHTML = `
+                <button class="btn btn-success" onclick="setupDriverAlert('${reqId}')" style="width:100%; padding:14px; border-radius:12px; font-weight:800; background:#28a745 !important; color:white; border:none;">
+                    Try Again
+                </button>
+            `;
+        }
+    });
+};
+
+// Action when they click "I will try later"
+window.cleanupStaleRequestAndClose = function() {
+    if (window.currentRequestId) {
+        database.ref(`commuters/${userId}`).update({ currentRequest: null });
+    }
+    window.currentRequestId = null;
+    if (window.commuterData) window.commuterData.currentRequest = null;
+    localStorage.removeItem('currentRequestId');
+    
+    closeModal('pendingRequestPopup');
+    
+    const customActions = document.getElementById('timeoutActions');
+    if (customActions) customActions.remove();
+    
+    const cancelBtn = document.getElementById('cancelRequestBtn');
+    if (cancelBtn) cancelBtn.style.display = 'block';
+
+    if (typeof showModernDashboard === 'function') showModernDashboard();
+};
 
 // --- COMPLETE FUNCTION FOR index.html ---
 window.listenForRequestStatus = function(reqId) {
@@ -25147,16 +25350,16 @@ window.proceedWithBooking = async function(taxiId) {
     let walletDeduction = 0;
 
     if (promoRemaining > 0) {
-        promoDeduction = Math.min(promoValue, fare);
+        if (window.commuterData?.promoPercentage) {
+            promoDeduction = Math.round(fare * (window.commuterData.promoPercentage / 100));
+        } else {
+            promoDeduction = Math.min(promoValue, fare);
+        }
     }
     let remainingFare = Math.max(0, fare - promoDeduction);
 
-    // --- PAYFAST REDIRECT LOGIC ---
     if (window.selectedPaymentMethod === 'card' && remainingFare > 0) {
         if (availableCredit < remainingFare) {
-            console.log("Directing to PayFast to pre-fund the ride...");
-            
-            // Save state so we can automatically request the ride after payment succeeds
             sessionStorage.setItem('pendingRideBroadcast', JSON.stringify({
                 calculatedPrice: fare,
                 paymentMethod: 'card',
@@ -25170,14 +25373,20 @@ window.proceedWithBooking = async function(taxiId) {
             if (typeof initiatePayfastPayment === 'function') {
                 initiatePayfastPayment(remainingFare, 'Asiye Pre-Paid Ride', paymentId);
                 closeModal('taxiListSheet');
-                return; // STOP execution until they return from PayFast
+                return; 
             }
         } else {
-            walletDeduction = remainingFare; // Pay via Wallet seamlessly
+            walletDeduction = remainingFare; 
         }
     }
 
     let totalAppliedCredit = promoDeduction + walletDeduction;
+
+    // 🟢 CLEANUP PREVIOUS TIMEOUT UI IF IT EXISTS
+    const cancelBtn = document.getElementById('cancelRequestBtn');
+    if (cancelBtn) cancelBtn.style.display = 'block';
+    const timeoutActions = document.getElementById('timeoutActions');
+    if (timeoutActions) timeoutActions.remove();
 
     closeModal('confirmRidePopup');
     closeModal('taxiListSheet');
@@ -25257,7 +25466,7 @@ window.proceedWithBooking = async function(taxiId) {
 
             const requestData = {
                 requestId: window.currentRequestId,
-                taxiId: null, 
+                taxiId: taxiId || null, // Allow directed requests
                 carCategory: window.selectedRideCategory || 'standard',
                 commuterId: userId,
                 commuterName: passengerData.commuterName,
@@ -25291,29 +25500,39 @@ window.proceedWithBooking = async function(taxiId) {
             await requestNode.set(requestData);
 
             if (!isPooling) {
-                const snap = await database.ref('taxis').once('value');
-                if (snap.exists()) {
-                    snap.forEach(child => {
-                        const driver = child.val();
-                        // 🚨 IMPORTANT: Send to ALL Asiye Go drivers within 15km
-                        if (driver.vehicleType === 'ehailing' && driver.isOnline && !driver.isFull && driver.latitude) {
-                            const dist = calculateDistance(commuterLat, commuterLng, driver.latitude, driver.longitude);
-                            if (dist <= 15) {
-                                database.ref(`notifications/taxis/${child.key}`).push({
-                                    type: 'passenger',
-                                    title: 'New Asiye Go Request!',
-                                    message: `Passenger is requesting a private ride.`,
-                                    requestId: window.currentRequestId,
-                                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                                });
-                            }
-                        }
+                if (taxiId) {
+                    // Direct specific taxi ping
+                    database.ref(`notifications/taxis/${taxiId}`).push({
+                        type: 'passenger',
+                        title: 'New Ride Request!',
+                        message: `Passenger is requesting a ride.`,
+                        requestId: window.currentRequestId,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
                     });
+                } else {
+                    // Ping all nearby Asiye Go drivers
+                    const snap = await database.ref('taxis').once('value');
+                    if (snap.exists()) {
+                        snap.forEach(child => {
+                            const driver = child.val();
+                            if (driver.vehicleType === 'ehailing' && driver.isOnline && !driver.isFull && driver.latitude) {
+                                const dist = calculateDistance(commuterLat, commuterLng, driver.latitude, driver.longitude);
+                                if (dist <= 15) {
+                                    database.ref(`notifications/taxis/${child.key}`).push({
+                                        type: 'passenger',
+                                        title: 'New Asiye Go Request!',
+                                        message: `Passenger is requesting a private ride.`,
+                                        requestId: window.currentRequestId,
+                                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                                    });
+                                }
+                            }
+                        });
+                    }
                 }
             }
         }
 
-        // Apply wallet balance and promo deductions
         const userUpdates = { currentRequest: window.currentRequestId };
         if (totalAppliedCredit > 0) {
             if (promoRemaining > 0 && window.selectedPaymentMethod === 'cash') {
@@ -25331,6 +25550,9 @@ window.proceedWithBooking = async function(taxiId) {
         localStorage.setItem('currentRequestId', window.currentRequestId);
         listenForRequestStatus(window.currentRequestId);
         if (typeof ensureTripActive === 'function') ensureTripActive();
+
+        // 🟢 START THE 7 SECOND SEARCH TIMER
+        window.startTaxiSearchTimer(window.currentRequestId);
 
     } catch (error) {
         console.error("Database save failed:", error);
@@ -26199,10 +26421,6 @@ window.setupSafeRequestListener = function() {
 // Call this after Firebase is initialized
 setTimeout(window.setupSafeRequestListener, 2000);
 
-// =======================================================================
-// E-HAILING POOL CREATION & JOINING LOGIC
-// =======================================================================
-
 window.requestAsiyeGoRide = async function() {
     closeModal('taxiListSheet');
 
@@ -26214,9 +26432,12 @@ window.requestAsiyeGoRide = async function() {
     let promoDeduction = 0;
     let walletDeduction = 0;
 
-    // Calculate potential deductions without writing them to database yet
     if (promoRemaining > 0) {
-        promoDeduction = Math.min(promoValue, fare);
+        if (window.commuterData?.promoPercentage) {
+            promoDeduction = Math.round(fare * (window.commuterData.promoPercentage / 100));
+        } else {
+            promoDeduction = Math.min(promoValue, fare);
+        }
     }
 
     let remainingFare = Math.max(0, fare - promoDeduction);
@@ -26231,6 +26452,12 @@ window.requestAsiyeGoRide = async function() {
     }
 
     let totalAppliedCredit = promoDeduction + walletDeduction;
+
+    // 🟢 CLEANUP PREVIOUS TIMEOUT UI IF IT EXISTS
+    const cancelBtn = document.getElementById('cancelRequestBtn');
+    if (cancelBtn) cancelBtn.style.display = 'block';
+    const timeoutActions = document.getElementById('timeoutActions');
+    if (timeoutActions) timeoutActions.remove();
 
     openModal('pendingRequestPopup');
 
@@ -26262,7 +26489,6 @@ window.requestAsiyeGoRide = async function() {
     } catch (e) {}
 
     var finalDest = window.userDropOffDestination || "As Directed";
-
     let joinedExistingPoolId = null;
 
     if (isPooling) {
@@ -26368,7 +26594,6 @@ window.requestAsiyeGoRide = async function() {
         }
     }
 
-    // Only associate trip ID locally. No debit transaction is dispatched yet.
     await database.ref(`commuters/${userId}`).update({
         currentRequest: currentRequestId
     });
@@ -26378,6 +26603,9 @@ window.requestAsiyeGoRide = async function() {
     }
 
     listenForRequestStatus(currentRequestId);
+    
+    // 🟢 START THE 7 SECOND SEARCH TIMER
+    window.startTaxiSearchTimer(currentRequestId);
 };
 
 
@@ -28072,7 +28300,7 @@ window.showOnboardingSharePopup = function(goal, count) {
             <div style="width: 80px; height: 80px; background: rgba(40, 167, 69, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
                 <i class="fas fa-gift" style="font-size: 3rem; color: #28a745;"></i>
             </div>
-            <h3 style="color: white !important; font-weight: 900; font-size: 1.4rem; margin-bottom: 10px;">Claim Your R${goal} Reward!</h3>
+            <h3 style="color: white !important; font-weight: 900; font-size: 1.4rem; margin-bottom: 10px;">Claim Your Ride Vouchers!</h3>
             <p style="color: #ccc !important; font-size: 0.95rem; margin-bottom: 20px; line-height: 1.55;">
                 You have selected the <strong style="color: #28a745;">R${goal} Cash Payout</strong> goal. Invite exactly <strong>${count} friends</strong> using your code to unlock your reward!
             </p>
@@ -28151,7 +28379,7 @@ window.nextOnboardStep = function(stepNum) {
     }
 };
 
-window.saveUnifiedOnboardingData = function() {
+window.saveUnifiedOnboardingData = async function() {
     try {
         console.log("Saving onboarding data...");
         const phoneInput = document.getElementById('enforcedPhoneInput');
@@ -28160,6 +28388,7 @@ window.saveUnifiedOnboardingData = function() {
         const latInput = document.getElementById('onboardLocLat');
         const lngInput = document.getElementById('onboardLocLng');
         const textInput = document.getElementById('onboardLocText');
+        const refCodeInput = document.getElementById('onboardReferralCode'); // NEW
 
         if (!phoneInput || !useCaseSelect || !travelTypeSelect) {
             showToast("Required fields are missing. Please refresh.", "danger");
@@ -28173,6 +28402,7 @@ window.saveUnifiedOnboardingData = function() {
         const lat = latInput ? latInput.value : '';
         const lng = lngInput ? lngInput.value : '';
         const address = textInput ? textInput.value : '';
+        const refCode = refCodeInput ? refCodeInput.value.replace(/\s+/g, '').trim() : '';
 
         const selectedGoalElement = document.querySelector('input[name="referralGoal"]:checked');
         const selectedGoal = selectedGoalElement ? selectedGoalElement.value : "50";
@@ -28204,33 +28434,46 @@ window.saveUnifiedOnboardingData = function() {
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         };
 
-        // Close background active-trip/popup interrupters before opening share popup
+        // 🟢 PROCESS THE VOUCHER CLAIM (20% OFF)
+        if (refCode) {
+            const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(refCode.toUpperCase()).once('value');
+            const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(refCode).once('value');
+            
+            let matchedReferrer = null;
+            if (codeQuery.exists()) {
+                codeQuery.forEach(c => { matchedReferrer = c.key; });
+            } else if (phoneQuery.exists()) {
+                phoneQuery.forEach(c => { matchedReferrer = c.key; });
+            }
+
+            if (matchedReferrer && matchedReferrer !== userId) {
+                updates.referredBy = refCode;
+                updates.promoRemaining = 1;
+                updates.promoPercentage = 20; // Marks 20% discount
+                updates.binaryCountsProcessed = false;
+                showToast("Voucher claimed! 20% off your ride.", "success");
+            } else {
+                showToast("Invalid Invite Code. Proceeding without voucher.", "warning");
+            }
+        }
+
         closeAllPopups();
 
         database.ref(`commuters/${userId}`).update(updates).then(() => {
-            if (window.commuterData) {
-                Object.assign(window.commuterData, updates);
-            }
-
-            // Hide the onboarding modal completely
+            if (window.commuterData) Object.assign(window.commuterData, updates);
             const modal = document.getElementById('phoneEnforcementModal');
             if (modal) {
                 modal.classList.remove('open');
                 modal.style.setProperty('display', 'none', 'important');
             }
-
-            // Show the customized sharing popup
             window.showOnboardingSharePopup(selectedGoal, goalCount);
         }).catch(err => {
-            console.error("Firebase update failed:", err);
             showToast("Network error. Could not save profile.", "danger");
         });
     } catch (err) {
-        console.error("Error in saveUnifiedOnboardingData:", err);
         showToast("Setup failed. Please check all fields.", "danger");
     }
 };
-
 
 window.onPaymentSuccess = function(paymentData) {
     if (typeof originalOnPaymentSuccessHandler === 'function') {
