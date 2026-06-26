@@ -10244,17 +10244,18 @@ function initializeApp(uid) {
         handleUserNotFound();
     });
 }
+// =======================================================================
+// INSTANT R5 REGISTRATION REFERRAL ENGINE
+// Replace 'processPendingReferralCounters' in index.html
+// =======================================================================
 window.processPendingReferralCounters = async function(newUserId, referrerCode) {
     if (!referrerCode || newUserId === referrerCode) return;
 
-    // Determine which database node to update (commuters or taxis)
-    const dbNode = window.dbNode || 'commuters';
-    const userRef = database.ref(`${dbNode}/${newUserId}`);
-    
+    const userRef = database.ref(`commuters/${newUserId}`);
     const snap = await userRef.once('value');
     const userData = snap.val() || {};
 
-    // Don't process twice
+    // Prevent running this script twice
     if (userData.binaryCountsProcessed) return;
 
     // 1. Mark as processed for the new user
@@ -10266,16 +10267,12 @@ window.processPendingReferralCounters = async function(newUserId, referrerCode) 
     if (window.commuterData) {
         window.commuterData.referredBy = referrerCode;
         window.commuterData.binaryCountsProcessed = true;
-    } else if (window.taxiData) {
-        window.taxiData.referredBy = referrerCode;
-        window.taxiData.binaryCountsProcessed = true;
     }
 
-    // 2. --- FIND LEVEL 1 AMBASSADOR ---
+    // 2. Find the Ambassador/Referrer
     let l1Id = null;
     let l1Data = null;
     
-    // Look up referrer by Code, Phone, or UID
     const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
     const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
     
@@ -10288,57 +10285,42 @@ window.processPendingReferralCounters = async function(newUserId, referrerCode) 
         if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
     }
 
-    // 3. --- UPDATE LEVEL 1 ---
-   if (l1Id) {
+    // 3. Process Instant R5 Registration Reward
+    if (l1Id) {
+        const earnAmount = 5.00; // Instant R5 for commuter registration
+
         await database.ref(`commuters/${l1Id}`).transaction(data => {
             if (data) {
+                // Increment Network Counters
                 data.level1_invites = (data.level1_invites || 0) + 1;
                 data.referralCount = (data.referralCount || 0) + 1; 
-                // 🟢 Give 2x R25 ride vouchers
-                data.promoRemaining = (data.promoRemaining || 0) + 2;
-                data.promoValue = 25;
+                
+                // Instantly apply R5 Cash to Wallet
+                data.credits = (data.credits || 0) + earnAmount;
+                data.referralEarnings = (data.referralEarnings || 0) + earnAmount;
+                data.totalEarnings = (data.totalEarnings || 0) + earnAmount;
             }
             return data;
         });
         
-        await database.ref(`notifications/commuters/${l1Id}`).push({
+        // Log the completed transaction
+        await database.ref(`commuters/${l1Id}/earnings/ref_${newUserId}`).set({
+            id: 'ref_' + newUserId,
+            type: 'referral_reward',
+            amount: earnAmount,
+            description: `New Commuter Registration: ${userData.name || 'User'}`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            status: 'completed',
+            linkedUserId: newUserId
+        });
+
+        // Notify Ambassador of instant earnings
+        database.ref(`notifications/commuters/${l1Id}`).push({
             type: 'referral_bonus',
-            title: 'New Referral!',
-            message: `A passenger registered using your link. You received 2x R25 ride vouchers!`,
+            title: 'R5 Registration Bonus! 🎉',
+            message: `A new commuter registered using your link! R5.00 has been added to your balance automatically.`,
             timestamp: firebase.database.ServerValue.TIMESTAMP
         });
-        
-        await database.ref(`commuters/${l1Id}/earnings`).push({
-            id: 'ref_l1_' + Date.now(),
-            type: 'referral_reward',
-            amount: 50.00,
-            description: `L1 Direct Invite Bonus (${userData.name || 'User'})`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'completed'
-        });
-
-        // 4. --- UPDATE LEVEL 2 (Invite of an Invite) ---
-        if (l1Data && l1Data.referredBy) {
-            let l2Id = null;
-            const l2CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(l1Data.referredBy).once('value');
-            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
-            
-            if (l2CodeQuery.exists()) {
-                l2CodeQuery.forEach(child => { l2Id = child.key; });
-            } else if (l2PhoneQuery.exists()) {
-                l2PhoneQuery.forEach(child => { l2Id = child.key; });
-            } else {
-                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
-                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
-            }
-
-            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
-                await database.ref(`commuters/${l2Id}`).transaction(data => {
-                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
-                    return data;
-                });
-            }
-        }
     }
 };         
 window.saveEnforcedPhoneNumber = function(e) {
@@ -28045,123 +28027,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadNearbySuggestions();
 });
 
-function loadNearbySuggestions() {
-    const listContainer = document.getElementById('suggested-locations-list');
 
-    // Check if Geolocation is supported
-    if (!navigator.geolocation) {
-        showFallbackSuggestions("Geolocation not supported by this browser.");
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        async (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            
-            try {
-                const locations = await fetchNearbyPlaces(lat, lon);
-                if (locations && locations.length > 0) {
-                    renderSuggestions(locations);
-                } else {
-                    showFallbackSuggestions("No matching locations found nearby.");
-                }
-            } catch (error) {
-                console.error("Error fetching places:", error);
-                showFallbackSuggestions("Could not load nearby locations.");
-            }
-        },
-        (error) => {
-            console.warn("Geolocation error:", error.message);
-            showFallbackSuggestions("Location access denied or unavailable.");
-        },
-        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-    );
-}
-
-// Queries OpenStreetMap Overpass API for schools, clinics/hospitals, and malls within a 5km (5000m) radius
-async function fetchNearbyPlaces(lat, lon) {
-    const radius = 5000; // Radius in meters
-    
-    // Overpass QL query targeting malls, schools, clinics, and hospitals
-    const query = `
-        [out:json][timeout:15];
-        (
-          node["shop"="mall"](around:${radius}, ${lat}, ${lon});
-          way["shop"="mall"](around:${radius}, ${lat}, ${lon});
-          node["amenity"="school"](around:${radius}, ${lat}, ${lon});
-          way["amenity"="school"](around:${radius}, ${lat}, ${lon});
-          node["amenity"="clinic"](around:${radius}, ${lat}, ${lon});
-          way["amenity"="clinic"](around:${radius}, ${lat}, ${lon});
-          node["amenity"="hospital"](around:${radius}, ${lat}, ${lon});
-          way["amenity"="hospital"](around:${radius}, ${lat}, ${lon});
-        );
-        out tags center 5;
-    `;
-
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
-    
-    if (!response.ok) throw new Error("Network response was not ok");
-    
-    const data = await response.json();
-    
-    // Parse response into structured objects
-    return data.elements
-        .map(element => {
-            const tags = element.tags || {};
-            const name = tags.name;
-            
-            // Determine type
-            let type = 'other';
-            if (tags.shop === 'mall') type = 'mall';
-            else if (tags.amenity === 'school') type = 'school';
-            else if (tags.amenity === 'clinic' || tags.amenity === 'hospital') type = 'clinic';
-
-            return {
-                name: name,
-                type: type
-            };
-        })
-        .filter(item => item.name); // Filter out any elements without a name
-}
-
-// Render the list items dynamically
-function renderSuggestions(locations) {
-    const listContainer = document.getElementById('suggested-locations-list');
-    listContainer.innerHTML = ''; // Clear loader
-
-    locations.forEach(loc => {
-        // Assign icons based on location type
-        let iconClass = 'fa-map-marker-alt';
-        if (loc.type === 'mall') iconClass = 'fa-shopping-bag';
-        else if (loc.type === 'school') iconClass = 'fa-graduation-cap';
-        else if (loc.type === 'clinic') iconClass = 'fa-hand-holding-medical';
-
-        const itemHtml = `
-            <div class="suggestion-item" onclick="quickSelectDest('${escapeHtml(loc.name)}')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
-                <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas ${iconClass}" style="color: #98989D; font-size: 1rem;"></i>
-                </div>
-                <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${loc.name}</span>
-            </div>
-        `;
-        listContainer.insertAdjacentHTML('beforeend', itemHtml);
-    });
-}
 
 // Fallback suggestions shown if geolocation fails or is denied
-function showFallbackSuggestions(reason) {
-    console.log("Using fallback suggestions:", reason);
-    const fallbackLocations = [
-        { name: "Local Mall/Shopping Centre", type: "mall" },
-        { name: "Nearest School", type: "school" },
-        { name: "Nearest Clinic", type: "clinic" }
-    ];
-    renderSuggestions(fallbackLocations);
-}
 
-// Helper utility to prevent HTML injection in dynamic content
+
 function escapeHtml(str) {
     return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 }
@@ -28183,54 +28053,6 @@ window.setupFirstTripListener = function() {
 setTimeout(() => { if (typeof window.setupFirstTripListener === 'function') window.setupFirstTripListener(); }, 5000);
 
 // 3. Unlock the R50 Reward
-window.checkFirstTripCompletion = function() {
-    if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
-    if (window.commuterData.firstTripReferralProcessed) return;
-
-    const referrerId = window.commuterData.referredBy; 
-
-    // Mark as processed immediately so it doesn't trigger twice
-    firebase.database().ref(`commuters/${window.userId}`).update({
-        firstTripReferralProcessed: true
-    });
-    window.commuterData.firstTripReferralProcessed = true;
-
-    const earnAmount = 50.00; // R50
-    const referrerRef = firebase.database().ref('commuters/' + referrerId);
-
-    // Securely update the referrer's wallet balances
-    referrerRef.transaction(function(userData) {
-        if (!userData) return userData;
-        if (!userData.credits) userData.credits = 0;
-        if (!userData.referralEarnings) userData.referralEarnings = 0;
-        if (!userData.totalEarnings) userData.totalEarnings = 0;
-        if (!userData.referralCount) userData.referralCount = 0;
-
-        userData.credits += earnAmount;
-        userData.referralEarnings += earnAmount;
-        userData.totalEarnings += earnAmount;
-        userData.referralCount += 1;
-        return userData;
-    }, function(error, committed, snapshot) {
-        if (committed) {
-            // Update the pending record to "Completed"
-            firebase.database().ref(`commuters/${referrerId}/earnings/ref_pending_${window.userId}`).update({
-                description: 'Friend Completed 1st Trip!',
-                status: 'completed',
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
-
-            // Send Push Notification to the Referrer
-            firebase.database().ref(`notifications/commuters/${referrerId}`).push({
-                type: 'referral_bonus',
-                title: 'R50 Referral Earned! 🎉',
-                message: `Your friend completed their first trip! R50 has been added to your wallet.`,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-    });
-};
-
 // 4. Update the Earnings Dashboard UI to show Pending status
 window.openEarningsDashboard = function(userData) {
     closeSideMenu(); // Hide the sidebar
@@ -29211,6 +29033,207 @@ window.processPendingReferralCounters = async function(newUserId, referrerPhoneO
     }
 };
 
+// =======================================================================
+// ISSUE 1 & 3 FIX: UNIFIED REFERRAL COUNTER & PENDING EARNINGS
+// Replace all duplicate 'processPendingReferralCounters' in index.html
+// =======================================================================
+// =======================================================================
+// ISSUE 3 FIX: UNLOCK THE R50 AFTER THE PASSENGER'S FIRST TRIP
+// Replace 'checkFirstTripCompletion' in index.html
+// =======================================================================
+window.checkFirstTripCompletion = function() {
+    if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
+    
+    // Stop if we have already unlocked the reward
+    if (window.commuterData.firstTripReferralProcessed) return;
+
+    const referrerCode = window.commuterData.referredBy; 
+
+    // Mark passenger profile so it never runs twice
+    firebase.database().ref(`commuters/${window.userId}`).update({
+        firstTripReferralProcessed: true
+    });
+    window.commuterData.firstTripReferralProcessed = true;
+
+    // Search for the Ambassador
+    Promise.all([
+        database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value'),
+        database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value'),
+        database.ref(`commuters/${referrerCode}`).once('value')
+    ]).then(([codeQ, phoneQ, uidQ]) => {
+        let ambassadorId = null;
+        if (codeQ.exists()) codeQ.forEach(c => ambassadorId = c.key);
+        else if (phoneQ.exists()) phoneQ.forEach(c => ambassadorId = c.key);
+        else if (uidQ.exists()) ambassadorId = uidQ.key;
+
+        // Give the Ambassador the R50 wallet balance
+        if (ambassadorId && ambassadorId !== window.userId) {
+            const earnAmount = 50.00; 
+
+            firebase.database().ref(`commuters/${ambassadorId}`).transaction(function(userData) {
+                if (!userData) return userData;
+                userData.credits = (userData.credits || 0) + earnAmount;
+                userData.referralEarnings = (userData.referralEarnings || 0) + earnAmount;
+                userData.totalEarnings = (userData.totalEarnings || 0) + earnAmount;
+                // Reduce the pending count
+                userData.pendingReferrals = Math.max(0, (userData.pendingReferrals || 0) - 1);
+                return userData;
+            }, function(error, committed) {
+                if (committed) {
+                    // Update the "Pending" statement to "Completed" on their statement
+                    firebase.database().ref(`commuters/${ambassadorId}/earnings/ref_pending_${window.userId}`).update({
+                        description: `Completed: ${window.commuterData.name || 'Friend'} 1st Trip!`,
+                        status: 'completed',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+
+                    // Notify Ambassador
+                    firebase.database().ref(`notifications/commuters/${ambassadorId}`).push({
+                        type: 'referral_bonus',
+                        title: 'R50 Reward Unlocked! 🎉',
+                        message: `Your referral (${window.commuterData.name || 'A user'}) completed their first trip! R50 added to your wallet.`,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            });
+        }
+    });
+};
+
+
+async function fetchAndRenderNearby(lat, lon) {
+    try {
+        const locations = await fetchNearbyPlaces(lat, lon);
+        if (locations && locations.length > 0) {
+            renderSuggestions(locations);
+        } else {
+            showFallbackSuggestions("No matching locations found nearby.");
+        }
+    } catch (error) {
+        console.error("Error fetching places:", error);
+        showFallbackSuggestions("Could not load nearby locations.");
+    }
+}
+
+// =======================================================================
+// COMPLETE REPLACEMENT FOR: SUGGESTED NEARBY & REFERRAL ENGINE
+// FILE: index.html (Commuter App)
+// =======================================================================
+
+// ---------------------------------------------------------
+// 1. NEARBY SUGGESTIONS ENGINE (FIXED REFERENCE ERROR)
+// ---------------------------------------------------------
+window.loadNearbySuggestions = function() {
+    const listContainer = document.getElementById('suggested-locations-list');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = `
+        <div id="suggestions-loader" style="display: flex; align-items: center; gap: 12px; padding: 14px 10px; color: #98989D;">
+            <i class="fas fa-spinner fa-spin"></i>
+            <span style="font-size: 0.95rem;">Finding locations near you...</span>
+        </div>`;
+
+    if (window.commuterLat && window.commuterLng) {
+        window.fetchAndRenderNearby(window.commuterLat, window.commuterLng);
+    } else {
+        let retries = 0;
+        const interval = setInterval(() => {
+            if (window.commuterLat && window.commuterLng) {
+                clearInterval(interval);
+                window.fetchAndRenderNearby(window.commuterLat, window.commuterLng);
+            } else {
+                retries++;
+                if (retries > 10) { 
+                    clearInterval(interval);
+                    window.showFallbackSuggestions("Could not determine your exact location.");
+                }
+            }
+        }, 500);
+    }
+};
+
+window.fetchAndRenderNearby = async function(lat, lon) {
+    try {
+        const locations = await window.fetchNearbyPlaces(lat, lon);
+        if (locations && locations.length > 0) {
+            window.renderSuggestions(locations);
+        } else {
+            window.showFallbackSuggestions("No matching locations found nearby.");
+        }
+    } catch (error) {
+        console.error("Error fetching places:", error);
+        window.showFallbackSuggestions("Could not load nearby locations.");
+    }
+};
+
+window.fetchNearbyPlaces = async function(lat, lon) {
+    const radius = 5000; 
+    const query = `
+        [out:json][timeout:15];
+        (
+          node["shop"="mall"](around:${radius}, ${lat}, ${lon});
+          way["shop"="mall"](around:${radius}, ${lat}, ${lon});
+          node["amenity"="school"](around:${radius}, ${lat}, ${lon});
+          way["amenity"="school"](around:${radius}, ${lat}, ${lon});
+          node["amenity"="clinic"](around:${radius}, ${lat}, ${lon});
+          way["amenity"="hospital"](around:${radius}, ${lat}, ${lon});
+        );
+        out tags center 5;
+    `;
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Network response was not ok");
+    const data = await response.json();
+    return data.elements
+        .map(element => {
+            const tags = element.tags || {};
+            const name = tags.name;
+            let type = 'other';
+            if (tags.shop === 'mall') type = 'mall';
+            else if (tags.amenity === 'school') type = 'school';
+            else if (tags.amenity === 'clinic' || tags.amenity === 'hospital') type = 'clinic';
+            return { name: name, type: type };
+        })
+        .filter(item => item.name);
+};
+
+window.renderSuggestions = function(locations) {
+    const listContainer = document.getElementById('suggested-locations-list');
+    if (!listContainer) return;
+    listContainer.innerHTML = ''; 
+
+    locations.forEach(loc => {
+        let iconClass = 'fa-map-marker-alt';
+        if (loc.type === 'mall') iconClass = 'fa-shopping-bag';
+        else if (loc.type === 'school') iconClass = 'fa-graduation-cap';
+        else if (loc.type === 'clinic') iconClass = 'fa-hand-holding-medical';
+
+        const itemHtml = `
+            <div class="suggestion-item" onclick="quickSelectDest('${escapeHtml(loc.name)}')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
+                <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                    <i class="fas ${iconClass}" style="color: #98989D; font-size: 1rem;"></i>
+                </div>
+                <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(loc.name)}</span>
+            </div>
+        `;
+        listContainer.insertAdjacentHTML('beforeend', itemHtml);
+    });
+};
+
+window.showFallbackSuggestions = function(reason) {
+    console.log("Using fallback suggestions:", reason);
+    const fallbackLocations = [
+        { name: "Local Mall/Shopping Centre", type: "mall" },
+        { name: "Nearest School", type: "school" },
+        { name: "Nearest Clinic", type: "clinic" }
+    ];
+    window.renderSuggestions(fallbackLocations);
+};
+
+
+// ---------------------------------------------------------
+// 2. REFERRAL TRACKING ENGINE (PENDING -> COMPLETED)
+// ---------------------------------------------------------
 window.processPendingReferralCounters = async function(newUserId, referrerCode) {
     if (!referrerCode || newUserId === referrerCode) return;
 
@@ -29220,81 +29243,111 @@ window.processPendingReferralCounters = async function(newUserId, referrerCode) 
 
     if (userData.binaryCountsProcessed) return;
 
-    // 1. Mark as processed for the new user
     await userRef.update({ 
         binaryCountsProcessed: true, 
         referredBy: referrerCode 
     });
+    
     if (window.commuterData) {
         window.commuterData.referredBy = referrerCode;
         window.commuterData.binaryCountsProcessed = true;
     }
 
-    // 2. --- LEVEL 1 PROCESSING ---
     let l1Id = null;
-    let l1Data = null;
     
-    // Look up the referrer by Ambassador Code, Phone, or UserID
     const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
     const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
     
     if (codeQuery.exists()) {
-        codeQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+        codeQuery.forEach(child => { l1Id = child.key; });
     } else if (phoneQuery.exists()) {
-        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+        phoneQuery.forEach(child => { l1Id = child.key; });
     } else {
         const uidQuery = await database.ref(`commuters/${referrerCode}`).once('value');
-        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
+        if (uidQuery.exists()) l1Id = uidQuery.key;
     }
 
+    // CREATE PENDING EARNING FOR AMBASSADOR
     if (l1Id) {
-        // Increment Level 1 Invites & Pay R50 bonus
         await database.ref(`commuters/${l1Id}`).transaction(data => {
             if (data) {
                 data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1;
-                data.credits = (data.credits || 0) + 50.00;
-                data.referralEarnings = (data.referralEarnings || 0) + 50.00;
-                data.totalEarnings = (data.totalEarnings || 0) + 50.00;
+                data.referralCount = (data.referralCount || 0) + 1; 
+                data.pendingReferrals = (data.pendingReferrals || 0) + 1; // Used for "Pending" math
             }
             return data;
         });
         
-        await database.ref(`commuters/${l1Id}/earnings`).push({
-            id: 'ref_l1_' + Date.now(),
+        await database.ref(`commuters/${l1Id}/earnings/ref_pending_${newUserId}`).set({
+            id: 'ref_pending_' + newUserId,
             type: 'referral_reward',
             amount: 50.00,
-            description: `Level 1 Invite: ${userData.name || 'New User'}`,
+            description: `Pending: ${userData.name || 'New User'} (Awaiting 1st Trip)`,
             timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'completed'
+            status: 'pending',
+            linkedUserId: newUserId
         });
 
-        // 3. --- LEVEL 2 PROCESSING (Invite of an Invite) ---
-        if (l1Data && l1Data.referredBy) {
-            let l2Id = null;
-            const l2CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(l1Data.referredBy).once('value');
-            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
-            
-            if (l2CodeQuery.exists()) {
-                l2CodeQuery.forEach(child => { l2Id = child.key; });
-            } else if (l2PhoneQuery.exists()) {
-                l2PhoneQuery.forEach(child => { l2Id = child.key; });
-            } else {
-                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
-                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
-            }
-
-            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
-                // Increment Level 2 Invites (No immediate cash, just royalty eligibility)
-                await database.ref(`commuters/${l2Id}`).transaction(data => {
-                    if (data) {
-                        data.level2_invites = (data.level2_invites || 0) + 1;
-                    }
-                    return data;
-                });
-            }
-        }
+        database.ref(`notifications/commuters/${l1Id}`).push({
+            type: 'referral_bonus_pending',
+            title: 'New Sign-up!',
+            message: `A user registered using your link! R50 is pending until they take their first trip.`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
     }
+};
+
+window.checkFirstTripCompletion = function() {
+    if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
+    if (window.commuterData.firstTripReferralProcessed) return;
+
+    const referrerCode = window.commuterData.referredBy; 
+
+    // Lock it so we don't pay twice
+    firebase.database().ref(`commuters/${window.userId}`).update({
+        firstTripReferralProcessed: true
+    });
+    window.commuterData.firstTripReferralProcessed = true;
+
+    Promise.all([
+        database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value'),
+        database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value'),
+        database.ref(`commuters/${referrerCode}`).once('value')
+    ]).then(([codeQ, phoneQ, uidQ]) => {
+        let ambassadorId = null;
+        if (codeQ.exists()) codeQ.forEach(c => ambassadorId = c.key);
+        else if (phoneQ.exists()) phoneQ.forEach(c => ambassadorId = c.key);
+        else if (uidQ.exists()) ambassadorId = uidQ.key;
+
+        if (ambassadorId && ambassadorId !== window.userId) {
+            const earnAmount = 50.00; 
+
+            // FINALIZE THE R50 PAYMENT TO AMBASSADOR
+            firebase.database().ref(`commuters/${ambassadorId}`).transaction(function(userData) {
+                if (!userData) return userData;
+                userData.credits = (userData.credits || 0) + earnAmount;
+                userData.referralEarnings = (userData.referralEarnings || 0) + earnAmount;
+                userData.totalEarnings = (userData.totalEarnings || 0) + earnAmount;
+                userData.pendingReferrals = Math.max(0, (userData.pendingReferrals || 0) - 1);
+                return userData;
+            }, function(error, committed) {
+                if (committed) {
+                    firebase.database().ref(`commuters/${ambassadorId}/earnings/ref_pending_${window.userId}`).update({
+                        description: `Completed: ${window.commuterData.name || 'Friend'} 1st Trip!`,
+                        status: 'completed',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+
+                    firebase.database().ref(`notifications/commuters/${ambassadorId}`).push({
+                        type: 'referral_bonus',
+                        title: 'R50 Reward Unlocked! 🎉',
+                        message: `Your referral (${window.commuterData.name || 'A user'}) completed their first trip! R50 added to your wallet.`,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            });
+        }
+    });
 };
 </script>
 </body>
