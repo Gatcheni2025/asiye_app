@@ -9838,7 +9838,197 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 
     </div>
 </div>
-<script>
+
+<!-- UNIFIED ASIYE CLUB GATEWAY MODAL -->
+<div id="asiyeClubGatewayPopup" class="modal-overlay" style="z-index: 100005 !important;">
+    <div class="modal-content" style="background: #ffffff !important; color: #111111 !important; border-radius: 24px; padding: 30px 25px !important; max-width: 420px; text-align: center; margin: auto;">
+        <div class="uber-drag-handle"></div>
+        <div style="width: 70px; height: 70px; background: rgba(0, 123, 255, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+            <i class="fas fa-users" style="font-size: 2.2rem; color: #007BFF;"></i>
+        </div>
+        <h3 style="color: #111111 !important; font-weight: 800; margin-bottom: 8px;">Asiye Club</h3>
+        <p style="color: #666666 !important; font-size: 0.95rem; line-height: 1.5; margin-bottom: 25px;">
+            Convenient, pooled daily transit for work, school, or church. Share a dedicated vehicle and save up to 40% on monthly travel.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
+            <!-- Path A: Book Now (For Active Subscribers) -->
+            <button class="btn btn-primary" onclick="openAsiyeClubBookNow()" style="width: 100%; padding: 16px; font-weight: 800; background: #007BFF !important; color: white !important; border: none; border-radius: 14px;">
+                <i class="fas fa-ticket-alt"></i> Book Now (With Voucher)
+            </button>
+            
+            <!-- Path B: Register / Subscribe -->
+            <button class="btn btn-light" onclick="openAsiyeClubRegister()" style="width: 100%; padding: 16px; font-weight: 800; background: #f8f9fa !important; border: 1px solid #ddd !important; color: #333 !important; border-radius: 14px;">
+                <i class="fas fa-user-plus"></i> New Subscription Registration
+            </button>
+            
+            <button class="btn btn-light" onclick="closeModal('asiyeClubGatewayPopup'); showModernDashboard();" style="width: 100%; border: none; background: transparent; color: #888; font-weight: 600; margin-top: 5px;">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- VOUCHER SUMMON MODAL (BOOK NOW) -->
+<div id="asiyeClubVoucherPopup" class="modal-overlay" style="z-index: 100005 !important;">
+    <div class="modal-content" style="background: #ffffff !important; color: #111111 !important; border-radius: 24px; padding: 30px 25px !important; max-width: 420px; text-align: center; margin: auto;">
+        <div class="uber-drag-handle"></div>
+        <i class="fas fa-ticket-alt" style="font-size: 3rem; color: #28a745; margin-bottom: 15px;"></i>
+        <h3 style="color: #111111 !important; font-weight: 800; margin-bottom: 8px;">Enter Voucher Reference</h3>
+        <p style="color: #666666 !important; font-size: 0.9rem; line-height: 1.4; margin-bottom: 20px;">
+            Enter the 8-digit Reference Number issued to you upon successful registration and payment.
+        </p>
+
+        <div class="form-group" style="margin-bottom: 20px;">
+            <input type="text" id="clubVoucherInput" placeholder="e.g., AS-10024" maxlength="12" style="text-align: center; font-family: monospace; font-size: 1.4rem; text-transform: uppercase; background: #f8f9fa !important; color: #111111 !important; border: 2px solid #ddd !important; padding: 12px; border-radius: 12px; width: 100%; letter-spacing: 2px; font-weight: bold;">
+        </div>
+
+        <div style="display: flex; gap: 10px; width: 100%;">
+            <button class="btn btn-light" onclick="closeModal('asiyeClubVoucherPopup'); openModal('asiyeClubGatewayPopup');" style="flex: 1; padding: 14px; border-radius: 12px; font-weight: 700;">Back</button>
+            <button id="summonVoucherVehicleBtn" class="btn btn-primary" onclick="verifyVoucherAndSummon()" style="flex: 2; padding: 14px; border-radius: 12px; background: #28a745 !important; color: white !important; font-weight: 800; border: none;">
+                Summon Vehicle
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- CLUB SUBSCRIPTION REGISTRATION WIZARD -->
+<!-- CLUB SUBSCRIPTION REGISTRATION WIZARD -->
+<!-- CLUB SUBSCRIPTION REGISTRATION WIZARD -->
+<div id="asiyeClubRegisterPopup" class="modal-overlay" style="z-index: 100005 !important; background: rgba(0,0,0,0.8) !important;">
+    <div class="modal-content" style="background: #1C1C1E !important; color: white !important; height: 95vh !important; max-height: 95vh !important; border-radius: 28px 28px 0 0 !important; padding: 0 !important; margin: 0 !important; display: flex; flex-direction: column;">
+        
+        <!-- Wizard Header -->
+        <div class="popup-fixed-header" style="background: #000000 !important; border-bottom: 1px solid #333 !important; display: flex; align-items: center; padding: 15px 20px; flex-shrink: 0;">
+            <button class="back-btn" onclick="closeModal('asiyeClubRegisterPopup'); openModal('asiyeClubGatewayPopup');" style="color: #0A84FF; background: transparent; border: none; font-size: 1.1rem; display: flex; align-items: center; gap: 5px;">
+                <i class="fas fa-chevron-left"></i> Back
+            </button>
+            <h3 style="color: #fff; margin:0; flex-grow: 1; text-align: center; font-size: 1.2rem; font-weight: 700; padding-right: 60px;">Club Registration</h3>
+        </div>
+
+        <!-- Scrollable Steps Area -->
+        <div id="wizardStepsContainer" style="padding: 24px; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+            
+            <!-- Step 1: Route Setup -->
+            <div id="clubStep1" class="wizard-step" style="display: block;">
+                <h4 style="color: #0A84FF; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-map-marked-alt"></i> Route Details</h4>
+                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 20px;">
+                    Provide your morning pickup location and destination.
+                </p>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Morning Pickup Address *</label>
+                    <div id="clubRegisterPickupContainer" class="uber-geocoder" style="background: #2C2C2E !important; border-radius: 12px;"></div>
+                    <input type="hidden" id="clubPickupLat"><input type="hidden" id="clubPickupLng"><input type="hidden" id="clubPickupAddress">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Morning Drop-off Address *</label>
+                    <div id="clubRegisterDropoffContainer" class="uber-geocoder" style="background: #2C2C2E !important; border-radius: 12px;"></div>
+                    <input type="hidden" id="clubDropoffLat"><input type="hidden" id="clubDropoffLng"><input type="hidden" id="clubDropoffAddress">
+                </div>
+            </div>
+
+            <!-- Step 2: Purpose & Time -->
+            <div id="clubStep2" class="wizard-step" style="display: none;">
+                <h4 style="color: #FF9F0A; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-business-time"></i> Purpose & Timeline</h4>
+                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 20px;">
+                    Let us know why and when you travel so we can match you with nearby commuters.
+                </p>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Purpose of Commute *</label>
+                    <select id="clubPurpose" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px; font-weight: 700;">
+                        <option value="work">Travelling to Work</option>
+                        <option value="school">Travelling to School / University</option>
+                        <option value="church">Travelling to Church</option>
+                        <option value="other">Other Regular Commitments</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Preferred Morning Departure *</label>
+                    <select id="clubMorningTime" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px;">
+                        <option value="06:00">06:00 AM - 06:30 AM</option>
+                        <option value="06:30">06:30 AM - 07:00 AM</option>
+                        <option value="07:00" selected>07:00 AM - 07:30 AM</option>
+                        <option value="07:30">07:30 AM - 08:00 AM</option>
+                        <option value="08:00">08:00 AM - 08:30 AM</option>
+                    </select>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Preferred Return Time (Afternoon) *</label>
+                    <select id="clubReturnTime" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px;">
+                        <option value="15:30">03:30 PM - 04:00 PM</option>
+                        <option value="16:00">04:00 PM - 04:30 PM</option>
+                        <option value="16:30">04:30 PM - 05:00 PM</option>
+                        <option value="17:00" selected>05:00 PM - 05:30 PM</option>
+                        <option value="17:30">05:30 PM - 06:00 PM</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Step 3: Billing & Terms -->
+            <div id="clubStep3" class="wizard-step" style="display: none;">
+                <h4 style="color: #30D158; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-coins"></i> Select Billing Plan</h4>
+                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 20px;">
+                    Choose how often you prefer to pay. Add a card to activate.
+                </p>
+
+                <!-- Term selection cards (Daily, Weekly, Monthly with highlight) -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 25px;">
+                    <div id="termCardDaily" onclick="selectClubBillingTerm('daily')" style="background: #2C2C2E; border: 2px solid transparent; border-radius: 16px; padding: 12px; cursor: pointer; text-align: center;">
+                        <i class="fas fa-calendar-day" style="font-size: 1.3rem; color: #30D158; margin-bottom: 6px;"></i>
+                        <span style="display: block; font-weight: bold; font-size: 0.85rem;">Daily</span>
+                        <small style="color: #888; font-size: 0.65rem;">Pay Daily</small>
+                    </div>
+                    <div id="termCardWeekly" onclick="selectClubBillingTerm('weekly')" style="background: #2C2C2E; border: 2px solid transparent; border-radius: 16px; padding: 12px; cursor: pointer; text-align: center;">
+                        <i class="fas fa-calendar-week" style="font-size: 1.3rem; color: #30D158; margin-bottom: 6px;"></i>
+                        <span style="display: block; font-weight: bold; font-size: 0.85rem;">Weekly</span>
+                        <small style="color: #888; font-size: 0.65rem;">Upfront Weekly</small>
+                    </div>
+                    <div id="termCardMonthly" onclick="selectClubBillingTerm('monthly')" style="background: #2C2C2E; border: 2px solid #30D158; border-radius: 16px; padding: 12px; cursor: pointer; text-align: center; position: relative;">
+                        <div style="position: absolute; top: -8px; right: -8px; background: #FF9F0A; color: black; font-size: 0.55rem; font-weight: 900; padding: 2px 6px; border-radius: 10px; text-transform: uppercase;">Trial</div>
+                        <i class="fas fa-calendar-alt" style="font-size: 1.3rem; color: #30D158; margin-bottom: 6px;"></i>
+                        <span style="display: block; font-weight: bold; font-size: 0.85rem;">Monthly</span>
+                        <small style="color: #30D158; font-size: 0.65rem; font-weight: bold;">1st Trip Free</small>
+                    </div>
+                </div>
+
+                <!-- Live Pricing breakdown (Platform fee removed) -->
+                <div style="background: #000; border-radius: 16px; padding: 20px; border: 1px solid #333; margin-bottom: 15px;">
+                    <h5 style="color: #8e8e93; font-size: 0.75rem; text-transform: uppercase; margin: 0 0 12px 0; font-weight: 800; letter-spacing: 0.5px;">Fares Breakdown</h5>
+                    
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #ccc;">
+                        <span>Estimated Route Distance:</span>
+                        <span id="clubEstDistance" style="font-weight: bold; color: white;">-- km</span>
+                    </div>
+
+                    <!-- Dynamic Trial Row (Only shows when Monthly is selected) -->
+                    <div id="clubTrialPromotionRow" style="display: none; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #FF9F0A;">
+                        <span>First Trip Free Trial:</span>
+                        <span id="clubTrialDiscountAmount" style="font-weight: bold;">-R0.00</span>
+                    </div>
+
+                    <div style="border-top: 1px solid #222; margin: 10px 0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 1rem; font-weight: 800;">Estimated Cost:</span>
+                        <span id="clubEstCost" style="font-size: 1.6rem; font-weight: 900; color: #30D158;">R0.00</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Wizard Navigation Footer -->
+        <div class="form-navigation" style="flex-shrink: 0; background: #1C1C1E; border-top: 1px solid #333; padding: 20px !important;">
+            <button id="clubPrevBtn" class="btn btn-nav btn-back" onclick="navigateClubWizard(-1)">Back</button>
+            <button id="clubNextBtn" class="btn btn-nav btn-next" onclick="navigateClubWizard(1)" style="background: white !important; color: black !important;">Next</button>
+            <button id="clubRegisterBtn" class="btn btn-nav btn-next" onclick="submitClubSubscription()" style="display: none; background: #30D158 !important; color: white !important;">Submit Register</button>
+        </div>
+
+    </div>
+</div><script>
     function launchNativeNav(lat, lng) {
     if (window.AndroidNav) {
     window.AndroidNav.startNavigation(lat, lng);
@@ -10197,6 +10387,9 @@ function initializeApp(uid) {
             }
 
             // --- UNIFIED ONBOARDING GATEWAY ---
+           // Replace the inside of initializeApp(uid) after checking onboardingComplete:
+
+            // --- UNIFIED ONBOARDING GATEWAY ---
             if (!commuterData.onboardingComplete) {
                 console.log("🛡️ Onboarding incomplete. Activating multi-step setup...");
                 const onboardModal = document.getElementById('phoneEnforcementModal');
@@ -10211,8 +10404,14 @@ function initializeApp(uid) {
                 // Already onboarded: Load standard map features and trip check
                 initializeUserEarnings();
                 
-                if (typeof processNewUserReferral === 'function') {
-                    processNewUserReferral();
+                // --- PROCESS BINARY REFERRAL COUNTS ---
+                const pendingRef = localStorage.getItem('pendingReferral');
+                if (pendingRef && !commuterData.binaryCountsProcessed && typeof window.processPendingReferralCounters === 'function') {
+                    window.processPendingReferralCounters(userId, pendingRef);
+                    localStorage.removeItem('pendingReferral');
+                } else if (!commuterData.binaryCountsProcessed && commuterData.referredBy && typeof window.processPendingReferralCounters === 'function') {
+                    // Failsafe in case they added code via onboarding
+                    window.processPendingReferralCounters(userId, commuterData.referredBy);
                 }
                 
                 if (typeof checkAndProcessAdShareReward === 'function') {
@@ -10248,81 +10447,6 @@ function initializeApp(uid) {
 // INSTANT R5 REGISTRATION REFERRAL ENGINE
 // Replace 'processPendingReferralCounters' in index.html
 // =======================================================================
-window.processPendingReferralCounters = async function(newUserId, referrerCode) {
-    if (!referrerCode || newUserId === referrerCode) return;
-
-    const userRef = database.ref(`commuters/${newUserId}`);
-    const snap = await userRef.once('value');
-    const userData = snap.val() || {};
-
-    // Prevent running this script twice
-    if (userData.binaryCountsProcessed) return;
-
-    // 1. Mark as processed for the new user
-    await userRef.update({ 
-        binaryCountsProcessed: true, 
-        referredBy: referrerCode 
-    });
-    
-    if (window.commuterData) {
-        window.commuterData.referredBy = referrerCode;
-        window.commuterData.binaryCountsProcessed = true;
-    }
-
-    // 2. Find the Ambassador/Referrer
-    let l1Id = null;
-    let l1Data = null;
-    
-    const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
-    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
-    
-    if (codeQuery.exists()) {
-        codeQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
-    } else if (phoneQuery.exists()) {
-        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
-    } else {
-        const uidQuery = await database.ref(`commuters/${referrerCode}`).once('value');
-        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
-    }
-
-    // 3. Process Instant R5 Registration Reward
-    if (l1Id) {
-        const earnAmount = 5.00; // Instant R5 for commuter registration
-
-        await database.ref(`commuters/${l1Id}`).transaction(data => {
-            if (data) {
-                // Increment Network Counters
-                data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1; 
-                
-                // Instantly apply R5 Cash to Wallet
-                data.credits = (data.credits || 0) + earnAmount;
-                data.referralEarnings = (data.referralEarnings || 0) + earnAmount;
-                data.totalEarnings = (data.totalEarnings || 0) + earnAmount;
-            }
-            return data;
-        });
-        
-        // Log the completed transaction
-        await database.ref(`commuters/${l1Id}/earnings/ref_${newUserId}`).set({
-            id: 'ref_' + newUserId,
-            type: 'referral_reward',
-            amount: earnAmount,
-            description: `New Commuter Registration: ${userData.name || 'User'}`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'completed',
-            linkedUserId: newUserId
-        });
-
-        // Notify Ambassador of instant earnings
-        database.ref(`notifications/commuters/${l1Id}`).push({
-            type: 'referral_bonus',
-            title: 'R5 Registration Bonus! 🎉',
-            message: `A new commuter registered using your link! R5.00 has been added to your balance automatically.`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-    }
-};         
 window.saveEnforcedPhoneNumber = function(e) {
      if(e) {
          e.preventDefault();
@@ -12113,60 +12237,60 @@ window.openEHailingTaxis = window.openAsiyeGoTaxis;
           }
 
           // Find this function in your code
-      function setupNavListeners() {
-          console.log("Setting up navigation listeners...");
+     // =======================================================================
+// REPLACED: setupNavListeners (Redirects to Asiye Club Gateway)
+// =======================================================================
+function setupNavListeners() {
+    console.log("Setting up navigation listeners...");
 
-          // Helper to safely add listener
-          const addListener = (id, func) => {
-              const el = document.getElementById(id);
-              if (el) el.addEventListener("click", func);
-          };
+    const addListener = (id, func) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("click", func);
+    };
 
+    // 1. My Trip
+    addListener("navMyTripBtn", showMyTrip);
 
-          // 2. My Trip
-          addListener("navMyTripBtn", showMyTrip);
+    // 2. TAXI BUTTON (The Center Button - Now opens Asiye Club portal)
+    const taxiBtn = document.getElementById("navCatchTaxiBtn");
+    if (taxiBtn) {
+        taxiBtn.onclick = function(e) {
+            if (e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            // Block opening if a trip is already active
+            if (typeof isTripLive === 'function' && isTripLive()) return;
 
-          // 3. TAXI BUTTON (The Center Button)
-          const taxiBtn = document.getElementById("navCatchTaxiBtn");
-          if (taxiBtn) {
-              taxiBtn.onclick = function() {
-                  // Check if user already has a ride
-                  if (isTripLive()) return;
+            // Close other views and launch Club Gateway
+            closeAllPopups();
+            if (typeof window.openAsiyeClubGateway === 'function') {
+                window.openAsiyeClubGateway();
+            }
+        };
+    }
 
-                  // Close any other open screens
-                  closeAllPopups();
+    // 3. Parcels
+    addListener("navParcelsBtn", () => {
+        if (typeof isTripLive === 'function' && isTripLive()) return;
+        closeAllPopups();
+        openModal('parcelDestinationPopup');
+    });
 
-                  // Get address for the blue text
-                  refreshLocationDisplay();
+    // 4. Profile
+    addListener("navProfileBtn", showProfile);
 
-                  // Open the Confirmation Popup DIRECTLY
-                  openModal('locationConfirmPopup');
-              };
-          }
+    // Highlight Active State Logic
+    const navItems = document.querySelectorAll(".nav-item");
+    navItems.forEach(item => {
+        item.addEventListener("click", () => {
+            navItems.forEach(i => i.classList.remove("active"));
+            item.classList.add("active");
+        });
+    });
 
-          // 4. Parcels
-          addListener("navParcelsBtn", () => {
-              if (isTripLive()) return;
-              closeAllPopups();
-              openModal('parcelDestinationPopup');
-          });
-
-          // 5. Profile
-          addListener("navProfileBtn", showProfile);
-
-          // Highlight Active State Logic (Visual only)
-          const navItems = document.querySelectorAll(".nav-item");
-          navItems.forEach(item => {
-              item.addEventListener("click", () => {
-                  navItems.forEach(i => i.classList.remove("active"));
-                  item.classList.add("active");
-              });
-          });
-
-          // Ensure Market Logic is ready in background
-          if (typeof setupMarketListeners === 'function') setupMarketListeners();
-      }
-
+    if (typeof setupMarketListeners === 'function') setupMarketListeners();
+}
 window.addEventListener('load', () => {
     // Failsafe to ensure dashboard appears and preloader drops
     setTimeout(() => {
@@ -14710,8 +14834,9 @@ window.showSearchingIndicator = function() {
 };
 
 
+
 // =======================================================================
-// RENDER COMPREHENSIVE CATEGORIES & ICONS (MAPBOX VERSION)
+// FIXED: renderUberSuggestions with City/Town/Locality Icon mapping
 // =======================================================================
 window.renderUberSuggestions = function(features, type) {
     const listDiv = document.getElementById('uber-suggestions-list');
@@ -14733,9 +14858,15 @@ window.renderUberSuggestions = function(features, type) {
         let category = (f.properties?.category || "").toLowerCase();
         let maki = (f.properties?.maki || "").toLowerCase(); // Mapbox icon tags
         let nameLower = name.toLowerCase();
+        let placeType = f.place_type || [];
 
+        // Cities, Towns, Suburbs, Localities, and Neighborhoods
+        if (placeType.includes("place") || placeType.includes("locality") || placeType.includes("neighborhood") || category.includes("place") || category.includes("locality") || nameLower.includes("city") || nameLower.includes("town") || nameLower.includes("suburb")) {
+            icon = "fa-city";
+            color = "#FF9F0A"; // Orange accent for town/city landmarks
+        }
         // Schools / Universities
-        if (nameLower.includes("school") || nameLower.includes("university") || nameLower.includes("college") || category.includes("education")) {
+        else if (nameLower.includes("school") || nameLower.includes("university") || nameLower.includes("college") || category.includes("education")) {
             icon = "fa-graduation-cap";
             color = "#007BFF";
         }
@@ -15714,6 +15845,13 @@ const BASE_SHARE_URL = "https://asiye.cloud/share.html?ref=";
             window.open(whatsappUrl, '_blank');
         }
 
+      window.shareOnWhatsApp = function() {
+            const referralLink = BASE_SHARE_URL + userId;
+            const message = `I'm earning free rides using the Asiye App! 🚗\n\nSign up with my link, take your first ride, and we both get R50 in ride vouchers: ${referralLink}`;
+            const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
+        }
+
         window.shareOnFacebook = function() {
             const referralLink = BASE_SHARE_URL + userId;
             const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(referralLink)}`;
@@ -15722,27 +15860,26 @@ const BASE_SHARE_URL = "https://asiye.cloud/share.html?ref=";
 
         window.shareOnX = function() {
             const referralLink = BASE_SHARE_URL + userId;
-            const text = `I'm earning cash daily just by sharing the Asiye App! Catch rides, send parcels, and get paid. 🚗💸\n\nJoin my network here:`;
+            const text = `I'm earning R50 in free ride vouchers just by sharing the Asiye App! Catch rides, send parcels, and save. 🚗\n\nJoin my network here:`;
             const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(referralLink)}`;
             window.open(url, '_blank');
         }
 
        window.copyDirectReferralLink = function() {
-    const referralLink = BASE_SHARE_URL + userId;
-    const shareText = `Join me on Asiye! 🚗\nTap here to download and get a bonus: ${referralLink}\n(My Invite Code: ${userId})`;
-    
-    if (navigator.clipboard) {
-        navigator.clipboard.writeText(shareText).then(() => {
-            // FIX: Added the missing comma before "fa-copy"
-            showGenericMessage(
-                "Copied!", 
-                "Your invite link is copied. Send it to your friends to earn R50 in ride vouchers!", 
-                "fa-copy", 
-                "icon-success"
-            );
-        });
-    }
-};
+            const referralLink = BASE_SHARE_URL + userId;
+            const shareText = `Join me on Asiye! 🚗\nTap here to download and get R25 off your first ride: ${referralLink}\n(My Invite Code: ${userId})`;
+            
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(shareText).then(() => {
+                    showGenericMessage(
+                        "Copied!", 
+                        "Your invite link is copied. Send it to your friends to earn R50 in Ride Vouchers when they take a ride!", 
+                        "fa-copy", 
+                        "icon-success"
+                    );
+                });
+            }
+        };
 window.shareReferralLink = function() {
     if (!userId) {
         showGenericMessage("Login Required", "Please login.", "fa-lock", "icon-warning");
@@ -15763,31 +15900,139 @@ window.shareReferralLink = function() {
     }, 100);
 };
 // 4. Update Backend Function to pay R50 instead of R0.50
-window.rewardReferrer = function(referrerId) {
-    if (!referrerId) return;
-    const referrerRef = database.ref('commuters/' + referrerId);
+// =======================================================================
+// UNIFIED REFERRAL ENGINE: PENDING & COMPLETED
+// =======================================================================
+window.processPendingReferralCounters = async function(newUserId, referrerCode) {
+    if (!referrerCode || newUserId === referrerCode) return;
 
-    referrerRef.transaction(function(userData) {
-        if (!userData) return userData;
-        if (!userData.referralCount) userData.referralCount = 0;
+    const userRef = database.ref(`commuters/${newUserId}`);
+    const snap = await userRef.once('value');
+    const userData = snap.val() || {};
+
+    if (userData.binaryCountsProcessed) return;
+
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: referrerCode 
+    });
+    
+    if (window.commuterData) {
+        window.commuterData.referredBy = referrerCode;
+        window.commuterData.binaryCountsProcessed = true;
+    }
+
+    let l1Id = null;
+    let l1Node = 'commuters';
+    
+    // Check both Nodes 
+    const codeQueryC = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
+    const phoneQueryC = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
+    const codeQueryU = await database.ref('users').orderByChild('referralCode').equalTo(referrerCode).once('value');
+    const phoneQueryU = await database.ref('users').orderByChild('phone').equalTo(referrerCode).once('value');
+    
+    if (codeQueryC.exists()) { codeQueryC.forEach(c => { l1Id = c.key; l1Node = 'commuters'; }); } 
+    else if (phoneQueryC.exists()) { phoneQueryC.forEach(c => { l1Id = c.key; l1Node = 'commuters'; }); }
+    else if (codeQueryU.exists()) { codeQueryU.forEach(c => { l1Id = c.key; l1Node = 'users'; }); }
+    else if (phoneQueryU.exists()) { phoneQueryU.forEach(c => { l1Id = c.key; l1Node = 'users'; }); }
+    else {
+        const uidQueryC = await database.ref(`commuters/${referrerCode}`).once('value');
+        if (uidQueryC.exists()) { l1Id = uidQueryC.key; l1Node = 'commuters'; }
+        else {
+            const uidQueryU = await database.ref(`users/${referrerCode}`).once('value');
+            if (uidQueryU.exists()) { l1Id = uidQueryU.key; l1Node = 'users'; }
+        }
+    }
+
+    // CREATE PENDING EARNING FOR AMBASSADOR
+    if (l1Id) {
+        await database.ref(`${l1Node}/${l1Id}`).transaction(data => {
+            if (data) {
+                data.level1_invites = (data.level1_invites || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1; 
+                data.pendingReferrals = (data.pendingReferrals || 0) + 1; 
+            }
+            return data;
+        });
         
-        // 🟢 Gives 2 rides of R25 instead of R50 cash
-        userData.promoRemaining = (userData.promoRemaining || 0) + 2;
-        userData.promoValue = 25; 
-        userData.referralCount += 1;
-        return userData;
-    }, function(error, committed, snapshot) {
-        if (committed) {
-            database.ref(`notifications/commuters/${referrerId}`).push({
-                type: 'referral_bonus',
-                title: 'New Referral!',
-                message: `A friend joined using your link. You earned 2x R25 ride vouchers!`,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
+        await database.ref(`${l1Node}/${l1Id}/earnings/ref_pending_${newUserId}`).set({
+            id: 'ref_pending_' + newUserId,
+            type: 'referral_reward',
+            amount: 50.00,
+            description: `Pending: ${userData.name || 'New User'} (Awaiting 1st Trip)`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP,
+            status: 'pending',
+            linkedUserId: newUserId
+        });
+
+        database.ref(`notifications/${l1Node}/${l1Id}`).push({
+            type: 'referral_bonus_pending',
+            title: 'New Sign-up!',
+            message: `A user registered using your link! R50 is pending until they take their first trip.`,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+};
+
+window.checkFirstTripCompletion = function() {
+    if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
+    if (window.commuterData.firstTripReferralProcessed) return;
+
+    const referrerCode = window.commuterData.referredBy; 
+
+    firebase.database().ref(`commuters/${window.userId}`).update({
+        firstTripReferralProcessed: true
+    });
+    window.commuterData.firstTripReferralProcessed = true;
+
+    Promise.all([
+        database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value'),
+        database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value'),
+        database.ref(`commuters/${referrerCode}`).once('value'),
+        database.ref('users').orderByChild('referralCode').equalTo(referrerCode).once('value'),
+        database.ref('users').orderByChild('phone').equalTo(referrerCode).once('value'),
+        database.ref(`users/${referrerCode}`).once('value')
+    ]).then(([codeQC, phoneQC, uidQC, codeQU, phoneQU, uidQU]) => {
+        let ambassadorId = null;
+        let l1Node = 'commuters';
+        
+        if (codeQC.exists()) { codeQC.forEach(c => { ambassadorId = c.key; l1Node = 'commuters'; }); }
+        else if (phoneQC.exists()) { phoneQC.forEach(c => { ambassadorId = c.key; l1Node = 'commuters'; }); }
+        else if (uidQC.exists()) { ambassadorId = uidQC.key; l1Node = 'commuters'; }
+        else if (codeQU.exists()) { codeQU.forEach(c => { ambassadorId = c.key; l1Node = 'users'; }); }
+        else if (phoneQU.exists()) { phoneQU.forEach(c => { ambassadorId = c.key; l1Node = 'users'; }); }
+        else if (uidQU.exists()) { ambassadorId = uidQU.key; l1Node = 'users'; }
+
+        if (ambassadorId && ambassadorId !== window.userId) {
+            const earnAmount = 50.00; 
+
+            firebase.database().ref(`${l1Node}/${ambassadorId}`).transaction(function(userData) {
+                if (!userData) return userData;
+                userData.credits = (userData.credits || 0) + earnAmount;
+                userData.referralEarnings = (userData.referralEarnings || 0) + earnAmount;
+                userData.totalEarnings = (userData.totalEarnings || 0) + earnAmount;
+                userData.pendingReferrals = Math.max(0, (userData.pendingReferrals || 0) - 1);
+                return userData;
+            }, function(error, committed) {
+                if (committed) {
+                    firebase.database().ref(`${l1Node}/${ambassadorId}/earnings/ref_pending_${window.userId}`).update({
+                        description: `Completed: ${window.commuterData.name || 'Friend'} 1st Trip!`,
+                        status: 'completed',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+
+                    firebase.database().ref(`notifications/${l1Node}/${ambassadorId}`).push({
+                        type: 'referral_bonus',
+                        title: 'R50 Reward Unlocked! 🎉',
+                        message: `Your referral (${window.commuterData.name || 'A user'}) completed their first trip! R50 added to your wallet.`,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
             });
         }
     });
 };
-// 5. Update Backend Function 2 to pay R50
+
 window.processReferralReward = function(referrerId) {
     if (!referrerId) return;
 
@@ -17151,17 +17396,7 @@ window.confirmAccountDeletion = async function() {
           openModal('promoteAndEarnPopup');
       }
 
-      function shareOnWhatsApp() {
-          const message = `Check out the Asiye App! Catch taxis and shop on the market: ${APP_SHARE_LINK}`;
-          const whatsappUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
-          window.open(whatsappUrl, '_blank');
-      }
-
-   
-
-
-
-
+ 
           /**
            * Placeholder function for Facebook SDK integration.
            */
@@ -17490,10 +17725,12 @@ window.confirmAccountDeletion = async function() {
   // =====================================================================
 // UNIFIED, FREEZE-PROOF MODAL MANAGER
 // =====================================================================
+// =======================================================================
+// FIXED: openModal geocoder options to include places & localities
+// =======================================================================
 function openModal(modalId) {
     console.log("Opening Modal:", modalId);
 
-    // Prevent recursion - check if we're already opening a modal
     if (window._isOpeningModal) {
         console.warn("Modal already opening, skipping recursion");
         return;
@@ -17502,14 +17739,13 @@ function openModal(modalId) {
     window._isOpeningModal = true;
 
     try {
-        // 1. Shared Geocoder Options (Includes Malls & Ranks)
-        // Wrapped in safety checks to prevent crashes if map/coords aren't ready
         if (typeof mapboxgl !== 'undefined' && typeof map !== 'undefined' && typeof commuterLng !== 'undefined' && typeof commuterLat !== 'undefined') {
             const geocoderOptions = {
                 accessToken: mapboxgl.accessToken,
                 mapboxgl: mapboxgl,
                 marker: false,
-                types: 'address,poi',
+                // UPDATED: Now includes place, locality, and neighborhood to support city/town searches
+                types: 'address,poi,place,locality,neighborhood', 
                 proximity: [commuterLng, commuterLat],
                 localGeocoder: typeof forwardGeocoder === 'function' ? forwardGeocoder : null,
                 zoom: 18,
@@ -17518,36 +17754,33 @@ function openModal(modalId) {
             };
 
             // --- CASE 1: Main Destination Prompt (Taxi Search) ---
-           // Inside openModal(modalId) find this block:
-if (modalId === 'destinationPromptPopup' && typeof parcelGeocoder === 'undefined' || !window.geocoder) {
-    window.geocoder = new MapboxGeocoder(geocoderOptions);
-    const container = document.getElementById('geocoder-container');
-    if (container) {
-        container.innerHTML = '';
-        container.appendChild(window.geocoder.onAdd(map));
-        window.geocoder.on('result', (e) => {
-            userDropOffDestination = e.result.text;
-            // CRITICAL FIX: Save coords here too!
-            window.ehailingDestLng = e.result.geometry.coordinates[0];
-            window.ehailingDestLat = e.result.geometry.coordinates[1];
-        });
-    }
-}
-// --- CASE 2: Parcel Destination ---
-else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
-    window.parcelGeocoder = new MapboxGeocoder(geocoderOptions);
-    const container = document.getElementById('parcel-geocoder-container');
-    if (container) {
-        container.innerHTML = '';
-        container.appendChild(window.parcelGeocoder.onAdd(map));
-        window.parcelGeocoder.on('result', (e) => {
-            userDropOffDestination = e.result.text;
-            // CRITICAL FIX: Save coords here too!
-            window.ehailingDestLng = e.result.geometry.coordinates[0];
-            window.ehailingDestLat = e.result.geometry.coordinates[1];
-        });
-    }
-}
+            if (modalId === 'destinationPromptPopup' && (typeof parcelGeocoder === 'undefined' || !window.geocoder)) {
+                window.geocoder = new MapboxGeocoder(geocoderOptions);
+                const container = document.getElementById('geocoder-container');
+                if (container) {
+                    container.innerHTML = '';
+                    container.appendChild(window.geocoder.onAdd(map));
+                    window.geocoder.on('result', (e) => {
+                        userDropOffDestination = e.result.text;
+                        window.ehailingDestLng = e.result.geometry.coordinates[0];
+                        window.ehailingDestLat = e.result.geometry.coordinates[1];
+                    });
+                }
+            }
+            // --- CASE 2: Parcel Destination ---
+            else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
+                window.parcelGeocoder = new MapboxGeocoder(geocoderOptions);
+                const container = document.getElementById('parcel-geocoder-container');
+                if (container) {
+                    container.innerHTML = '';
+                    container.appendChild(window.parcelGeocoder.onAdd(map));
+                    window.parcelGeocoder.on('result', (e) => {
+                        userDropOffDestination = e.result.text;
+                        window.ehailingDestLng = e.result.geometry.coordinates[0];
+                        window.ehailingDestLat = e.result.geometry.coordinates[1];
+                    });
+                }
+            }
             // --- CASE 3: Change Pickup Location (Manual Pin) ---
             else if (modalId === 'changeLocationPopup' && !window.pickupGeocoder) {
                 const pickupOpts = { ...geocoderOptions, placeholder: 'Search pickup address' };
@@ -17589,12 +17822,9 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
             }
         }
 
-        // --- FINAL STEP: VISUALLY OPEN THE MODAL (THE FIX) ---
         const targetModal = document.getElementById(modalId);
         if (targetModal) {
             targetModal.classList.add('open');
-
-            // CRITICAL FIX: Force above the Dashboard (80000) and override display:none
             targetModal.style.setProperty('display', 'flex', 'important');
             targetModal.style.setProperty('z-index', '100005', 'important');
             targetModal.style.setProperty('opacity', '1', 'important');
@@ -17602,23 +17832,18 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
 
             targetModal.scrollTop = 0;
 
-            // Reattach ads logic for specific modals
             if (modalId === 'taxiListSheet' && typeof setupTaxiSheetAds === 'function') {
                 setTimeout(setupTaxiSheetAds, 300);
             }
-        } else {
-            console.error("Could not find modal with ID:", modalId);
         }
     } catch (err) {
         console.error("Error in openModal:", err);
     } finally {
-        // Reset the flag after opening
         setTimeout(() => {
             window._isOpeningModal = false;
         }, 100);
     }
-}
-  async function snapToRoad(lng, lat) {
+}  async function snapToRoad(lng, lat) {
       return new Promise((resolve) => {
           // Use Mapbox Map Matching API for precise road snapping
           const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${lng},${lat};${lng},${lat}?access_token=${mapboxgl.accessToken}&radiuses=20&geometries=geojson`;
@@ -21161,109 +21386,68 @@ window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
     }
 };
 
-// =======================================================================
-// 4. MAPBOX POI-OVERDRIVE SEARCH ENGINE & INPUT LISTENER
-// =======================================================================
-window.setupDestAutocomplete = function() {
-    const destInput = document.getElementById('uberDestInput');
-    const pickupInput = document.getElementById('uberPickupInput');
-    let searchTimeout = null;
+function performLiveSearch(query, type) {
+    let cleanQuery = query.toLowerCase().trim();
+    
+    // Proximity biasing based on passenger coordinates
+    const proximity = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+    
+    // UPDATED: Now queries poi, address, place, locality, and neighborhood
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=poi,address,place,locality,neighborhood${proximity}&limit=12`;
 
-    // 1. Live Keyboard Listener
-    window.handleImmediateInput = function(e, type) {
-        const query = e.target.value;
-        if (searchTimeout) clearTimeout(searchTimeout);
+    fetch(url)
+        .then(res => {
+            if (!res.ok) throw new Error('API Error');
+            return res.json();
+        })
+        .then(data => {
+            if (data.features) {
+                // Combine with local hardcoded locations (Malls/Ranks)
+                const localMatches = saKeyLocations.filter(loc => 
+                    loc.name.toLowerCase().includes(cleanQuery)
+                ).map(loc => ({
+                    text: loc.name,
+                    place_name: loc.name + ", South Africa",
+                    geometry: { coordinates: [loc.lng, loc.lat] },
+                    properties: { category: loc.type },
+                    place_type: ["poi"]
+                }));
 
-        if (type === 'destination') {
-            window.ehailingDestLat = null;
-            window.ehailingDestLng = null;
-            window.userDropOffDestination = query;
-        }
+                let combined = [...localMatches, ...data.features];
 
-        if (!query || query.trim().length < 2) {
-            window.restoreDefaultSuggestions();
-        } else {
-            window.showSearchingIndicator();
-            searchTimeout = setTimeout(() => {
-                performLiveSearch(query, type);
-            }, 350);
-        }
-    };
+                // Filter for 30km radius & remove duplicates
+                const seen = new Set();
+                const filteredResults = combined.filter(f => {
+                    const dist = calculateDistance(
+                        window.commuterLat, 
+                        window.commuterLng, 
+                        f.geometry.coordinates[1], 
+                        f.geometry.coordinates[0]
+                    );
+                    
+                    const isDuplicate = seen.has(f.text.toLowerCase());
+                    seen.add(f.text.toLowerCase());
+                    
+                    return dist <= 30 && !isDuplicate;
+                });
 
-    // 2. Input Re-binding
-    if (destInput) {
-        const newDestInput = destInput.cloneNode(true);
-        destInput.parentNode.replaceChild(newDestInput, destInput);
-        newDestInput.addEventListener('input', (e) => window.handleImmediateInput(e, 'destination'));
-    }
+                const listDiv = document.getElementById('uber-suggestions-list');
+                if (!listDiv) return;
 
-    if (pickupInput) {
-        const newPickupInput = pickupInput.cloneNode(true);
-        pickupInput.parentNode.replaceChild(newPickupInput, pickupInput);
-        newPickupInput.addEventListener('input', (e) => window.handleImmediateInput(e, 'pickup'));
-    }
-
-    // 3. Corrected Search Engine (Removed 'landmark' to fix 422 error)
-    function performLiveSearch(query, type) {
-        let cleanQuery = query.toLowerCase().trim();
-        
-        // Proper proximity formatting
-        const proximity = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
-        
-        // types=poi covers Malls, Schools, Clinics, Churches, and Businesses
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=poi,address${proximity}&limit=12`;
-
-        fetch(url)
-            .then(res => {
-                if (!res.ok) throw new Error('API Error');
-                return res.json();
-            })
-            .then(data => {
-                if (data.features) {
-                    // Combine with local hardcoded locations (Malls/Ranks)
-                    const localMatches = saKeyLocations.filter(loc => 
-                        loc.name.toLowerCase().includes(cleanQuery)
-                    ).map(loc => ({
-                        text: loc.name,
-                        place_name: loc.name + ", South Africa",
-                        geometry: { coordinates: [loc.lng, loc.lat] },
-                        properties: { category: loc.type }
-                    }));
-
-                    let combined = [...localMatches, ...data.features];
-
-                    // Filter for 30km radius & remove duplicates
-                    const seen = new Set();
-                    const filteredResults = combined.filter(f => {
-                        const dist = calculateDistance(
-                            window.commuterLat, 
-                            window.commuterLng, 
-                            f.geometry.coordinates[1], 
-                            f.geometry.coordinates[0]
-                        );
-                        
-                        const isDuplicate = seen.has(f.text.toLowerCase());
-                        seen.add(f.text.toLowerCase());
-                        
-                        return dist <= 30 && !isDuplicate;
-                    });
-
-                    const listDiv = document.getElementById('uber-suggestions-list');
-                    if (!listDiv) return;
-
-                    if (filteredResults.length === 0) {
-                        listDiv.innerHTML = `<div style="padding: 20px; color: #666; text-align: center;">No matches found within 30km.</div>`;
-                    } else {
-                        window.renderUberSuggestions(filteredResults, type);
-                    }
+                if (filteredResults.length === 0) {
+                    listDiv.innerHTML = `<div style="padding: 20px; color: #666; text-align: center;">No matches found within 30km.</div>`;
+                } else {
+                    window.renderUberSuggestions(filteredResults, type);
                 }
-            })
-            .catch(err => {
-                console.error("Geocoding failed:", err);
-                window.restoreDefaultSuggestions();
-            });
-    } // performLiveSearch closed
-};   window.populateEHailingListSheet = function(priceStr, etaMins) {
+            }
+        })
+        .catch(err => {
+            console.error("Geocoding failed:", err);
+            window.restoreDefaultSuggestions();
+        });
+}
+
+   window.populateEHailingListSheet = function(priceStr, etaMins) {
       const sheet = document.getElementById('taxiListSheet');
       var fName = window.commuterData?.name || 'Passenger';
 
@@ -23936,101 +24120,6 @@ function updatePaymentButtons(taxiId, selectedMethod) {
 
 window.baseCalculatedFare = 0;
 window.currentNegotiatedFare = 0;
-window.populateEHailingCategories = function(standardPrice, clubPrice, xlPrice) {
-    const sheet = document.getElementById('taxiListSheet');
-    if (!sheet) return;
-
-    window.baseCalculatedFare = standardPrice;
-    window.currentNegotiatedFare = standardPrice;
-    window.selectedRideCategory = 'standard'; 
-    window.calculatedTripPrice = standardPrice;
-    window.selectedPaymentMethod = 'cash'; // Default to cash
-
-    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
-
-    sheet.innerHTML = `
-        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
-        
-        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch;">
-            
-            <div style="display:flex; align-items:center; margin-bottom: 20px;">
-                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Choose a ride</h4>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
-                <div id="cat-club" onclick="selectCategory('club', ${clubPrice})" style="border: 2.5px solid transparent; background: #2c2c2e; border-radius: 18px; padding: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="width: 44px; height: 44px; background: rgba(255,159,10,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #FF9F0A;"><i class="fas fa-users"></i></div>
-                        <div>
-                            <div style="font-weight: 700; font-size: 1rem;">Asiye Club</div>
-                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared ride</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 1.1rem; font-weight: 800;">R${clubPrice}</div>
-                </div>
-
-                <div id="cat-standard" onclick="selectCategory('standard', ${standardPrice})" style="border: 2.5px solid #c5ff00; background: #2c2c2e; border-radius: 18px; padding: 14px; cursor: pointer;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                             <div style="width: 44px; height: 44px; background: rgba(197,255,0,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #c5ff00;"><i class="fas fa-car"></i></div>
-                            <div>
-                                <div style="font-weight: 700; font-size: 1rem;">Asiye Go</div>
-                                <div style="font-size: 0.75rem; color: #8e8e93;">Private ride</div>
-                            </div>
-                        </div>
-                        <div style="font-size: 1.1rem; font-weight: 800; color: #c5ff00;">R${standardPrice}</div>
-                    </div>
-
-                    <div id="negotiatorBox" style="background: #1c1c1e; border-radius: 14px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
-                        <button onclick="adjustFare(-5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">-</button>
-                        <div style="text-align: center;">
-                            <div id="negotiatedFareDisplay" style="font-size: 1.5rem; font-weight: 900; color: #ffffff !important;">R${window.currentNegotiatedFare}</div>
-                            <div style="font-size: 0.65rem; color: #8e8e93; text-transform: uppercase;">Your offer</div>
-                        </div>
-                        <button onclick="adjustFare(5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">+</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- PAYMENT METHOD SECTION -->
-            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
-                <div style="font-size: 0.85rem; color: #8e8e93; margin-bottom: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Payment Method</div>
-                <div style="display: flex; gap: 10px;">
-                    <button id="payCashBtn" onclick="selectPayment('cash')" style="flex: 1; padding: 14px; border-radius: 14px; background: #28a745; color: white; border: none; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
-                        <i class="fas fa-money-bill-wave"></i> Cash
-                    </button>
-                    <button id="payCardBtn" onclick="selectPayment('card')" style="flex: 1; padding: 14px; border-radius: 14px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
-                        <i class="fas fa-credit-card"></i> Card / Wallet
-                    </button>
-                </div>
-                <div id="walletBalanceWarning" style="display: none; background: rgba(220,53,69,0.1); border: 1px solid #ffcdd2; color: #dc3545; padding: 10px; border-radius: 10px; font-size: 0.85rem; margin-top: 10px; font-weight: 600; line-height: 1.4;"></div>
-            </div>
-
-            <!-- PROMO SECTION -->
-            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
-                <div id="promoCodeInputSection" style="display: none; margin-bottom: 12px;">
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="manualPromoCodeField" placeholder="Enter code" style="flex: 1; background: #2c2c2e !important; border: 1px solid #3a3a3c !important; color: white !important; border-radius: 10px; padding: 10px;">
-                        <button onclick="applyManualPromoCode()" style="background: #0A84FF; border: none; color: white; border-radius: 10px; padding: 0 15px; font-weight: 700;">Apply</button>
-                    </div>
-                </div>
-                <div onclick="togglePromoCodeInput()" style="color: #0A84FF; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-tag"></i> <span>Add promo code</span>
-                </div>
-            </div>
-
-            <button id="findOffersBtn" onclick="submitNegotiatedRide()" style="width: 100%; background: #c5ff00; color: #000; font-weight: 900; font-size: 1.1rem; padding: 16px; border-radius: 16px; border: none; cursor: pointer; transition: 0.2s;">
-                Request Asiye Go (CASH - R${standardPrice})
-            </button>
-        </div>
-    `;
-    
-    if (!sheet.classList.contains('open')) sheet.classList.add('open');
-    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
-};
 window.adjustFare = function(amount) {
     // Cannot bid lower than (Base Fare - R15), absolute min R20
     let minAllowed = window.baseCalculatedFare - 15;
@@ -24850,33 +24939,238 @@ window.selectPayment = function(method) {
     }
 };
 
-// Also update the selectCategory function to update the button text when toggling between Club/Standard
+// =======================================================================
+// UPDATED: populateEHailingCategories (Club Only: R22 Base + R5/km / 3)
+// =======================================================================
+window.populateEHailingCategories = function(standardPrice, clubPrice, xlPrice) {
+    const sheet = document.getElementById('taxiListSheet');
+    if (!sheet) return;
+
+    // Retrieve the calculated route distance
+    const dist = window.calculatedTripDistance || 5;
+
+    // Asiye Go (Private on-demand): Standard R30 Base + R8/km (Min R35)
+    const asiyeGoPrice = Math.max(35, Math.round(30 + (dist * 8.00)));
+
+    // Asiye Club (Shared commute): (R22 Base + R5/km) / 3 passengers (Min R20)
+    const asiyeClubSingleTripPrice = Math.max(20, Math.round((22.00 + (dist * 5.00)) / 3));
+
+    // Save rates globally for transaction matching
+    window.baseCalculatedFare = asiyeGoPrice;
+    window.currentNegotiatedFare = asiyeGoPrice;
+    window.calculatedTripPrice = asiyeGoPrice; // Fallback
+    window.calculatedClubSingleTripPrice = asiyeClubSingleTripPrice;
+
+    // Pre-select "Asiye Club" ('club') as the default category
+    window.selectedRideCategory = 'club'; 
+    window.selectedPaymentMethod = 'cash'; 
+
+    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
+
+    sheet.innerHTML = `
+        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
+        
+        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; height: 100%;">
+            
+            <div style="display:flex; align-items:center; margin-bottom: 20px; flex-shrink: 0;">
+                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Choose a ride</h4>
+            </div>
+
+            <!-- Categories Selection List -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; flex-shrink: 0;">
+                
+                <!-- Category 1: Asiye Club -->
+                <div id="cat-club" onclick="selectCategory('club', ${asiyeClubSingleTripPrice})" style="border: 2.5px solid #FF9F0A; background: #2c2c2e; border-radius: 18px; padding: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 44px; height: 44px; background: rgba(255,159,10,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #FF9F0A;"><i class="fas fa-users"></i></div>
+                        <div>
+                            <div style="font-weight: 700; font-size: 1rem;">Asiye Club</div>
+                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared with other two people</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 1.15rem; font-weight: 800; color: #FF9F0A;">R${asiyeClubSingleTripPrice}</div>
+                </div>
+
+                <!-- Category 2: Asiye Go (Standard Private) -->
+                <div id="cat-standard" onclick="selectCategory('standard', ${asiyeGoPrice})" style="border: 2.5px solid transparent; background: #2c2c2e; border-radius: 18px; padding: 14px; cursor: pointer;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                             <div style="width: 44px; height: 44px; background: rgba(197,255,0,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #c5ff00;"><i class="fas fa-car"></i></div>
+                            <div>
+                                <div style="font-weight: 700; font-size: 1rem;">Asiye Go</div>
+                                <div style="font-size: 0.75rem; color: #8e8e93;">Travel alone of with family</div>
+                            </div>
+                        </div>
+                        <div style="font-size: 1.15rem; font-weight: 800; color: #c5ff00;">R${asiyeGoPrice}</div>
+                    </div>
+
+                    <!-- Negotiation Box (Only visible when Asiye Go is selected) -->
+                    <div id="negotiatorBox" style="background: #1c1c1e; border-radius: 14px; padding: 12px; display: none; align-items: center; justify-content: space-between; margin-top: 12px;">
+                        <button onclick="adjustFare(-5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">-</button>
+                        <div style="text-align: center;">
+                            <div id="negotiatedFareDisplay" style="font-size: 1.5rem; font-weight: 900; color: #ffffff !important;">R${window.currentNegotiatedFare}</div>
+                            <div style="font-size: 0.65rem; color: #8e8e93; text-transform: uppercase;">Your offer</div>
+                        </div>
+                        <button onclick="adjustFare(5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DYNAMIC DETAIL & BOOKING PANEL AREA -->
+            <div id="dynamicBookingPanel" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;">
+                <!-- Content is populated dynamically based on category selection -->
+            </div>
+        </div>
+    `;
+    
+    // Explicitly update the bottom action card to default to Asiye Club panel on render
+    window.selectCategory('club', asiyeClubSingleTripPrice);
+
+    if (!sheet.classList.contains('open')) sheet.classList.add('open');
+    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
+};
+// =======================================================================
+// FIXED: selectCategory (Dynamically locks panels and displays status)
+// =======================================================================
 window.selectCategory = function(cat, price) {
     window.selectedRideCategory = cat;
     const isStandard = (cat === 'standard');
-    window.calculatedTripPrice = isStandard ? window.currentNegotiatedFare : price;
 
     const clubCard = document.getElementById('cat-club');
     const stdCard = document.getElementById('cat-standard');
     const negotiatorBox = document.getElementById('negotiatorBox');
-    const btn = document.getElementById('findOffersBtn');
+    const bookingPanel = document.getElementById('dynamicBookingPanel');
+
+    if (!bookingPanel) return;
 
     if (isStandard) {
-        stdCard.style.border = '2px solid #c5ff00';
-        clubCard.style.border = '2px solid transparent';
-        negotiatorBox.style.display = 'flex';
-        if (btn) btn.style.background = '#c5ff00';
-    } else {
-        clubCard.style.border = '2px solid #FF9F0A';
-        stdCard.style.border = '2px solid transparent';
-        negotiatorBox.style.display = 'none';
-        if (btn) btn.style.background = '#FF9F0A';
-    }
-    
-    // Re-trigger payment text rendering
-    selectPayment(window.selectedPaymentMethod || 'cash');
-};
+        // Standard (Asiye Go) Selection State
+        window.calculatedTripPrice = window.currentNegotiatedFare;
+        stdCard.style.border = '2.5px solid #c5ff00';
+        clubCard.style.border = '2.5px solid transparent';
+        if (negotiatorBox) negotiatorBox.style.display = 'flex';
 
+        // Render standard on-demand checkout options (Payment methods + Request Button)
+        const availableCredit = parseFloat(window.commuterData?.credits || 0);
+        bookingPanel.innerHTML = `
+            <!-- PAYMENT METHOD SECTION -->
+            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
+                <div style="font-size: 0.85rem; color: #8e8e93; margin-bottom: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Payment Method</div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="payCashBtn" onclick="selectPayment('cash')" style="flex: 1; padding: 14px; border-radius: 14px; background: #28a745; color: white; border: none; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
+                        <i class="fas fa-money-bill-wave"></i> Cash
+                    </button>
+                    <button id="payCardBtn" onclick="selectPayment('card')" style="flex: 1; padding: 14px; border-radius: 14px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
+                        <i class="fas fa-credit-card"></i> Card / Wallet
+                    </button>
+                </div>
+                <div id="walletBalanceWarning" style="display: none; background: rgba(220,53,69,0.1); border: 1px solid #ffcdd2; color: #dc3545; padding: 10px; border-radius: 10px; font-size: 0.85rem; margin-top: 10px; font-weight: 600; line-height: 1.4;"></div>
+            </div>
+
+            <!-- PROMO SECTION -->
+            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
+                <div id="promoCodeInputSection" style="display: none; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="manualPromoCodeField" placeholder="Enter code" style="flex: 1; background: #2c2c2e !important; border: 1px solid #3a3a3c !important; color: white !important; border-radius: 10px; padding: 10px;">
+                        <button onclick="applyManualPromoCode()" style="background: #0A84FF; border: none; color: white; border-radius: 10px; padding: 0 15px; font-weight: 700;">Apply</button>
+                    </div>
+                </div>
+                <div onclick="togglePromoCodeInput()" style="color: #0A84FF; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-tag"></i> <span>Add promo code</span>
+                </div>
+            </div>
+
+            <button id="findOffersBtn" onclick="submitNegotiatedRide()" style="width: 100%; background: #c5ff00; color: #000; font-weight: 900; font-size: 1.1rem; padding: 16px; border-radius: 16px; border: none; cursor: pointer; transition: 0.2s;">
+                Request Asiye Go (CASH - R${window.currentNegotiatedFare})
+            </button>
+        `;
+        selectPayment(window.selectedPaymentMethod || 'cash');
+
+    } else {
+        // Asiye Club Selection State
+        window.calculatedTripPrice = window.calculatedClubSingleTripPrice;
+        clubCard.style.border = '2.5px solid #FF9F0A';
+        stdCard.style.border = '2.5px solid transparent';
+        if (negotiatorBox) negotiatorBox.style.display = 'none';
+
+        // Check if commuter already has a registered or active subscription
+        const sub = window.commuterData?.clubSubscription;
+
+        if (sub) {
+            if (sub.status === 'pending_allocation') {
+                // CASE A: User has booked, waiting for matching approval. Hide Register, show pending status.
+                bookingPanel.innerHTML = `
+                    <div style="background: rgba(255, 159, 10, 0.1); border-radius: 20px; padding: 18px 15px; border: 1px solid #FF9F0A; margin-bottom: 18px; text-align: center; animation: fadeIn 0.3s ease;">
+                        <i class="fas fa-hourglass-half" style="font-size: 2.2rem; color: #FF9F0A; margin-bottom: 12px; display: block; filter: drop-shadow(0 0 10px rgba(255,159,10,0.2));"></i>
+                        <h5 style="margin: 0 0 6px 0; color: #FF9F0A; font-size: 1.05rem; font-weight: 900;">Booking Reserved</h5>
+                        <p style="margin: 0; color: #ccc; font-size: 0.85rem; line-height: 1.5;">
+                            Booking reserved, waiting for approval. We are matching you with a dedicated driver and commute pool.
+                        </p>
+                    </div>
+
+                    <button class="btn" disabled style="width: 100%; background: #2c2c2e; color: #666; border: 1px solid #333; font-weight: 800; font-size: 1.05rem; padding: 15px; border-radius: 14px; cursor: not-allowed; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fas fa-lock"></i> Registration Locked (Active Booking)
+                    </button>
+                `;
+            } else if (sub.status === 'allocated' && !sub.paymentAuthorized) {
+                // CASE B: Matched but requires payment confirmation
+                bookingPanel.innerHTML = `
+                    <div style="background: rgba(48, 209, 88, 0.1); border-radius: 20px; padding: 18px 15px; border: 1px solid #30D158; margin-bottom: 18px; text-align: center; animation: fadeIn 0.3s ease;">
+                        <i class="fas fa-car-side" style="font-size: 2.2rem; color: #30D158; margin-bottom: 12px; display: block;"></i>
+                        <h5 style="margin: 0 0 6px 0; color: #30D158; font-size: 1.05rem; font-weight: 900;">Vehicle Allocated!</h5>
+                        <p style="margin: 0 0 14px 0; color: #ccc; font-size: 0.85rem; line-height: 1.5;">
+                            A vehicle is ready for your commute. Please authorize payment to activate your voucher.
+                        </p>
+                        <button class="btn" onclick="window.triggerPaymentAuthorizationAlert(window.commuterData.clubSubscription)" style="width: 100%; background: #30D158 !important; color: white !important; font-weight: 900; border-radius: 12px; border: none; padding: 12px;">
+                            Authorize Payment
+                        </button>
+                    </div>
+                `;
+            } else if (sub.status === 'active' || sub.paymentAuthorized) {
+                // CASE C: Active Subscriber. Ready to Summon!
+                const voucherCode = sub.voucherCode || 'N/A';
+                bookingPanel.innerHTML = `
+                    <div style="background: rgba(48, 209, 88, 0.1); border-radius: 16px; padding: 14px 15px; border: 1px solid #30D158; margin-bottom: 18px; text-align: left; animation: fadeIn 0.3s ease; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <span style="font-size: 0.7rem; color: #30D158; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Active Subscription</span>
+                            <div style="font-size: 1.15rem; font-weight: 900; color: white; margin-top: 2px; font-family: monospace; letter-spacing: 1px;">${voucherCode}</div>
+                        </div>
+                        <i class="fas fa-shield-check" style="color: #30D158; font-size: 1.5rem;"></i>
+                    </div>
+
+                    <button onclick="window.openAsiyeClubBookNow()" style="width: 100%; background: #FF9F0A; color: black; font-weight: 900; font-size: 1.05rem; padding: 15px; border-radius: 14px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fas fa-ticket-alt"></i> Book Now (Use Voucher)
+                    </button>
+                `;
+            }
+        } else {
+            // CASE D: Default state. No subscription found yet. Show options.
+            bookingPanel.innerHTML = `
+                <div style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #3A3A3C; margin-bottom: 18px; text-align: left; animation: fadeIn 0.3s ease;">
+                    <h5 style="margin: 0 0 6px 0; color: #FF9F0A; font-size: 0.95rem; font-weight: 800;"><i class="fas fa-info-circle"></i> Asiye Club Subscription</h5>
+                    <p style="margin: 0; color: #ccc; font-size: 0.8rem; line-height: 1.45;">
+                        Asiye Club uses dedicated vehicles on daily routes. Click <b>Book Now</b> if you have an active voucher, or <b>Register</b> to create your subscription waitlist profile.
+                    </p>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                    <!-- Action 1: Summon with Voucher -->
+                    <button onclick="window.openAsiyeClubBookNow()" style="width: 100%; background: #FF9F0A; color: black; font-weight: 900; font-size: 1.05rem; padding: 15px; border-radius: 14px; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fas fa-ticket-alt"></i> Book Now (Use Voucher)
+                    </button>
+
+                    <!-- Action 2: Launch Registration Wizard & Pre-populate Current Route -->
+                    <button onclick="window.launchPrePopulatedClubRegister()" style="width: 100%; background: #2c2c2e; color: white; border: 1px solid #444; font-weight: 800; font-size: 1.05rem; padding: 15px; border-radius: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fas fa-user-plus"></i> Register for Club on this Route
+                    </button>
+                </div>
+            `;
+        }
+    }
+};
 window.cancelCurrentRequest = async function() {
     if (!window.currentRequestId) {
         console.warn("No active request to cancel");
@@ -26595,6 +26889,75 @@ window.currentRequestStatusListener = null;
 window.activeListenerReqId = null;
 
 
+// =======================================================================
+// UNIFIED PAYFAST TRANSACTION COMPLETED CALLBACK
+// =======================================================================
+window.onPaymentSuccess = function(paymentData) {
+    console.log("PayFast Payment Success Callback Caught:", paymentData);
+
+    // Case 1: Asiye Club Subscription activations
+    if (paymentData.paymentId && paymentData.paymentId.startsWith('club_sub_')) {
+        const voucherCode = paymentData.paymentId.replace('club_sub_', '');
+        window.activateClubSubscription(voucherCode);
+        return;
+    }
+
+    // Case 2: Standard Wallet top-ups
+    if (paymentData.paymentId && paymentData.paymentId.startsWith('wallet_topup_')) {
+        const topupAmount = parseFloat(paymentData.amount || 0);
+        database.ref(`commuters/${userId}`).once('value').then(snap => {
+            const currentCredits = parseFloat(snap.val().credits || 0);
+            const newCredits = currentCredits + topupAmount;
+            
+            database.ref(`commuters/${userId}`).update({ credits: newCredits }).then(() => {
+                if (window.commuterData) window.commuterData.credits = newCredits;
+                updateSideMenuData();
+                updatePromoWalletDisplay();
+                showGenericMessage("Top-up Successful!", `R${topupAmount.toFixed(2)} has been credited to your wallet.`, "fa-wallet", "icon-success");
+            });
+        });
+        return;
+    }
+
+    // Case 3: Resuming standard ride bookings after payment redirects
+    if (paymentData.paymentId && paymentData.paymentId.startsWith('ride_')) {
+        const pendingBroadcastJson = sessionStorage.getItem('pendingRideBroadcast');
+        if (pendingBroadcastJson) {
+            const data = JSON.parse(pendingBroadcastJson);
+            sessionStorage.removeItem('pendingRideBroadcast');
+            
+            database.ref(`commuters/${userId}`).once('value').then(snap => {
+                const credits = parseFloat(snap.val().credits || 0) + parseFloat(paymentData.amount);
+                
+                database.ref(`commuters/${userId}`).update({ credits: credits }).then(() => {
+                    if (window.commuterData) window.commuterData.credits = credits;
+                    
+                    window.selectedPaymentMethod = 'card';
+                    window.calculatedTripPrice = data.calculatedPrice;
+                    window.selectedRideCategory = data.carCategory;
+                    window.userDropOffDestination = data.destination;
+                    
+                    if (typeof proceedWithBooking === 'function') {
+                        proceedWithBooking();
+                    }
+                });
+            });
+        }
+        return;
+    }
+
+    // Case 4: Asiye Delivery orders
+    if (paymentData.paymentId && paymentData.paymentId.startsWith('parcel_')) {
+        if (typeof completeDeliveryAfterPayment === 'function') {
+            completeDeliveryAfterPayment();
+        }
+        return;
+    }
+};
+
+// =======================================================================
+// UNIFIED WALLET FARE DEBITS ON COMPLETION
+// =======================================================================
 window.deductWalletOnCompletion = function(reqId) {
     if (!reqId || !userId) return Promise.resolve(false);
 
@@ -26608,53 +26971,45 @@ window.deductWalletOnCompletion = function(reqId) {
         const req = snap.val();
         if (!req) return false;
 
-        // Isolate passenger profile values if dealing with pooling
-        let myTripData = req;
-        if (req.type === 'club' && req.passengers && req.passengers[userId]) {
-            myTripData = req.passengers[userId];
-        }
+        const isClub = req.carCategory === 'club';
+        const finalAmount = parseFloat(req.finalAmount || req.calculatedPrice || 0);
 
-        const appliedCredit = parseFloat(myTripData.appliedCredit || 0);
-        if (appliedCredit <= 0) {
+        if (finalAmount <= 0) {
             localStorage.setItem(deductionLockKey, "true");
             return true; 
         }
 
+        // Daily subscription cards are authorized upfront and debited per ride completion
+        if (isClub && req.paymentMethod === 'daily') {
+            console.log(`Processing authorized transaction of R${finalAmount} on client token profile...`);
+        }
+
         const commuterRef = database.ref(`commuters/${userId}`);
-        
         return commuterRef.transaction(currentProfile => {
             if (!currentProfile) return currentProfile;
 
-            // Initialize properties safely if not defined
-            const promoRemaining = currentProfile.promoRemaining || 0;
             const credits = parseFloat(currentProfile.credits || 0);
-
-            // Deduct promo count if applicable
-            if (promoRemaining > 0 && myTripData.paymentMethod === 'cash') {
-                currentProfile.promoRemaining = promoRemaining - 1;
+            
+            // Only deduct wallet credits if NOT already paid upfront via Weekly/Monthly voucher packages
+            if (req.paymentMethod === 'daily' || !isClub) {
+                currentProfile.credits = Math.max(0, credits - finalAmount);
             }
-
-            // Deduct numeric wallet credits
-            currentProfile.credits = Math.max(0, credits - appliedCredit);
 
             return currentProfile;
         }, (error, committed, snapshot) => {
-            if (error) {
-                console.error("Deduction transaction error:", error);
-            } else if (committed) {
+            if (committed) {
                 localStorage.setItem(deductionLockKey, "true");
                 const freshData = snapshot.val();
                 if (window.commuterData && freshData) {
                     window.commuterData.credits = freshData.credits;
-                    window.commuterData.promoRemaining = freshData.promoRemaining;
                 }
                 
-                // Add ledger transaction to earnings list
+                // Write transaction ledger details
                 database.ref(`commuters/${userId}/earnings`).push({
                     id: 'deduct_' + Date.now(),
                     type: 'withdrawal',
-                    amount: appliedCredit,
-                    description: 'Trip Fare Payment',
+                    amount: finalAmount,
+                    description: isClub ? 'Club Trip Completion Fare' : 'Taxi Ride Fare',
                     timestamp: firebase.database.ServerValue.TIMESTAMP,
                     status: 'completed'
                 });
@@ -26666,10 +27021,6 @@ window.deductWalletOnCompletion = function(reqId) {
         });
     });
 };
-// =======================================================================
-// COMMUTER APP: LIVE TRIP TRACKING & SYNCHRONIZATION (BOTTOM SHEET FIX)
-// =======================================================================
-
 // =======================================================================
 // COMMUTER APP: LIVE TRIP TRACKING & SYNCHRONIZATION (CLEAN BOTTOM SHEET)
 // =======================================================================
@@ -27315,13 +27666,32 @@ window.applyManualPromoCode = async function() {
     }
 
     const btn = document.querySelector('#promoCodeInputSection button');
-// --- CASE A: REDEEMING AN AMBASSADOR CODE (Binary Network) ---
-  if (code.startsWith('AMB-')) {
-        const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(code).once('value');
-        if (codeQuery.exists()) {
-            let ambId, ambData;
-            codeQuery.forEach(c => { ambId = c.key; ambData = c.val(); });
+    
+    // --- CASE A: REDEEMING AN AMBASSADOR CODE (Binary Network) ---
+    if (code.startsWith('AMB-') || code.length > 20 || /^\+?\d{10,}$/.test(code)) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        const codeQC = await database.ref('commuters').orderByChild('referralCode').equalTo(code).once('value');
+        const phoneQC = await database.ref('commuters').orderByChild('phone').equalTo(code).once('value');
+        const codeQU = await database.ref('users').orderByChild('referralCode').equalTo(code).once('value');
+        const phoneQU = await database.ref('users').orderByChild('phone').equalTo(code).once('value');
+        
+        let ambId = null;
+        if (codeQC.exists()) { codeQC.forEach(c => ambId = c.key); }
+        else if (phoneQC.exists()) { phoneQC.forEach(c => ambId = c.key); }
+        else if (codeQU.exists()) { codeQU.forEach(c => ambId = c.key); }
+        else if (phoneQU.exists()) { phoneQU.forEach(c => ambId = c.key); }
+        else {
+            const uidQC = await database.ref(`commuters/${code}`).once('value');
+            if (uidQC.exists()) ambId = uidQC.key;
+            else {
+                const uidQU = await database.ref(`users/${code}`).once('value');
+                if (uidQU.exists()) ambId = uidQU.key;
+            }
+        }
             
+        if (ambId) {
             if (ambId === userId) {
                 showGenericMessage("Failed", "You cannot use your own referral code.", "fa-exclamation-triangle", "icon-warning");
                 btn.disabled = false; btn.innerHTML = 'Apply'; return;
@@ -27354,11 +27724,12 @@ window.applyManualPromoCode = async function() {
         btn.disabled = false; btn.innerHTML = 'Apply';
         return;
     }
+
+    // --- CASE B: CLASSIC ASIYE STUDENT VOUCHERS ---
     const origText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
 
-    // 1. SECURITY CHECK: Enforce Commuter Phone Verification
     const currentCommuterPhone = commuterData?.phone || '';
     const isPhoneVerified = commuterData?.phoneVerified === true;
 
@@ -27374,15 +27745,12 @@ window.applyManualPromoCode = async function() {
         return;
     }
 
-    // Normalize commuter phone format: 0712345678
     const cleanCommuter = currentCommuterPhone.replace(/\D/g, '');
     const baseCommuter = cleanCommuter.slice(-9);
     const normalizedCommuterPhone = "0" + baseCommuter;
 
-    // --- CASE A: REDEEMING A SECURE AMBASSADOR VOUCHER ---
-   // --- CASE A: REDEEMING A SECURE AMBASSADOR VOUCHER ---
     if (code.startsWith('AS') && code.length === 8) {
-        
+      
         // 1. SECURITY CHECK: Enforce that Commuter has a registered Student Number
         const currentStudentNumber = commuterData?.studentNumber ? commuterData.studentNumber.toString().trim() : '';
         if (!currentStudentNumber) {
@@ -27633,73 +28001,6 @@ function getDriverVerificationOnboardingHtml() {
     `;
 }
 
-window.processFirstTripReferralReward = function() {
-    if (!userId || !commuterData || !commuterData.referredBy) return;
-
-    // Verify if they've already completed their first trip reward path to prevent duplication
-    if (commuterData.firstTripReferralProcessed === true) return;
-
-    const referrerPhone = commuterData.referredBy;
-
-    // Locate the ambassador profile linked to this phone number
-    database.ref('commuters').orderByChild('phone').equalTo(referrerPhone).once('value', snapshot => {
-        if (snapshot.exists()) {
-            let ambassadorId = null;
-            snapshot.forEach(child => {
-                ambassadorId = child.key;
-            });
-
-            // Prevent self-referral payouts
-            if (ambassadorId && ambassadorId !== userId) {
-                const earnAmount = 5.00; // R5.00 Student Onboard Reward upon first trip completion
-                const ambassadorRef = database.ref(`commuters/${ambassadorId}`);
-
-                ambassadorRef.transaction(function(userData) {
-                    if (!userData) return userData;
-                    
-                    if (!userData.credits) userData.credits = 0;
-                    if (!userData.referralEarnings) userData.referralEarnings = 0;
-                    if (!userData.totalEarnings) userData.totalEarnings = 0;
-                    if (!userData.referralCount) userData.referralCount = 0;
-
-                    // Apply referral metrics on verified completed ride
-                    userData.credits += earnAmount;
-                    userData.referralEarnings += earnAmount;
-                    userData.totalEarnings += earnAmount;
-                    userData.referralCount += 1;
-
-                    return userData;
-                }, function(error, committed) {
-                    if (committed) {
-                        // Mark first trip referral processed so we don't pay twice
-                        database.ref(`commuters/${userId}`).update({
-                            firstTripReferralProcessed: true
-                        });
-                        if (commuterData) commuterData.firstTripReferralProcessed = true;
-
-                        // Log history item inside Ambassador profile
-                        database.ref(`commuters/${ambassadorId}/earnings`).push({
-                            id: 'ref_' + Date.now(),
-                            type: 'referral_reward',
-                            amount: earnAmount,
-                            description: 'Referred Student Completed First Paid Trip',
-                            timestamp: firebase.database.ServerValue.TIMESTAMP,
-                            status: 'completed'
-                        });
-
-                        // Notify Ambassador
-                        database.ref(`notifications/commuters/${ambassadorId}`).push({
-                            type: 'referral_bonus',
-                            title: 'Referral Earned!',
-                            message: `Your referred student completed their first paid trip! You earned R${earnAmount.toFixed(2)}.`,
-                            timestamp: firebase.database.ServerValue.TIMESTAMP
-                        });
-                    }
-                });
-            }
-        }
-    });
-};
 
 // =======================================================================
 // MAPBOX REVERSE GEOCODER (Converts GPS to Street Address)
@@ -28064,13 +28365,33 @@ window.openEarningsDashboard = function(userData) {
         const adEarnings = data.adEarnings || 0;
         const clickEarnings = data.clickEarnings || 0;
         const referralEarnings = data.referralEarnings || 0;
+        
+        // Calculate Pending Rewards based on pending invites
+        const pendingRefs = parseInt(data.pendingReferrals || 0);
+        const pendingRewardsValue = pendingRefs * 50;
 
         const balDisplay = document.getElementById('totalBalanceDisplay');
         const adDisplay = document.getElementById('adEarningsDisplay');
         const clickDisplay = document.getElementById('clickEarningsDisplay');
         const refDisplay = document.getElementById('referralEarningsDisplay');
 
-        if (balDisplay) balDisplay.textContent = `R${totalCredits.toFixed(2)}`;
+        // Update the main green card to inject the pending warning beautifully
+        if (balDisplay) {
+            const greenCard = balDisplay.parentElement;
+            greenCard.innerHTML = `
+                <div style="font-size: 0.9em; opacity: 0.9; margin-bottom: 5px; text-transform: uppercase; font-weight: 800;">Available Cash Balance</div>
+                <div id="totalBalanceDisplay" style="font-size: 2.8em; font-weight: 900; line-height: 1;">R${totalCredits.toFixed(2)}</div>
+                
+                <div style="background: rgba(0, 0, 0, 0.2); border: 1px dashed rgba(255,255,255,0.4); padding: 12px; border-radius: 12px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="text-align: left;">
+                        <div style="font-size: 0.85rem; font-weight: 800; color: #FFD700;"><i class="fas fa-clock"></i> Pending Sign-ups</div>
+                        <div style="font-size: 0.65rem; opacity: 0.9; margin-top: 2px;">Unlocks when they take 1st trip</div>
+                    </div>
+                    <div style="font-size: 1.3rem; font-weight: 900; color: #FFD700;">R${pendingRewardsValue.toFixed(2)}</div>
+                </div>
+            `;
+        }
+
         if (adDisplay) adDisplay.textContent = `R${adEarnings.toFixed(2)}`;
         if (clickDisplay) clickDisplay.textContent = `R${clickEarnings.toFixed(2)}`;
         if (refDisplay) refDisplay.textContent = `R${referralEarnings.toFixed(2)}`;
@@ -28089,7 +28410,7 @@ window.openEarningsDashboard = function(userData) {
                     const color = isPending ? '#f8961e' : (isPositive ? '#28a745' : '#111');
                     const sign = isPositive && !isPending ? '+' : '';
                     const amountDisplay = isPending ? `⏳ Pending` : `${sign}R${Math.abs(tx.amount).toFixed(2)}`;
-                    const opacity = isPending ? '0.6' : '1';
+                    const opacity = isPending ? '0.7' : '1';
 
                     historyHtml += `
                         <div style="display: flex; justify-content: space-between; padding: 12px 10px; border-bottom: 1px solid #eee; font-size: 0.9rem; opacity: ${opacity};">
@@ -28106,7 +28427,6 @@ window.openEarningsDashboard = function(userData) {
     }
     openModal('earningsDashboardPopup');
 };
-
 
 function serviceUseExplanation(type) {
     if (type === 'work') return "Travelling to work";
@@ -28146,8 +28466,9 @@ window.showOnboardingSharePopup = function(goal, count) {
     openModal('genericMessagePopup');
 };
 
+
 window.copyOnboardRefLink = function() {
-    const shareText = `🚀 Asiye is giving cash rewards for sharing the app!\nDownload Asiye and use my invite code: ${userId}\n\n🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n🍏 iOS: ${IOS_STORE_LINK}`;
+    const shareText = `🚀 Asiye is giving R50 in ride vouchers for sharing the app!\nDownload Asiye and use my invite code to get R25 off your first ride: ${userId}\n\n🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n🍏 iOS: ${IOS_STORE_LINK}`;
     if (navigator.clipboard) {
         navigator.clipboard.writeText(shareText).then(() => {
             showToast("Invite message copied!", "success");
@@ -28156,7 +28477,7 @@ window.copyOnboardRefLink = function() {
 };
 
 window.shareOnboardWhatsApp = function(goal, count) {
-    const shareText = `🚀 Asiye is giving R${goal} for sharing the app! Please download the Asiye App and use my invite code: ${userId}\nEvery successful download helps unlock the reward. 🚗🎉\n\n🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n🍏 iOS: ${IOS_STORE_LINK}`;
+    const shareText = `🚀 Asiye is giving me R50 in ride vouchers for every friend I invite! Please download the Asiye App and use my invite code to get R25 off your first ride: ${userId}\n\n🤖 Android: ${ANDROID_STORE_LINK}&referrer=${userId}\n🍏 iOS: ${IOS_STORE_LINK}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
 };
 
@@ -28258,15 +28579,16 @@ window.saveUnifiedOnboardingData = async function() {
 
         // 🟢 PROCESS THE VOUCHER CLAIM (20% OFF)
         if (refCode) {
-            const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(refCode.toUpperCase()).once('value');
-            const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(refCode).once('value');
+            const codeQC = await database.ref('commuters').orderByChild('referralCode').equalTo(refCode.toUpperCase()).once('value');
+            const phoneQC = await database.ref('commuters').orderByChild('phone').equalTo(refCode).once('value');
+            const codeQU = await database.ref('users').orderByChild('referralCode').equalTo(refCode.toUpperCase()).once('value');
+            const phoneQU = await database.ref('users').orderByChild('phone').equalTo(refCode).once('value');
             
             let matchedReferrer = null;
-            if (codeQuery.exists()) {
-                codeQuery.forEach(c => { matchedReferrer = c.key; });
-            } else if (phoneQuery.exists()) {
-                phoneQuery.forEach(c => { matchedReferrer = c.key; });
-            }
+            if (codeQC.exists()) { codeQC.forEach(c => { matchedReferrer = c.key; }); }
+            else if (phoneQC.exists()) { phoneQC.forEach(c => { matchedReferrer = c.key; }); }
+            else if (codeQU.exists()) { codeQU.forEach(c => { matchedReferrer = c.key; }); }
+            else if (phoneQU.exists()) { phoneQU.forEach(c => { matchedReferrer = c.key; }); }
 
             if (matchedReferrer && matchedReferrer !== userId) {
                 updates.referredBy = refCode;
@@ -28274,6 +28596,13 @@ window.saveUnifiedOnboardingData = async function() {
                 updates.promoPercentage = 20; // Marks 20% discount
                 updates.binaryCountsProcessed = false;
                 showToast("Voucher claimed! 20% off your ride.", "success");
+                
+                // Set a short timeout to trigger processing after save is complete
+                setTimeout(() => {
+                    if (typeof window.processPendingReferralCounters === 'function') {
+                        window.processPendingReferralCounters(userId, refCode);
+                    }
+                }, 1000);
             } else {
                 showToast("Invalid Invite Code. Proceeding without voucher.", "warning");
             }
@@ -28297,43 +28626,6 @@ window.saveUnifiedOnboardingData = async function() {
     }
 };
 
-window.onPaymentSuccess = function(paymentData) {
-    if (typeof originalOnPaymentSuccessHandler === 'function') {
-        originalOnPaymentSuccessHandler(paymentData);
-    }
-
-    if (paymentData.paymentId.includes('ride_')) {
-        const pendingBroadcastJson = sessionStorage.getItem('pendingRideBroadcast');
-        
-        if (pendingBroadcastJson) {
-            console.log("Card payment successful. Resuming ride broadcast...");
-            const data = JSON.parse(pendingBroadcastJson);
-            sessionStorage.removeItem('pendingRideBroadcast');
-            
-            // 1. Add the paid funds to the wallet
-            database.ref(`commuters/${userId}`).once('value').then(snap => {
-                const credits = parseFloat(snap.val().credits || 0) + parseFloat(paymentData.amount);
-                
-                database.ref(`commuters/${userId}`).update({ credits: credits }).then(() => {
-                    if (window.commuterData) window.commuterData.credits = credits;
-                    
-                    // 2. Restore State
-                    window.selectedPaymentMethod = 'card';
-                    window.calculatedTripPrice = data.calculatedPrice;
-                    window.selectedRideCategory = data.carCategory;
-                    window.userDropOffDestination = data.destination;
-                    
-                    // 3. Fire the request perfectly!
-                    if (typeof proceedWithBooking === 'function') {
-                        proceedWithBooking();
-                    } else if (typeof window.proceedWithBooking === 'function') {
-                        window.proceedWithBooking();
-                    }
-                });
-            });
-        }
-    }
-};
 window.startWaitingTimer = function() {
     if (window.waitingTimerInterval) clearInterval(window.waitingTimerInterval);
     
@@ -28446,7 +28738,110 @@ window.rideNowPayFull = function(reqId, rideNowCost) {
             }
         });
 };
+// =======================================================================
+// FIXED & BALANCED: setupDestAutocomplete (With Nested performLiveSearch)
+// =======================================================================
+window.setupDestAutocomplete = function() {
+    const destInput = document.getElementById('uberDestInput');
+    const pickupInput = document.getElementById('uberPickupInput');
+    let searchTimeout = null;
 
+    // 1. Live Keyboard Listener
+    window.handleImmediateInput = function(e, type) {
+        const query = e.target.value;
+        if (searchTimeout) clearTimeout(searchTimeout);
+
+        if (type === 'destination') {
+            window.ehailingDestLat = null;
+            window.ehailingDestLng = null;
+            window.userDropOffDestination = query;
+        }
+
+        if (!query || query.trim().length < 2) {
+            window.restoreDefaultSuggestions();
+        } else {
+            window.showSearchingIndicator();
+            searchTimeout = setTimeout(() => {
+                performLiveSearch(query, type);
+            }, 350);
+        }
+    };
+
+    // 2. Input Re-binding
+    if (destInput) {
+        const newDestInput = destInput.cloneNode(true);
+        destInput.parentNode.replaceChild(newDestInput, destInput);
+        newDestInput.addEventListener('input', (e) => window.handleImmediateInput(e, 'destination'));
+    }
+
+    if (pickupInput) {
+        const newPickupInput = pickupInput.cloneNode(true);
+        pickupInput.parentNode.replaceChild(newPickupInput, pickupInput);
+        newPickupInput.addEventListener('input', (e) => window.handleImmediateInput(e, 'pickup'));
+    }
+
+    // 3. Search Engine (Includes Cities/Towns & Balanced Braces)
+    function performLiveSearch(query, type) {
+        let cleanQuery = query.toLowerCase().trim();
+        
+        // Proximity biasing based on passenger coordinates
+        const proximity = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+        
+        // Updated types to include place, locality, and neighborhood to support towns and cities (e.g. Durban, Johannesburg)
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=poi,address,place,locality,neighborhood${proximity}&limit=12`;
+
+        fetch(url)
+            .then(res => {
+                if (!res.ok) throw new Error('API Error');
+                return res.json();
+            })
+            .then(data => {
+                if (data.features) {
+                    // Combine with local hardcoded locations (Malls/Ranks)
+                    const localMatches = saKeyLocations.filter(loc => 
+                        loc.name.toLowerCase().includes(cleanQuery)
+                    ).map(loc => ({
+                        text: loc.name,
+                        place_name: loc.name + ", South Africa",
+                        geometry: { coordinates: [loc.lng, loc.lat] },
+                        properties: { category: loc.type },
+                        place_type: ["poi"]
+                    }));
+
+                    let combined = [...localMatches, ...data.features];
+
+                    // Filter for 30km radius & remove duplicates
+                    const seen = new Set();
+                    const filteredResults = combined.filter(f => {
+                        const dist = calculateDistance(
+                            window.commuterLat, 
+                            window.commuterLng, 
+                            f.geometry.coordinates[1], 
+                            f.geometry.coordinates[0]
+                        );
+                        
+                        const isDuplicate = seen.has(f.text.toLowerCase());
+                        seen.add(f.text.toLowerCase());
+                        
+                        return dist <= 30 && !isDuplicate;
+                    });
+
+                    const listDiv = document.getElementById('uber-suggestions-list');
+                    if (!listDiv) return;
+
+                    if (filteredResults.length === 0) {
+                        listDiv.innerHTML = `<div style="padding: 20px; color: #666; text-align: center;">No matches found within 30km.</div>`;
+                    } else {
+                        window.renderUberSuggestions(filteredResults, type);
+                    }
+                }
+            })
+            .catch(err => {
+                console.error("Geocoding failed:", err);
+                window.restoreDefaultSuggestions();
+            });
+    }
+};
 window.initDualGeocoders = async function() {
     const destContainer = document.getElementById('uber-dest-container');
     const pickupContainer = document.getElementById('uber-pickup-container');
@@ -28729,9 +29124,13 @@ window.showTripCompletedScreen = async function(reqId) {
 
         modal.classList.add('open');
 
-        // Auto deduct credits
         if (typeof window.deductWalletOnCompletion === 'function') {
             setTimeout(() => window.deductWalletOnCompletion(reqId), 800);
+        }
+        
+        // 🟢 TRIGGER FIRST TRIP REWARD CHECK
+        if (typeof window.checkFirstTripCompletion === 'function') {
+            setTimeout(() => window.checkFirstTripCompletion(), 1000);
         }
 
     } catch (error) {
@@ -28896,81 +29295,6 @@ window.closeRatingAndGoHome = function() {
     if (typeof showModernDashboard === 'function') showModernDashboard();
 };
 
-// ==================== END RATING SYSTEM ====================
-window.processPendingReferralCounters = async function(newUserId, referrerId) {
-    if (!referrerId || newUserId === referrerId) return;
-
-    const userRef = database.ref(`commuters/${newUserId}`);
-    const snap = await userRef.once('value');
-    const userData = snap.val() || {};
-
-    if (userData.binaryCountsProcessed) return;
-
-    // Mark processed on the new user
-    await userRef.update({ 
-        binaryCountsProcessed: true, 
-        referredBy: referrerId 
-    });
-    if (window.commuterData) {
-        window.commuterData.referredBy = referrerId;
-        window.commuterData.binaryCountsProcessed = true;
-    }
-
-    // --- LEVEL 1 PROCESSING ---
-    let l1Id = null;
-    let l1Data = null;
-    
-    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerId).once('value');
-    if (phoneQuery.exists()) {
-        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
-    } else {
-        const uidQuery = await database.ref(`commuters/${referrerId}`).once('value');
-        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
-    }
-
-    if (l1Id) {
-        // Increment Level 1 Invites & Pay R50 bonus
-        await database.ref(`commuters/${l1Id}`).transaction(data => {
-            if (data) {
-                data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1; // Legacy support
-                data.credits = (data.credits || 0) + 50.00;
-                data.referralEarnings = (data.referralEarnings || 0) + 50.00;
-                data.totalEarnings = (data.totalEarnings || 0) + 50.00;
-            }
-            return data;
-        });
-        
-        await database.ref(`commuters/${l1Id}/earnings`).push({
-            id: 'ref_' + Date.now(),
-            type: 'referral_reward',
-            amount: 50.00,
-            description: 'Level 1 Direct Invite Bonus',
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'completed'
-        });
-
-        // --- LEVEL 2 PROCESSING (Invite of an Invite) ---
-        if (l1Data && l1Data.referredBy) {
-            let l2Id = null;
-            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
-            if (l2PhoneQuery.exists()) {
-                l2PhoneQuery.forEach(child => { l2Id = child.key; });
-            } else {
-                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
-                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
-            }
-
-            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
-                await database.ref(`commuters/${l2Id}`).transaction(data => {
-                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
-                    return data;
-                });
-            }
-        }
-    }
-};
-
 window.processPendingReferralCounters = async function(newUserId, referrerPhoneOrId) {
     if (!referrerPhoneOrId || newUserId === referrerPhoneOrId) return;
 
@@ -29032,74 +29356,6 @@ window.processPendingReferralCounters = async function(newUserId, referrerPhoneO
         }
     }
 };
-
-// =======================================================================
-// ISSUE 1 & 3 FIX: UNIFIED REFERRAL COUNTER & PENDING EARNINGS
-// Replace all duplicate 'processPendingReferralCounters' in index.html
-// =======================================================================
-// =======================================================================
-// ISSUE 3 FIX: UNLOCK THE R50 AFTER THE PASSENGER'S FIRST TRIP
-// Replace 'checkFirstTripCompletion' in index.html
-// =======================================================================
-window.checkFirstTripCompletion = function() {
-    if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
-    
-    // Stop if we have already unlocked the reward
-    if (window.commuterData.firstTripReferralProcessed) return;
-
-    const referrerCode = window.commuterData.referredBy; 
-
-    // Mark passenger profile so it never runs twice
-    firebase.database().ref(`commuters/${window.userId}`).update({
-        firstTripReferralProcessed: true
-    });
-    window.commuterData.firstTripReferralProcessed = true;
-
-    // Search for the Ambassador
-    Promise.all([
-        database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value'),
-        database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value'),
-        database.ref(`commuters/${referrerCode}`).once('value')
-    ]).then(([codeQ, phoneQ, uidQ]) => {
-        let ambassadorId = null;
-        if (codeQ.exists()) codeQ.forEach(c => ambassadorId = c.key);
-        else if (phoneQ.exists()) phoneQ.forEach(c => ambassadorId = c.key);
-        else if (uidQ.exists()) ambassadorId = uidQ.key;
-
-        // Give the Ambassador the R50 wallet balance
-        if (ambassadorId && ambassadorId !== window.userId) {
-            const earnAmount = 50.00; 
-
-            firebase.database().ref(`commuters/${ambassadorId}`).transaction(function(userData) {
-                if (!userData) return userData;
-                userData.credits = (userData.credits || 0) + earnAmount;
-                userData.referralEarnings = (userData.referralEarnings || 0) + earnAmount;
-                userData.totalEarnings = (userData.totalEarnings || 0) + earnAmount;
-                // Reduce the pending count
-                userData.pendingReferrals = Math.max(0, (userData.pendingReferrals || 0) - 1);
-                return userData;
-            }, function(error, committed) {
-                if (committed) {
-                    // Update the "Pending" statement to "Completed" on their statement
-                    firebase.database().ref(`commuters/${ambassadorId}/earnings/ref_pending_${window.userId}`).update({
-                        description: `Completed: ${window.commuterData.name || 'Friend'} 1st Trip!`,
-                        status: 'completed',
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-
-                    // Notify Ambassador
-                    firebase.database().ref(`notifications/commuters/${ambassadorId}`).push({
-                        type: 'referral_bonus',
-                        title: 'R50 Reward Unlocked! 🎉',
-                        message: `Your referral (${window.commuterData.name || 'A user'}) completed their first trip! R50 added to your wallet.`,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-                }
-            });
-        }
-    });
-};
-
 
 async function fetchAndRenderNearby(lat, lon) {
     try {
@@ -29297,13 +29553,106 @@ window.processPendingReferralCounters = async function(newUserId, referrerCode) 
     }
 };
 
+// =======================================================================
+// UNIFIED REFERRAL ENGINE (VOUCHERS & 500 INVITE = R3000 VOLUME BONUS)
+// =======================================================================
+window.processPendingReferralCounters = async function(newUserId, referrerCode) {
+    if (!referrerCode || newUserId === referrerCode) return;
+
+    const userRef = database.ref(`commuters/${newUserId}`);
+    const snap = await userRef.once('value');
+    const userData = snap.val() || {};
+
+    if (userData.binaryCountsProcessed) return;
+
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: referrerCode 
+    });
+    
+    if (window.commuterData) {
+        window.commuterData.referredBy = referrerCode;
+        window.commuterData.binaryCountsProcessed = true;
+    }
+
+    let l1Id = null;
+    let l1Node = 'commuters';
+    
+    // Check both Nodes 
+    const codeQueryC = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
+    const phoneQueryC = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
+    const codeQueryU = await database.ref('users').orderByChild('referralCode').equalTo(referrerCode).once('value');
+    const phoneQueryU = await database.ref('users').orderByChild('phone').equalTo(referrerCode).once('value');
+    
+    if (codeQueryC.exists()) { codeQueryC.forEach(c => { l1Id = c.key; l1Node = 'commuters'; }); } 
+    else if (phoneQueryC.exists()) { phoneQueryC.forEach(c => { l1Id = c.key; l1Node = 'commuters'; }); }
+    else if (codeQueryU.exists()) { codeQueryU.forEach(c => { l1Id = c.key; l1Node = 'users'; }); }
+    else if (phoneQueryU.exists()) { phoneQueryU.forEach(c => { l1Id = c.key; l1Node = 'users'; }); }
+    else {
+        const uidQueryC = await database.ref(`commuters/${referrerCode}`).once('value');
+        if (uidQueryC.exists()) { l1Id = uidQueryC.key; l1Node = 'commuters'; }
+        else {
+            const uidQueryU = await database.ref(`users/${referrerCode}`).once('value');
+            if (uidQueryU.exists()) { l1Id = uidQueryU.key; l1Node = 'users'; }
+        }
+    }
+
+    // UPDATE COUNTERS & CHECK FOR R3000 VOLUME BONUS
+    if (l1Id) {
+        await database.ref(`${l1Node}/${l1Id}`).transaction(data => {
+            if (data) {
+                data.level1_invites = (data.level1_invites || 0) + 1;
+                data.referralCount = (data.referralCount || 0) + 1; 
+                data.pendingReferrals = (data.pendingReferrals || 0) + 1; 
+                
+                // R3000 VOLUME BONUS LOGIC
+                if (data.level1_invites === 500) {
+                    data.credits = (data.credits || 0) + 3000.00; // Wallet Cash!
+                    data.totalEarnings = (data.totalEarnings || 0) + 3000.00;
+                    data.earnedVolumeBonus = true;
+                }
+            }
+            return data;
+        }, function(error, committed, snapshot) {
+            if (committed && snapshot) {
+                const freshData = snapshot.val();
+                
+                // Alert user of Pending Voucher
+                database.ref(`notifications/${l1Node}/${l1Id}`).push({
+                    type: 'referral_bonus_pending',
+                    title: 'New Sign-up!',
+                    message: `A user registered using your link! 2x R25 Ride Vouchers are pending until they take their first trip.`,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                // If they hit exactly 500, log the R3000 cash injection
+                if (freshData.level1_invites === 500) {
+                    database.ref(`${l1Node}/${l1Id}/earnings/vol_bonus_${Date.now()}`).set({
+                        id: 'vol_bonus_' + Date.now(),
+                        type: 'volume_bonus',
+                        amount: 3000.00,
+                        description: `500 Invites Volume Bonus!`,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        status: 'completed'
+                    });
+                    database.ref(`notifications/${l1Node}/${l1Id}`).push({
+                        type: 'volume_bonus',
+                        title: '🎉 R3000 Bonus Unlocked!',
+                        message: `Congratulations! You reached 500 direct invites! R3000 cash has been added to your wallet.`,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+            }
+        });
+    }
+};
+
 window.checkFirstTripCompletion = function() {
     if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
     if (window.commuterData.firstTripReferralProcessed) return;
 
     const referrerCode = window.commuterData.referredBy; 
 
-    // Lock it so we don't pay twice
     firebase.database().ref(`commuters/${window.userId}`).update({
         firstTripReferralProcessed: true
     });
@@ -29312,42 +29661,640 @@ window.checkFirstTripCompletion = function() {
     Promise.all([
         database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value'),
         database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value'),
-        database.ref(`commuters/${referrerCode}`).once('value')
-    ]).then(([codeQ, phoneQ, uidQ]) => {
+        database.ref(`commuters/${referrerCode}`).once('value'),
+        database.ref('users').orderByChild('referralCode').equalTo(referrerCode).once('value'),
+        database.ref('users').orderByChild('phone').equalTo(referrerCode).once('value'),
+        database.ref(`users/${referrerCode}`).once('value')
+    ]).then(([codeQC, phoneQC, uidQC, codeQU, phoneQU, uidQU]) => {
         let ambassadorId = null;
-        if (codeQ.exists()) codeQ.forEach(c => ambassadorId = c.key);
-        else if (phoneQ.exists()) phoneQ.forEach(c => ambassadorId = c.key);
-        else if (uidQ.exists()) ambassadorId = uidQ.key;
+        let l1Node = 'commuters';
+        
+        if (codeQC.exists()) { codeQC.forEach(c => { ambassadorId = c.key; l1Node = 'commuters'; }); }
+        else if (phoneQC.exists()) { phoneQC.forEach(c => { ambassadorId = c.key; l1Node = 'commuters'; }); }
+        else if (uidQC.exists()) { ambassadorId = uidQC.key; l1Node = 'commuters'; }
+        else if (codeQU.exists()) { codeQU.forEach(c => { ambassadorId = c.key; l1Node = 'users'; }); }
+        else if (phoneQU.exists()) { phoneQU.forEach(c => { ambassadorId = c.key; l1Node = 'users'; }); }
+        else if (uidQU.exists()) { ambassadorId = uidQU.key; l1Node = 'users'; }
 
         if (ambassadorId && ambassadorId !== window.userId) {
-            const earnAmount = 50.00; 
-
-            // FINALIZE THE R50 PAYMENT TO AMBASSADOR
-            firebase.database().ref(`commuters/${ambassadorId}`).transaction(function(userData) {
+            // FINALIZE THE R50 VOUCHER PAYMENT (NO CASH WALLET INCREASE)
+            firebase.database().ref(`${l1Node}/${ambassadorId}`).transaction(function(userData) {
                 if (!userData) return userData;
-                userData.credits = (userData.credits || 0) + earnAmount;
-                userData.referralEarnings = (userData.referralEarnings || 0) + earnAmount;
-                userData.totalEarnings = (userData.totalEarnings || 0) + earnAmount;
+                
+                // Add 2 rides at R25 each (R50 Voucher Value)
+                userData.promoRemaining = (userData.promoRemaining || 0) + 2;
+                userData.promoValue = 25; 
                 userData.pendingReferrals = Math.max(0, (userData.pendingReferrals || 0) - 1);
+                
                 return userData;
             }, function(error, committed) {
                 if (committed) {
-                    firebase.database().ref(`commuters/${ambassadorId}/earnings/ref_pending_${window.userId}`).update({
-                        description: `Completed: ${window.commuterData.name || 'Friend'} 1st Trip!`,
-                        status: 'completed',
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-
-                    firebase.database().ref(`notifications/commuters/${ambassadorId}`).push({
+                    firebase.database().ref(`notifications/${l1Node}/${ambassadorId}`).push({
                         type: 'referral_bonus',
-                        title: 'R50 Reward Unlocked! 🎉',
-                        message: `Your referral (${window.commuterData.name || 'A user'}) completed their first trip! R50 added to your wallet.`,
+                        title: 'R50 Vouchers Unlocked! 🎉',
+                        message: `Your referral (${window.commuterData.name || 'A user'}) completed their first trip! You have been granted 2x R25 Ride Vouchers.`,
                         timestamp: firebase.database.ServerValue.TIMESTAMP
                     });
                 }
             });
         }
     });
+};
+
+// =======================================================================
+// ASIYE CLUB: SUBSCRIPTION, GEOPROCESSING, AND SUMMON ENGINE
+// =======================================================================
+
+// Global state tracking variables
+window.clubCurrentStep = 1;
+window.clubTotalSteps = 3;
+window.clubBillingTerm = 'monthly'; 
+window.clubRouteDistance = 0;
+window.clubRegisterPickupGeocoder = null;
+window.clubRegisterDropoffGeocoder = null;
+window.calculatedClubTotalPrice = 0;
+
+/**
+ * Opens the Asiye Club Gateway selection modal
+ */
+window.openAsiyeClubGateway = function() {
+    closeAllPopups();
+    if (typeof hideModernDashboard === 'function') {
+        hideModernDashboard();
+    }
+    openModal('asiyeClubGatewayPopup');
+};
+
+/**
+ * Triggers the voucher entry panel (Path A: Book Now)
+ */
+window.openAsiyeClubBookNow = function() {
+    closeModal('asiyeClubGatewayPopup');
+    openModal('asiyeClubVoucherPopup');
+};
+
+/**
+ * Launches the Multi-Step Subscription Wizard (Path B: Register)
+ */
+window.openAsiyeClubRegister = function() {
+    closeModal('asiyeClubGatewayPopup');
+    openModal('asiyeClubRegisterPopup');
+    window.clubCurrentStep = 1;
+    window.navigateClubWizard(0); // Force UI state updates
+
+    // Attach Mapbox geocoder instances once upon initialization
+    if (!window.clubRegisterPickupGeocoder) {
+        const geoOptions = {
+            accessToken: mapboxgl.accessToken,
+            mapboxgl: mapboxgl,
+            marker: false,
+            placeholder: 'Morning Pickup Address...',
+            proximity: [window.commuterLng || 28.0473, window.commuterLat || -26.2041],
+            country: 'za'
+        };
+
+        window.clubRegisterPickupGeocoder = new MapboxGeocoder(geoOptions);
+        const pContainer = document.getElementById('clubRegisterPickupContainer');
+        if (pContainer) {
+            pContainer.innerHTML = '';
+            pContainer.appendChild(window.clubRegisterPickupGeocoder.onAdd(map));
+            window.clubRegisterPickupGeocoder.on('result', (e) => {
+                document.getElementById('clubPickupLng').value = e.result.geometry.coordinates[0];
+                document.getElementById('clubPickupLat').value = e.result.geometry.coordinates[1];
+                document.getElementById('clubPickupAddress').value = e.result.place_name;
+                window.calculateClubDistanceAndPrice();
+            });
+        }
+
+        window.clubRegisterDropoffGeocoder = new MapboxGeocoder(geoOptions);
+        const dContainer = document.getElementById('clubRegisterDropoffContainer');
+        if (dContainer) {
+            dContainer.innerHTML = '';
+            dContainer.appendChild(window.clubRegisterDropoffGeocoder.onAdd(map));
+            window.clubRegisterDropoffGeocoder.on('result', (e) => {
+                document.getElementById('clubDropoffLng').value = e.result.geometry.coordinates[0];
+                document.getElementById('clubDropoffLat').value = e.result.geometry.coordinates[1];
+                document.getElementById('clubDropoffAddress').value = e.result.place_name;
+                window.calculateClubDistanceAndPrice();
+            });
+        }
+
+        // Apply visual overrides to match the dark theme wizard input containers
+        setTimeout(() => {
+            document.querySelectorAll('#asiyeClubRegisterPopup .mapboxgl-ctrl-geocoder--input').forEach(input => {
+                input.style.color = '#ffffff';
+                input.style.backgroundColor = 'transparent';
+                input.style.border = 'none';
+            });
+            document.querySelectorAll('#asiyeClubRegisterPopup .mapboxgl-ctrl-geocoder').forEach(container => {
+                container.style.backgroundColor = '#2C2C2E';
+                container.style.border = '1px solid #3A3A3C';
+                container.style.borderRadius = '12px';
+                container.style.maxWidth = '100%';
+                container.style.width = '100%';
+            });
+        }, 150);
+    }
+};
+
+/**
+ * Handles Step Switching and Navigation Validation
+ */
+window.navigateClubWizard = function(stepDirection) {
+    if (stepDirection === 1 && !window.validateClubStep(window.clubCurrentStep)) {
+        return; // Halted due to validation failure
+    }
+
+    for (let i = 1; i <= window.clubTotalSteps; i++) {
+        const stepElement = document.getElementById(`clubStep${i}`);
+        if (stepElement) stepElement.style.display = 'none';
+    }
+
+    window.clubCurrentStep += stepDirection;
+    if (window.clubCurrentStep < 1) window.clubCurrentStep = 1;
+    if (window.clubCurrentStep > window.clubTotalSteps) window.clubCurrentStep = window.clubTotalSteps;
+
+    const currentStepElement = document.getElementById(`clubStep${window.clubCurrentStep}`);
+    if (currentStepElement) currentStepElement.style.display = 'block';
+
+    const prevBtn = document.getElementById('clubPrevBtn');
+    const nextBtn = document.getElementById('clubNextBtn');
+    const registerBtn = document.getElementById('clubRegisterBtn');
+
+    if (window.clubCurrentStep === 1) {
+        prevBtn.innerText = "Cancel";
+        prevBtn.onclick = () => { closeModal('asiyeClubRegisterPopup'); window.openAsiyeClubGateway(); };
+    } else {
+        prevBtn.innerText = "Back";
+        prevBtn.onclick = () => window.navigateClubWizard(-1);
+    }
+
+    if (window.clubCurrentStep === window.clubTotalSteps) {
+        nextBtn.style.display = 'none';
+        registerBtn.style.display = 'block';
+        window.calculateClubDistanceAndPrice();
+    } else {
+        nextBtn.style.display = 'block';
+        registerBtn.style.display = 'none';
+    }
+};
+
+window.validateClubStep = function(step) {
+    if (step === 1) {
+        const pAddress = document.getElementById('clubPickupAddress').value;
+        const dAddress = document.getElementById('clubDropoffAddress').value;
+        if (!pAddress || !dAddress) {
+            showGenericMessage("Address Missing", "Please select pickup and drop-off addresses to continue.", "fa-map-marker-alt", "icon-warning");
+            return false;
+        }
+    }
+    return true;
+};
+
+/**
+ * 1. Card Click Handler (Pre-selects terms and highlights active UI)
+ */
+window.selectClubBillingTerm = function(term) {
+    window.clubBillingTerm = term;
+    
+    // Toggle active borders
+    document.getElementById('termCardDaily').style.border = term === 'daily' ? '2px solid #30D158' : '2px solid transparent';
+    document.getElementById('termCardWeekly').style.border = term === 'weekly' ? '2px solid #30D158' : '2px solid transparent';
+    document.getElementById('termCardMonthly').style.border = term === 'monthly' ? '2px solid #30D158' : '2px solid transparent';
+    
+    window.calculateClubDistanceAndPrice();
+};
+
+// =======================================================================
+// UPDATED: calculateClubDistanceAndPrice (Club Only: R22 Base + R5/km / 3)
+// =======================================================================
+window.calculateClubDistanceAndPrice = function() {
+    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
+    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
+    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
+    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
+
+    if (isNaN(pLat) || isNaN(pLng) || isNaN(dLat) || isNaN(dLng)) return;
+
+    // Calculate actual route distance with road curvature modifier
+    const dist = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
+    window.clubRouteDistance = dist;
+
+    // Asiye Club Shared Commute: (R22 Base + R5/km) / 3 (Min R20)
+    const singleTripPrice = Math.max(20, Math.round((22.00 + (dist * 5.00)) / 3));
+
+    // Fallback to monthly if no term is selected yet
+    const activeTerm = window.clubBillingTerm || 'monthly';
+    
+    let daysToBill = 20; 
+    let discount = 0.15; // 15% discount for monthly commitments
+    let trialDeduction = 0;
+
+    if (activeTerm === 'weekly') {
+        daysToBill = 5; 
+        discount = 0.05; 
+    } else if (activeTerm === 'daily') {
+        daysToBill = 1;
+        discount = 0; 
+    }
+
+    // Cumulative base calculation
+    const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
+    
+    const trialRow = document.getElementById('clubTrialPromotionRow');
+    const trialValueEl = document.getElementById('clubTrialDiscountAmount');
+
+    // Apply Monthly Trial Promotion (First Single Trip Free)
+    if (activeTerm === 'monthly') {
+        trialDeduction = singleTripPrice; 
+        if (trialRow && trialValueEl) {
+            trialRow.style.display = 'flex';
+            trialValueEl.innerText = `-R${trialDeduction.toFixed(2)}`;
+        }
+    } else {
+        if (trialRow) trialRow.style.display = 'none';
+    }
+
+    // Calculate commuter's final billing total (Inclusive of promotions, no driver-side platform fees)
+    const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
+
+    const distEl = document.getElementById('clubEstDistance');
+    const costEl = document.getElementById('clubEstCost');
+
+    if (distEl) distEl.innerText = `${dist.toFixed(1)} km`;
+    if (costEl) {
+        const billingLabel = activeTerm === 'monthly' ? 'MONTHLY TRIAL' : activeTerm.toUpperCase();
+        costEl.innerText = `R${totalEstCost.toFixed(2)} (${billingLabel})`;
+    }
+
+    window.calculatedClubTotalPrice = totalEstCost;
+};
+
+window.calculateClubPriceEstimate = window.calculateClubDistanceAndPrice;
+
+/**
+ * 3. Write Subscription with accurate billing parameters
+ */
+// =======================================================================
+// FIXED: submitClubSubscription (Writes Full Strings For Admin Views)
+// =======================================================================
+window.submitClubSubscription = async function() {
+    if (!window.userId) return;
+
+    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
+    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
+    const pAddr = document.getElementById('clubPickupAddress').value;
+
+    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
+    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
+    const dAddr = document.getElementById('clubDropoffAddress').value;
+
+    const purpose = document.getElementById('clubPurpose').value;
+    const morningTime = document.getElementById('clubMorningTime').value;
+    const returnTime = document.getElementById('clubReturnTime').value;
+    
+    // Read billing terms directly from Card selection state
+    const billingPref = window.clubBillingTerm || 'monthly';
+
+    const btn = document.getElementById('clubRegisterBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+
+    const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
+
+    const subscriptionData = {
+        commuterId: window.userId,
+        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
+        commuterPhone: window.commuterData?.phone || '',
+        pickupAddress: pAddr,
+        pickupLat: pLat,
+        pickupLng: pLng,
+        dropoffAddress: dAddr,
+        dropoffLat: dLat,
+        dropoffLng: dLng,
+        purpose: purpose,
+        morningDeparture: morningTime,
+        afternoonReturn: returnTime,
+        paymentTerms: billingPref,
+        estimatedCost: window.calculatedClubTotalPrice,
+        routeDistance: window.clubRouteDistance,
+        voucherCode: voucherRefCode,
+        status: 'pending_allocation', 
+        trialApplied: billingPref === 'monthly', // Logs active trial status
+        createdAt: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    try {
+        // Path 1: Write full subscription card to profile
+        await database.ref(`commuters/${window.userId}/clubSubscription`).set(subscriptionData);
+
+        // Path 2: Write complete waitlist payload to the commuters fallback path
+        await database.ref(`commuters/${window.userId}/clubWaitlist`).set({
+            commuterId: window.userId,
+            commuterName: subscriptionData.commuterName,
+            commuterPhone: subscriptionData.commuterPhone,
+            pickupAddress: pAddr,
+            dropoffAddress: dAddr,
+            pickupLat: pLat,
+            pickupLng: pLng,
+            dropoffLat: dLat,
+            dropoffLng: dLng,
+            morningTime: morningTime,
+            returnTime: returnTime,
+            voucherCode: voucherRefCode,
+            paymentTerms: billingPref,
+            routeDistance: window.clubRouteDistance,
+            estimatedCost: window.calculatedClubTotalPrice,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        // Path 3: Write complete waitlist payload to the global list
+        await database.ref(`club_pools/waiting_list/${window.userId}`).set({
+            commuterId: window.userId,
+            commuterName: subscriptionData.commuterName,
+            commuterPhone: subscriptionData.commuterPhone,
+            pickupAddress: pAddr,
+            dropoffAddress: dAddr,
+            pickupLat: pLat,
+            pickupLng: pLng,
+            dropoffLat: dLat,
+            dropoffLng: dLng,
+            morningTime: morningTime,
+            returnTime: returnTime,
+            voucherCode: voucherRefCode,
+            paymentTerms: billingPref,
+            routeDistance: window.clubRouteDistance,
+            estimatedCost: window.calculatedClubTotalPrice,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        closeModal('asiyeClubRegisterPopup');
+        
+        showGenericMessage(
+            "Registration Successful!",
+            `You are registered! Your unique voucher reference number is: <strong style="font-size: 1.25rem; color: #28a745;">${voucherRefCode}</strong>.<br><br>We are clustering passengers in your area. Once matched, we will notify you to authorize payment and confirm your driver.`,
+            "fa-clipboard-check",
+            "icon-success"
+        );
+
+        if (window.commuterData) {
+            window.commuterData.clubSubscription = subscriptionData;
+        }
+        updateSideMenuData();
+
+    } catch (err) {
+        console.error("Subscription write failed:", err);
+        showGenericMessage("Registration Error", "Could not complete registration. Check your connection.", "fa-times-circle", "icon-danger");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Submit Register';
+    }
+};
+/**
+ * Path A: Voucher Summon Verification
+ */
+window.verifyVoucherAndSummon = function() {
+    const enteredCode = document.getElementById('clubVoucherInput').value.trim().toUpperCase();
+    if (!enteredCode) {
+        showToast("Voucher input cannot be empty.", "danger");
+        return;
+    }
+
+    const btn = document.getElementById('summonVoucherVehicleBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+
+    database.ref(`commuters/${window.userId}/clubSubscription`).once('value', async (snapshot) => {
+        const sub = snapshot.val();
+
+        if (sub && sub.voucherCode === enteredCode) {
+            if (sub.status === 'pending_allocation') {
+                showGenericMessage("Matching Queue", "We are still matching passengers to allocate a vehicle for your area.", "fa-hourglass-half", "icon-warning");
+                btn.disabled = false;
+                btn.innerHTML = 'Summon Vehicle';
+                return;
+            }
+
+            if (sub.status === 'allocated' || sub.status === 'active') {
+                try {
+                    await window.summonPreAllocatedVehicle(sub);
+                    closeModal('asiyeClubVoucherPopup');
+                } catch(e) {
+                    showGenericMessage("Dispatch Error", "Failed to dispatch allocated vehicle.", "fa-car-crash", "icon-danger");
+                }
+            } else {
+                showGenericMessage("Voucher Suspended", "This subscription voucher is inactive.", "fa-ban", "icon-danger");
+            }
+        } else {
+            showGenericMessage("Invalid Voucher", "Reference voucher code not found.", "fa-times-circle", "icon-danger");
+        }
+        btn.disabled = false;
+        btn.innerHTML = 'Summon Vehicle';
+    });
+};
+
+/**
+ * Summon Pre-Allocated Vehicle via Voucher
+ */
+window.summonPreAllocatedVehicle = async function(sub) {
+    openModal('pendingRequestPopup');
+    const msgEl = document.getElementById('requestingMessage');
+    if (msgEl) {
+        msgEl.innerHTML = `
+            <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.2);">
+                <div class="logo-circle" style="box-shadow: 0 0 20px rgba(40,167,69,0.4);"><i class="fas fa-ticket-alt" style="color:#28a745; font-size:24px;"></i></div>
+            </div>
+            <div style="font-weight:900; color:#fff; font-size:1.4rem;">Summoning Vehicle...</div>
+            <p style="color:#aaa; font-size:0.9rem;">Connecting to your assigned 30-day driver.</p>
+        `;
+    }
+
+    const requestNode = database.ref("requests").push();
+    window.currentRequestId = requestNode.key;
+
+    const requestData = {
+        requestId: window.currentRequestId,
+        taxiId: sub.allocatedTaxiId || null, 
+        carCategory: 'club',
+        commuterId: window.userId,
+        commuterName: sub.commuterName,
+        commuterPhone: sub.commuterPhone,
+        calculatedPrice: sub.estimatedCost,
+        paymentMethod: sub.paymentTerms || 'cash',
+        requirePin: true,
+        pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
+        pickupAddress: sub.pickupAddress || 'Home',
+        commuterLocation: { latitude: window.commuterLat, longitude: window.commuterLng },
+        destination: sub.dropoffAddress || 'As Directed',
+        status: 'pending',
+        type: 'club',
+        voucherCode: sub.voucherCode,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    await requestNode.set(requestData);
+    
+    await database.ref(`commuters/${window.userId}`).update({ currentRequest: window.currentRequestId });
+    if (window.commuterData) window.commuterData.currentRequest = window.currentRequestId;
+    localStorage.setItem('currentRequestId', window.currentRequestId);
+
+    if (sub.allocatedTaxiId) {
+        database.ref(`notifications/taxis/${sub.allocatedTaxiId}`).push({
+            type: 'passenger',
+            title: 'Asiye Club Summon!',
+            message: `Club subscriber ${sub.commuterName} has summoned you.`,
+            requestId: window.currentRequestId,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+    }
+
+    listenForRequestStatus(window.currentRequestId);
+    window.startTaxiSearchTimer(window.currentRequestId);
+};
+
+// =======================================================================
+// CLUB CONTRACT ALLOCATIONS & BILLING ACTIVATION
+// =======================================================================
+
+// =======================================================================
+// FIXED: setupSubscriptionAllocationsListener (Real-time UI Sync)
+// =======================================================================
+window.setupSubscriptionAllocationsListener = function() {
+    if (!window.userId) return;
+
+    const subRef = database.ref(`commuters/${window.userId}/clubSubscription`);
+    
+    subRef.on('value', (snapshot) => {
+        const sub = snapshot.val();
+        if (window.commuterData) {
+            window.commuterData.clubSubscription = sub; // Synchronize local memory
+        }
+
+        // If the booking sheet is open, dynamically refresh the panel contents instantly
+        if (document.getElementById('taxiListSheet').classList.contains('open') && window.selectedRideCategory === 'club') {
+            window.selectCategory('club', window.calculatedClubSingleTripPrice || 20);
+        }
+
+        if (!sub) return;
+
+        // Trigger payment authorization modal if status changes to allocated
+        if (sub.status === 'allocated' && !sub.paymentAuthorized) {
+            window.triggerPaymentAuthorizationAlert(sub);
+        }
+    });
+};
+/**
+ * Triggers Allocation Alerts & Payment Authorization
+ */
+window.triggerPaymentAuthorizationAlert = function(sub) {
+    const popup = document.getElementById('genericMessagePopup');
+    if (!popup) return;
+
+    popup.className = 'modal-overlay open';
+    popup.style.cssText = `display: flex !important; visibility: visible !important; opacity: 1 !important; z-index: 200000 !important; background: rgba(0,0,0,0.85) !important; align-items: center !important; justify-content: center !important; position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh; margin: 0 !important; padding: 0 !important;`;
+
+    const displayAmount = parseFloat(sub.estimatedCost || 0).toFixed(2);
+    const billingCycle = sub.paymentTerms === 'weekly' ? 'Weekly' : (sub.paymentTerms === 'daily' ? 'Per Completed Trip' : 'Monthly');
+
+    popup.innerHTML = `
+        <div class="modal-content" style="background:#ffffff !important; max-width: 380px !important; margin: auto !important; padding: 30px 25px !important; border-radius: 24px !important; text-align: center !important; height: auto !important; box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;">
+            <div style="width: 70px; height: 70px; background: rgba(48, 209, 88, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                <i class="fas fa-car-side" style="font-size: 2.2rem; color: #30D158;"></i>
+            </div>
+            <h3 style="color: #111111 !important; font-weight: 800; margin: 0 0 10px 0 !important;">Vehicle Allocated!</h3>
+            <p style="color: #555555 !important; font-size: 0.95rem; margin: 0 0 18px 0 !important; line-height: 1.45;">
+                Great news! We have allocated a dedicated vehicle to your pool group for the upcoming 30-day billing cycle.
+            </p>
+
+            <div style="background: #f8f9fa; border: 1px solid #eee; border-radius: 14px; padding: 15px; margin-bottom: 20px; text-align: left;">
+                <div style="font-size: 0.75rem; color: #888; font-weight: bold; text-transform: uppercase;">Subscription Term</div>
+                <div style="font-size: 1.1rem; font-weight: 800; color: #111; margin-top: 2px;">${billingCycle} Fares</div>
+                <div style="font-size: 1.4rem; font-weight: 900; color: #28a745; margin-top: 5px;">R${displayAmount}</div>
+                <small style="color: #666; font-size: 0.72rem; margin-top: 4px; display: block;">12% Asiye Commission included</small>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
+                <button class="btn btn-primary" onclick="window.authorizeSubscriptionPayment('${sub.voucherCode}', ${sub.estimatedCost}, '${sub.paymentTerms}')" style="width: 100%; padding: 14px; background: #30D158 !important; color: white !important; font-weight: bold; border-radius: 12px; border: none;">
+                    Authorize Payment & Activate
+                </button>
+                <button class="btn btn-light" onclick="closeModal('genericMessagePopup')" style="width: 100%; padding: 12px; background: transparent; color: #888; border: none;">
+                    Review Later
+                </button>
+            </div>
+        </div>
+    `;
+};
+
+/**
+ * Handle subscription billing payments
+ */
+window.authorizeSubscriptionPayment = function(voucherCode, totalCost, paymentTerms) {
+    const btn = document.querySelector('#genericMessagePopup .btn-primary');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+    if (paymentTerms === 'daily') {
+        window.activateClubSubscription(voucherCode);
+    } else {
+        closeModal('genericMessagePopup');
+        if (typeof initiatePayfastPayment === 'function') {
+            initiatePayfastPayment(totalCost, `Asiye Club Voucher ${voucherCode}`, `club_sub_${voucherCode}`);
+        } else {
+            showGenericMessage("Gateway Error", "PayFast Billing system is offline.", "fa-exclamation-triangle", "icon-danger");
+        }
+    }
+};
+
+window.activateClubSubscription = function(voucherCode) {
+    database.ref(`commuters/${window.userId}/clubSubscription`).update({
+        status: 'active',
+        paymentAuthorized: true,
+        activatedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        database.ref(`club_pools/waiting_list/${window.userId}`).remove();
+
+        closeModal('genericMessagePopup');
+        showGenericMessage(
+            "Activation Complete! 🎉",
+            `Your subscription is active! Enter Voucher Reference: <strong style="font-size: 1.2rem; color: #30D158;">${voucherCode}</strong> whenever you need to summon your vehicle. Fares will be charged according to your payment terms.`,
+            "fa-crown",
+            "icon-success"
+        );
+    }).catch(err => {
+        showGenericMessage("Activation Error", "Could not complete payment authorization.", "fa-times-circle", "icon-danger");
+    });
+};
+
+/**
+ * Automatically bridges searched route details to the Club registration wizard
+ */
+window.launchPrePopulatedClubRegister = function() {
+    closeModal('taxiListSheet');
+    window.openAsiyeClubRegister();
+
+    // Pull coordinates and location details from search states
+    const pickupInputVal = document.getElementById('uberPickupInput')?.value || '';
+    const destInputVal = document.getElementById('uberDestInput')?.value || '';
+
+    // Assign text values to wizard inputs
+    document.getElementById('clubPickupAddress').value = pickupInputVal;
+    document.getElementById('clubDropoffAddress').value = destInputVal;
+
+    document.getElementById('clubPickupLat').value = window.commuterLat || '';
+    document.getElementById('clubPickupLng').value = window.commuterLng || '';
+    document.getElementById('clubDropoffLat').value = window.ehailingDestLat || '';
+    document.getElementById('clubDropoffLng').value = window.ehailingDestLng || '';
+
+    // Sync input fields inside Geocoder containers
+    setTimeout(() => {
+        if (window.clubRegisterPickupGeocoder && pickupInputVal) {
+            window.clubRegisterPickupGeocoder.setInput(pickupInputVal);
+        }
+        if (window.clubRegisterDropoffGeocoder && destInputVal) {
+            window.clubRegisterDropoffGeocoder.setInput(destInputVal);
+        }
+        window.calculateClubDistanceAndPrice();
+    }, 300);
 };
 </script>
 </body>
