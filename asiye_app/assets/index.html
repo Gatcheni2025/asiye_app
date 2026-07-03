@@ -8662,7 +8662,8 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
             </div>
 
         <!-- Suggested Locations Container -->
-<div style="margin-bottom: 25px;">
+<!-- Suggested Locations Container -->
+<div id="suggested-nearby-wrapper" style="margin-bottom: 25px;">
     <div style="color: #98989D; font-size: 0.85rem; padding: 10px 10px 5px 10px; text-align: left; font-weight: 600;">
         SUGGESTED NEARBY
     </div>
@@ -8791,7 +8792,8 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
         <div id="onboardStep1" style="display: none; flex-direction: column; width: 100%; height: 100%;">
             <div style="text-align: center; margin-bottom: 20px;">
                 <i class="fas fa-mobile-alt" style="color: #0A84FF; font-size: 2.5rem; margin-bottom: 10px;"></i>
-                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Verify Your Account</h3>
+                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Add phone number</h3>
+<p>Your number is used for bookings and for safety checks</p>
             </div>
             <div style="flex: 1; overflow-y: auto; margin-bottom: 15px;">
                 <div class="form-group" style="margin-bottom: 15px;">
@@ -8811,14 +8813,17 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
         <!-- STEP 2: Route Search -->
         <div id="onboardStep2" style="display: none; flex-direction: column; width: 100%; height: 100%; overflow: visible !important;">
             <div style="text-align: center; margin-bottom: 15px;">
-                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Your Daily Route</h3>
-                <p style="color: #aaa; font-size: 0.85rem; margin: 0;">Where do you commute from and to?</p>
+                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Setup your Asiye Account</h3>
+               <p style="color: #aaa; font-size: 0.85rem; margin: 0;">
+Tell us about your daily travel. We'll create a personalized, cost-effective schedule that makes your everyday commute easier, more convenient, and more affordable.
+</p>
+
             </div>
             <div style="flex: 1; position: relative; z-index: 100; overflow: visible !important;">
                 <!-- PICKUP -->
                 <div class="form-group" style="margin-bottom: 15px; position: relative; z-index: 20;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin: 0;">PICKUP ADDRESS *</label>
+                        <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin: 0;">PICKUP AREA / TOWN *</label>
                         <span onclick="window.useCurrentGpsForOnboard()" style="color: #007BFF; font-size: 0.8rem; font-weight: 800; cursor: pointer;"><i class="fas fa-crosshairs"></i> Use GPS</span>
                     </div>
                     <input type="text" id="onboardPickupInput" placeholder="Search building, street, or rank..." autocomplete="off">
@@ -8828,7 +8833,7 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 
                 <!-- DROP-OFF -->
                 <div class="form-group" style="margin-bottom: 15px; position: relative; z-index: 10;">
-                    <label style="color: #888; font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 6px;">DROP-OFF ADDRESS *</label>
+                    <label style="color: #888; font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 6px;">DROP-OFF AREA / TOWN *</label>
                     <input type="text" id="onboardDropoffInput" placeholder="Where are you going?" autocomplete="off">
                     <div id="onboardDropoffSuggestions" style="position: absolute; top: 100%; left: 0; width: 100%; display: none;"></div>
                 </div>
@@ -8869,7 +8874,7 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
                     </div>
                 </div>
 
-                <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; display:block;">CHOOSE A PLAN *</label>
+                <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; display:block;">What you might pay (round trip) *</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px;">
                     <div id="obPlanCardDaily" onclick="window.selectOnboardPlan('daily')" style="background: #2C2C2E; border: 2px solid transparent; border-radius: 12px; padding: 12px 5px; cursor: pointer; text-align: center;">
                         <span style="display: block; font-weight: bold; font-size: 0.85rem; color: white;">Daily</span>
@@ -8895,10 +8900,10 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px; flex-shrink: 0;">
                 <div style="display: flex; gap: 10px; width: 100%;">
                     <button class="btn btn-light" onclick="window.nextOnboardStep(2)" style="flex: 1; background: #333; color: white; border: none; border-radius: 12px;">Back</button>
-                    <button class="btn btn-primary" onclick="window.confirmClubAndProceed()" style="flex: 2; background: #30D158; color: black; font-weight: 800; border: none; border-radius: 12px;">Join Waiting List</button>
+                    <button class="btn btn-primary" onclick="window.confirmClubAndProceed()" style="flex: 2; background: #30D158; color: black; font-weight: 800; border: none; border-radius: 12px;">Add me in</button>
                 </div>
                 <button onclick="window.skipClubAndProceed()" style="width: 100%; padding: 14px; background: transparent; border: 1px solid #444; color: #888; border-radius: 12px; font-weight: 700; cursor: pointer;">
-                    Skip Club Membership
+                    Charge me normal e-hailing fee
                 </button>
             </div>
         </div>
@@ -8907,9 +8912,11 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
         <div id="onboardStep4" style="display: none; flex-direction: column; width: 100%; height: 100%;">
             <div style="text-align: center; margin-bottom: 20px;">
                 <i class="fas fa-gift" style="color: #007BFF; font-size: 3rem; margin-bottom: 10px;"></i>
-                <h3 style="color: white !important; font-weight: 800;">Invite & Earn Cash</h3>
-                <p style="color: #aaa !important; font-size: 0.9rem;">Earn direct cash into your bank when you invite friends to use Asiye!</p>
-            </div>
+                <h3 style="color: white !important; font-weight: 800;">Invite Someone & Earn</h3>
+                <p style="color: #aaa !important; font-size: 0.9rem;">
+Know someone who travels every day? Invite them to join Asiye and help them save compared to expensive public transport. Share your invite, and you'll earn real cash directly into your bank account for every successful referral.
+</p>
+ </div>
             <div style="flex: 1; display: flex; flex-direction: column; gap: 15px;">
                 <button onclick="window.nextOnboardStep(5)" style="background: #007BFF; color: white; border: none; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 1.1rem; cursor: pointer;">
                     <i class="fas fa-share-alt"></i> Set a Cash Goal
@@ -9256,27 +9263,24 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 
 <div id="taxiListSheet"><div class="sheet-header"><h4>Taxis Near You</h4><button class="sheet-close-btn" onclick="closeModal('taxiListSheet');">&times;</button></div><div id="taxiListContainer"></div></div>
 <!-- Locate your confirmation popup container -->
-<div id="confirmRidePopup" class="popup-modal">
-    <div class="popup-content">
-        <h3>Confirm Your Ride</h3>
+<!-- ======================================================== -->
+<!-- CORRECTED CONFIRM RIDE POPUP -->
+<!-- ======================================================== -->
+<div id="confirmRidePopup" class="modal-overlay">
+    <div class="modal-content">
+        <div id="confirmDriverImageContainer" class="profile-pic-container" style="width:80px;height:80px;font-size:2em;margin: 0 auto 15px auto;"></div>
+        <h3 id="confirmDriverName" style="margin-bottom: 20px;">Confirm Your Ride</h3>
         
-        <!-- Existing Ride Details Section -->
-        <div class="details-section">
-            <p><span>Driver:</span> <span>Sibusiso Dlamini</span></p>
-            <p><span>Route:</span> <span>Newcastle to Madadeni</span></p>
-            <p><span>Total Fare:</span> <span class="bold-fare">R18.00</span></p>
-            
-            <!-- STEP 3: INSERT THE SAVINGS ROW RIGHT HERE -->
-            <p class="savings-row">
-                <span><i class="fa-solid fa-gift" style="color: #28a745; margin-right: 5px;"></i> Your Asiye Savings</span>
-                <span class="savings-highlight">R5.00 kept in your pocket!</span>
-            </p>
+        <!-- Dynamic Ride Details Section (JS injects fare and driver info here) -->
+        <div id="confirmRideDetails" class="details-section" style="width: 100%; text-align: left;">
+            <!-- Populated automatically by JavaScript -->
         </div>
 
-        <!-- Existing Action Buttons at the bottom -->
-        <div class="popup-actions">
-            <button class="cancel-btn">Cancel</button>
-            <button class="confirm-btn">Confirm Ride</button>
+        <!-- Cancel Button (JS dynamically injects the Green 'Confirm' button above this) -->
+        <div class="modal-buttons" style="width: 100%; display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+            <button class="btn btn-light" onclick="closeModal('confirmRidePopup'); openModal('taxiListSheet');" style="width: 100%; padding: 14px; border-radius: 16px; font-weight: bold; background: #f8f9fa; border: 1px solid #ccc; color: #333;">
+                Cancel
+            </button>
         </div>
     </div>
 </div>
@@ -10198,6 +10202,49 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
             <button id="clubNextBtn" class="btn btn-nav btn-next" onclick="window.navigateClubWizard(1)" style="background: white !important; color: black !important;">Next</button>
             <button id="clubRegisterBtn" class="btn btn-nav btn-next" onclick="window.submitClubSubscription()" style="display: none; background: #30D158 !important; color: white !important;">Submit Register</button>
         </div>
+    </div>
+</div>
+
+<!-- ======================================================== -->
+<!-- PAYFAST R10 CARD VERIFICATION MODAL                      -->
+<!-- ======================================================== -->
+<div id="cardVerificationPopup" class="modal-overlay" style="display: none; z-index: 100000; background: rgba(0,0,0,0.85); align-items: center; justify-content: center;">
+    <div class="modal-content" style="max-width: 400px; width: 92%; background: #ffffff !important; color: #111111 !important; border-radius: 24px; padding: 30px 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5);">
+        
+        <div style="width: 70px; height: 70px; background: #eef4ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+            <i class="fas fa-shield-alt" style="font-size: 2.2rem; color: #007BFF;"></i>
+        </div>
+        
+        <h3 style="margin: 0 0 10px 0; font-weight: 900; font-size: 1.4rem; color: #111;">Link Your Payment Card</h3>
+        
+        <p style="color: #555; font-size: 0.9rem; line-height: 1.5; margin-bottom: 20px;">
+            Your Asiye Club pool is ready! Please verify your card to secure your seat.
+        </p>
+
+        <!-- Explanation Box -->
+        <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 16px; padding: 16px; text-align: left; margin-bottom: 24px;">
+            <div style="display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start;">
+                <i class="fas fa-clock" style="color: #28a745; font-size: 1.1rem; margin-top: 2px;"></i>
+                <div style="font-size: 0.85rem; color: #333;">
+                    <strong>Pay at Drop-off:</strong> You will only be charged your trip fare automatically when the ride ends.
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px; align-items: flex-start;">
+                <i class="fas fa-lock" style="color: #007BFF; font-size: 1.1rem; margin-top: 2px;"></i>
+                <div style="font-size: 0.85rem; color: #333;">
+                    <strong>R10 PayFast Verification:</strong> A temporary R10 charge authenticates your card. We instantly credit this R10 back into your Asiye Wallet!
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <button class="btn btn-primary" onclick="initiatePayFastCardVerification()" style="width: 100%; padding: 16px; border-radius: 16px; font-weight: 800; font-size: 1.05rem; background: #007BFF !important; color: white !important; border: none; box-shadow: 0 4px 15px rgba(0,123,255,0.3); cursor: pointer;">
+            <i class="fas fa-credit-card" style="margin-right: 8px;"></i> Verify Card (Pay R10)
+        </button>
+        
+        <button onclick="closeModal('cardVerificationPopup')" style="background: transparent; border: none; color: #888; font-weight: 700; font-size: 0.9rem; margin-top: 15px; cursor: pointer;">
+            Cancel & Ride Solo
+        </button>
     </div>
 </div>
 <script>
@@ -24478,13 +24525,18 @@ window.selectCategory = function(cat, price) {
                     </button>
                 `;
             }
-        } else {
+        } } else {
             // Default state. No subscription found yet. Show options.
             bookingPanel.innerHTML = `
                 <div style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #3A3A3C; margin-bottom: 18px; text-align: left; animation: fadeIn 0.3s ease;">
-                    <h5 style="margin: 0 0 6px 0; color: #FF9F0A; font-size: 0.95rem; font-weight: 800;"><i class="fas fa-info-circle"></i> Asiye Club Subscription</h5>
+                    <h5 style="margin: 0 0 8px 0; color: #FF9F0A; font-size: 0.95rem; font-weight: 800;"><i class="fas fa-info-circle"></i> Asiye Club Membership</h5>
+                    
+                    <p style="margin: 0 0 10px 0; color: #ccc; font-size: 0.8rem; line-height: 1.45;">
+                        Join the Asiye Club and enjoy significantly lower travel fares while still getting the convenience of door-to-door transport. An Asiye driver will pick you up from your location and drop you off exactly where you need to go.
+                    </p>
+                    
                     <p style="margin: 0; color: #ccc; font-size: 0.8rem; line-height: 1.45;">
-                        Asiye Club uses dedicated vehicles on daily routes. Click <b>Book Now</b> if you have an active voucher, or <b>Register</b> to create your subscription waitlist profile.
+                        Membership is completely free. Once you register, we'll match you with up to two other Club members travelling in the same direction, allowing everyone to share the journey and save more.
                     </p>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
@@ -28865,7 +28917,6 @@ window.confirmClubAndProceed = function() {
 window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
     try {
         const phoneInput = document.getElementById('enforcedPhoneInput');
-        
         const pLat = document.getElementById('onboardPickupLat')?.value;
         const pLng = document.getElementById('onboardPickupLng')?.value;
         const pText = document.getElementById('onboardPickupText')?.value;
@@ -28885,6 +28936,7 @@ window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
         let selectedGoal = "50";
         let goalCount = 10;
 
+        // If they click "Complete & Get My Link", this captures the goal they selected
         if (!skipGoalSetup) {
             const selectedGoalElement = document.querySelector('input[name="referralGoal"]:checked');
             selectedGoal = selectedGoalElement ? selectedGoalElement.value : "50";
@@ -28902,12 +28954,10 @@ window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
             return;
         }
 
-        const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
-
         const updates = {
             phone: phone,
             onboardingComplete: true,
-            clubOptOut: false, // We assume they opted in as they filled the data
+            clubOptOut: !window.wantsClub,
             onboardRoute: {
                 pickupAddress: pText,
                 pickupLat: parseFloat(pLat),
@@ -28915,15 +28965,45 @@ window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
                 dropoffAddress: dText,
                 dropoffLat: parseFloat(dLat),
                 dropoffLng: parseFloat(dLng),
-                morningTime: window.onboardMorningTime || '07:00',
-                returnTime: window.onboardReturnTime || '17:00',
-                days: window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'],
-                estimatedClubPrice: window.onboardCalculatedPrice || 0,
-                distanceKm: window.onboardRouteDistance || 0,
-                billingTerm: window.onboardBillingTerm || 'monthly'
+                distanceKm: window.onboardRouteDistance || 0
             },
             updatedAt: firebase.database.ServerValue.TIMESTAMP
         };
+
+        // 🚨 THIS IS WHERE THEY ARE ADDED TO THE CLUB WAITING LIST 🚨
+        if (window.wantsClub) {
+            const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
+            
+            updates.onboardRoute.morningTime = window.onboardMorningTime || '07:00';
+            updates.onboardRoute.returnTime = window.onboardReturnTime || '17:00';
+            updates.onboardRoute.days = window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'];
+            updates.onboardRoute.estimatedClubPrice = window.onboardCalculatedPrice || 0;
+            updates.onboardRoute.billingTerm = window.onboardBillingTerm || 'monthly';
+
+            const clubSubscriptionPayload = {
+                commuterId: window.userId,
+                commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
+                commuterPhone: phone,
+                pickupAddress: pText, pickupLat: parseFloat(pLat), pickupLng: parseFloat(pLng),
+                dropoffAddress: dText, dropoffLat: parseFloat(dLat), dropoffLng: parseFloat(dLng),
+                morningDeparture: window.onboardMorningTime || '07:00',
+                afternoonReturn: window.onboardReturnTime || '17:00',
+                days: window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'],
+                paymentTerms: window.onboardBillingTerm || 'monthly',
+                estimatedCost: window.onboardCalculatedPrice || 0,
+                routeDistance: window.onboardRouteDistance || 0,
+                voucherCode: voucherRefCode,
+                // THIS ENSURES THEY SHOW AS "BOOKING RESERVED" IN THE APP
+                status: 'pending_allocation', 
+                trialApplied: (window.onboardBillingTerm === 'monthly'),
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            updates.clubSubscription = clubSubscriptionPayload;
+            
+            // Push to public waitlist for backend matching
+            await database.ref(`club_pools/waiting_list/${window.userId}`).set(clubSubscriptionPayload);
+        }
 
         if (!skipGoalSetup) {
             updates.referralGoal = parseInt(selectedGoal);
@@ -28948,51 +29028,32 @@ window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
             }
         }
 
-        // Generate the strict payload to inject them straight into the Asiye Club Waiting List
-        const clubSubscriptionPayload = {
-            commuterId: window.userId,
-            commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
-            commuterPhone: phone,
-            pickupAddress: pText, pickupLat: parseFloat(pLat), pickupLng: parseFloat(pLng),
-            dropoffAddress: dText, dropoffLat: parseFloat(dLat), dropoffLng: parseFloat(dLng),
-            morningDeparture: window.onboardMorningTime || '07:00',
-            afternoonReturn: window.onboardReturnTime || '17:00',
-            days: window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'],
-            paymentTerms: window.onboardBillingTerm || 'monthly',
-            estimatedCost: window.onboardCalculatedPrice || 0,
-            routeDistance: window.onboardRouteDistance || 0,
-            voucherCode: voucherRefCode,
-            status: 'pending_allocation', // 4. MATCH 2 MORE PASSENGERS ON WAITING LIST
-            trialApplied: (window.onboardBillingTerm === 'monthly'),
-            createdAt: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        updates.clubSubscription = clubSubscriptionPayload;
-
         closeAllPopups();
 
-        // Save to Database Profiles & Add to Live Waiting Pool simultaneously
-        Promise.all([
-            database.ref(`commuters/${userId}`).update(updates),
-            database.ref(`club_pools/waiting_list/${window.userId}`).set(clubSubscriptionPayload)
-        ]).then(() => {
+        // Save everything to profile
+        database.ref(`commuters/${userId}`).update(updates).then(() => {
             if (window.commuterData) Object.assign(window.commuterData, updates);
             
             if (!skipGoalSetup) {
+                // If they clicked "Complete & get link", show the share window
                 window.showOnboardingSharePopup(selectedGoal, goalCount);
             } else {
-                showToast("Welcome to Asiye Club! We are matching you with a pool.", "success");
+                // If they clicked "No thanks", go straight to dashboard
+                if (window.wantsClub) {
+                    showToast("Welcome to Asiye Club! We are matching you with a pool.", "success");
+                } else {
+                    showToast("Welcome to Asiye!", "success");
+                }
                 showModernDashboard();
             }
         }).catch(err => {
-            showToast("Network error. Could not complete Club registration.", "danger");
+            showToast("Network error. Could not save profile.", "danger");
         });
 
     } catch (err) {
         showToast("Setup failed. Please check all fields.", "danger");
     }
 };
-
 window.onPaymentSuccess = function(paymentData) {
     if (typeof originalOnPaymentSuccessHandler === 'function') {
         originalOnPaymentSuccessHandler(paymentData);
@@ -29816,12 +29877,19 @@ async function fetchAndRenderNearby(lat, lon) {
 // FILE: index.html (Commuter App)
 // =======================================================================
 
-// ---------------------------------------------------------
-// 1. NEARBY SUGGESTIONS ENGINE (FIXED REFERENCE ERROR)
-// ---------------------------------------------------------
+// =======================================================================
+// 1. NEARBY SUGGESTIONS ENGINE (HIDES IF NOTHING IS FOUND)
+// =======================================================================
+// =======================================================================
+// 1. NEARBY SUGGESTIONS ENGINE (HIDES IF NOTHING IS FOUND)
+// =======================================================================
 window.loadNearbySuggestions = function() {
     const listContainer = document.getElementById('suggested-locations-list');
+    const wrapper = document.getElementById('suggested-nearby-wrapper');
     if (!listContainer) return;
+    
+    // Ensure the wrapper is visible while loading
+    if (wrapper) wrapper.style.display = 'block';
     
     listContainer.innerHTML = `
         <div id="suggestions-loader" style="display: flex; align-items: center; gap: 12px; padding: 14px 10px; color: #98989D;">
@@ -29841,7 +29909,7 @@ window.loadNearbySuggestions = function() {
                 retries++;
                 if (retries > 10) { 
                     clearInterval(interval);
-                    window.showFallbackSuggestions("Could not determine your exact location.");
+                    window.showFallbackSuggestions(); // Will trigger hiding the div
                 }
             }
         }, 500);
@@ -29854,11 +29922,11 @@ window.fetchAndRenderNearby = async function(lat, lon) {
         if (locations && locations.length > 0) {
             window.renderSuggestions(locations);
         } else {
-            window.showFallbackSuggestions("No matching locations found nearby.");
+            window.showFallbackSuggestions();
         }
     } catch (error) {
         console.error("Error fetching places:", error);
-        window.showFallbackSuggestions("Could not load nearby locations.");
+        window.showFallbackSuggestions();
     }
 };
 
@@ -29895,8 +29963,19 @@ window.fetchNearbyPlaces = async function(lat, lon) {
 
 window.renderSuggestions = function(locations) {
     const listContainer = document.getElementById('suggested-locations-list');
+    const wrapper = document.getElementById('suggested-nearby-wrapper');
     if (!listContainer) return;
+
     listContainer.innerHTML = ''; 
+
+    // If API returned an empty array, hide the whole section
+    if (!locations || locations.length === 0) {
+        if (wrapper) wrapper.style.display = 'none';
+        return;
+    }
+
+    // Otherwise, ensure it's visible and map out the locations
+    if (wrapper) wrapper.style.display = 'block';
 
     locations.forEach(loc => {
         let iconClass = 'fa-map-marker-alt';
@@ -29916,16 +29995,20 @@ window.renderSuggestions = function(locations) {
     });
 };
 
-window.showFallbackSuggestions = function(reason) {
-    console.log("Using fallback suggestions:", reason);
-    const fallbackLocations = [
-        { name: "Local Mall/Shopping Centre", type: "mall" },
-        { name: "Nearest School", type: "school" },
-        { name: "Nearest Clinic", type: "clinic" }
-    ];
-    window.renderSuggestions(fallbackLocations);
+// 🚨 THIS REPLACES THE OLD FALLBACK AND HIDES THE WHOLE SECTION INSTEAD 🚨
+window.showFallbackSuggestions = function() {
+    console.log("No exact nearby places found. Hiding 'Suggested Nearby' section.");
+    const wrapper = document.getElementById('suggested-nearby-wrapper');
+    if (wrapper) {
+        wrapper.style.display = 'none'; // Completely collapses the UI element
+    } else {
+        // Safe fallback just in case the ID wasn't added properly
+        const listContainer = document.getElementById('suggested-locations-list');
+        if (listContainer && listContainer.parentElement) {
+            listContainer.parentElement.style.display = 'none';
+        }
+    }
 };
-
 
 // ---------------------------------------------------------
 // 2. REFERRAL TRACKING ENGINE (PENDING -> COMPLETED)
@@ -30971,7 +31054,103 @@ window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
             
             let matchedReferrer = null;
             if (codeQuery.exists()) { codeQuery.forEach(c => { matchedReferrer = c.key; }); } 
-            else if (phoneQuery.exists()) { phoneQuery.forEach(c => { matchedReferrer = c.key; });
+            else if (phoneQuery.exists()) { phoneQuery.forEach(c => { matchedReferrer = c.key; }); }
+
+            if (matchedReferrer && matchedReferrer !== userId) {
+                updates.referredBy = refCode;
+                updates.promoRemaining = 1;
+                updates.promoPercentage = 20; 
+                updates.binaryCountsProcessed = false;
+                showToast("Voucher claimed! 20% off your ride.", "success");
+            }
+        }
+
+        closeAllPopups();
+
+        // Save everything to profile
+        database.ref(`commuters/${userId}`).update(updates).then(() => {
+            if (window.commuterData) Object.assign(window.commuterData, updates);
+            
+            if (!skipGoalSetup) {
+                window.showOnboardingSharePopup(selectedGoal, goalCount);
+            } else {
+                if (window.wantsClub) {
+                    showToast("Welcome to Asiye Club! We are matching you with a pool.", "success");
+                } else {
+                    showToast("Welcome to Asiye!", "success");
+                }
+                showModernDashboard();
+            }
+        }).catch(err => {
+            showToast("Network error. Could not save profile.", "danger");
+        });
+
+    } catch (err) {
+        showToast("Setup failed. Please check all fields.", "danger");
+    }
+};
+
+// =================================================================
+// 💳 INITIATE R10 PAYFAST CARD VERIFICATION (AD HOC TOKENIZATION)
+// =================================================================
+window.initiatePayFastCardVerification = function() {
+    if (!window.userId) return;
+    
+    // Show loading spinner overlay
+    const loader = document.getElementById('payfastRedirectLoader');
+    if (loader) loader.style.display = 'flex';
+    closeModal('cardVerificationPopup');
+
+    const paymentId = `card_auth_${window.userId}_${Date.now()}`;
+    const firstName = window.commuterData?.name?.split(' ')[0] || 'Commuter';
+    const lastName = window.commuterData?.name?.split(' ')[1] || 'User';
+    const email = window.commuterData?.email || `${window.commuterData?.phone || 'user'}@asiye.cloud`;
+
+    // PayFast Ad Hoc Tokenization Parameters [1, 2]
+    const paymentData = {
+        merchant_id: '15794279',      // Replace with your LIVE Payfast Merchant ID
+        merchant_key: 'evemwqtov8t9d', // Replace with your LIVE Payfast Merchant Key
+        return_url: 'https://asiye.cloud/success.html?type=card_auth',
+        cancel_url: 'https://asiye.cloud/cancel.html',
+        notify_url: 'https://asiye.cloud/notify.php', // Must be a backend PHP/Node script to capture the token
+        
+        name_first: firstName,
+        name_last: lastName,
+        email_address: email,
+        m_payment_id: paymentId,
+        
+        amount: '10.00',               // 🚨 R10.00 Verification Charge
+        item_name: 'Asiye Card Verification & Wallet Credit',
+        
+        // 🚨 CRITICAL FOR AD HOC TOKENIZATION (Charge at end of trip)
+        subscription_type: '2'         // '2' tells PayFast this is an Ad Hoc Agreement [1]
+    };
+
+    // Store intent locally
+    sessionStorage.setItem('pendingCardAuth', JSON.stringify({
+        paymentId: paymentId,
+        timestamp: Date.now()
+    }));
+
+    // Form submission to PayFast
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = 'https://www.payfast.co.za/eng/process'; // Live URL
+    form.style.display = 'none';
+
+    for (const key in paymentData) {
+        if (paymentData[key] !== '' && paymentData[key] !== null) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = paymentData[key];
+            form.appendChild(input);
+        }
+    }
+
+    document.body.appendChild(form);
+    setTimeout(() => form.submit(), 1500);
+};
 </script>
 </body>
 </html>
