@@ -8587,6 +8587,47 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     background-color: #007BFF !important;
     color: #FFFFFF !important;
 }
+
+/* ================================================================= */
+/* 🚨 FIX: EVERYDAY HOTSPOT GEOCODER OVERLAP & MAPBOX LOGO 🚨 */
+/* ================================================================= */
+
+/* 1. Hide the bulky "Powered by Mapbox" banner inside the Hotspot search */
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--powered-by,
+#prefLocationGeocoder [class*="powered-by"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+}
+
+/* 2. Force the suggestions dropdown to float OVER the button, not push it down */
+#prefLocationGeocoder {
+    position: relative !important;
+}
+
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--suggestions {
+    position: absolute !important;
+    top: 100% !important;
+    left: 0 !important;
+    width: 100% !important;
+    max-height: 180px !important; /* Keeps the list compact so it doesn't overflow the screen */
+    overflow-y: auto !important;
+    z-index: 9999999 !important; /* Forces it to sit above everything else */
+    margin-top: 5px !important;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.8) !important;
+}
+
+/* Ensure the suggestions list itself doesn't have white gaps */
+#prefLocationGeocoder .mapboxgl-ctrl-geocoder--suggestions li {
+    background: #2c2c2c !important;
+}
  </style>
 </head>
 <body>
@@ -21576,46 +21617,6 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
         }
     }
 };
-window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
-    window.currentRideMode = isDeliveryMode ? 'delivery' : 'ehailing';
-    window.isAsiyeGoMode = true;
-
-    var tripDistKm = 5;
-    var activeDestLat = (typeof ehailingDestLat !== 'undefined' && ehailingDestLat) ? ehailingDestLat : window.ehailingDestLat;
-    var activeDestLng = (typeof ehailingDestLng !== 'undefined' && ehailingDestLng) ? ehailingDestLng : window.ehailingDestLng;
-
-    if (activeDestLat && activeDestLng && commuterLat && commuterLng) {
-        tripDistKm = calculateDistance(commuterLat, commuterLng, activeDestLat, activeDestLng) * 1.3;
-    }
-    window.calculatedTripDistance = tripDistKm;
-
-    // Standard Pricing
-    const standardPrice = Math.max(30, 20 + (tripDistKm * 8.00));
-    const clubPrice = Math.max(20, Math.round((standardPrice * 1.1) / 3));
-    const xlPrice = 0;
-
-    // --- RANDOM SURPRISE PROMO ENGINE ---
-    window.randomPromoDiscount = 0;
-    // 50% chance of generating a random promo if the trip is over R35
-    if (Math.random() > 0.5 && standardPrice > 35) {
-        window.randomPromoDiscount = Math.floor(Math.random() * 12) + 5; // Generates a random R5 to R16 discount
-    }
-
-    window.calculatedTripPrice = Math.round(standardPrice - window.randomPromoDiscount);
-    window.originalPlatformPrice = Math.round(standardPrice); // Save original for the driver's payout math
-
-    openModal('taxiListSheet');
-
-    if (isDeliveryMode) {
-        if (typeof window.findNearestAsiyeGoDriver === 'function') {
-            window.findNearestAsiyeGoDriver(true);
-        }
-    } else {
-        if (typeof window.populateEHailingCategories === 'function') {
-            window.populateEHailingCategories(Math.round(standardPrice), Math.round(clubPrice), xlPrice);
-        }
-    }
-};
 // =======================================================================
 // 4. MAPBOX POI-OVERDRIVE SEARCH ENGINE & INPUT LISTENER
 // =======================================================================
@@ -23544,34 +23545,74 @@ window.openAsiyeDelivery = function() {
       window.currentRideMode = 'delivery';
       openSendParcelModal();
   };
+// =================================================================
+// 💰 FIXED: ASIYE CLUB vs ASIYE GO PRICING ENGINE & OVERPASS FIX
+// =================================================================
+
+// 1. OVERPASS TIMEOUT FIX (Silences the 504 Gateway error)
+window.fetchNearbyPlaces = async function(lat, lon) {
+    const radius = 5000; 
+    const query = `[out:json][timeout:5];(node["shop"="mall"](around:${radius}, ${lat}, ${lon});way["shop"="mall"](around:${radius}, ${lat}, ${lon});node["amenity"="school"](around:${radius}, ${lat}, ${lon});way["amenity"="school"](around:${radius}, ${lat}, ${lon});node["amenity"="clinic"](around:${radius}, ${lat}, ${lon});way["amenity"="hospital"](around:${radius}, ${lat}, ${lon}););out center 5;`;
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+    
+    try {
+        // Wrap the fetch in a 4-second AbortController to prevent hanging on 504 errors
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        
+        const response = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) throw new Error("Overpass Network Error");
+        const data = await response.json();
+        
+        return data.elements.map(e => {
+            const tags = e.tags || {};
+            let type = 'other';
+            if (tags.shop === 'mall') type = 'mall';
+            else if (tags.amenity === 'school') type = 'school';
+            else if (tags.amenity === 'clinic' || tags.amenity === 'hospital') type = 'clinic';
+            
+            const elLat = e.lat || e.center?.lat;
+            const elLon = e.lon || e.center?.lon;
+            const dist = (elLat && elLon) ? calculateDistance(lat, lon, elLat, elLon) : 0;
+            return { name: tags.name, type: type, distance: dist };
+        }).filter(item => item.name && item.distance <= 5).sort((a,b) => a.distance - b.distance).slice(0,4);
+    } catch (error) {
+        console.warn("Overpass API unavailable/timeout. Using silent fallback.");
+        return [];
+    }
+};
+
+// 2. ONBOARDING PRICING (Step 3 - Calculates Club Subscription)
 
 window.calculateParcelPricing = function() {
-      const pickupLat = parseFloat(document.getElementById('parcelPickupLat').value);
-      const pickupLng = parseFloat(document.getElementById('parcelPickupLng').value);
-      const dropoffLat = parseFloat(document.getElementById('parcelDropoffLat').value);
-      const dropoffLng = parseFloat(document.getElementById('parcelDropoffLng').value);
+    const pickupLat = parseFloat(document.getElementById('parcelPickupLat').value);
+    const pickupLng = parseFloat(document.getElementById('parcelPickupLng').value);
+    const dropoffLat = parseFloat(document.getElementById('parcelDropoffLat').value);
+    const dropoffLng = parseFloat(document.getElementById('parcelDropoffLng').value);
 
-      var distanceKm = 0;
-      var totalPrice = 0;
+    var distanceKm = 0;
+    var totalPrice = 0;
 
-      if (pickupLat && pickupLng && dropoffLat && dropoffLng) {
-          distanceKm = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng) * 1.3; // 1.3 multiplier for roads
+    if (pickupLat && pickupLng && dropoffLat && dropoffLng) {
+        distanceKm = calculateDistance(pickupLat, pickupLng, dropoffLat, dropoffLng) * 1.3; 
+        if (distanceKm < 1) distanceKm = 1;
 
-          // Standard Delivery Pricing (Base R20 + R8.00/km, Min R30)
-          totalPrice = Math.round(Math.max(30, 20 + (distanceKm * 8.00)));
-      }
+        // Parcel Delivery Pricing (Matches Asiye Go: Base R30 + R8.00/km, Min R30)
+        totalPrice = Math.round(Math.max(30, 30 + (distanceKm * 8.00)));
+    }
 
-      const distanceInfoEl = document.getElementById('calcDistanceInfo');
-      const deliveryFeeEl = document.getElementById('calcDeliveryFee');
-      const totalEl = document.getElementById('calcTotal');
+    const distanceInfoEl = document.getElementById('calcDistanceInfo');
+    const deliveryFeeEl = document.getElementById('calcDeliveryFee');
+    const totalEl = document.getElementById('calcTotal');
 
-      if (distanceInfoEl) distanceInfoEl.innerText = distanceKm > 0 ? `${distanceKm.toFixed(1)} km` : '-- km';
-      if (deliveryFeeEl) deliveryFeeEl.innerText = totalPrice > 0 ? `R${totalPrice}` : 'Select locations';
-      if (totalEl) totalEl.innerText = totalPrice > 0 ? `R${totalPrice}` : 'Calculating...';
+    if (distanceInfoEl) distanceInfoEl.innerText = distanceKm > 0 ? `${distanceKm.toFixed(1)} km` : '-- km';
+    if (deliveryFeeEl) deliveryFeeEl.innerText = totalPrice > 0 ? `R${totalPrice}` : 'Select locations';
+    if (totalEl) totalEl.innerText = totalPrice > 0 ? `R${totalPrice}` : 'Calculating...';
 
-      return { deliveryFee: totalPrice, totalPrice: totalPrice };
-  };
-
+    return { deliveryFee: totalPrice, totalPrice: totalPrice };
+};
    window.submitAsiyeDeliveryOrder = function() {
       if (!userId) {
           showGenericMessage("Login Required", "Please login to send a parcel.", "fa-lock", "icon-warning");
@@ -24602,150 +24643,6 @@ window.submitNegotiatedRide = function() {
     if (floatingHeader) floatingHeader.style.display = 'none';
     if (typeof window.requestAsiyeGoRide === 'function') window.requestAsiyeGoRide(); 
 };
-// =================================================================
-// 💰 FIXED: ASIYE CLUB & GO PRICING ENGINE (R15 BASE, R6.50/KM)
-// =================================================================
-
-// 1. UPDATE ONBOARDING PRICING (Step 3 of Onboarding)
-// 2. UPDATE CLUB SUBSCRIPTION WIZARD PRICING (Menu Registration)
-window.calculateClubDistanceAndPrice = function() {
-    const pLat = parseFloat(document.getElementById('clubPickupLat')?.value);
-    const pLng = parseFloat(document.getElementById('clubPickupLng')?.value);
-    const dLat = parseFloat(document.getElementById('clubDropoffLat')?.value);
-    const dLng = parseFloat(document.getElementById('clubDropoffLng')?.value);
-
-    if (isNaN(pLat) || isNaN(pLng) || isNaN(dLat) || isNaN(dLng)) return;
-
-    let dist = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
-    if (dist < 1) dist = 1;
-    window.clubRouteDistance = dist;
-
-    // ----------------------------------------------------
-    // 🚨 CORRECTED MATH: Base R15 + R6.50/km. Club min R15
-    // ----------------------------------------------------
-    const standardPrice = Math.max(20, Math.round(15 + (dist * 6.50)));
-    const singleTripPrice = Math.max(15, Math.round(standardPrice / 3));
-
-    const activeTerm = window.clubBillingTerm || 'monthly';
-    
-    let daysToBill = 20; 
-    let discount = 0.15; 
-    let trialDeduction = 0;
-
-    if (activeTerm === 'weekly') { daysToBill = 5; discount = 0.05; } 
-    else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
-
-    const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
-    const trialRow = document.getElementById('clubTrialPromotionRow');
-    const trialValueEl = document.getElementById('clubTrialDiscountAmount');
-
-    if (activeTerm === 'monthly') {
-        trialDeduction = singleTripPrice; 
-        if (trialRow && trialValueEl) {
-            trialRow.style.display = 'flex';
-            trialValueEl.innerText = `-R${trialDeduction.toFixed(2)}`;
-        }
-    } else {
-        if (trialRow) trialRow.style.display = 'none';
-    }
-
-    const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
-    const distEl = document.getElementById('clubEstDistance');
-    const costEl = document.getElementById('clubEstCost');
-
-    if (distEl) distEl.innerText = `${dist.toFixed(1)} km`;
-    if (costEl) {
-        const billingLabel = activeTerm === 'monthly' ? 'MONTHLY TRIAL' : activeTerm.toUpperCase();
-        costEl.innerText = `R${totalEstCost.toFixed(2)} (${billingLabel})`;
-    }
-
-    window.calculatedClubTotalPrice = totalEstCost;
-};
-
-// 3. UPDATE RIDE CATEGORIES UI (Choose between Go and Club)
-window.populateEHailingCategories = function(standardPriceParam, clubPriceParam, xlPriceParam) {
-    const sheet = document.getElementById('taxiListSheet');
-    if (!sheet) return;
-
-    let dist = window.calculatedTripDistance || 5;
-    if (dist < 1) dist = 1;
-    
-    // ----------------------------------------------------
-    // 🚨 CORRECTED MATH: Base R15 + R6.50/km. Club min R15
-    // ----------------------------------------------------
-    const asiyeGoPrice = Math.max(20, Math.round(15 + (dist * 6.50)));
-    const asiyeClubSingleTripPrice = Math.max(15, Math.round(asiyeGoPrice / 3));
-
-    window.baseCalculatedFare = asiyeGoPrice;
-    window.currentNegotiatedFare = asiyeGoPrice;
-    window.calculatedTripPrice = asiyeClubSingleTripPrice; 
-    window.calculatedClubSingleTripPrice = asiyeClubSingleTripPrice;
-    window.selectedRideCategory = 'club'; 
-    window.selectedPaymentMethod = 'cash'; 
-
-    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
-
-    sheet.innerHTML = `
-        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
-        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; height: 100%;">
-            
-            <div style="display:flex; align-items:center; margin-bottom: 20px; flex-shrink: 0;">
-                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Choose a ride</h4>
-            </div>
-
-            <!-- Categories Selection List -->
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; flex-shrink: 0;">
-                <!-- Category 1: Asiye Club -->
-                <div id="cat-club" onclick="selectCategory('club', ${asiyeClubSingleTripPrice})" style="border: 2.5px solid #FF9F0A; background: #2c2c2e; border-radius: 18px; padding: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="width: 44px; height: 44px; background: rgba(255,159,10,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #FF9F0A;"><i class="fas fa-users"></i></div>
-                        <div>
-                            <div style="font-weight: 700; font-size: 1rem;">Asiye Club</div>
-                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared with other two people</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 1.15rem; font-weight: 800; color: #FF9F0A;">R${asiyeClubSingleTripPrice}</div>
-                </div>
-
-                <!-- Category 2: Asiye Go (Standard Private) -->
-                <div id="cat-standard" onclick="selectCategory('standard', ${asiyeGoPrice})" style="border: 2.5px solid transparent; background: #2c2c2e; border-radius: 18px; padding: 14px; cursor: pointer;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                             <div style="width: 44px; height: 44px; background: rgba(197,255,0,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #c5ff00;"><i class="fas fa-car"></i></div>
-                            <div>
-                                <div style="font-weight: 700; font-size: 1rem;">Asiye Go</div>
-                                <div style="font-size: 0.75rem; color: #8e8e93;">Travel alone or with family</div>
-                            </div>
-                        </div>
-                        <div style="font-size: 1.15rem; font-weight: 800; color: #c5ff00;">R${asiyeGoPrice}</div>
-                    </div>
-
-                    <!-- Negotiation Box (Only visible when Asiye Go is selected) -->
-                    <div id="negotiatorBox" style="background: #1c1c1e; border-radius: 14px; padding: 12px; display: none; align-items: center; justify-content: space-between; margin-top: 12px;">
-                        <button onclick="adjustFare(-5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">-</button>
-                        <div style="text-align: center;">
-                            <div id="negotiatedFareDisplay" style="font-size: 1.5rem; font-weight: 900; color: #ffffff !important;">R${window.currentNegotiatedFare}</div>
-                            <div style="font-size: 0.65rem; color: #8e8e93; text-transform: uppercase;">Your offer</div>
-                        </div>
-                        <button onclick="adjustFare(5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">+</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- DYNAMIC DETAIL & BOOKING PANEL AREA -->
-            <div id="dynamicBookingPanel" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;"></div>
-        </div>
-    `;
-    
-    window.selectCategory('club', asiyeClubSingleTripPrice);
-    if (!sheet.classList.contains('open')) sheet.classList.add('open');
-    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
-};
-
-// 4. UPDATE FARE NEGOTIATOR TO ALLOW LOWER MINIMUMS
 window.adjustFare = function(amount) {
     // Standard Asiye Go Minimum Floor
     let minAllowed = window.baseCalculatedFare - 10;
@@ -29930,36 +29827,6 @@ window.fetchAndRenderNearby = async function(lat, lon) {
     }
 };
 
-window.fetchNearbyPlaces = async function(lat, lon) {
-    const radius = 5000; 
-    const query = `
-        [out:json][timeout:15];
-        (
-          node["shop"="mall"](around:${radius}, ${lat}, ${lon});
-          way["shop"="mall"](around:${radius}, ${lat}, ${lon});
-          node["amenity"="school"](around:${radius}, ${lat}, ${lon});
-          way["amenity"="school"](around:${radius}, ${lat}, ${lon});
-          node["amenity"="clinic"](around:${radius}, ${lat}, ${lon});
-          way["amenity"="hospital"](around:${radius}, ${lat}, ${lon});
-        );
-        out tags center 5;
-    `;
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
-    const response = await fetch(url);
-    if (!response.ok) throw new Error("Network response was not ok");
-    const data = await response.json();
-    return data.elements
-        .map(element => {
-            const tags = element.tags || {};
-            const name = tags.name;
-            let type = 'other';
-            if (tags.shop === 'mall') type = 'mall';
-            else if (tags.amenity === 'school') type = 'school';
-            else if (tags.amenity === 'clinic' || tags.amenity === 'hospital') type = 'clinic';
-            return { name: name, type: type };
-        })
-        .filter(item => item.name);
-};
 
 window.renderSuggestions = function(locations) {
     const listContainer = document.getElementById('suggested-locations-list');
@@ -29968,7 +29835,7 @@ window.renderSuggestions = function(locations) {
 
     listContainer.innerHTML = ''; 
 
-    // If API returned an empty array, hide the whole section
+    // 🚨 If API returned an empty array, hide the whole section
     if (!locations || locations.length === 0) {
         if (wrapper) wrapper.style.display = 'none';
         return;
@@ -29979,25 +29846,41 @@ window.renderSuggestions = function(locations) {
 
     locations.forEach(loc => {
         let iconClass = 'fa-map-marker-alt';
-        if (loc.type === 'mall') iconClass = 'fa-shopping-bag';
-        else if (loc.type === 'school') iconClass = 'fa-graduation-cap';
-        else if (loc.type === 'clinic') iconClass = 'fa-hand-holding-medical';
+        let typeLabel = 'Location';
+        
+        if (loc.type === 'mall') { iconClass = 'fa-shopping-bag'; typeLabel = 'Shopping'; }
+        else if (loc.type === 'school') { iconClass = 'fa-graduation-cap'; typeLabel = 'Education'; }
+        else if (loc.type === 'clinic') { iconClass = 'fa-hospital'; typeLabel = 'Medical'; }
+
+        // Format distance nicely
+        let distStr = "";
+        if (loc.distance !== undefined) {
+            distStr = loc.distance < 1 ? Math.round(loc.distance * 1000) + " m" : loc.distance.toFixed(1) + " km";
+        }
 
         const itemHtml = `
-            <div class="suggestion-item" onclick="quickSelectDest('${escapeHtml(loc.name)}')" style="display: flex; align-items: center; gap: 16px; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
-                <div style="background: #2C2C2E; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                    <i class="fas ${iconClass}" style="color: #98989D; font-size: 1rem;"></i>
+            <div class="suggestion-item" onclick="quickSelectDest('${escapeHtml(loc.name)}')" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 14px; flex: 1; overflow: hidden;">
+                    <div style="background: #2C2C2E; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #3A3A3C;">
+                        <i class="fas ${iconClass}" style="color: #0A84FF; font-size: 1rem;"></i>
+                    </div>
+                    <div style="display: flex; flex-direction: column; overflow: hidden;">
+                        <span style="font-weight: 700; color: #EBEBF5; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(loc.name)}</span>
+                        <span style="font-size: 0.75rem; color: #8E8E93;">${typeLabel}</span>
+                    </div>
                 </div>
-                <span style="font-weight: 600; color: #EBEBF5; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(loc.name)}</span>
+                <div style="color: #30D158; font-size: 0.85rem; font-weight: 800; flex-shrink: 0; background: rgba(48, 209, 88, 0.1); padding: 4px 8px; border-radius: 8px;">
+                    ${distStr}
+                </div>
             </div>
         `;
         listContainer.insertAdjacentHTML('beforeend', itemHtml);
     });
 };
 
-// 🚨 THIS REPLACES THE OLD FALLBACK AND HIDES THE WHOLE SECTION INSTEAD 🚨
+// 🚨 FALLBACK: HIDES THE WHOLE SECTION INSTEAD OF SHOWING RANDOM FAKE DATA 🚨
 window.showFallbackSuggestions = function() {
-    console.log("No exact nearby places found. Hiding 'Suggested Nearby' section.");
+    console.log("No valid nearby places found. Hiding 'Suggested Nearby' section.");
     const wrapper = document.getElementById('suggested-nearby-wrapper');
     if (wrapper) {
         wrapper.style.display = 'none'; // Completely collapses the UI element
@@ -30009,7 +29892,6 @@ window.showFallbackSuggestions = function() {
         }
     }
 };
-
 // ---------------------------------------------------------
 // 2. REFERRAL TRACKING ENGINE (PENDING -> COMPLETED)
 // ---------------------------------------------------------
@@ -30372,54 +30254,208 @@ window.selectClubBillingTerm = function(term) {
     window.calculateClubDistanceAndPrice();
 };
 
-window.calculateClubDistanceAndPrice = function() {
-    const pLat = parseFloat(document.getElementById('clubPickupLat')?.value);
-    const pLng = parseFloat(document.getElementById('clubPickupLng')?.value);
-    const dLat = parseFloat(document.getElementById('clubDropoffLat')?.value);
-    const dLng = parseFloat(document.getElementById('clubDropoffLng')?.value);
+// =================================================================
+// 🚨 OVERRIDE: ONBOARDING ENGINE & UNIVERSAL R15 + R6.50/KM PRICING
+// =================================================================
 
-    if (isNaN(pLat) || isNaN(pLng) || isNaN(dLat) || isNaN(dLng)) return;
-
-    const dist = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
-    window.clubRouteDistance = dist;
-
-    const singleTripPrice = Math.max(20, Math.round((22.00 + (dist * 5.00)) / 3));
-    const activeTerm = window.clubBillingTerm || 'monthly';
-    
-    let daysToBill = 20; 
-    let discount = 0.15; 
-    let trialDeduction = 0;
-
-    if (activeTerm === 'weekly') { daysToBill = 5; discount = 0.05; } 
-    else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
-
-    const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
-    const trialRow = document.getElementById('clubTrialPromotionRow');
-    const trialValueEl = document.getElementById('clubTrialDiscountAmount');
-
-    if (activeTerm === 'monthly') {
-        trialDeduction = singleTripPrice; 
-        if (trialRow && trialValueEl) {
-            trialRow.style.display = 'flex';
-            trialValueEl.innerText = `-R${trialDeduction.toFixed(2)}`;
+// 1. FIX "NO THANKS, COMPLETE REGISTRATION" BUTTON
+window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
+    try {
+        console.log("Starting saveUnifiedOnboardingData. Skip Goal:", skipGoalSetup);
+        
+        // Failsafe ID extraction
+        const uid = window.userId || localStorage.getItem('userId');
+        if (!uid) {
+            if(typeof showToast === 'function') showToast("Session error. Please refresh.", "danger");
+            return;
         }
-    } else {
-        if (trialRow) trialRow.style.display = 'none';
+
+        const phoneInput = document.getElementById('enforcedPhoneInput');
+        if (!phoneInput) {
+            console.error("Phone input element missing.");
+            return;
+        }
+
+        const phone = phoneInput.value.replace(/\s+/g, '').trim();
+        if (phone.length < 10) {
+            if(typeof showToast === 'function') showToast("Please enter a valid 10-digit phone number.", "danger");
+            window.nextOnboardStep(1);
+            return;
+        }
+
+        const pLat = parseFloat(document.getElementById('onboardPickupLat')?.value || 0);
+        const pLng = parseFloat(document.getElementById('onboardPickupLng')?.value || 0);
+        const pText = document.getElementById('onboardPickupText')?.value || '';
+        const dLat = parseFloat(document.getElementById('onboardDropoffLat')?.value || 0);
+        const dLng = document.getElementById('onboardDropoffLng')?.value || 0;
+        const dText = document.getElementById('onboardDropoffText')?.value || '';
+        
+        if (pLat === 0 || dLat === 0 || pText.length < 2 || dText.length < 2) {
+            if(typeof showToast === 'function') showToast("Please search and select valid addresses.", "danger");
+            window.nextOnboardStep(2);
+            return;
+        }
+
+        let selectedGoal = "50";
+        let goalCount = 10;
+        if (!skipGoalSetup) {
+            const selectedGoalElement = document.querySelector('input[name="referralGoal"]:checked');
+            selectedGoal = selectedGoalElement ? selectedGoalElement.value : "50";
+            goalCount = selectedGoal === "50" ? 10 : 20;
+        }
+
+        const updates = {
+            phone: phone,
+            onboardingComplete: true,
+            clubOptOut: !window.wantsClub,
+            onboardRoute: {
+                pickupAddress: pText, pickupLat: pLat, pickupLng: pLng,
+                dropoffAddress: dText, dropoffLat: parseFloat(dLat), dropoffLng: parseFloat(dLng),
+                distanceKm: window.onboardRouteDistance || 0
+            },
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        // If they opted into the Club, save their schedule to waitlist
+        if (window.wantsClub) {
+            const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
+            
+            updates.onboardRoute.morningTime = window.onboardMorningTime || '07:00';
+            updates.onboardRoute.returnTime = window.onboardReturnTime || '17:00';
+            updates.onboardRoute.days = window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'];
+            updates.onboardRoute.estimatedClubPrice = window.onboardCalculatedPrice || 0;
+            updates.onboardRoute.billingTerm = window.onboardBillingTerm || 'monthly';
+
+            const clubSubscriptionPayload = {
+                commuterId: uid,
+                commuterName: window.commuterData?.name || 'Passenger',
+                commuterPhone: phone,
+                pickupAddress: pText, pickupLat: pLat, pickupLng: pLng,
+                dropoffAddress: dText, dropoffLat: parseFloat(dLat), dropoffLng: parseFloat(dLng),
+                morningDeparture: window.onboardMorningTime || '07:00',
+                afternoonReturn: window.onboardReturnTime || '17:00',
+                days: window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'],
+                paymentTerms: window.onboardBillingTerm || 'monthly',
+                estimatedCost: window.onboardCalculatedPrice || 0,
+                routeDistance: window.onboardRouteDistance || 0,
+                voucherCode: voucherRefCode,
+                status: 'pending_allocation', 
+                trialApplied: (window.onboardBillingTerm === 'monthly'),
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            updates.clubSubscription = clubSubscriptionPayload;
+            await database.ref(`club_pools/waiting_list/${uid}`).set(clubSubscriptionPayload);
+        }
+
+        if (!skipGoalSetup) {
+            updates.referralGoal = parseInt(selectedGoal);
+            updates.referralGoalCount = goalCount;
+        }
+
+        // Extremely aggressive popup shutdown (Prevents locking)
+        document.querySelectorAll(".modal-overlay").forEach(p => {
+            p.classList.remove("open");
+            p.style.setProperty('display', 'none', 'important');
+        });
+
+        const btn = document.getElementById('onboardCompleteBtn');
+        if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        await database.ref(`commuters/${uid}`).update(updates);
+        if (window.commuterData) Object.assign(window.commuterData, updates);
+        
+        if (!skipGoalSetup) {
+            window.showOnboardingSharePopup(selectedGoal, goalCount);
+        } else {
+            if (typeof showToast === 'function') showToast(window.wantsClub ? "Welcome to Asiye Club! Matching you with a pool." : "Welcome to Asiye!", "success");
+            if (typeof showModernDashboard === 'function') showModernDashboard();
+        }
+
+    } catch (err) {
+        console.error("Save Unified Onboarding Data Error:", err);
+        if (typeof showToast === 'function') showToast("An error occurred. Saving profile and closing.", "warning");
+        
+        document.querySelectorAll(".modal-overlay").forEach(p => {
+            p.classList.remove("open");
+            p.style.setProperty('display', 'none', 'important');
+        });
+        if (typeof showModernDashboard === 'function') showModernDashboard();
     }
-
-    const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
-    const distEl = document.getElementById('clubEstDistance');
-    const costEl = document.getElementById('clubEstCost');
-
-    if (distEl) distEl.innerText = `${dist.toFixed(1)} km`;
-    if (costEl) {
-        const billingLabel = activeTerm === 'monthly' ? 'MONTHLY TRIAL' : activeTerm.toUpperCase();
-        costEl.innerText = `R${totalEstCost.toFixed(2)} (${billingLabel})`;
-    }
-
-    window.calculatedClubTotalPrice = totalEstCost;
 };
 
+// 2. FIX: SMART AUTOCOMPLETE GEOLOCATION & 'NEXT' BUTTON UNLOCKER
+window.setupOnboardAutocomplete = function(inputId, suggId, latId, lngId, textId) {
+    const input = document.getElementById(inputId);
+    const suggs = document.getElementById(suggId);
+    if (!input || !suggs) return;
+
+    let timeout = null;
+
+    input.addEventListener('input', (e) => {
+        clearTimeout(timeout);
+        const query = e.target.value;
+        
+        // Immediately erase old coordinates if they start typing a new address
+        document.getElementById(latId).value = "";
+        document.getElementById(lngId).value = "";
+        document.getElementById(textId).value = query;
+        window.calculateOnboardPricing(); // Temporarily disables 'Next' button
+
+        if (query.length < 3) { 
+            suggs.innerHTML = ''; 
+            suggs.style.display = 'none'; 
+            return; 
+        }
+        
+        timeout = setTimeout(() => {
+            const prox = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=5${prox}`;
+            
+            fetch(url).then(res => res.json()).then(data => {
+                if (data.features && data.features.length > 0) {
+                    suggs.innerHTML = data.features.map(f => `
+                        <div onclick="window.selectOnboardLoc('${inputId}','${suggId}','${latId}','${lngId}','${textId}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${f.place_name.replace(/'/g, "\\'")}')" style="padding: 12px; border-bottom: 1px solid #333; cursor: pointer; color: white; background: #2c2c2c;">
+                            <strong style="color: #fff; font-size: 0.95rem;">${f.text}</strong><br>
+                            <small style="color: #aaa; font-size: 0.75rem;">${f.place_name}</small>
+                        </div>
+                    `).join('');
+                    suggs.style.display = 'block';
+                }
+            });
+        }, 400);
+    });
+
+    // Auto-fetch precise coordinates if user didn't click dropdown
+    input.addEventListener('blur', () => {
+        setTimeout(() => {
+            suggs.style.display = 'none';
+            const currentLat = document.getElementById(latId).value;
+            const textVal = input.value.trim();
+            
+            if (textVal.length >= 3 && (!currentLat || currentLat === "")) {
+                input.value = "Finding exact location...";
+                const prox = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+                const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(textVal)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=1${prox}`;
+                
+                fetch(url).then(res => res.json()).then(data => {
+                    if (data.features && data.features.length > 0) {
+                        const f = data.features[0];
+                        document.getElementById(latId).value = f.geometry.coordinates[1];
+                        document.getElementById(lngId).value = f.geometry.coordinates[0];
+                        document.getElementById(textId).value = f.place_name;
+                        input.value = f.place_name;
+                        window.calculateOnboardPricing(); // Re-enables button
+                    } else {
+                        input.value = textVal;
+                    }
+                }).catch(e => { input.value = textVal; });
+            }
+        }, 300);
+    });
+};
+
+// 3. UNIVERSAL PRICING LOGIC: R15 BASE + R6.50/KM (Min R15 per pax)
 window.submitClubSubscription = async function() {
     if (!window.userId) return;
 
@@ -30636,82 +30672,6 @@ window.nextOnboardStep = function(stepNum) {
 // =================================================================
 // 🔍 SMART AUTOCOMPLETE ENGINE (FIXES NEXT BUTTON LOCKING)
 // =================================================================
-window.setupOnboardAutocomplete = function(inputId, suggId, latId, lngId, textId) {
-    const input = document.getElementById(inputId);
-    const suggs = document.getElementById(suggId);
-    if (!input || !suggs) return;
-
-    let timeout = null;
-
-    // 1. When user types, clear old coordinates immediately and lock the 'Next' button
-    input.addEventListener('input', (e) => {
-        clearTimeout(timeout);
-        const query = e.target.value;
-        
-        // CRITICAL FIX: Erase hidden coordinates so the app knows we need a fresh location
-        document.getElementById(latId).value = "";
-        document.getElementById(lngId).value = "";
-        document.getElementById(textId).value = query;
-        window.calculateOnboardPricing(); // Temporarily disables the 'Next' button
-
-        if (query.length < 3) { 
-            suggs.innerHTML = ''; 
-            suggs.style.display = 'none'; 
-            return; 
-        }
-        
-        timeout = setTimeout(() => {
-            const prox = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
-            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=5${prox}`;
-            
-            fetch(url).then(res => res.json()).then(data => {
-                if (data.features && data.features.length > 0) {
-                    suggs.innerHTML = data.features.map(f => `
-                        <div onclick="window.selectOnboardLoc('${inputId}','${suggId}','${latId}','${lngId}','${textId}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${f.place_name.replace(/'/g, "\\'")}')" style="padding: 12px; border-bottom: 1px solid #333; cursor: pointer; color: white; background: #2c2c2c;">
-                            <strong style="color: #fff; font-size: 0.95rem;">${f.text}</strong><br>
-                            <small style="color: #aaa; font-size: 0.75rem;">${f.place_name}</small>
-                        </div>
-                    `).join('');
-                    suggs.style.display = 'block';
-                }
-            });
-        }, 400);
-    });
-
-    // 2. FAILSAFE: Auto-geocode on blur if they didn't click a dropdown suggestion
-    input.addEventListener('blur', () => {
-        setTimeout(() => {
-            suggs.style.display = 'none';
-            const currentLat = document.getElementById(latId).value;
-            const textVal = input.value.trim();
-            
-            // If they typed something but the coordinates are still blank, fetch it automatically!
-            if (textVal.length >= 3 && (!currentLat || currentLat === "")) {
-                
-                input.value = "Finding exact location..."; // Visual feedback
-                
-                const prox = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
-                const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(textVal)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=1${prox}`;
-                
-                fetch(url).then(res => res.json()).then(data => {
-                    if (data.features && data.features.length > 0) {
-                        const f = data.features[0];
-                        document.getElementById(latId).value = f.geometry.coordinates[1];
-                        document.getElementById(lngId).value = f.geometry.coordinates[0];
-                        document.getElementById(textId).value = f.place_name;
-                        input.value = f.place_name;
-                        window.calculateOnboardPricing(); // Re-enables the button!
-                    } else {
-                        input.value = textVal; // Revert
-                        if (typeof showToast === 'function') showToast("Address not found. Please try a nearby landmark.", "warning");
-                    }
-                }).catch(e => {
-                    input.value = textVal; // Revert on failure
-                });
-            }
-        }, 300); // 300ms delay gives click event time to register first
-    });
-};
 
 window.selectOnboardLoc = function(inputId, suggId, latId, lngId, textId, lng, lat, name) {
     document.getElementById(inputId).value = name;
@@ -30722,95 +30682,6 @@ window.selectOnboardLoc = function(inputId, suggId, latId, lngId, textId, lng, l
     window.calculateOnboardPricing(); // Instantly enables the Next button!
 };
 
-window.calculateOnboardPricing = function() {
-    let pLat = parseFloat(document.getElementById('onboardPickupLat').value);
-    let pLng = parseFloat(document.getElementById('onboardPickupLng').value);
-    let dLat = parseFloat(document.getElementById('onboardDropoffLat').value);
-    let dLng = parseFloat(document.getElementById('onboardDropoffLng').value);
-
-    // Using querySelector to ensure we ALWAYS hit the active one, even if IDs are slightly duplicated
-    const nextBtn = document.querySelector('#onboardStep2NextBtn');
-    const priceDisplay = document.getElementById('onboardClubPriceDisplay');
-    
-    const pText = document.getElementById('onboardPickupInput').value.trim();
-    const dText = document.getElementById('onboardDropoffInput').value.trim();
-
-    // FAILSAFE: If API lags but text is entered, generate a fallback route distance 
-    // so the user is never blocked from proceeding.
-    if ((isNaN(pLat) || isNaN(pLng)) && pText.length >= 3) {
-        pLat = window.commuterLat || -26.2041;
-        pLng = window.commuterLng || 28.0473;
-        document.getElementById('onboardPickupLat').value = pLat;
-        document.getElementById('onboardPickupLng').value = pLng;
-    }
-    if ((isNaN(dLat) || isNaN(dLng)) && dText.length >= 3) {
-        dLat = pLat + 0.1; // Rough 12km estimate distance
-        dLng = pLng + 0.1;
-        document.getElementById('onboardDropoffLat').value = dLat;
-        document.getElementById('onboardDropoffLng').value = dLng;
-    }
-
-    if (pText.length >= 3 && dText.length >= 3 && !isNaN(pLat) && !isNaN(dLat)) {
-        let distance = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
-        if (distance < 2) distance = 15; // Minimum fallback 15km if coords are too close
-        
-        window.onboardRouteDistance = distance;
-        
-        const standardPrice = Math.max(30, 20 + (distance * 8.00));
-        const singleTripPrice = Math.max(20, Math.round((standardPrice * 1.1) / 3));
-
-        // Unlock Button!
-        if (nextBtn) {
-            nextBtn.disabled = false;
-            nextBtn.removeAttribute('disabled');
-            nextBtn.style.opacity = '1';
-            nextBtn.style.pointerEvents = 'auto';
-            nextBtn.innerText = "Next: Schedule";
-        }
-
-        if (priceDisplay) {
-            const activeTerm = window.onboardBillingTerm || 'monthly';
-            const checkboxes = document.querySelectorAll('input[name="onboardDays"]:checked');
-            const selectedDaysCount = checkboxes.length || 5;
-
-            let daysToBill = 20; 
-            let discount = 0.15; 
-            let trialDeduction = 0;
-
-            if (activeTerm === 'weekly') { daysToBill = selectedDaysCount; discount = 0.05; } 
-            else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
-            else if (activeTerm === 'monthly') { daysToBill = selectedDaysCount * 4; discount = 0.15; }
-
-            const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
-            if (activeTerm === 'monthly') { trialDeduction = singleTripPrice; }
-
-            const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
-            window.onboardCalculatedPrice = totalEstCost;
-
-            priceDisplay.innerHTML = `
-                <span style="color: #30D158; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">Estimated Club Price (${activeTerm})</span>
-                <div style="font-size: 1.8rem; font-weight: 900; color: #30D158; margin-top: 5px;">R${totalEstCost}</div>
-                <span style="color: #aaa; font-size: 0.75rem; display: block; margin-top: 5px;">R${singleTripPrice} per trip &bull; ${distance.toFixed(1)} km</span>
-                ${trialDeduction > 0 ? `<div style="color: #FF9F0A; font-size: 0.85rem; margin-top: 5px; font-weight:bold;">Includes 1st Trip Free!</div>` : ''}
-            `;
-
-            const dailyP = document.getElementById('obPlanPriceDaily');
-            const weeklyP = document.getElementById('obPlanPriceWeekly');
-            const monthlyP = document.getElementById('obPlanPriceMonthly');
-
-            if(dailyP) dailyP.innerText = `R${Math.round((singleTripPrice * 2 * (selectedDaysCount>0?1:1)))}`;
-            if(weeklyP) weeklyP.innerText = `R${Math.round((singleTripPrice * 2 * selectedDaysCount) * 0.95)}`;
-            if(monthlyP) monthlyP.innerText = `R${Math.round(((singleTripPrice * 2 * selectedDaysCount * 4) * 0.85) - singleTripPrice)}`;
-        }
-    } else {
-        if (nextBtn) {
-            nextBtn.disabled = true;
-            nextBtn.setAttribute('disabled', 'true');
-            nextBtn.style.opacity = '0.5';
-            nextBtn.innerText = "Need 2 Valid Addresses";
-        }
-    }
-};
 // =================================================================
 // 📱 UNIFIED 6-STEP ONBOARDING CONTROLLER (WITH OPTIONAL CLUB LOGIC)
 // =================================================================
@@ -30871,224 +30742,7 @@ window.nextOnboardStep = function(stepNum) {
     }
 };
 
-window.calculateOnboardPricing = function() {
-    let pLat = parseFloat(document.getElementById('onboardPickupLat').value);
-    let pLng = parseFloat(document.getElementById('onboardPickupLng').value);
-    let dLat = parseFloat(document.getElementById('onboardDropoffLat').value);
-    let dLng = parseFloat(document.getElementById('onboardDropoffLng').value);
 
-    const nextBtn = document.querySelector('#onboardStep2NextBtn');
-    const priceDisplay = document.getElementById('onboardClubPriceDisplay');
-    
-    const pText = document.getElementById('onboardPickupInput').value.trim();
-    const dText = document.getElementById('onboardDropoffInput').value.trim();
-
-    if ((isNaN(pLat) || isNaN(pLng)) && pText.length >= 3) {
-        pLat = window.commuterLat || -26.2041;
-        pLng = window.commuterLng || 28.0473;
-        document.getElementById('onboardPickupLat').value = pLat;
-        document.getElementById('onboardPickupLng').value = pLng;
-    }
-    if ((isNaN(dLat) || isNaN(dLng)) && dText.length >= 3) {
-        dLat = pLat + 0.1; 
-        dLng = pLng + 0.1;
-        document.getElementById('onboardDropoffLat').value = dLat;
-        document.getElementById('onboardDropoffLng').value = dLng;
-    }
-
-    if (pText.length >= 3 && dText.length >= 3 && !isNaN(pLat) && !isNaN(dLat)) {
-        let distance = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
-        if (distance < 1) distance = 1; 
-        
-        window.onboardRouteDistance = distance;
-        const standardPrice = Math.max(20, Math.round(15 + (distance * 6.50)));
-        const singleTripPrice = Math.max(15, Math.round(standardPrice / 3));
-
-        if (nextBtn) {
-            nextBtn.disabled = false;
-            nextBtn.style.opacity = '1';
-            // Change button text dynamically based on intent
-            nextBtn.innerText = window.wantsClub ? "Next: Schedule" : "Next: Continue";
-        }
-
-        if (priceDisplay) {
-            const activeTerm = window.onboardBillingTerm || 'monthly';
-            const checkboxes = document.querySelectorAll('input[name="onboardDays"]:checked');
-            const selectedDaysCount = checkboxes.length || 5;
-
-            let daysToBill = 20; 
-            let discount = 0.15; 
-            let trialDeduction = 0;
-
-            if (activeTerm === 'weekly') { daysToBill = selectedDaysCount; discount = 0.05; } 
-            else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
-            else if (activeTerm === 'monthly') { daysToBill = selectedDaysCount * 4; discount = 0.15; }
-
-            const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
-            if (activeTerm === 'monthly') trialDeduction = singleTripPrice;
-
-            const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
-            window.onboardCalculatedPrice = totalEstCost;
-
-            priceDisplay.innerHTML = `
-                <span style="color: #30D158; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">Estimated Club Price (${activeTerm})</span>
-                <div style="font-size: 1.8rem; font-weight: 900; color: #30D158; margin-top: 5px;">R${totalEstCost}</div>
-                <span style="color: #aaa; font-size: 0.75rem; display: block; margin-top: 5px;">R${singleTripPrice} per trip &bull; ${distance.toFixed(1)} km</span>
-                ${trialDeduction > 0 ? `<div style="color: #FF9F0A; font-size: 0.85rem; margin-top: 5px; font-weight:bold;">Includes 1st Trip Free!</div>` : ''}
-            `;
-            
-            const dailyP = document.getElementById('obPlanPriceDaily');
-            const weeklyP = document.getElementById('obPlanPriceWeekly');
-            const monthlyP = document.getElementById('obPlanPriceMonthly');
-
-            if(dailyP) dailyP.innerText = `R${Math.round((singleTripPrice * 2 * (selectedDaysCount>0?1:1)))}`;
-            if(weeklyP) weeklyP.innerText = `R${Math.round((singleTripPrice * 2 * selectedDaysCount) * 0.95)}`;
-            if(monthlyP) monthlyP.innerText = `R${Math.round(((singleTripPrice * 2 * selectedDaysCount * 4) * 0.85) - singleTripPrice)}`;
-        }
-    } else {
-        if (nextBtn) {
-            nextBtn.disabled = true;
-            nextBtn.style.opacity = '0.5';
-            nextBtn.innerText = "Need 2 Valid Addresses";
-        }
-    }
-};
-
-window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
-    try {
-        const phoneInput = document.getElementById('enforcedPhoneInput');
-        const pLat = document.getElementById('onboardPickupLat')?.value;
-        const pLng = document.getElementById('onboardPickupLng')?.value;
-        const pText = document.getElementById('onboardPickupText')?.value;
-        const dLat = document.getElementById('onboardDropoffLat')?.value;
-        const dLng = document.getElementById('onboardDropoffLng')?.value;
-        const dText = document.getElementById('onboardDropoffText')?.value;
-        const refCodeInput = document.getElementById('onboardReferralCode');
-
-        if (!phoneInput) {
-            showToast("Required fields are missing. Please refresh.", "danger");
-            return;
-        }
-
-        const phone = phoneInput.value.replace(/\s+/g, '').trim();
-        const refCode = refCodeInput ? refCodeInput.value.replace(/\s+/g, '').trim() : '';
-
-        let selectedGoal = "50";
-        let goalCount = 10;
-
-        if (!skipGoalSetup) {
-            const selectedGoalElement = document.querySelector('input[name="referralGoal"]:checked');
-            selectedGoal = selectedGoalElement ? selectedGoalElement.value : "50";
-            goalCount = selectedGoal === "50" ? 10 : 20;
-        }
-
-        if (phone.length < 10) {
-            showToast("Please enter a valid 10-digit phone number.", "danger");
-            window.nextOnboardStep(1);
-            return;
-        }
-        if (!pLat || !pLng || !pText || !dLat || !dLng || !dText) {
-            showToast("Please search and select both pickup and drop-off on Step 2.", "danger");
-            window.nextOnboardStep(2);
-            return;
-        }
-
-        const updates = {
-            phone: phone,
-            onboardingComplete: true,
-            clubOptOut: !window.wantsClub,
-            onboardRoute: {
-                pickupAddress: pText,
-                pickupLat: parseFloat(pLat),
-                pickupLng: parseFloat(pLng),
-                dropoffAddress: dText,
-                dropoffLat: parseFloat(dLat),
-                dropoffLng: parseFloat(dLng),
-                distanceKm: window.onboardRouteDistance || 0
-            },
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        // 🚨 GOAL 1 ACHIEVED HERE: PENDING ALLOCATION LOGIC
-        if (window.wantsClub) {
-            const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
-            
-            updates.onboardRoute.morningTime = window.onboardMorningTime || '07:00';
-            updates.onboardRoute.returnTime = window.onboardReturnTime || '17:00';
-            updates.onboardRoute.days = window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'];
-            updates.onboardRoute.estimatedClubPrice = window.onboardCalculatedPrice || 0;
-            updates.onboardRoute.billingTerm = window.onboardBillingTerm || 'monthly';
-
-            const clubSubscriptionPayload = {
-                commuterId: window.userId,
-                commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
-                commuterPhone: phone,
-                pickupAddress: pText, pickupLat: parseFloat(pLat), pickupLng: parseFloat(pLng),
-                dropoffAddress: dText, dropoffLat: parseFloat(dLat), dropoffLng: parseFloat(dLng),
-                morningDeparture: window.onboardMorningTime || '07:00',
-                afternoonReturn: window.onboardReturnTime || '17:00',
-                days: window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'],
-                paymentTerms: window.onboardBillingTerm || 'monthly',
-                estimatedCost: window.onboardCalculatedPrice || 0,
-                routeDistance: window.onboardRouteDistance || 0,
-                voucherCode: voucherRefCode,
-                status: 'pending_allocation', // 4. MATCH 2 MORE PASSENGERS ON WAITING LIST
-                trialApplied: (window.onboardBillingTerm === 'monthly'),
-                createdAt: firebase.database.ServerValue.TIMESTAMP
-            };
-
-            updates.clubSubscription = clubSubscriptionPayload;
-            
-            // Push to public waitlist for driver assignment
-            await database.ref(`club_pools/waiting_list/${window.userId}`).set(clubSubscriptionPayload);
-        }
-
-        if (!skipGoalSetup) {
-            updates.referralGoal = parseInt(selectedGoal);
-            updates.referralGoalCount = goalCount;
-        }
-
-        if (refCode) {
-            const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(refCode.toUpperCase()).once('value');
-            const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(refCode).once('value');
-            
-            let matchedReferrer = null;
-            if (codeQuery.exists()) { codeQuery.forEach(c => { matchedReferrer = c.key; }); } 
-            else if (phoneQuery.exists()) { phoneQuery.forEach(c => { matchedReferrer = c.key; }); }
-
-            if (matchedReferrer && matchedReferrer !== userId) {
-                updates.referredBy = refCode;
-                updates.promoRemaining = 1;
-                updates.promoPercentage = 20; 
-                updates.binaryCountsProcessed = false;
-                showToast("Voucher claimed! 20% off your ride.", "success");
-            }
-        }
-
-        closeAllPopups();
-
-        // Save everything to profile
-        database.ref(`commuters/${userId}`).update(updates).then(() => {
-            if (window.commuterData) Object.assign(window.commuterData, updates);
-            
-            if (!skipGoalSetup) {
-                window.showOnboardingSharePopup(selectedGoal, goalCount);
-            } else {
-                if (window.wantsClub) {
-                    showToast("Welcome to Asiye Club! We are matching you with a pool.", "success");
-                } else {
-                    showToast("Welcome to Asiye!", "success");
-                }
-                showModernDashboard();
-            }
-        }).catch(err => {
-            showToast("Network error. Could not save profile.", "danger");
-        });
-
-    } catch (err) {
-        showToast("Setup failed. Please check all fields.", "danger");
-    }
-};
 
 // =================================================================
 // 💳 INITIATE R10 PAYFAST CARD VERIFICATION (AD HOC TOKENIZATION)
@@ -31150,6 +30804,273 @@ window.initiatePayFastCardVerification = function() {
 
     document.body.appendChild(form);
     setTimeout(() => form.submit(), 1500);
+};
+
+// =================================================================
+// 🚨 OVERRIDE: CORRECTED ASIYE CLUB vs ASIYE GO PRICING ENGINE
+// =================================================================
+
+// 1. DYNAMIC CATEGORY PRICING (The Ride Selection Screen)
+window.populateEHailingCategories = function(standardPriceParam, clubPriceParam, xlPriceParam) {
+    const sheet = document.getElementById('taxiListSheet');
+    if (!sheet) return;
+
+    let dist = window.calculatedTripDistance || 5;
+    if (dist < 1) dist = 1;
+    
+    // ----------------------------------------------------
+    // 🟢 ASIYE CLUB MATH: Base R15 + R6.00/km (Split by 3)
+    // ----------------------------------------------------
+    const clubGross = 15 + (dist * 6.00);
+    const asiyeClubSingleTripPrice = Math.max(15, Math.round(clubGross / 3));
+
+    // ----------------------------------------------------
+    // 🟢 ASIYE GO MATH: Base R30 + R8.00/km
+    // ----------------------------------------------------
+    let asiyeGoOriginal = Math.max(30, Math.round(30 + (dist * 8.00)));
+    let asiyeGoPrice = asiyeGoOriginal;
+    
+    const isClubUser = window.commuterData && window.commuterData.clubSubscription && window.commuterData.clubOptOut !== true;
+    let goDiscountHtml = '';
+    
+    // 12% DISCOUNT FOR CLUB MEMBERS
+    if (isClubUser) {
+        asiyeGoPrice = Math.round(asiyeGoOriginal * 0.88); // 12% OFF
+        goDiscountHtml = `<div style="font-size: 0.65rem; color: #30D158; background: rgba(48, 209, 88, 0.15); padding: 3px 6px; border-radius: 6px; display: inline-block; margin-top: 4px; font-weight: 800;">12% CLUB DISCOUNT</div>`;
+    }
+
+    window.baseCalculatedFare = asiyeGoPrice;
+    window.currentNegotiatedFare = asiyeGoPrice;
+    window.calculatedTripPrice = asiyeClubSingleTripPrice; 
+    window.calculatedClubSingleTripPrice = asiyeClubSingleTripPrice;
+    window.selectedRideCategory = 'club'; 
+    window.selectedPaymentMethod = 'cash'; 
+
+    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
+
+    sheet.innerHTML = `
+        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
+        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; height: 100%;">
+            
+            <div style="display:flex; align-items:center; margin-bottom: 20px; flex-shrink: 0;">
+                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Choose a ride</h4>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; flex-shrink: 0;">
+                <!-- Asiye Club -->
+                <div id="cat-club" onclick="selectCategory('club', ${asiyeClubSingleTripPrice})" style="border: 2.5px solid #FF9F0A; background: #2c2c2e; border-radius: 18px; padding: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 44px; height: 44px; background: rgba(255,159,10,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #FF9F0A;"><i class="fas fa-users"></i></div>
+                        <div>
+                            <div style="font-weight: 700; font-size: 1rem;">Asiye Club</div>
+                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared with other two people</div>
+                        </div>
+                    </div>
+                    <div style="font-size: 1.15rem; font-weight: 800; color: #FF9F0A;">R${asiyeClubSingleTripPrice}</div>
+                </div>
+
+                <!-- Asiye Go -->
+                <div id="cat-standard" onclick="selectCategory('standard', ${asiyeGoPrice})" style="border: 2.5px solid transparent; background: #2c2c2e; border-radius: 18px; padding: 14px; cursor: pointer;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                             <div style="width: 44px; height: 44px; background: rgba(197,255,0,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #c5ff00;"><i class="fas fa-car"></i></div>
+                            <div>
+                                <div style="font-weight: 700; font-size: 1rem;">Asiye Go</div>
+                                <div style="font-size: 0.75rem; color: #8e8e93;">Travel alone or with family</div>
+                                ${goDiscountHtml}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            ${isClubUser ? `<div style="font-size: 0.85rem; color: #8e8e93; text-decoration: line-through;">R${asiyeGoOriginal}</div>` : ''}
+                            <div style="font-size: 1.15rem; font-weight: 800; color: #c5ff00;">R${asiyeGoPrice}</div>
+                        </div>
+                    </div>
+
+                    <div id="negotiatorBox" style="background: #1c1c1e; border-radius: 14px; padding: 12px; display: none; align-items: center; justify-content: space-between; margin-top: 12px;">
+                        <button onclick="adjustFare(-5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">-</button>
+                        <div style="text-align: center;">
+                            <div id="negotiatedFareDisplay" style="font-size: 1.5rem; font-weight: 900; color: #ffffff !important;">R${window.currentNegotiatedFare}</div>
+                            <div style="font-size: 0.65rem; color: #8e8e93; text-transform: uppercase;">Your offer</div>
+                        </div>
+                        <button onclick="adjustFare(5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="dynamicBookingPanel" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;"></div>
+        </div>
+    `;
+    
+    window.selectCategory('club', asiyeClubSingleTripPrice);
+    if (!sheet.classList.contains('open')) sheet.classList.add('open');
+    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
+};
+
+// 2. BACKGROUND SEARCH ENGINE (Fixes Mapbox Routing Math)
+window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
+    window.currentRideMode = isDeliveryMode ? 'delivery' : 'ehailing';
+    window.isAsiyeGoMode = true;
+
+    let tripDistKm = 5;
+    let activeDestLat = (typeof ehailingDestLat !== 'undefined' && ehailingDestLat) ? ehailingDestLat : window.ehailingDestLat;
+    let activeDestLng = (typeof ehailingDestLng !== 'undefined' && ehailingDestLng) ? ehailingDestLng : window.ehailingDestLng;
+
+    if (activeDestLat && activeDestLng && commuterLat && commuterLng) {
+        tripDistKm = calculateDistance(commuterLat, commuterLng, activeDestLat, activeDestLng) * 1.3;
+    }
+    if (tripDistKm < 1) tripDistKm = 1;
+    window.calculatedTripDistance = tripDistKm;
+
+    // 🟢 ASIYE GO MATH
+    let standardPriceOriginal = Math.max(30, Math.round(30 + (tripDistKm * 8.00)));
+    let standardPrice = standardPriceOriginal;
+
+    const isClubUser = window.commuterData && window.commuterData.clubSubscription && window.commuterData.clubOptOut !== true;
+    if (isClubUser && !isDeliveryMode) {
+        standardPrice = Math.round(standardPriceOriginal * 0.88); // 12% discount
+    }
+
+    window.randomPromoDiscount = 0;
+    if (Math.random() > 0.5 && standardPrice > 35) {
+        window.randomPromoDiscount = Math.floor(Math.random() * 12) + 5;
+    }
+
+    window.calculatedTripPrice = Math.max(30, Math.round(standardPrice - window.randomPromoDiscount));
+    window.originalPlatformPrice = standardPriceOriginal;
+
+    openModal('taxiListSheet');
+
+    if (isDeliveryMode) {
+        if (typeof window.findNearestAsiyeGoDriver === 'function') {
+            window.findNearestAsiyeGoDriver(true);
+        }
+    } else {
+        if (typeof window.populateEHailingCategories === 'function') {
+            window.populateEHailingCategories();
+        }
+    }
+};
+
+// 3. CLUB SUBSCRIPTION WIZARD (Sidebar Menu)
+window.calculateClubDistanceAndPrice = function() {
+    const pLat = parseFloat(document.getElementById('clubPickupLat')?.value);
+    const pLng = parseFloat(document.getElementById('clubPickupLng')?.value);
+    const dLat = parseFloat(document.getElementById('clubDropoffLat')?.value);
+    const dLng = parseFloat(document.getElementById('clubDropoffLng')?.value);
+
+    if (isNaN(pLat) || isNaN(pLng) || isNaN(dLat) || isNaN(dLng)) return;
+
+    let dist = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
+    if (dist < 1) dist = 1;
+    window.clubRouteDistance = dist;
+
+    // 🟢 ASIYE CLUB MATH
+    const clubGross = 15 + (dist * 6.00);
+    const singleTripPrice = Math.max(15, Math.round(clubGross / 3));
+
+    const activeTerm = window.clubBillingTerm || 'monthly';
+    let daysToBill = 20, discount = 0.15, trialDeduction = 0;
+
+    if (activeTerm === 'weekly') { daysToBill = 5; discount = 0.05; } 
+    else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
+
+    const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
+    const trialRow = document.getElementById('clubTrialPromotionRow');
+    const trialValueEl = document.getElementById('clubTrialDiscountAmount');
+
+    if (activeTerm === 'monthly') {
+        trialDeduction = singleTripPrice; 
+        if (trialRow && trialValueEl) { trialRow.style.display = 'flex'; trialValueEl.innerText = `-R${trialDeduction.toFixed(2)}`; }
+    } else {
+        if (trialRow) trialRow.style.display = 'none';
+    }
+
+    const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
+    const distEl = document.getElementById('clubEstDistance');
+    const costEl = document.getElementById('clubEstCost');
+
+    if (distEl) distEl.innerText = `${dist.toFixed(1)} km`;
+    if (costEl) costEl.innerText = `R${totalEstCost.toFixed(2)} (${activeTerm === 'monthly' ? 'MONTHLY TRIAL' : activeTerm.toUpperCase()})`;
+    window.calculatedClubTotalPrice = totalEstCost;
+};
+
+// 4. ONBOARDING (Step 3 Setup)
+window.calculateOnboardPricing = function() {
+    let pLat = parseFloat(document.getElementById('onboardPickupLat').value);
+    let pLng = parseFloat(document.getElementById('onboardPickupLng').value);
+    let dLat = parseFloat(document.getElementById('onboardDropoffLat').value);
+    let dLng = parseFloat(document.getElementById('onboardDropoffLng').value);
+
+    const nextBtn = document.querySelector('#onboardStep2NextBtn');
+    const priceDisplay = document.getElementById('onboardClubPriceDisplay');
+    const pText = document.getElementById('onboardPickupInput').value.trim();
+    const dText = document.getElementById('onboardDropoffInput').value.trim();
+
+    if ((isNaN(pLat) || isNaN(pLng)) && pText.length >= 3) {
+        pLat = window.commuterLat || -26.2041; pLng = window.commuterLng || 28.0473;
+        document.getElementById('onboardPickupLat').value = pLat; document.getElementById('onboardPickupLng').value = pLng;
+    }
+    if ((isNaN(dLat) || isNaN(dLng)) && dText.length >= 3) {
+        dLat = pLat + 0.1; dLng = pLng + 0.1;
+        document.getElementById('onboardDropoffLat').value = dLat; document.getElementById('onboardDropoffLng').value = dLng;
+    }
+
+    if (pText.length >= 3 && dText.length >= 3 && !isNaN(pLat) && !isNaN(dLat)) {
+        let distance = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
+        if (distance < 1) distance = 1; 
+        window.onboardRouteDistance = distance;
+        
+        // 🟢 ASIYE CLUB MATH
+        const clubGross = 15 + (distance * 6.00);
+        const singleTripPrice = Math.max(15, Math.round(clubGross / 3));
+
+        if (nextBtn) {
+            nextBtn.disabled = false;
+            nextBtn.style.opacity = '1';
+            nextBtn.innerText = window.wantsClub ? "Next: Schedule" : "Next: Continue";
+        }
+
+        if (priceDisplay) {
+            const activeTerm = window.onboardBillingTerm || 'monthly';
+            const checkboxes = document.querySelectorAll('input[name="onboardDays"]:checked');
+            const selectedDaysCount = checkboxes.length || 5;
+
+            let daysToBill = 20; let discount = 0.15; let trialDeduction = 0;
+            if (activeTerm === 'weekly') { daysToBill = selectedDaysCount; discount = 0.05; } 
+            else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
+            else if (activeTerm === 'monthly') { daysToBill = selectedDaysCount * 4; discount = 0.15; }
+
+            const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
+            if (activeTerm === 'monthly') trialDeduction = singleTripPrice;
+
+            const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
+            window.onboardCalculatedPrice = totalEstCost;
+
+            priceDisplay.innerHTML = `
+                <span style="color: #30D158; font-size: 0.75rem; font-weight: 800; text-transform: uppercase;">Estimated Club Price (${activeTerm})</span>
+                <div style="font-size: 1.8rem; font-weight: 900; color: #30D158; margin-top: 5px;">R${totalEstCost}</div>
+                <span style="color: #aaa; font-size: 0.75rem; display: block; margin-top: 5px;">R${singleTripPrice} per trip &bull; ${distance.toFixed(1)} km</span>
+                ${trialDeduction > 0 ? `<div style="color: #FF9F0A; font-size: 0.85rem; margin-top: 5px; font-weight:bold;">Includes 1st Trip Free!</div>` : ''}
+            `;
+
+            const dailyP = document.getElementById('obPlanPriceDaily');
+            const weeklyP = document.getElementById('obPlanPriceWeekly');
+            const monthlyP = document.getElementById('obPlanPriceMonthly');
+
+            if(dailyP) dailyP.innerText = `R${Math.round((singleTripPrice * 2 * (selectedDaysCount>0?1:1)))}`;
+            if(weeklyP) weeklyP.innerText = `R${Math.round((singleTripPrice * 2 * selectedDaysCount) * 0.95)}`;
+            if(monthlyP) monthlyP.innerText = `R${Math.round(((singleTripPrice * 2 * selectedDaysCount * 4) * 0.85) - singleTripPrice)}`;
+        }
+    } else {
+        if (nextBtn) {
+            nextBtn.disabled = true;
+            nextBtn.style.opacity = '0.5';
+            nextBtn.innerText = "Need 2 Valid Addresses";
+        }
+    }
 };
 </script>
 </body>
