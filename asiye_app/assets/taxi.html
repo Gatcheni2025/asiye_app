@@ -14859,7 +14859,7 @@ window.captureScan = function() {
             showCommunicationBanner("Failed to complete setup. Please check connection.", "danger");
             if(btn) { btn.innerHTML = '<i class="fas fa-check-circle"></i> Complete Setup'; btn.disabled = false; }
         }
-    };    window.startFastTrackFlow = function() {
+    };   window.startFastTrackFlow = function() {
         if (!taxiData) return;
 
         window.injectFastTrackHTML();
@@ -14870,8 +14870,7 @@ window.captureScan = function() {
         const hasYear = taxiData.vehicleYear;
         const vehicleDone = window.isHandlerMode ? true : (hasReg && hasYear);
 
-        const refCount = taxiData.referencesCount || 0;
-        const referencesDone = refCount >= 10 || taxiData.verificationStatus === 'verified';
+        const referencesDone = taxiData.referencesProvided === true || taxiData.verificationStatus === 'verified';
 
         if (!vehicleDone) {
             window.showVehicleDetailsPopup();
@@ -14887,13 +14886,11 @@ window.injectFastTrackHTML = function() {
             if (el) el.remove();
         });
 
-        const refCount = taxiData?.referencesCount || 0;
-
         const container = document.createElement('div');
         container.innerHTML = `
             <!-- Vehicle Details Popup (Forced Flow - No Close Button) -->
             <div id="vehicleDetailsPopup" class="popup" style="max-width: 400px; width: 90%; z-index: 75000 !important; padding: 25px;">
-                <div style="text-align: center;">
+  <div style="text-align: center;">
                     <i class="fas fa-car" style="font-size: 3rem; color: #007BFF; margin-bottom: 15px;"></i>
                     <h3 style="margin-bottom: 5px;">Vehicle Details</h3>
                     <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Please provide the year and registration number of your vehicle.</p>
@@ -14911,33 +14908,23 @@ window.injectFastTrackHTML = function() {
             </div>
 
             <!-- References Verification Popup (Forced Flow - No Close Button) -->
-            <div id="referencesPopup" class="popup" style="max-width: 400px; width: 90%; z-index: 75000 !important; padding: 25px;">
+           <!-- References Verification Popup (Forced Flow - No Close Button) -->
+            <div id="referencesPopup" class="popup" style="max-width: 400px; width: 90%; z-index: 75000 !important; padding: 25px; max-height: 85vh; overflow-y: auto;">
                 <div style="text-align: center;">
-                    <i class="fas fa-users" style="font-size: 3rem; color: #28a745; margin-bottom: 15px;"></i>
-                    <h3 style="margin-bottom: 5px;">Driver References</h3>
-                    <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">To ensure safety, we require 10 registered passengers to verify you. Ask your passengers to sign up and confirm you as their driver.</p>
+                    <i class="fas fa-address-book" style="font-size: 3rem; color: #28a745; margin-bottom: 15px;"></i>
+                    <h3 style="margin-bottom: 5px;">Contact References</h3>
+                    <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">To ensure safety, please provide 5 contact numbers of people we can call for a reference.</p>
 
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #eee;">
-                        <h2 style="margin:0; color:#007BFF; font-size: 2.5rem;"><span id="refCountDisplay">${refCount}</span> / 10</h2>
-                        <p style="margin:0; color:#888; font-size:0.85rem; font-weight: bold;">References Verified</p>
+                    <div style="text-align: left; margin-bottom: 15px;">
+                        <input type="tel" id="refPhone1" placeholder="Reference 1 (e.g. 0712345678)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 10px;">
+                        <input type="tel" id="refPhone2" placeholder="Reference 2 (e.g. 0712345678)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 10px;">
+                        <input type="tel" id="refPhone3" placeholder="Reference 3 (e.g. 0712345678)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 10px;">
+                        <input type="tel" id="refPhone4" placeholder="Reference 4 (e.g. 0712345678)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 10px;">
+                        <input type="tel" id="refPhone5" placeholder="Reference 5 (e.g. 0712345678)" style="width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 10px;">
                     </div>
 
-                    <button class="btn btn-outline" onclick="const inst = document.getElementById('selfVerifyInstructions'); inst.style.display = inst.style.display === 'none' ? 'block' : 'none';" style="width: 100%; border-radius: 12px; padding: 12px; font-weight: 800; margin-bottom: 15px; border: 2px solid #007BFF; color: #007BFF; background: transparent;">
-                        <i class="fas fa-question-circle"></i> How to self verify?
-                    </button>
-
-                    <div id="selfVerifyInstructions" style="display: none; text-align: left; background: #e6f2ff; padding: 15px; border-radius: 12px; margin-bottom: 15px; border: 1px solid #b3d7ff; font-size: 0.85rem; color: #333; line-height: 1.5;">
-                        <div style="margin-bottom: 8px;"><strong>Step 1:</strong> Click the share button and send to all friends and family.</div>
-                        <div style="margin-bottom: 8px;"><strong>Step 2:</strong> Friends and family must login or register on the Asiye App.</div>
-                        <div style="margin-bottom: 8px;"><strong>Step 3:</strong> Once logged in, they must click verify, it is available on their profile by adding your name and surname to select driver to verify.</div>
-                        <div><strong>Step 4:</strong> Complete the questionnaire about you and save. You are required at least 10 people to be completely verified. Once verified you are able to receive request and start driving.</div>
-                    </div>
-
-                    <button class="btn btn-primary" onclick="window.shareReferenceLink()" style="width: 100%; border-radius: 12px; padding: 16px; font-weight: 800; margin-bottom: 10px; background: #28a745; color: white; border: none;">
-                        <i class="fas fa-share-alt"></i> Share Reference Link
-                    </button>
-                    <button class="btn btn-outline" onclick="window.checkReferencesStatus()" style="width: 100%; border-radius: 12px; padding: 12px; font-weight: 800; border: 2px solid #ccc; background: white; color: #666;">
-                        Refresh Status
+                    <button id="submitReferencesBtn" class="btn btn-primary" onclick="window.submitReferences()" style="width: 100%; border-radius: 12px; padding: 16px; font-weight: 800; margin-bottom: 10px; background: #28a745; color: white; border: none;">
+                        <i class="fas fa-check-circle"></i> Submit References
                     </button>
                 </div>
             </div>
@@ -15114,49 +15101,62 @@ window.injectFastTrackHTML = function() {
         openPopup('referencesPopup');
     };
 
-    window.shareReferenceLink = async function() {
-        const driverName = `${taxiData?.name || ''} ${taxiData?.surname || ''}`.trim() || 'registering';
-        const verifyLink = `https://asiye.cloud/verify.html?driverRef=${userId}`;
-        const text = `Hi, I am ${driverName}. Please reference me by verifying me as a driver in order to complete my application with Asiye.\n\nTap this link to verify me:\n${verifyLink}\n\nDon't have the Asiye app yet? Download it here first so you can complete the verification:\n\n📱 Android: https://play.google.com/store/apps/details?id=com.asiyeapp.asiye&pcampaignid=web_share\n\n🍏 iOS: https://apps.apple.com/us/app/asiye/id6765691149`;
+    window.submitReferences = async function() {
+        const phones = [];
+        for (let i = 1; i <= 5; i++) {
+            const val = document.getElementById('refPhone' + i)?.value.trim();
+            if (val) phones.push(val);
+        }
 
-        if (navigator.share) {
-            try {
-                await navigator.share({ title: 'Verify me on Asiye', text: text });
-            } catch(e) {
-                console.log('Share canceled');
+        if (phones.length < 5) {
+            showCommunicationBanner("Please provide all 5 reference numbers.", "warning");
+            return;
+        }
+        
+        const valid = phones.every(p => /^[0-9]{10}$/.test(p));
+        if (!valid) {
+            showCommunicationBanner("Please enter valid 10-digit phone numbers.", "warning");
+            return;
+        }
+
+        const btn = document.getElementById('submitReferencesBtn');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+        }
+
+        try {
+            await database.ref(window.dbNode + '/' + userId).update({
+                referencesProvided: true,
+                contactReferences: phones
+            });
+
+            if (taxiData) {
+                taxiData.referencesProvided = true;
+                taxiData.contactReferences = phones;
             }
-        } else {
-            navigator.clipboard.writeText(text);
-            showCommunicationBanner("Reference link copied to clipboard!", "success");
+
+            closeActivePopup();
+            showCommunicationBanner("References submitted successfully!", "success");
+            
+            // RESTORE MENUS AFTER SUCCESSFUL VERIFICATION
+            const navMenu = document.getElementById('nav-menu');
+            if (navMenu) navMenu.style.display = 'flex';
+            const sideControls = document.getElementById('side-controls-container');
+            if (sideControls) sideControls.style.display = 'flex';
+            
+            if(typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
+        } catch (err) {
+            console.error(err);
+            showCommunicationBanner("Failed to save references.", "danger");
+            if (btn) {
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> Submit References';
+                btn.disabled = false;
+            }
         }
     };
 
-    window.checkReferencesStatus = function() {
-        database.ref(window.dbNode + '/' + userId).once('value', snap => {
-            if(snap.exists()) {
-                const data = snap.val();
-                if(taxiData) Object.assign(taxiData, data);
-                const count = data.referencesCount || 0;
-                const refDisplay = document.getElementById('refCountDisplay');
-                if (refDisplay) refDisplay.innerText = count;
-
-                if (count >= 10 || data.verificationStatus === 'verified') {
-                    closeActivePopup();
-                    showCommunicationBanner("You are now fully verified!", "success");
-                    
-                    // RESTORE MENUS AFTER SUCCESSFUL VERIFICATION
-                    const navMenu = document.getElementById('nav-menu');
-                    if (navMenu) navMenu.style.display = 'flex';
-                    const sideControls = document.getElementById('side-controls-container');
-                    if (sideControls) sideControls.style.display = 'flex';
-                    
-                    if(typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
-                } else {
-                    showCommunicationBanner(`You need ${10 - count} more references.`, "info");
-                }
-            }
-        });
-    };    window.startFastTrackFlow = function() {
+   window.startFastTrackFlow = function() {
         if (!taxiData) return;
 
         window.injectFastTrackHTML();
@@ -15170,8 +15170,7 @@ window.injectFastTrackHTML = function() {
 
         if (window.isHandlerMode) vehicleDone = true;
 
-        const refCount = taxiData.referencesCount || 0;
-        const referencesDone = refCount >= 10;
+        const referencesDone = taxiData.referencesProvided === true || taxiData.verificationStatus === 'verified';
 
         if (!vehicleDone) {
             window.showVehicleDetailsPopup();
@@ -15181,7 +15180,6 @@ window.injectFastTrackHTML = function() {
             if(typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
         }
     };
-
 // =====================================================================
 // GLOBAL ACTION GATEKEEPER
 // =====================================================================
