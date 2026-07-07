@@ -10645,103 +10645,80 @@ function initializeApp(uid) {
         handleUserNotFound();
     });
 }
-window.processPendingReferralCounters = async function(newUserId, referrerCode) {
-    if (!referrerCode || newUserId === referrerCode) return;
 
-    // Determine which database node to update (commuters or taxis)
-    const dbNode = window.dbNode || 'commuters';
-    const userRef = database.ref(`${dbNode}/${newUserId}`);
-    
+window.processPendingReferralCounters = async function(newUserId, referralToken) {
+    if (!referralToken || newUserId === referralToken) return;
+
+    const userRef = database.ref(`commuters/${newUserId}`);
     const snap = await userRef.once('value');
     const userData = snap.val() || {};
 
-    // Don't process twice
     if (userData.binaryCountsProcessed) return;
 
-    // 1. Mark as processed for the new user
-    await userRef.update({ 
-        binaryCountsProcessed: true, 
-        referredBy: referrerCode 
-    });
-    
-    if (window.commuterData) {
-        window.commuterData.referredBy = referrerCode;
-        window.commuterData.binaryCountsProcessed = true;
-    } else if (window.taxiData) {
-        window.taxiData.referredBy = referrerCode;
-        window.taxiData.binaryCountsProcessed = true;
-    }
+    let ambId = null;
 
-    // 2. --- FIND LEVEL 1 AMBASSADOR ---
-    let l1Id = null;
-    let l1Data = null;
-    
-    // Look up referrer by Code, Phone, or UID
-    const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
-    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
-    
-    if (codeQuery.exists()) {
-        codeQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
-    } else if (phoneQuery.exists()) {
-        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
+    // 1. Try treating token as a UID
+    let checkSnap = await database.ref(`commuters/${referralToken}`).once('value');
+    if (checkSnap.exists()) {
+        ambId = checkSnap.key;
     } else {
-        const uidQuery = await database.ref(`commuters/${referrerCode}`).once('value');
-        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
-    }
-
-    // 3. --- UPDATE LEVEL 1 ---
-   if (l1Id) {
-        await database.ref(`commuters/${l1Id}`).transaction(data => {
-            if (data) {
-                data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1; 
-                // ð¢ Give 2x R25 ride vouchers
-                data.promoRemaining = (data.promoRemaining || 0) + 2;
-                data.promoValue = 25;
-            }
-            return data;
-        });
-        
-        await database.ref(`notifications/commuters/${l1Id}`).push({
-            type: 'referral_bonus',
-            title: 'New Referral!',
-            message: `A passenger registered using your link. You received 2x R25 ride vouchers!`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-        
-        await database.ref(`commuters/${l1Id}/earnings`).push({
-            id: 'ref_l1_' + Date.now(),
-            type: 'referral_reward',
-            amount: 50.00,
-            description: `L1 Direct Invite Bonus (${userData.name || 'User'})`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'completed'
-        });
-
-        // 4. --- UPDATE LEVEL 2 (Invite of an Invite) ---
-        if (l1Data && l1Data.referredBy) {
-            let l2Id = null;
-            const l2CodeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(l1Data.referredBy).once('value');
-            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
-            
-            if (l2CodeQuery.exists()) {
-                l2CodeQuery.forEach(child => { l2Id = child.key; });
-            } else if (l2PhoneQuery.exists()) {
-                l2PhoneQuery.forEach(child => { l2Id = child.key; });
-            } else {
-                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
-                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
-            }
-
-            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
-                await database.ref(`commuters/${l2Id}`).transaction(data => {
-                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
-                    return data;
-                });
+        // 2. Try treating token as an AMB- Code
+        let codeSnap = await database.ref('commuters').orderByChild('referralCode').equalTo(referralToken.toUpperCase()).once('value');
+        if (codeSnap.exists()) {
+            codeSnap.forEach(c => ambId = c.key);
+        } else {
+            // 3. Try treating token as a Phone Number
+            let phoneSnap = await database.ref('commuters').orderByChild('phone').equalTo(referralToken).once('value');
+            if (phoneSnap.exists()) {
+                phoneSnap.forEach(c => ambId = c.key);
             }
         }
     }
-};         
+
+    if (!ambId) {
+        console.error("Referral failed: Ambassador not found for token", referralToken);
+        return; 
+    }
+
+    // Mark processed on the new user
+    await userRef.update({ 
+        binaryCountsProcessed: true, 
+        referredBy: ambId 
+    });
+
+    if (window.commuterData) {
+        window.commuterData.referredBy = ambId;
+        window.commuterData.binaryCountsProcessed = true;
+    }
+
+    // Give Ambassador the Pending Stat
+    await database.ref(`commuters/${ambId}`).transaction(data => {
+        if (data) {
+            data.level1_invites = (data.level1_invites || 0) + 1;
+            data.referralCount = (data.referralCount || 0) + 1; 
+            data.pendingReferrals = (data.pendingReferrals || 0) + 1;
+        }
+        return data;
+    });
+
+    // Create ledger entry
+    await database.ref(`commuters/${ambId}/earnings/ref_pending_${newUserId}`).set({
+        id: 'ref_pending_' + newUserId,
+        type: 'referral_reward',
+        amount: 50.00,
+        description: `Pending: ${userData.name || 'New User'} (Awaiting 1st Trip)`,
+        timestamp: firebase.database.ServerValue.TIMESTAMP,
+        status: 'pending',
+        linkedUserId: newUserId
+    });
+
+    database.ref(`notifications/commuters/${ambId}`).push({
+        type: 'referral_bonus_pending',
+        title: 'New Sign-up! 🎉',
+        message: `A user registered using your link! R50 is pending until they take their first trip.`,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+};
 window.saveEnforcedPhoneNumber = function(e) {
      if(e) {
          e.preventDefault();
@@ -18980,63 +18957,8 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
       }
   });
 
-  window.findBroadcastingTaxis = async function(silentMode = false) {
-      const container = document.getElementById('taxiListContainer');
-      const uLat = parseFloat(commuterLat);
-      const uLng = parseFloat(commuterLng);
-
-      if (!Number.isFinite(uLat) || !Number.isFinite(uLng) || uLat === 0) return;
-
-      if (!silentMode) {
-          if(container) container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><p>Scanning 5km radius...</p></div>`;
-          if(typeof openModal === 'function') openModal('taxiListSheet');
-      }
-
-      try {
-          const snapshot = await database.ref("taxis").once("value");
-          const taxisData = snapshot.val() || {};
-          const broadcastingTaxis = [];
-
-          // 1. Get Real Taxis (Must be Online & Broadcasting)
-          for (const taxiId in taxisData) {
-              const taxi = { taxiId, ...taxisData[taxiId] };
-
-              if (taxi.isOnline && taxi.isBroadcasting && !taxi.isFull && taxi.verificationStatus === 'verified') {
-                  const dist = calculateDistance(uLat, uLng, parseFloat(taxi.latitude), parseFloat(taxi.longitude));
-                  if (dist <= 5) { // Within 5km
-                      taxi.distance = dist;
-                      broadcastingTaxis.push(taxi);
-                  }
-              }
-          }
-
-          // 2. Add Dummy Taxis (For visual traffic)
-          if (typeof window.dummyTaxisList !== 'undefined' && window.dummyTaxisList.length > 0) {
-              window.dummyTaxisList.forEach(dummy => {
-                  var currentLat = dummy.latitude;
-                  var currentLng = dummy.longitude;
-                  if (typeof taxiMarkers !== 'undefined' && taxiMarkers[dummy.taxiId]) {
-                      const pos = taxiMarkers[dummy.taxiId].getLngLat();
-                      currentLat = pos.lat;
-                      currentLng = pos.lng;
-                  }
-                  const dist = calculateDistance(uLat, uLng, currentLat, currentLng);
-                  if (dist <= 5) {
-                      broadcastingTaxis.push({ ...dummy, latitude: currentLat, longitude: currentLng, distance: dist });
-                  }
-              });
-          }
-
-          window.zoomToFitTaxis(broadcastingTaxis);
-
-          if (broadcastingTaxis.length > 0) {
-              window.populateTaxiListSheet(broadcastingTaxis, 'passenger');
-          }
-      } catch (error) {
-          console.error("Search Error:", error);
-      }
-  };
-  findBroadcastingTaxis = window.findBroadcastingTaxis;
+window.handleFindTaxisNearMe = window.findBroadcastingTaxis;
+window.findMinibusTaxis = window.findBroadcastingTaxis;
 
 
   window.checkVerificationMilestone = function(earningsArray) {
@@ -24396,336 +24318,7 @@ function updatePaymentButtons(taxiId, selectedMethod) {
 window.baseCalculatedFare = 0;
 window.currentNegotiatedFare = 0;
 
-   // =======================================================================
-// RIDE CATEGORY SELECTION (ASIYE GO vs ASIYE CLUB)
-// =======================================================================
-// =======================================================================
-// RIDE CATEGORY SELECTION (ASIYE GO vs ASIYE CLUB)
-// =======================================================================
-window.selectCategory = function(cat, price) {
-    window.selectedRideCategory = cat;
-    const isStandard = (cat === 'standard');
-
-    const clubCard = document.getElementById('cat-club');
-    const stdCard = document.getElementById('cat-standard');
-    const negotiatorBox = document.getElementById('negotiatorBox');
-    const bookingPanel = document.getElementById('dynamicBookingPanel');
-
-    if (!bookingPanel) return;
-
-    if (isStandard) {
-        // ---------------------------------------------------------
-        // 1. ASIYE GO (STANDARD E-HAILING) STATE
-        // ---------------------------------------------------------
-        window.calculatedTripPrice = window.currentNegotiatedFare;
-        if (stdCard) stdCard.style.border = '2.5px solid #c5ff00';
-        if (clubCard) clubCard.style.border = '2.5px solid transparent';
-        if (negotiatorBox) negotiatorBox.style.display = 'flex';
-
-        // Check Promos
-        let accountPromoHtml = '';
-        const promoRemaining = window.commuterData?.promoRemaining || 0;
-        const promoValue = window.commuterData?.promoValue || 25;
-        const promoPercentage = window.commuterData?.promoPercentage || 0;
-        
-        if (promoRemaining > 0) {
-            let promoDesc = promoPercentage ? `${promoPercentage}% off` : `-R${promoValue}`;
-            accountPromoHtml = `
-                <div style="background: rgba(40, 167, 69, 0.1); border: 1px solid #28a745; border-radius: 12px; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <i class="fas fa-tag" style="color: #28a745; font-size: 1.2rem;"></i>
-                        <div>
-                            <div style="color: #28a745; font-weight: 800; font-size: 0.9rem;">Promo Applied</div>
-                            <div style="color: #888; font-size: 0.75rem;">${promoRemaining} rides remaining</div>
-                        </div>
-                    </div>
-                    <div style="color: #28a745; font-weight: 900; font-size: 1.1rem;">${promoDesc}</div>
-                </div>
-            `;
-        }
-
-        // Render Checkout Panel
-        bookingPanel.innerHTML = `
-            ${accountPromoHtml}
-            <!-- PAYMENT METHOD SECTION -->
-            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
-                <div style="font-size: 0.85rem; color: #8e8e93; margin-bottom: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Payment Method</div>
-                <div style="display: flex; gap: 10px;">
-                    <button id="payCashBtn" onclick="selectPayment('cash')" style="flex: 1; padding: 14px; border-radius: 14px; background: #28a745; color: white; border: none; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
-                        <i class="fas fa-money-bill-wave"></i> Cash
-                    </button>
-                    <button id="payCardBtn" onclick="selectPayment('card')" style="flex: 1; padding: 14px; border-radius: 14px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;">
-                        <i class="fas fa-credit-card"></i> Card / Wallet
-                    </button>
-                </div>
-                <div id="walletBalanceWarning" style="display: none; background: rgba(220,53,69,0.1); border: 1px solid #ffcdd2; color: #dc3545; padding: 10px; border-radius: 10px; font-size: 0.85rem; margin-top: 10px; font-weight: 600; line-height: 1.4;"></div>
-            </div>
-
-            <!-- PROMO CODE INPUT -->
-            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
-                <div id="promoCodeInputSection" style="display: none; margin-bottom: 12px;">
-                    <div style="display: flex; gap: 8px;">
-                        <input type="text" id="manualPromoCodeField" placeholder="Enter code" style="flex: 1; background: #2c2c2e !important; border: 1px solid #3a3a3c !important; color: white !important; border-radius: 10px; padding: 10px;">
-                        <button onclick="applyManualPromoCode()" style="background: #0A84FF; border: none; color: white; border-radius: 10px; padding: 0 15px; font-weight: 700;">Apply</button>
-                    </div>
-                </div>
-                <div onclick="togglePromoCodeInput()" style="color: #0A84FF; font-size: 0.9rem; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                    <i class="fas fa-tag"></i> <span>Add promo code</span>
-                </div>
-            </div>
-
-            <!-- SUBMIT BUTTON -->
-            <button id="findOffersBtn" onclick="submitNegotiatedRide()" style="width: 100%; background: #c5ff00; color: #000; font-weight: 900; font-size: 1.1rem; padding: 16px; border-radius: 16px; border: none; cursor: pointer; transition: 0.2s;">
-                Request Asiye Go (CASH - R${window.currentNegotiatedFare})
-            </button>
-        `;
-        
-        if (typeof window.selectPayment === 'function') {
-            window.selectPayment(window.selectedPaymentMethod || 'cash');
-        }
-
-    } else {
-        // ---------------------------------------------------------
-        // 2. ASIYE CLUB (POOLING / SUBSCRIPTION) STATE
-        // ---------------------------------------------------------
-        window.calculatedTripPrice = window.calculatedClubSingleTripPrice;
-        if (clubCard) clubCard.style.border = '2.5px solid #FF9F0A';
-        if (stdCard) stdCard.style.border = '2.5px solid transparent';
-        if (negotiatorBox) negotiatorBox.style.display = 'none';
-
-        // Show Loading State while we search for existing pools in the background
-        bookingPanel.innerHTML = '<div class="spinner" style="margin: 20px auto; border-color: #333; border-left-color: #FF9F0A;"></div><p style="text-align:center; color:#aaa; font-size:0.85rem;">Scanning for active clubs nearby...</p>';
-
-        const pLat = window.commuterLat;
-        const pLng = window.commuterLng;
-        const dLat = window.ehailingDestLat;
-        const dLng = window.ehailingDestLng;
-
-        // Fetch existing pools from Firebase
-      // Fetch existing pools from Firebase (Uses requests node to bypass Permission Denied)
-       // Fetch existing pools from Firebase (Uses requests node to bypass Permission Denied)
-       // Fetch existing pools from Firebase (Uses requests node to bypass Permission Denied)
-         database.ref('requests').orderByChild('type').equalTo('club').once('value').then((activeSnap) => {
-            let myWaitingPool = null;
-            let myActivePool = null;
-            const areaClubsMap = new Map(); // Use a Map to combine duplicate clubs
-            
-            if (activeSnap.exists()) {
-                activeSnap.forEach(child => {
-                    const req = child.val();
-                    const reqId = child.key;
-                    
-                    // 1. Determine if this pool matches the CURRENT SEARCH ROUTE
-                    const pool_pLat = req.poolCenterLat || req.pickupLat || (req.commuterLocation ? req.commuterLocation.latitude : null);
-                    const pool_pLng = req.poolCenterLng || req.pickupLng || (req.commuterLocation ? req.commuterLocation.longitude : null);
-                    const pool_dLat = req.dropoffLat || null;
-                    const pool_dLng = req.dropoffLng || null;
-                    
-                    let matchesRoute = false;
-                    
-                    if (pool_pLat && pool_pLng && pool_dLat && pool_dLng) {
-                        const pDist = calculateDistance(pLat, pLng, pool_pLat, pool_pLng);
-                        const dDist = calculateDistance(dLat, dLng, pool_dLat, pool_dLng);
-                        if (pDist <= 5 && dDist <= 5) {
-                            matchesRoute = true;
-                        }
-                    } else if (pool_pLat && pool_pLng && req.destination) {
-                        // Fallback for older pooling data structures
-                        const pDist = calculateDistance(pLat, pLng, pool_pLat, pool_pLng);
-                        const currentDestText = window.userDropOffDestination ? window.userDropOffDestination.split(',')[0].trim().toLowerCase() : '';
-                        const poolDestText = req.destination.split(',')[0].trim().toLowerCase();
-                        if (pDist <= 5 && (currentDestText === poolDestText || !currentDestText)) {
-                            matchesRoute = true;
-                        }
-                    }
-
-                    // 2. Process all matched routes in the area
-                    if (matchesRoute) {
-                        const passCount = req.passengers ? Object.keys(req.passengers).length : (req.status === 'waiting_pool' ? 1 : 0);
-                        const maxCap = parseInt(req.maxCapacity) || 3; // Force valid integer, max 3
-                        
-                        if (req.passengers && req.passengers[window.userId]) {
-                            // User is in this specific pool
-                            if (req.status === 'waiting_pool') {
-                                myWaitingPool = { ...req, poolId: reqId, passCount, maxCap };
-                            } else if (['pooling', 'pending', 'accepted', 'driver_on_way'].includes(req.status)) {
-                                myActivePool = { ...req, poolId: reqId, passCount, maxCap };
-                            }
-                        } else {
-                            // GROUPING FIX: Visually combine identical orphan waitlists
-                            const dep = req.morningDeparture || '07:00';
-                            const poolType = req.status === 'waiting_pool' ? 'waiting' : 'active';
-                            const pFrom = (req.pickupAddress || 'Area').split(',')[0].trim();
-                            const pTo = (req.destination || req.dropoffAddress || 'Destination').split(',')[0].trim();
-                            
-                            const groupKey = `${poolType}_${dep}_${pTo}`;
-                            
-                            if (!areaClubsMap.has(groupKey)) {
-                                areaClubsMap.set(groupKey, {
-                                    ...req, 
-                                    poolId: reqId, 
-                                    poolType: poolType,
-                                    passCount: passCount, 
-                                    maxCap: maxCap,
-                                    pFrom: pFrom,
-                                    pTo: pTo
-                                });
-                            } else if (poolType === 'waiting') {
-                                // If it's a waiting list duplicate, visually merge the passenger count!
-                                let existing = areaClubsMap.get(groupKey);
-                                existing.passCount += passCount;
-                            }
-                        }
-                    }
-                });
-            }
-
-            const areaClubs = Array.from(areaClubsMap.values());
-
-            let html = '';
-            
-            // ----------------------------------------------------
-            // SCENARIO 1: User is already in an Active Club
-            // ----------------------------------------------------
-            if (myActivePool) {
-                const dep = myActivePool.morningDeparture || '07:00';
-                const ret = myActivePool.afternoonReturn || '17:00';
-                const price = myActivePool.passengers[window.userId].price || myActivePool.originalPerPersonPrice || 25;
-                const passCount = myActivePool.passCount || 1;
-                const maxCap = myActivePool.maxCap || 3;
-                
-                html += `
-                    <div style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #30D158; margin-bottom: 18px; text-align: left;">
-                        <h5 style="margin: 0 0 8px 0; color: #30D158; font-size: 1.05rem;"><i class="fas fa-check-circle"></i> You have joined this club!</h5>
-                        <p style="margin: 0 0 10px 0; color: #EBEBF5; font-size: 0.85rem; line-height: 1.45;">
-                            We are calling this driver. Confirm booking 15 mins prior the time in order to move.
-                        </p>
-                        <div style="background: #1C1C1E; padding: 10px; border-radius: 10px; border: 1px solid #444; display: flex; justify-content: space-between; margin-bottom: 12px;">
-                            <div>
-                                <div style="color: #aaa; font-size: 0.7rem; text-transform: uppercase;">Departs</div>
-                                <div style="color: white; font-weight: bold;">${dep}</div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="color: #aaa; font-size: 0.7rem; text-transform: uppercase;">Capacity</div>
-                                <div style="color: #30D158; font-weight: bold;">${passCount}/${maxCap} Filled</div>
-                            </div>
-                        </div>
-                        <button onclick="window.summonMyClubRide('${myActivePool.poolId}')" style="width: 100%; background: #30D158; color: black; font-weight: 900; font-size: 1.05rem; padding: 14px; border-radius: 12px; border: none; cursor: pointer; margin-bottom: 10px;">
-                            <i class="fas fa-check-circle"></i> Confirm Booking (R${price})
-                        </button>
-                        <button onclick="window.leaveClubAndStartNew('${myActivePool.poolId}')" style="width: 100%; background: transparent; color: #FF3B30; font-weight: 700; font-size: 0.9rem; padding: 10px; border-radius: 12px; border: 1px dashed #FF3B30; cursor: pointer;">
-                            Leave Club
-                        </button>
-                    </div>
-                `;
-            }
-            // ----------------------------------------------------
-            // SCENARIO 2: User is on a Waiting List
-            // ----------------------------------------------------
-            else if (myWaitingPool) {
-                const dep = myWaitingPool.morningDeparture || '07:00';
-                
-                html += `
-                    <div style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #0A84FF; margin-bottom: 18px; text-align: left;">
-                        <h5 style="margin: 0 0 8px 0; color: #0A84FF; font-size: 1.05rem;"><i class="fas fa-hourglass-half"></i> You have joined this club</h5>
-                        <p style="margin: 0 0 10px 0; color: #ccc; font-size: 0.85rem; line-height: 1.45;">
-                            Your club is currently forming for the <strong>${dep}</strong> slot. We are calling this driver. Confirm booking 15 mins prior the time in order to move.
-                        </p>
-                        <button onclick="window.leaveClubAndStartNew('${myWaitingPool.poolId}')" style="width: 100%; background: transparent; color: #FF3B30; font-weight: 700; font-size: 0.9rem; padding: 12px; border-radius: 12px; border: 1px solid #FF3B30; cursor: pointer;">
-                            Cancel waitlist & start new
-                        </button>
-                    </div>
-                `;
-            }
-            // ----------------------------------------------------
-            // SCENARIO 3: User is NOT in a club, and NO clubs exist
-            // ----------------------------------------------------
-            else if (areaClubs.length === 0) {
-                html += `
-                    <div style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #3A3A3C; margin-bottom: 15px; text-align: left;">
-                        <h5 style="margin: 0 0 8px 0; color: #FF9F0A; font-size: 0.95rem; font-weight: 800;"><i class="fas fa-info-circle"></i> No existing clubs on this route</h5>
-                        <p style="margin: 0 0 10px 0; color: #ccc; font-size: 0.8rem; line-height: 1.45;">
-                            There are currently no active pools going to this exact destination. You can register to start a new club waiting list, or book a private Asiye Go ride immediately.
-                        </p>
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 10px; width: 100%;">
-                        <button onclick="window.launchPrePopulatedClubRegister()" style="width: 100%; background: #FF9F0A; color: black; font-weight: 900; font-size: 1.05rem; padding: 15px; border-radius: 14px; border: none; cursor: pointer;">
-                            <i class="fas fa-user-plus"></i> Join Waiting List
-                        </button>
-                        <button onclick="window.selectCategory('standard', ${window.baseCalculatedFare})" style="width: 100%; background: #2c2c2e; color: white; border: 1px solid #c5ff00; font-weight: 800; font-size: 1.05rem; padding: 15px; border-radius: 14px; cursor: pointer;">
-                            <i class="fas fa-car"></i> Book Asiye Go (R${window.baseCalculatedFare})
-                        </button>
-                    </div>
-                `;
-            }
-
-            // ----------------------------------------------------
-            // RENDER AREA CLUBS (Showing Full and Empty)
-            // ----------------------------------------------------
-            if (areaClubs.length > 0) {
-                html += `<h5 style="margin: 0 0 10px 0; color: #EBEBF5; font-size: 0.95rem;"><i class="fas fa-route" style="color:#0A84FF;"></i> Other Clubs on this Route</h5>`;
-                
-                areaClubs.slice(0, 4).forEach(p => {
-                    const dep = p.morningDeparture || '07:00';
-                    let passCount = parseInt(p.passCount) || 1;
-                    const maxCap = parseInt(p.maxCap) || 3;
-                    
-                    // Prevent visual glitches: hard cap the display values
-                    if (passCount > maxCap) passCount = maxCap; 
-                    if (p.poolType === 'waiting' && passCount === maxCap) passCount = maxCap - 1; 
-
-                    const isFull = passCount >= maxCap || ['accepted', 'driver_on_way', 'in_transit'].includes(p.status);
-                    
-                    // Use pre-cleaned grouped names
-                    const pFrom = p.pFrom || 'Area';
-                    const pTo = p.pTo || 'Destination';
-
-                    let actionBtn = '';
-                    let statusBadge = '';
-
-                    if (p.poolType === 'waiting') {
-                        statusBadge = `<span style="color:#0A84FF; font-size:0.75rem; font-weight:800;">WAITING LIST (${passCount}/${maxCap})</span>`;
-                        actionBtn = `<button onclick="window.joinWaitlistPool('${p.poolId}', '${dep}')" style="background:#0A84FF; color:white; font-weight:800; font-size:0.8rem; border-radius:8px; padding:6px 12px; border:none; cursor:pointer;">Join Slot</button>`;
-                    } else if (isFull) {
-                        statusBadge = `<span style="color:#FF3B30; font-size:0.75rem; font-weight:800;">FULL (${maxCap}/${maxCap})</span>`;
-                        // Launch register to allow them to create a waitlist for this specific time slot
-                        actionBtn = `<button onclick="window.launchPrePopulatedClubRegister('${dep}')" style="background:transparent; color:#FF9F0A; border:1px solid #FF9F0A; font-weight:800; font-size:0.8rem; border-radius:8px; padding:6px 12px; cursor:pointer;">Book Slot</button>`;
-                    } else {
-                        statusBadge = `<span style="color:#30D158; font-size:0.75rem; font-weight:800;">LOADING (${passCount}/${maxCap})</span>`;
-                        actionBtn = `<button onclick="window.joinLivePool('${p.poolId}', ${p.calculatedPrice || p.originalPerPersonPrice})" style="background:#30D158; color:black; font-weight:800; font-size:0.8rem; border-radius:8px; padding:6px 12px; border:none; cursor:pointer;">Join Pool</button>`;
-                    }
-
-                    html += `
-                    <div style="background:#1C1C1E; border:1px solid #3A3A3C; border-radius:12px; padding:12px; margin-bottom:10px;">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
-                            <div style="flex:1; overflow:hidden; padding-right:10px;">
-                                <div style="color:white; font-size:0.85rem; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-                                    ${escapeHtml(pFrom)} <i class="fas fa-arrow-right" style="color:#666; font-size:0.7rem; margin:0 4px;"></i> ${escapeHtml(pTo)}
-                                </div>
-                                <div style="color:#aaa; font-size:0.75rem; margin-top:4px;">
-                                    Departs at <span style="color:white; font-weight:bold;">${dep}</span>
-                                </div>
-                            </div>
-                            <strong style="color:${isFull ? '#FF3B30' : '#30D158'}; font-size:0.95rem; margin-top:2px;">R${p.calculatedPrice || p.originalPerPersonPrice || p.estimatedCost || 25}</strong>
-                        </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            ${statusBadge}
-                            ${actionBtn}
-                        </div>
-                    </div>`;
-                });
-            }
-
-            // Inject the resulting HTML into the panel
-            bookingPanel.innerHTML = html;
-
-        }).catch(err => {
-            console.error("Pool fetch error", err);
-            bookingPanel.innerHTML = '<p style="color:#dc3545;text-align:center;">Error loading clubs. Please check your connection.</p>';
-        });
-  }
-};
-// 3. Payment Method Updater
+ // 3. Payment Method Updater
 window.selectPayment = function(method) {
     window.selectedPaymentMethod = method;
     const cashBtn = document.getElementById('payCashBtn');
@@ -26113,52 +25706,47 @@ window.proceedWithBooking = async function(taxiId) {
             window.currentRequestId = requestNode.key;
 
                 const requestData = {
-                requestId: window.currentRequestId,
-                taxiId: taxiId || null, // Allow directed requests
-                carCategory: window.selectedRideCategory || 'standard',
-                commuterId: userId,
-                commuterName: passengerData.commuterName,
-                commuterPhone: passengerData.commuterPhone,
-                commuterProfilePic: window.commuterData?.profile_picture_url || "",
-                calculatedPrice: fare,
-                originalPlatformPrice: window.originalPlatformPrice || fare,
-                platformPromoApplied: window.randomPromoDiscount || 0,
-                paymentMethod: passengerData.paymentMethod,
-                appliedCredit: totalAppliedCredit, 
-                finalAmount: passengerData.finalAmount,
-                tripDistance: window.calculatedTripDistance || 0,
-                commuterLocation: { latitude: commuterLat, longitude: commuterLng },
-                pickupAddress: preciseAddress,
-                destination: finalDest,
-                status: isPooling ? "pooling" : "pending",
-                type: isPooling ? "club" : "ehailing",
-                requirePin: true,
-                pickupPin: passengerData.pickupPin,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            };
-
-            if (isPooling) {
-            requestData.expiresAt = Date.now() + (10 * 60000); 
-            requestData.minCapacity = 2; 
-            requestData.maxCapacity = 3; // FIXED: Maximum of 3 people
-            requestData.originalPerPersonPrice = fare;
-            requestData.poolCenterLat = commuterLat;
-            requestData.poolCenterLng = commuterLng;
-            requestData.passengers = {};
-            requestData.passengers[userId] = passengerData;
-        }
+    requestId: window.currentRequestId,
+    taxiId: taxiId, 
+    carCategory: 'club', // Mark as Club
+    commuterId: window.userId,
+    commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
+    commuterPhone: window.commuterData?.phone || "",
+    calculatedPrice: fare,
+    paymentMethod: 'cash',
+    appliedCredit: 0, 
+    finalAmount: fare,
+    commuterLocation: { latitude: window.commuterLat, longitude: window.commuterLng },
+    pickupAddress: preciseAddress,
+    destination: finalDest,
+    status: "pending", 
+    type: "club", // Change to club so Driver triggers Club UI
+    requirePin: true,
+    pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+};
+if (isPooling) {
+                requestData.expiresAt = Date.now() + (10 * 60000); 
+                requestData.minCapacity = 2; // Needs at least 2 people to be a viable shared trip
+                requestData.maxCapacity = 3; // STRICT ENFORCEMENT: Max 3 people for Asiye Club
+                requestData.originalPerPersonPrice = fare;
+                requestData.poolCenterLat = commuterLat;
+                requestData.poolCenterLng = commuterLng;
+                requestData.passengers = {};
+                requestData.passengers[userId] = passengerData;
+            }
             await requestNode.set(requestData);
 
             if (!isPooling) {
                 if (taxiId) {
                     // Direct specific taxi ping
-                    database.ref(`notifications/taxis/${taxiId}`).push({
-                        type: 'passenger',
-                        title: 'New Ride Request!',
-                        message: `Passenger is requesting a ride.`,
-                        requestId: window.currentRequestId,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
+                   database.ref(`notifications/taxis/${taxiId}`).push({
+    type: 'club', // Match the type
+    title: 'New Passenger for Club!',
+    message: `A passenger requested a seat for R${fare}.`,
+    requestId: window.currentRequestId,
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+});
                 } else {
                     // Ping all nearby Asiye Go drivers
                     const snap = await database.ref('taxis').once('value');
@@ -27138,7 +26726,7 @@ window.requestAsiyeGoRide = async function() {
 
     let totalAppliedCredit = promoDeduction + walletDeduction;
 
-    // ð¢ CLEANUP PREVIOUS TIMEOUT UI IF IT EXISTS
+    // 🟢 CLEANUP PREVIOUS TIMEOUT UI IF IT EXISTS
     const cancelBtn = document.getElementById('cancelRequestBtn');
     if (cancelBtn) cancelBtn.style.display = 'block';
     const timeoutActions = document.getElementById('timeoutActions');
@@ -27176,6 +26764,7 @@ window.requestAsiyeGoRide = async function() {
     var finalDest = window.userDropOffDestination || "As Directed";
     let joinedExistingPoolId = null;
 
+    // Check if there's an existing pool we can jump into
     if (isPooling) {
         const snap = await database.ref('requests').orderByChild('status').equalTo('pooling').once('value');
         if (snap.exists()) {
@@ -27211,14 +26800,16 @@ window.requestAsiyeGoRide = async function() {
     };
 
     if (joinedExistingPoolId) {
-        currentRequestId = joinedExistingPoolId;
+        // Join an existing pool
+        window.currentRequestId = joinedExistingPoolId;
         await database.ref(`requests/${joinedExistingPoolId}/passengers/${userId}`).set(passengerData);
     } else {
+        // Create a brand new request
         const requestNode = database.ref("requests").push();
-        currentRequestId = requestNode.key;
+        window.currentRequestId = requestNode.key;
 
         const requestData = {
-            requestId: currentRequestId,
+            requestId: window.currentRequestId,
             taxiId: null, 
             carCategory: window.selectedRideCategory || 'standard',
             commuterId: userId,
@@ -27240,59 +26831,60 @@ window.requestAsiyeGoRide = async function() {
             timestamp: firebase.database.ServerValue.TIMESTAMP
         };
 
-       if (isPooling) {
+        if (isPooling) {
             requestData.expiresAt = Date.now() + (10 * 60000); 
-            requestData.minCapacity = 2; 
-            requestData.maxCapacity = 4; // FIXED: Allow 4 passengers
+            requestData.minCapacity = 2; // Can launch with 2
+            requestData.maxCapacity = 3; // 🚨 STRICT ENFORCEMENT: 3 Passengers Max for Asiye Club
             requestData.originalPerPersonPrice = fare;
             requestData.poolCenterLat = commuterLat;
             requestData.poolCenterLng = commuterLng;
             requestData.passengers = {};
             requestData.passengers[userId] = passengerData;
         }
+
         await requestNode.set(requestData);
 
-        if (!isPooling) {
-            database.ref('taxis').once('value').then(snap => {
-                if (snap.exists()) {
-                    snap.forEach(child => {
-                        const driver = child.val();
-                        if (driver.vehicleType === 'ehailing' && driver.isOnline && !driver.isFull && driver.latitude && driver.longitude) {
-                            const dist = calculateDistance(commuterLat, commuterLng, driver.latitude, driver.longitude);
-                            if (dist <= 15) {
-                                database.ref(`notifications/taxis/${child.key}`).push({
-                                    type: 'passenger',
-                                    title: 'New Asiye Go Request!',
-                                    message: `Passenger ${passengerData.commuterName} is requesting a private ride.`,
-                                    requestId: currentRequestId,
-                                    commuterName: passengerData.commuterName,
-                                    pickupAddress: preciseAddress,
-                                    destination: finalDest,
-                                    calculatedPrice: fare,
-                                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                                });
-                            }
-                        }
-                    });
+        // 🚨 CRITICAL FIX: PING DRIVERS FOR BOTH ASIYE GO AND ASIYE CLUB
+        // Ping all nearby Asiye Go drivers (within 15km)
+        const snap = await database.ref('taxis').once('value');
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const driver = child.val();
+                // Must be e-hailing, online, and not full
+                if (driver.vehicleType === 'ehailing' && driver.isOnline && !driver.isFull && driver.latitude) {
+                    const dist = calculateDistance(commuterLat, commuterLng, driver.latitude, driver.longitude);
+                    if (dist <= 15) {
+                        database.ref(`notifications/taxis/${child.key}`).push({
+                            type: isPooling ? 'club' : 'passenger',
+                            title: isPooling ? 'New Asiye Club Pool! 👥' : 'New Asiye Go Request! 🚗',
+                            message: `Passenger ${passengerData.commuterName} is requesting a ${isPooling ? 'shared' : 'private'} ride.`,
+                            requestId: window.currentRequestId,
+                            commuterName: passengerData.commuterName,
+                            pickupAddress: preciseAddress,
+                            destination: finalDest,
+                            calculatedPrice: fare,
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        });
+                    }
                 }
             });
         }
+        // 🚨 END FIX
     }
 
     await database.ref(`commuters/${userId}`).update({
-        currentRequest: currentRequestId
+        currentRequest: window.currentRequestId
     });
     
     if (window.commuterData) {
-        window.commuterData.currentRequest = currentRequestId;
+        window.commuterData.currentRequest = window.currentRequestId;
     }
 
-    listenForRequestStatus(currentRequestId);
+    listenForRequestStatus(window.currentRequestId);
     
-    // ð¢ START THE 7 SECOND SEARCH TIMER
-    window.startTaxiSearchTimer(currentRequestId);
+    // 🟢 START THE 7 SECOND SEARCH TIMER
+    window.startTaxiSearchTimer(window.currentRequestId);
 };
-
 
 window.currentRequestStatusListener = null;
 window.activeListenerReqId = null;
@@ -29137,65 +28729,165 @@ const originalHandleIncomingNotification = window.handleIncomingNotification;
 // INCOMING NOTIFICATION HANDLER (COMMUTER APP)
 // =======================================================================
 window.handleIncomingNotification = function(notification) {
-    console.log("ð© Passenger received notification:", notification.type, notification);
+    console.log("🚕 Driver Notification Received:", notification);
 
-    // ð¨ 1. RELIABLE CANCELLATION HANDLER ð¨
-    if (notification.type === 'ride_cancelled') {
-        console.log("Driver cancelled the ride!");
+    // =====================================================================
+    // 1. TRIGGER SYSTEM TRAY NOTIFICATION (VIA FLUTTER/ANDROID BRIDGE)
+    // =====================================================================
+    if (window.Android && window.Android.postMessage) {
+        const type = notification.type === 'chat_message' ? 'INFO' : 'DANGER';
+        var title = notification.title;
+
+        if (!title) {
+            title = notification.type === 'chat_message'
+                ? `New Message from ${notification.senderName}`
+                : 'New Request!';
+        }
+
+        // Send JSON data to Flutter, including the payload for when it gets clicked
+        window.Android.postMessage(JSON.stringify({
+            action: 'showNotification',
+            title: title,
+            message: notification.message || 'You have a new update.',
+            type: type,
+            payload: JSON.stringify(notification) // Passes the full data back to Flutter
+        }));
+    }
+
+    // =====================================================================
+    // 2. IN-APP UI HANDLING
+    // =====================================================================
+    switch (notification.type) {
         
-        // Alert the Commuter
-        if (typeof showGenericMessage === 'function') {
-            showGenericMessage(
-                "Trip Cancelled", 
-                notification.message || "The driver had to cancel the trip. Please request a new ride.", 
-                "fa-times-circle", 
-                "icon-danger"
-            );
-        }
-        
-        // Clean up Commuter State & Return to Dashboard
-        if (typeof window.cleanupTripData === 'function') {
-            window.cleanupTripData();
-        }
-        return; // Stop further processing
-    }
+        // --- CHAT MESSAGES ---
+        case 'chat_message':
+            const chatPopup = document.getElementById('chatPopup');
+            const isChatOpen = chatPopup && chatPopup.classList.contains('open');
+            // Don't show a banner if they are already looking at the chat with this person
+            if (isChatOpen && typeof currentChatParticipant !== 'undefined' && currentChatParticipant?.id === notification.senderId) return;
 
-    // 2. RELIABLE COMPLETION HANDLER
-    if (notification.type === 'ride_completed' || notification.type === 'trip_completed') {
-        let reqId = notification.requestKey || notification.requestId || window.currentRequestId || localStorage.getItem('currentRequestId');
+            if (typeof showStickyNotification === 'function') {
+                showStickyNotification(
+                    `Msg from ${notification.senderName || 'Passenger'}`,
+                    notification.message,
+                    () => {
+                        if (typeof openChat === 'function') openChat(notification.senderId, notification.senderName || "Passenger");
+                    }
+                );
+            }
+            break;
 
-        if (reqId && typeof window.showTripCompletedScreen === 'function') {
-            window.showTripCompletedScreen(reqId);
-        } else if (typeof showRatingModal === 'function') {
-            showRatingModal(reqId || '', '');
-        }
+        // --- RIDE CANCELLATIONS ---
+        case 'ride_cancelled':
+        case 'request_cancelled':
+            if (typeof showGenericMessage === 'function') {
+                showGenericMessage("Passenger Cancelled", "The user has cancelled the request.", "bx-x-circle", "danger");
+            }
+            
+            // 🚨 CRITICAL: Clean up accepted array and UI
+            if (notification.requestId) {
+                const reqId = notification.requestId;
+                
+                if (typeof removePassengerFromMap === 'function') removePassengerFromMap(reqId);
+                
+                if (typeof acceptedPassengers !== 'undefined') {
+                    const pIndex = acceptedPassengers.findIndex(p => p.key === reqId);
+                    if (pIndex !== -1) {
+                        acceptedPassengers.splice(pIndex, 1);
+                        if (window.passengerLocations) window.passengerLocations.delete(reqId);
+                        
+                        // If car is now completely empty, pull them off navigation and make them available
+                        if (acceptedPassengers.length === 0) {
+                            if (taxiData && taxiData.isFull) {
+                                database.ref('taxis/' + userId).update({ isFull: false, isBroadcasting: true });
+                                taxiData.isFull = false;
+                                taxiData.isBroadcasting = true;
+                            }
+                            const tripCard = document.getElementById('ehailingActiveTripCard');
+                            if (tripCard) tripCard.style.display = 'none';
+                            if (typeof window.exitNavigation === 'function') window.exitNavigation();
+                            if (typeof window.clearAllRoutes === 'function') window.clearAllRoutes();
+                        }
+                        
+                        if (typeof updatePassengerCounter === 'function') updatePassengerCounter();
+                        if (typeof updateBottomMenu === 'function') updateBottomMenu();
+                        if (typeof updatePassengerListUI === 'function') updatePassengerListUI();
+                    }
+                }
+            }
 
-        if (typeof cleanupTripData === 'function') window.cleanupTripData();
-        return;
-    }
+            // Close the request popup if the user cancelled while the driver was looking at it
+            if (typeof activeRequest !== 'undefined' && activeRequest && activeRequest.commuterId === notification.commuterId) {
+                if (typeof closeActivePopup === 'function') closeActivePopup();
+                activeRequest = null;
+                currentRequestId = null;
+            }
+            break;
 
-    // 3. TRIP STARTED / ARRIVED HANDLERS
-    if (notification.type === 'trip_started' || notification.type === 'driver_arrived') {
-        const activeReqId = window.currentRequestId || localStorage.getItem('currentRequestId');
-        if (activeReqId && typeof window.showDriverAcceptedPopup === 'function') {
-            window.showDriverAcceptedPopup(notification.driverId, { requestKey: activeReqId });
-        }
+        // --- NEW RIDE / PARCEL / CLUB REQUESTS ---
+        case 'passenger':
+        case 'parcel':
+        case 'club':
+            console.log("🔔 Driver received direct request notification!", notification);
+            
+            if (notification.requestId) {
+                database.ref(`requests/${notification.requestId}`).once('value').then(snap => {
+                    if (!snap.exists()) return;
+                    const req = { key: snap.key, ...snap.val() };
+                    
+                    if ((req.status === 'pending' || req.status === 'pooling') && (!activeRequest || activeRequest.key !== req.key)) {
+                        
+                        // 1. Check if Driver is Full
+                        if (taxiData && taxiData.isFull === true) return;
+
+                        // 2. MIXED MODE PREVENTION: Don't cross Asiye Go and Asiye Club rides
+                        if (typeof acceptedPassengers !== 'undefined' && acceptedPassengers.length > 0) {
+                            const currentRideType = acceptedPassengers[0].type;
+                            
+                            // If currently doing a Club ride, block standard Go rides
+                            if (currentRideType === 'club' && req.type !== 'club') {
+                                console.log("Blocked Asiye Go request because driver is currently in a Club Pool.");
+                                return; 
+                            }
+                            // If currently doing an Asiye Go ride, block Club rides
+                            if ((currentRideType === 'ehailing' || currentRideType === 'passenger') && req.type === 'club') {
+                                console.log("Blocked Club request because driver is currently doing an Asiye Go ride.");
+                                return; 
+                            }
+                        }
+
+                        // We are clear to show the request!
+                        activeRequest = req;
+                        currentRequestId = req.key;
+
+                        // Play ringtone
+                        try { new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3').play().catch(()=>{}); } catch(e) {}
+
+                        window.isShowingRequestPopup = false; 
+
+                        // 3. STRICT TYPE ROUTING (Send to the correct Popup UI)
+                        if (req.type === 'parcel') {
+                            if (typeof window.openParcelRequestPopup === 'function') window.openParcelRequestPopup(req);
+                        } else if (req.type === 'club') {
+                            if (typeof window.showPoolingRoomPopup === 'function') window.showPoolingRoomPopup(req);
+                        } else {
+                            if (typeof window.openCommuterRequestPopup === 'function') window.openCommuterRequestPopup(req);
+                        }
+                    }
+                });
+            }
+            break;
+            
+        // --- ADMIN BROADCASTS ---
+        case 'admin_broadcast':
+            if (typeof showGenericMessage === 'function') {
+                showGenericMessage(notification.title || "Admin Message", notification.message, "fa-bullhorn", "info");
+            }
+            break;
     }
-    
-    // 4. CHAT MESSAGES
-    if (notification.type === 'chat_message') {
-        const chatPopup = document.getElementById('chatPopup');
-        if (chatPopup && chatPopup.classList.contains('open')) return; // Already chatting
-        
-        if (typeof showStickyNotification === 'function') {
-            showStickyNotification(
-                `Msg from ${notification.senderName}`,
-                notification.message,
-                () => { openChat(notification.senderId, notification.senderName); }
-            );
-        }
-    }
-};window.checkActiveTrip = function() {
+};
+
+window.checkActiveTrip = function() {
     if (!userId) {
         showModernDashboard();
         return;
@@ -29543,69 +29235,6 @@ window.closeRatingAndGoHome = function() {
 };
 
 
-window.processPendingReferralCounters = async function(newUserId, referrerPhoneOrId) {
-    if (!referrerPhoneOrId || newUserId === referrerPhoneOrId) return;
-
-    const userRef = database.ref(`commuters/${newUserId}`);
-    const snap = await userRef.once('value');
-    const userData = snap.val() || {};
-
-    if (userData.binaryCountsProcessed) return;
-
-    // Mark processed on the new user
-    await userRef.update({ 
-        binaryCountsProcessed: true, 
-        referredBy: referrerPhoneOrId 
-    });
-    if (window.commuterData) {
-        window.commuterData.referredBy = referrerPhoneOrId;
-        window.commuterData.binaryCountsProcessed = true;
-    }
-
-    // --- LEVEL 1 PROCESSING ---
-    let l1Id = null;
-    let l1Data = null;
-    
-    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerPhoneOrId).once('value');
-    if (phoneQuery.exists()) {
-        phoneQuery.forEach(child => { l1Id = child.key; l1Data = child.val(); });
-    } else {
-        const uidQuery = await database.ref(`commuters/${referrerPhoneOrId}`).once('value');
-        if (uidQuery.exists()) { l1Id = uidQuery.key; l1Data = uidQuery.val(); }
-    }
-
-    if (l1Id) {
-        // Increment Level 1 Invites
-        await database.ref(`commuters/${l1Id}`).transaction(data => {
-            if (data) {
-                data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1; // Legacy support
-            }
-            return data;
-        });
-
-        // --- LEVEL 2 PROCESSING (Invite of an Invite) ---
-        if (l1Data && l1Data.referredBy) {
-            let l2Id = null;
-            const l2PhoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(l1Data.referredBy).once('value');
-            if (l2PhoneQuery.exists()) {
-                l2PhoneQuery.forEach(child => { l2Id = child.key; });
-            } else {
-                const l2UidQuery = await database.ref(`commuters/${l1Data.referredBy}`).once('value');
-                if (l2UidQuery.exists()) l2Id = l2UidQuery.key;
-            }
-
-            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
-                await database.ref(`commuters/${l2Id}`).transaction(data => {
-                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
-                    return data;
-                });
-            }
-        }
-    }
-};
-
-
 
 async function fetchAndRenderNearby(lat, lon) {
     try {
@@ -29744,75 +29373,6 @@ window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
     }
 };
 
-window.processPendingReferralCounters = async function(newUserId, referrerId) {
-    if (!referrerId || newUserId === referrerId) return;
-
-    const userRef = database.ref(`commuters/${newUserId}`);
-    const snap = await userRef.once('value');
-    const userData = snap.val() || {};
-
-    if (userData.binaryCountsProcessed) return;
-
-    // Mark processed on the new user
-    await userRef.update({ 
-        binaryCountsProcessed: true, 
-        referredBy: referrerId 
-    });
-    
-    if (window.commuterData) {
-        window.commuterData.referredBy = referrerId;
-        window.commuterData.binaryCountsProcessed = true;
-    }
-
-    // --- LEVEL 1 PROCESSING ---
-    // Since referrerId is ALREADY the UID, no need to query the database!
-    let l1Id = referrerId;
-
-    if (l1Id) {
-        // Increment Level 1 Invites & Pending Referral Count
-        await database.ref(`commuters/${l1Id}`).transaction(data => {
-            if (data) {
-                data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1; 
-                data.pendingReferrals = (data.pendingReferrals || 0) + 1; // Creates the Pending R50
-            }
-            return data;
-        });
-        
-        // Add pending earnings ledger
-        await database.ref(`commuters/${l1Id}/earnings/ref_pending_${newUserId}`).set({
-            id: 'ref_pending_' + newUserId,
-            type: 'referral_reward',
-            amount: 50.00,
-            description: `Pending: ${userData.name || 'New User'} (Awaiting 1st Trip)`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'pending',
-            linkedUserId: newUserId
-        });
-
-        // Notify Ambassador that a friend just created an account
-        database.ref(`notifications/commuters/${l1Id}`).push({
-            type: 'referral_bonus_pending',
-            title: 'New Sign-up!',
-            message: `A user registered using your link! R50 is pending until they take their first trip.`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-
-        // --- LEVEL 2 PROCESSING (Network Effect) ---
-        const l1Snap = await database.ref(`commuters/${l1Id}`).once('value');
-        const l1Data = l1Snap.val();
-
-        if (l1Data && l1Data.referredBy) {
-            let l2Id = l1Data.referredBy; // Assumes referredBy is correctly stored as UID
-            if (l2Id && l2Id !== l1Id && l2Id !== newUserId) {
-                await database.ref(`commuters/${l2Id}`).transaction(data => {
-                    if (data) data.level2_invites = (data.level2_invites || 0) + 1;
-                    return data;
-                });
-            }
-        }
-    }
-};
 
 window.checkFirstTripCompletion = function() {
     if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
@@ -29983,68 +29543,6 @@ window.showFallbackSuggestions = function() {
 // ---------------------------------------------------------
 // 2. REFERRAL TRACKING ENGINE (PENDING -> COMPLETED)
 // ---------------------------------------------------------
-window.processPendingReferralCounters = async function(newUserId, referrerCode) {
-    if (!referrerCode || newUserId === referrerCode) return;
-
-    const userRef = database.ref(`commuters/${newUserId}`);
-    const snap = await userRef.once('value');
-    const userData = snap.val() || {};
-
-    if (userData.binaryCountsProcessed) return;
-
-    await userRef.update({ 
-        binaryCountsProcessed: true, 
-        referredBy: referrerCode 
-    });
-    
-    if (window.commuterData) {
-        window.commuterData.referredBy = referrerCode;
-        window.commuterData.binaryCountsProcessed = true;
-    }
-
-    let l1Id = null;
-    
-    const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(referrerCode).once('value');
-    const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(referrerCode).once('value');
-    
-    if (codeQuery.exists()) {
-        codeQuery.forEach(child => { l1Id = child.key; });
-    } else if (phoneQuery.exists()) {
-        phoneQuery.forEach(child => { l1Id = child.key; });
-    } else {
-        const uidQuery = await database.ref(`commuters/${referrerCode}`).once('value');
-        if (uidQuery.exists()) l1Id = uidQuery.key;
-    }
-
-    // CREATE PENDING EARNING FOR AMBASSADOR
-    if (l1Id) {
-        await database.ref(`commuters/${l1Id}`).transaction(data => {
-            if (data) {
-                data.level1_invites = (data.level1_invites || 0) + 1;
-                data.referralCount = (data.referralCount || 0) + 1; 
-                data.pendingReferrals = (data.pendingReferrals || 0) + 1; // Used for "Pending" math
-            }
-            return data;
-        });
-        
-        await database.ref(`commuters/${l1Id}/earnings/ref_pending_${newUserId}`).set({
-            id: 'ref_pending_' + newUserId,
-            type: 'referral_reward',
-            amount: 50.00,
-            description: `Pending: ${userData.name || 'New User'} (Awaiting 1st Trip)`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP,
-            status: 'pending',
-            linkedUserId: newUserId
-        });
-
-        database.ref(`notifications/commuters/${l1Id}`).push({
-            type: 'referral_bonus_pending',
-            title: 'New Sign-up!',
-            message: `A user registered using your link! R50 is pending until they take their first trip.`,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-    }
-};
 
 window.checkFirstTripCompletion = function() {
     if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
@@ -30423,10 +29921,7 @@ window.submitClubSubscription = async function() {
     const billingPref = window.clubBillingTerm || 'monthly';
 
     const btn = document.getElementById('clubRegisterBtn');
-    if(btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
-    }
+    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reserving Slot...'; }
 
     const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
 
@@ -30439,48 +29934,136 @@ window.submitClubSubscription = async function() {
         purpose: purpose, morningDeparture: morningTime, afternoonReturn: returnTime,
         paymentTerms: billingPref, estimatedCost: window.calculatedClubTotalPrice,
         routeDistance: window.clubRouteDistance, voucherCode: voucherRefCode,
-        status: 'pending_allocation', trialApplied: billingPref === 'monthly', 
-        createdAt: firebase.database.ServerValue.TIMESTAMP
+        status: 'availing_on_route', 
+        trialApplied: billingPref === 'monthly', 
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        price: window.calculatedClubSingleTripPrice || 15
     };
 
     try {
         await database.ref(`commuters/${window.userId}/clubSubscription`).set(subscriptionData);
         
-        // Push to public waitlist inside 'requests' to bypass permission denied
-        const waitlistRef = database.ref("requests").push();
-        const poolPayload = Object.assign({}, subscriptionData, {
-            requestId: waitlistRef.key,
-            status: 'waiting_pool', 
-            type: 'club',
-            poolCenterLat: parseFloat(pLat),
-            poolCenterLng: parseFloat(pLng),
-            maxCapacity: 4,
-            passengers: {}
-        });
-        poolPayload.passengers[window.userId] = Object.assign({}, subscriptionData);
-        await waitlistRef.set(poolPayload);
+        let targetRequestId = window.onboardJoinedPoolId;
 
-        closeModal('asiyeClubRegisterPopup');
-        
-        if (typeof showGenericMessage === 'function') {
-            showGenericMessage(
-                "Registration Successful!",
-                `You are registered! Your unique voucher reference number is: <strong style="font-size: 1.25rem; color: #28a745;">${voucherRefCode}</strong>.<br><br>We are clustering passengers in your area. Once matched, we will notify you to authorize payment and confirm your driver.`,
-                "fa-clipboard-check",
-                "icon-success"
-            );
+        if (targetRequestId) {
+            // Join existing queue
+            await database.ref(`requests/${targetRequestId}/passengers/${window.userId}`).set(subscriptionData);
+        } else {
+            // Create new queue
+            const waitlistRef = database.ref("requests").push();
+            targetRequestId = waitlistRef.key;
+            
+            const poolPayload = Object.assign({}, subscriptionData, {
+                requestId: targetRequestId,
+                status: 'availing_on_route', 
+                type: 'club',
+                poolCenterLat: parseFloat(pLat),
+                poolCenterLng: parseFloat(pLng),
+                maxCapacity: 3, 
+                originalPerPersonPrice: window.calculatedClubSingleTripPrice || 15,
+                passengers: {}
+            });
+            poolPayload.passengers[window.userId] = Object.assign({}, subscriptionData);
+            await waitlistRef.set(poolPayload);
         }
 
-        if (window.commuterData) window.commuterData.clubSubscription = subscriptionData;
+        window.currentRequestId = targetRequestId;
+        localStorage.setItem('currentRequestId', targetRequestId);
+        await database.ref(`commuters/${window.userId}`).update({ currentRequest: targetRequestId });
+
+        closeAllPopups();
+        
+        // 🚀 SHOW THE VISUAL QUEUE UI IMMEDIATELY
+        window.showCommuterClubQueuePopup(targetRequestId);
+        window.listenForRequestStatus(targetRequestId);
 
     } catch (err) {
         console.error("Subscription write failed:", err);
-        if (typeof showGenericMessage === 'function') showGenericMessage("Registration Error", "Could not complete registration. Check your connection.", "fa-times-circle", "icon-danger");
+        showToast("Error reserving slot.", "danger");
     } finally {
         if(btn) { btn.disabled = false; btn.innerHTML = 'Submit Register'; }
     }
 };
 
+window.submitClubSubscription = async function() {
+    if (!window.userId) return;
+
+    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
+    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
+    const pAddr = document.getElementById('clubPickupAddress').value;
+    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
+    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
+    const dAddr = document.getElementById('clubDropoffAddress').value;
+
+    const purpose = document.getElementById('clubPurpose').value;
+    const morningTime = document.getElementById('clubMorningTime').value;
+    const returnTime = document.getElementById('clubReturnTime').value;
+    const billingPref = window.clubBillingTerm || 'monthly';
+
+    const btn = document.getElementById('clubRegisterBtn');
+    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reserving Slot...'; }
+
+    const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
+
+    const subscriptionData = {
+        commuterId: window.userId,
+        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
+        commuterPhone: window.commuterData?.phone || '',
+        pickupAddress: pAddr, pickupLat: pLat, pickupLng: pLng,
+        dropoffAddress: dAddr, dropoffLat: dLat, dropoffLng: dLng,
+        purpose: purpose, morningDeparture: morningTime, afternoonReturn: returnTime,
+        paymentTerms: billingPref, estimatedCost: window.calculatedClubTotalPrice,
+        routeDistance: window.clubRouteDistance, voucherCode: voucherRefCode,
+        status: 'availing_on_route', 
+        trialApplied: billingPref === 'monthly', 
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        price: window.calculatedClubSingleTripPrice || 15
+    };
+
+    try {
+        await database.ref(`commuters/${window.userId}/clubSubscription`).set(subscriptionData);
+        
+        let targetRequestId = window.onboardJoinedPoolId;
+
+        if (targetRequestId) {
+            // Join existing queue
+            await database.ref(`requests/${targetRequestId}/passengers/${window.userId}`).set(subscriptionData);
+        } else {
+            // Create new queue
+            const waitlistRef = database.ref("requests").push();
+            targetRequestId = waitlistRef.key;
+            
+            const poolPayload = Object.assign({}, subscriptionData, {
+                requestId: targetRequestId,
+                status: 'availing_on_route', 
+                type: 'club',
+                poolCenterLat: parseFloat(pLat),
+                poolCenterLng: parseFloat(pLng),
+                maxCapacity: 3, 
+                originalPerPersonPrice: window.calculatedClubSingleTripPrice || 15,
+                passengers: {}
+            });
+            poolPayload.passengers[window.userId] = Object.assign({}, subscriptionData);
+            await waitlistRef.set(poolPayload);
+        }
+
+        window.currentRequestId = targetRequestId;
+        localStorage.setItem('currentRequestId', targetRequestId);
+        await database.ref(`commuters/${window.userId}`).update({ currentRequest: targetRequestId });
+
+        closeAllPopups();
+        
+        // 🚀 SHOW THE VISUAL QUEUE UI IMMEDIATELY
+        window.showCommuterClubQueuePopup(targetRequestId);
+        window.listenForRequestStatus(targetRequestId);
+
+    } catch (err) {
+        console.error("Subscription write failed:", err);
+        showToast("Error reserving slot.", "danger");
+    } finally {
+        if(btn) { btn.disabled = false; btn.innerHTML = 'Submit Register'; }
+    }
+};
 window.verifyVoucherAndSummon = function() {
     const enteredCode = document.getElementById('clubVoucherInput')?.value.trim().toUpperCase();
     if (!enteredCode) {
@@ -30734,7 +30317,6 @@ window.initiatePayFastCardVerification = function() {
 // 🚨 OVERRIDE: CORRECTED ASIYE CLUB vs ASIYE GO PRICING ENGINE
 // =================================================================
 
-// 1. DYNAMIC CATEGORY PRICING (The Ride Selection Screen)
 window.populateEHailingCategories = function(standardPriceParam, clubPriceParam, xlPriceParam) {
     const sheet = document.getElementById('taxiListSheet');
     if (!sheet) return;
@@ -30743,21 +30325,29 @@ window.populateEHailingCategories = function(standardPriceParam, clubPriceParam,
     if (dist < 1) dist = 1;
     
     // ----------------------------------------------------
-    // 🟢 ASIYE CLUB MATH: Base R15 + R6.00/km (Split by 3)
-    // ----------------------------------------------------
-    const clubGross = 15 + (dist * 6.00);
-    const asiyeClubSingleTripPrice = Math.max(15, Math.round(clubGross / 3));
-
-    // ----------------------------------------------------
-    // 🟢 ASIYE GO MATH: Base R30 + R8.00/km
+    // 🔴 1. ASIYE GO MATH (Base R30 + R8/km, Min R30)
     // ----------------------------------------------------
     let asiyeGoOriginal = Math.max(30, Math.round(30 + (dist * 8.00)));
     let asiyeGoPrice = asiyeGoOriginal;
+
+    // ----------------------------------------------------
+    // 🟢 2. ASIYE CLUB MATH (Tied to Go, Split by 3)
+    // ----------------------------------------------------
+    // The whole car costs 25% less than a private Asiye Go ride
+    const totalClubCarPrice = asiyeGoPrice * 0.75; 
     
+    // Split strictly by 3 seats
+    let asiyeClubSingleTripPrice = Math.round(totalClubCarPrice / 3);
+    
+    // HARD FLOOR: A taxi ride in SA is never less than ~R15
+    if (asiyeClubSingleTripPrice < 15) {
+        asiyeClubSingleTripPrice = 15; 
+    }
+
     const isClubUser = window.commuterData && window.commuterData.clubSubscription && window.commuterData.clubOptOut !== true;
     let goDiscountHtml = '';
     
-    // 12% DISCOUNT FOR CLUB MEMBERS
+    // 12% DISCOUNT FOR CLUB MEMBERS ON PRIVATE RIDES
     if (isClubUser) {
         asiyeGoPrice = Math.round(asiyeGoOriginal * 0.88); // 12% OFF
         goDiscountHtml = `<div style="font-size: 0.65rem; color: #30D158; background: rgba(48, 209, 88, 0.15); padding: 3px 6px; border-radius: 6px; display: inline-block; margin-top: 4px; font-weight: 800;">12% CLUB DISCOUNT</div>`;
@@ -30790,7 +30380,7 @@ window.populateEHailingCategories = function(standardPriceParam, clubPriceParam,
                         <div style="width: 44px; height: 44px; background: rgba(255,159,10,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #FF9F0A;"><i class="fas fa-users"></i></div>
                         <div>
                             <div style="font-weight: 700; font-size: 1rem;">Asiye Club</div>
-                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared with other two people</div>
+                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared with up to 2 others</div>
                         </div>
                     </div>
                     <div style="font-size: 1.15rem; font-weight: 800; color: #FF9F0A;">R${asiyeClubSingleTripPrice}</div>
@@ -30832,7 +30422,6 @@ window.populateEHailingCategories = function(standardPriceParam, clubPriceParam,
     if (!sheet.classList.contains('open')) sheet.classList.add('open');
     if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
 };
-
 // 2. BACKGROUND SEARCH ENGINE (Fixes Mapbox Routing Math)
 window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
     window.currentRideMode = isDeliveryMode ? 'delivery' : 'ehailing';
@@ -31017,94 +30606,6 @@ window.calculateOnboardPricing = function() {
 // =======================================================================
 
 
-window.checkForExistingClubsAndShowStep3 = async function() {
-    window.onboardExistingChecked = true;
-    const pLat = parseFloat(document.getElementById('onboardPickupLat').value);
-    const pLng = parseFloat(document.getElementById('onboardPickupLng').value);
-    const dLat = parseFloat(document.getElementById('onboardDropoffLat').value);
-    const dLng = parseFloat(document.getElementById('onboardDropoffLng').value);
-
-    window.calculateOnboardPricing(); 
-
-    const step3Container = document.getElementById('onboardStep3');
-    let existingClubDiv = document.getElementById('existingClubMatches');
-    
-    if (!existingClubDiv) {
-        existingClubDiv = document.createElement('div');
-        existingClubDiv.id = 'existingClubMatches';
-        existingClubDiv.style.marginBottom = '15px';
-        step3Container.insertBefore(existingClubDiv, step3Container.children[1]);
-    }
-
-    existingClubDiv.innerHTML = '<div class="spinner" style="margin: 0 auto; border-color: #333; border-left-color: #30D158;"></div><p style="text-align:center;color:#aaa;font-size:0.85rem;margin-top:10px;">Searching for existing clubs on this route...</p>';
-    
-    for (let i = 0; i <= 5; i++) {
-        const el = document.getElementById('onboardStep' + i);
-        if (el) el.style.display = (i === 3) ? 'flex' : 'none';
-    }
-
-   try {
-        const activeSnap = await database.ref('requests').orderByChild('type').equalTo('club').once('value');
-        
-        const pools = [];
-        
-        if (activeSnap.exists()) {
-            activeSnap.forEach(child => {
-                const req = child.val();
-                
-                // A. Waiting List Pool Match
-                if (req.status === 'waiting_pool' && req.pickupLat && req.dropoffLat && child.key !== window.userId) {
-                    const pDist = calculateDistance(pLat, pLng, req.pickupLat, req.pickupLng);
-                    const dDist = calculateDistance(dLat, dLng, req.dropoffLat, req.dropoffLng);
-                    if (pDist <= 5 && dDist <= 5) {
-                        pools.push({...req, poolId: child.key, poolType: 'waiting'});
-                    }
-                }
-                // B. Active (Pooling) Match
-                else if (req.status === 'pooling' && req.poolCenterLat && req.destination) {
-                    const pDist = calculateDistance(pLat, pLng, req.poolCenterLat, req.poolCenterLng);
-                    if (pDist <= 5) {
-                        const passCount = req.passengers ? Object.keys(req.passengers).length : 0;
-                        const maxCap = req.maxCapacity || 4;
-                        if (passCount < maxCap) {
-                            pools.push({...req, poolId: child.key, poolType: 'active', passCount, maxCap});
-                        }
-                    }
-                }
-            });
-        }
-        if (pools.length > 0) {
-            let html = `<h4 style="color:#30D158; margin: 0 0 10px 0; font-size:1.05rem;"><i class="fas fa-users"></i> Existing Clubs Found Nearby!</h4>`;
-            pools.slice(0, 2).forEach(p => {
-                if (p.poolType === 'active') {
-                    html += `
-                    <div style="background:#2C2C2E; border:1px solid #30D158; border-radius:12px; padding:12px; margin-bottom:10px; text-align:left;">
-                        <strong style="color:white;">Active Pool Route</strong><br>
-                        <span style="color:#aaa; font-size:0.8rem;">${p.passCount} / ${p.maxCap} Passengers Boarding</span><br>
-                        <span style="color:#FFC107; font-size:0.8rem; font-weight:bold;">Estimated: R${p.calculatedPrice || p.originalPerPersonPrice}</span>
-                        <button class="btn btn-sm" onclick="window.onboardJoinedPoolId='${p.poolId}'; showToast('Selected existing club!', 'success'); window.nextOnboardStep(4);" style="background:#30D158; color:black; font-weight:900; border-radius:10px; padding:10px; margin-top:10px; width:100%; border:none; cursor:pointer;">Join This Club</button>
-                    </div>`;
-                } else {
-                    html += `
-                    <div style="background:#2C2C2E; border:1px solid #007BFF; border-radius:12px; padding:12px; margin-bottom:10px; text-align:left;">
-                        <strong style="color:white;">Waiting List Pool</strong><br>
-                        <span style="color:#aaa; font-size:0.8rem;">Departs: ${p.morningDeparture || '07:00'} | Returns: ${p.afternoonReturn || '17:00'}</span><br>
-                        <span style="color:#FFC107; font-size:0.8rem; font-weight:bold;">Estimated: R${p.estimatedCost} / month</span>
-                        <button class="btn btn-sm" onclick="window.onboardJoinedPoolId='${p.poolId}'; showToast('Selected waitlist club!', 'success'); window.nextOnboardStep(4);" style="background:#007BFF; color:white; font-weight:900; border-radius:10px; padding:10px; margin-top:10px; width:100%; border:none; cursor:pointer;">Join Waitlist</button>
-                    </div>`;
-                }
-            });
-            html += `<hr style="border-color:#444; margin: 15px 0;"><p style="color:#aaa; font-size:0.8rem; margin:0;">Or create your own schedule below:</p>`;
-            existingClubDiv.innerHTML = html;
-        } else {
-            existingClubDiv.innerHTML = `<div style="background:#2C2C2E; padding:15px; border-radius:12px; margin-bottom:15px; color:#aaa; font-size:0.85rem; border:1px solid #444;"><i class="fas fa-info-circle"></i> No existing clubs on this exact route. Create a new schedule below!</div>`;
-        }
-
-    } catch(e) {
-        console.error(e);
-        existingClubDiv.innerHTML = '';
-    }
-};
 window.onboardShareAndComplete = function() {
     window.saveUnifiedOnboardingData(true); 
     setTimeout(() => {
@@ -31208,9 +30709,7 @@ window.leaveClubAndStartNew = function(poolId) {
 // =================================================================
 
 window.nextOnboardStep = function(stepNum) {
-    if (stepNum === 3 && window.wantsClub === false) {
-        stepNum = 4; // Skip scheduling if they declined the club
-    }
+    if (stepNum === 3 && window.wantsClub === false) stepNum = 4;
 
     for (let i = 0; i <= 5; i++) {
         const el = document.getElementById('onboardStep' + i);
@@ -31220,19 +30719,33 @@ window.nextOnboardStep = function(stepNum) {
     if (stepNum === 2 && !window.onboardGeocodersInit) {
         window.onboardGeocodersInit = true;
         setupOnboardAutocomplete('onboardPickupInput', 'onboardPickupSuggestions', 'onboardPickupLat', 'onboardPickupLng', 'onboardPickupText');
-        setupOnboardAutocomplete('onboardDropoffInput', 'onboardDropoffSuggestions', 'onboardDropoffLat', 'onboardDropoffLng', 'onboardDropoffText');
         
-        // AUTO-FILL GPS LOCATION IMMEDIATELY
-        setTimeout(() => {
-            if (typeof window.useCurrentGpsForOnboard === 'function') window.useCurrentGpsForOnboard();
-        }, 300);
+        // 🚀 FIX: AUTO-CAPTURE LOCATION IMMEDIATELY
+        document.getElementById('onboardPickupInput').value = "Locating you automatically...";
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                window.commuterLat = lat; window.commuterLng = lng;
+                
+                try {
+                    const address = await getAddressFromCoordsPromise(lng, lat);
+                    document.getElementById('onboardPickupInput').value = address;
+                    document.getElementById('onboardPickupLat').value = lat;
+                    document.getElementById('onboardPickupLng').value = lng;
+                    
+                    // 🚀 INSTANTLY BROADCAST TO DRIVERS THAT SOMEONE IS IN THIS AREA
+                    database.ref('demand_hotspots').push({
+                        lat: lat, lng: lng, timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    
+                    window.scanForAreaClubs(lat, lng);
+                } catch(e) {}
+            });
+        }
     }
-    
-    if (stepNum === 3) {
-        window.calculateOnboardPricing();
-    }
+    if (stepNum === 3) window.calculateOnboardPricing();
 };
-
 window.useCurrentGpsForOnboard = async function() {
     const input = document.getElementById('onboardPickupInput');
     if (input) input.value = "Locating GPS...";
@@ -31258,111 +30771,6 @@ window.useCurrentGpsForOnboard = async function() {
     }
 };
 
-window.scanForAreaClubs = async function(pLat, pLng) {
-    const areaClubsDiv = document.getElementById('onboardAreaClubs');
-    const dropoffSection = document.getElementById('onboardDropoffSection');
-    const nextBtn = document.getElementById('onboardStep2NextBtn');
-    
-    areaClubsDiv.style.display = 'flex';
-    areaClubsDiv.innerHTML = '<div class="spinner" style="margin: 10px auto; border-color: #333; border-left-color: #30D158;"></div><p style="text-align:center;color:#aaa;font-size:0.8rem;margin:0;">Scanning your area for active clubs...</p>';
-    dropoffSection.style.display = 'none';
-    
-    // Disable next button until they make a choice or fill dropoff
-    if (nextBtn) {
-        nextBtn.disabled = true;
-        nextBtn.style.opacity = '0.5';
-    }
-
-    try {
-        // Read directly from requests node to bypass permission errors
-        const activeSnap = await database.ref('requests').orderByChild('type').equalTo('club').once('value');
-        
-        const pools = [];
-        if (activeSnap.exists()) {
-            activeSnap.forEach(child => {
-                const req = child.val();
-                const status = req.status;
-                
-                // We want active pools ('pooling') OR waiting list pools ('waiting_pool')
-                if (status === 'pooling' || status === 'waiting_pool') {
-                    // Check if pickup is within 5km of user's pickup
-                    const reqLat = req.poolCenterLat || req.pickupLat;
-                    const reqLng = req.poolCenterLng || req.pickupLng;
-                    
-                    if (reqLat && reqLng) {
-                        const pDist = calculateDistance(pLat, pLng, reqLat, reqLng);
-                        if (pDist <= 5) {
-                            // Don't show the user their own pools
-                            if (child.key !== window.userId && req.commuterId !== window.userId) {
-                                const passCount = req.passengers ? Object.keys(req.passengers).length : (status === 'waiting_pool' ? 1 : 0);
-                                const maxCap = req.maxCapacity || 4;
-                                // Only show if the club is not full
-                                if (passCount < maxCap) {
-                                    pools.push({...req, poolId: child.key, passCount, maxCap});
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        if (pools.length > 0) {
-            let html = `<h4 style="color:#30D158; margin: 0 0 5px 0; font-size:1rem;"><i class="fas fa-car-side"></i> ${pools.length} Club(s) leaving from your area</h4>`;
-            
-            pools.slice(0, 3).forEach(p => {
-                const dest = p.destination || p.dropoffAddress || 'Unknown Destination';
-                const timeStr = p.status === 'waiting_pool' 
-                    ? `Departs: ${p.morningDeparture||'07:00'} | Returns: ${p.afternoonReturn||'17:00'}`
-                    : `Live Pool! Searching for driver...`;
-                
-                const priceStr = p.estimatedCost ? `R${p.estimatedCost}/mo` : `R${p.calculatedPrice || p.originalPerPersonPrice || 25}`;
-
-                html += `
-                <div style="background:#1C1C1E; border:1px solid #30D158; border-radius:12px; padding:12px; text-align:left; margin-bottom:10px;">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom: 8px;">
-                        <div style="flex: 1; padding-right: 10px;">
-                            <strong style="color:white; font-size:0.95rem; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">To: ${escapeHtml(dest.split(',')[0])}</strong>
-                            <span style="color:#aaa; font-size:0.75rem;">${timeStr}</span><br>
-                            <span style="color:#888; font-size:0.75rem;"><i class="fas fa-users" style="color:#007BFF;"></i> ${p.passCount} / ${p.maxCap} Passengers</span>
-                        </div>
-                        <strong style="color:#FFC107; font-size:0.95rem; flex-shrink: 0;">${priceStr}</strong>
-                    </div>
-                    <button class="btn btn-sm" onclick="window.joinExistingOnboardPool('${p.poolId}', '${escapeHtml(dest)}', ${p.dropoffLat || 0}, ${p.dropoffLng || 0})" style="background:#30D158; color:black; font-weight:900; border-radius:8px; padding:10px; width:100%; border:none; cursor:pointer;">Join This Club</button>
-                </div>`;
-            });
-            
-            html += `<button onclick="window.showDropoffForNewClub()" style="background:transparent; border:1px dashed #888; color:#aaa; width:100%; padding:12px; border-radius:12px; font-weight:bold; margin-top:5px; cursor:pointer;">My destination isn't listed (Create New)</button>`;
-            areaClubsDiv.innerHTML = html;
-        } else {
-            // =========================================================
-            // 🚨 NO CLUBS FOUND: INJECT YOUR CUSTOM EXPLANATION TEXT
-            // =========================================================
-            const pickupText = document.getElementById('onboardPickupText').value || 'your area';
-            let areaParts = pickupText.split(',');
-            
-            // Extract a clean suburb/town name (skips street numbers if it's the first part)
-            let areaName = areaParts.length > 1 && /^[\d\s]+$/.test(areaParts[0].substring(0,3)) ? areaParts[1].trim() : areaParts[0].trim();
-
-            areaClubsDiv.style.display = 'flex';
-            areaClubsDiv.innerHTML = `
-                <div style="background: #2C2C2E; border-radius: 12px; padding: 15px; border: 1px dashed #FF9F0A; text-align: left;">
-                    <h4 style="margin: 0 0 8px 0; color: #FF9F0A; font-size: 0.95rem;"><i class="fas fa-info-circle"></i> No Clubs Found</h4>
-                    <p style="margin: 0; color: #ccc; font-size: 0.85rem; line-height: 1.45;">
-                        There is no Asiye club currently in this zone. Let us create a new club under the area <strong>${escapeHtml(areaName)}</strong>. Please enter your drop-off below.
-                    </p>
-                </div>
-            `;
-            
-            // Automatically unhide the drop-off section so they can continue
-            dropoffSection.style.display = 'flex';
-        }
-    } catch (e) {
-        console.error("Error finding clubs:", e);
-        areaClubsDiv.style.display = 'none';
-        dropoffSection.style.display = 'flex';
-    }
-};
 window.showDropoffForNewClub = function() {
     document.getElementById('onboardAreaClubs').style.display = 'none';
     document.getElementById('onboardDropoffSection').style.display = 'flex';
@@ -31492,6 +30900,498 @@ window.selectOnboardLoc = function(inputId, suggId, latId, lngId, textId, lng, l
     document.getElementById(lngId).value = lng;
     document.getElementById(suggId).style.display = 'none';
     window.calculateOnboardPricing(); // Instantly enables the Next button!
+};
+
+// =======================================================================
+// 🚀 THE "SHO'T LEFT" OVERRIDE: FREE-FLOWING TAXI MARKETPLACE
+// =======================================================================
+
+// 1. PRICING ENGINE (Split by 3, lower than Asiye Go, Min R15)
+window.calculateSharedPrice = function(distanceKm) {
+    if (!distanceKm || distanceKm < 1) distanceKm = 1;
+    let asiyeGoPrice = Math.max(30, Math.round(30 + (distanceKm * 8.00)));
+    let totalCarPrice = asiyeGoPrice * 0.75; // Car is 25% cheaper
+    let perPersonPrice = Math.round(totalCarPrice / 3); // Divided by 3 seats
+    return Math.max(15, perPersonPrice); // Floor is R15
+};
+
+// 2. OVERRIDE CATEGORY SELECTION (Removes "Waitlist" & "Other Clubs")
+
+// 3. OVERRIDE TAXI FINDER (Fetches freely moving taxis)
+window.findBroadcastingTaxis = async function(silentMode = false) {
+    const container = document.getElementById('taxiListContainer');
+    const uLat = parseFloat(window.commuterLat);
+    const uLng = parseFloat(window.commuterLng);
+
+    if (!Number.isFinite(uLat) || !Number.isFinite(uLng) || uLat === 0) return;
+
+    if (!silentMode) {
+        openModal('taxiListSheet');
+        if (container) container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><p style="color:#111; font-weight:bold;">Finding taxis flowing in your area...</p></div>`;
+    }
+
+    try {
+        const snapshot = await database.ref("taxis").once("value");
+        const taxisData = snapshot.val() || {};
+        const flowingTaxis = [];
+
+        let tripDistKm = 5; 
+        let destSet = false;
+        if (window.ehailingDestLat && window.ehailingDestLng) {
+            tripDistKm = calculateDistance(uLat, uLng, window.ehailingDestLat, window.ehailingDestLng) * 1.3;
+            destSet = true;
+        }
+        
+        const tripPrice = window.calculateSharedPrice(tripDistKm);
+        window.calculatedTripPrice = tripPrice; 
+
+        for (const taxiId in taxisData) {
+            const taxi = { taxiId, ...taxisData[taxiId] };
+            if (taxi.isOnline && taxi.isBroadcasting && !taxi.isFull && taxi.verificationStatus === 'verified') {
+                const distToPassenger = calculateDistance(uLat, uLng, parseFloat(taxi.latitude), parseFloat(taxi.longitude));
+                if (distToPassenger <= 10) { 
+                    taxi.distanceToPassenger = distToPassenger;
+                    taxi.displayPrice = destSet ? tripPrice : (taxi.rate || 15);
+                    flowingTaxis.push(taxi);
+                }
+            }
+        }
+
+        if (window.dummyTaxisList && window.dummyTaxisList.length > 0) {
+            window.dummyTaxisList.forEach(dummy => {
+                const dist = calculateDistance(uLat, uLng, dummy.latitude, dummy.longitude);
+                if (dist <= 10 && dummy.isBroadcasting && !dummy.isFull) {
+                    flowingTaxis.push({ ...dummy, distanceToPassenger: dist, displayPrice: destSet ? tripPrice : 15 });
+                }
+            });
+        }
+
+        if (flowingTaxis.length > 0) {
+            flowingTaxis.sort((a, b) => a.distanceToPassenger - b.distanceToPassenger);
+            window.zoomToFitTaxis(flowingTaxis);
+            window.populateFlowingTaxisList(flowingTaxis);
+        } else {
+            if (container) container.innerHTML = `
+                <div style="text-align:center; padding: 60px 20px;">
+                    <i class="fas fa-route" style="font-size: 3rem; color: #ccc;"></i>
+                    <h4 style="margin-top: 15px; color: #111; font-weight: 800;">No Taxis in Your Area</h4>
+                    <p style="color: #888;">There are no open taxis flowing nearby right now. Please try again in a few minutes.</p>
+                    <button class="btn btn-primary" onclick="findBroadcastingTaxis()" style="margin-top: 20px; width: 100%; border-radius: 16px; padding: 15px; font-weight: bold;">
+                        <i class="fas fa-sync-alt"></i> Refresh Radar
+                    </button>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error("Search Error:", error);
+    }
+};
+
+window.handleFindTaxisNearMe = window.findBroadcastingTaxis;
+window.findMinibusTaxis = window.findBroadcastingTaxis;
+
+// 4. OVERRIDE UI LIST RENDERER (Clean, Route-based Cards)
+window.populateFlowingTaxisList = function(taxis) {
+    const sheet = document.getElementById('taxiListSheet');
+    const container = document.getElementById('taxiListContainer');
+    if (!sheet || !container) return;
+
+    sheet.style.setProperty('background-color', '#F4F5F7', 'important');
+
+    sheet.innerHTML = `
+        <div class="sheet-handle-wrapper" id="taxiSheetDragHandle" style="padding-bottom: 0; background: #F4F5F7; border-radius: 28px 28px 0 0;">
+            <div class="sheet-handle-bar" style="width: 40px; height: 5px; background: #d0d0d0; margin-top: 10px;"></div>
+        </div>
+
+        <div style="background: #F4F5F7; padding: 10px 20px 20px 20px; height: 100%; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <h3 style="margin: 0; font-weight: 900; color: #111; font-size: 1.3rem;">Live Taxis on Route</h3>
+                <button onclick="closeModal('taxiListSheet'); showModernDashboard();" style="background: rgba(0,0,0,0.05); border: none; width: 35px; height: 35px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            </div>
+            
+            ${window.userDropOffDestination ? `
+                <div style="background: #eef4ff; border: 1px solid #cce0ff; padding: 10px 15px; border-radius: 12px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-map-marker-alt" style="color: #007BFF;"></i>
+                    <div style="font-size: 0.85rem; color: #0056b3; font-weight: 700;">
+                        You are looking for a ride to: <strong style="color: #000;">${escapeHtml(window.userDropOffDestination.split(',')[0])}</strong>
+                    </div>
+                </div>
+            ` : ''}
+
+            <div id="flowingListContent" style="display: flex; flex-direction: column; gap: 12px; padding-bottom: 100px;"></div>
+        </div>
+    `;
+
+    const listContent = document.getElementById('flowingListContent');
+    let html = '';
+
+    taxis.forEach(taxi => {
+        const driverName = (`${taxi.name || ''} ${taxi.surname || ''}`).trim() || 'Driver';
+        const taxiRoute = (taxi.destination && taxi.destination !== "As Directed" && taxi.destination !== "Not Specified") ? taxi.destination.split(',')[0] : 'Flowing Locally';
+        const isEhailing = taxi.vehicleType === 'ehailing';
+        const vehicleIcon = isEhailing ? 'fas fa-car' : 'fas fa-shuttle-van';
+        const vehicleColor = isEhailing ? '#007BFF' : '#28a745';
+        
+        const etaMins = Math.ceil((taxi.distanceToPassenger || 0.5) * 3);
+        const distanceStr = (taxi.distanceToPassenger || 0.5).toFixed(1);
+
+        html += `
+            <div style="background: #ffffff; border: 1px solid #eee; border-left: 5px solid ${vehicleColor}; border-radius: 16px; padding: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.03);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 45px; height: 45px; background: ${vehicleColor}15; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                            <i class="${vehicleIcon}" style="font-size: 1.2rem; color: ${vehicleColor};"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 800; font-size: 1rem; color: #111;">${escapeHtml(driverName)}</div>
+                            <div style="font-size: 0.75rem; font-weight: 700; color: #888;">${distanceStr} km away (~${etaMins} mins)</div>
+                        </div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.3rem; font-weight: 900; color: #111;">R${taxi.displayPrice}</div>
+                        <div style="font-size: 0.65rem; color: #28a745; font-weight: 800; text-transform: uppercase;">Per Seat</div>
+                    </div>
+                </div>
+
+                <div style="background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; border: 1px solid #f0f0f0;">
+                    <i class="fas fa-location-arrow" style="color: #f8961e;"></i>
+                    <div style="font-size: 0.85rem; color: #444;">
+                        <span style="color: #888; font-weight: 600;">Heading to:</span> <strong style="color: #111;">${escapeHtml(taxiRoute)}</strong>
+                    </div>
+                </div>
+
+                <button onclick="requestDirectSeat('${taxi.taxiId}')" style="width: 100%; background: #111; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; font-size: 1rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+                    <i class="fas fa-hand-paper" style="color: #FFC107; margin-right: 5px;"></i> Request Seat
+                </button>
+            </div>
+        `;
+    });
+
+    listContent.innerHTML = html;
+    if (!sheet.classList.contains('open')) sheet.classList.add('open');
+    if (typeof window.initTaxiSheetDrag === 'function') setTimeout(window.initTaxiSheetDrag, 100);
+};
+
+
+// 6. ERADICATE ONBOARDING WAITLIST (Overrides scanForAreaClubs so it doesn't trap users)
+window.scanForAreaClubs = function(pLat, pLng) {
+    const areaClubsDiv = document.getElementById('onboardAreaClubs');
+    const dropoffSection = document.getElementById('onboardDropoffSection');
+    const nextBtn = document.getElementById('onboardStep2NextBtn');
+
+    if (areaClubsDiv) areaClubsDiv.style.display = 'none';
+    if (dropoffSection) dropoffSection.style.display = 'flex';
+    
+    if (nextBtn) {
+        nextBtn.disabled = false;
+        nextBtn.style.opacity = '1';
+    }
+};
+// =======================================================================
+// 🚀 NATIVE SWIPEABLE TAXI SLIDER (SHO'T LEFT MARKETPLACE)
+// =======================================================================
+
+// 1. OVERRIDE CATEGORY SELECTION TO INJECT THE SLIDER
+window.selectCategory = function(cat, price) {
+    window.selectedRideCategory = cat;
+    window.calculatedTripPrice = price;
+
+    const clubCard = document.getElementById('cat-club');
+    const stdCard = document.getElementById('cat-standard');
+    const negotiatorBox = document.getElementById('negotiatorBox');
+    const bookingPanel = document.getElementById('dynamicBookingPanel');
+
+    if (!bookingPanel) return;
+
+    if (cat === 'standard') {
+        // PRIVATE ASIYE GO
+        window.calculatedTripPrice = window.currentNegotiatedFare;
+        if (stdCard) stdCard.style.border = '2.5px solid #c5ff00';
+        if (clubCard) clubCard.style.border = '2.5px solid transparent';
+        if (negotiatorBox) negotiatorBox.style.display = 'flex';
+
+        bookingPanel.innerHTML = `
+            <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
+                <div style="font-size: 0.85rem; color: #8e8e93; margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">Payment Method</div>
+                <div style="display: flex; gap: 10px;">
+                    <button id="payCashBtn" onclick="selectPayment('cash')" style="flex: 1; padding: 14px; border-radius: 14px; background: #28a745; color: white; border: none; font-weight: 800;">Cash</button>
+                    <button id="payCardBtn" onclick="selectPayment('card')" style="flex: 1; padding: 14px; border-radius: 14px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-weight: 800;">Card/Wallet</button>
+                </div>
+            </div>
+            <button onclick="submitNegotiatedRide()" style="width: 100%; background: #c5ff00; color: #000; font-weight: 900; font-size: 1.1rem; padding: 16px; border-radius: 16px; border: none;">
+                Request Asiye Go (CASH - R${window.currentNegotiatedFare})
+            </button>
+        `;
+        window.selectPayment(window.selectedPaymentMethod || 'cash');
+
+    } else {
+        // SHARED RIDE (ASIYE CLUB) - HORIZONTAL SLIDER NATIVE UI
+        if (clubCard) clubCard.style.border = '2.5px solid #FF9F0A';
+        if (stdCard) stdCard.style.border = '2.5px solid transparent';
+        if (negotiatorBox) negotiatorBox.style.display = 'none';
+
+        // Add hidden scrollbar CSS dynamically
+        if (!document.getElementById('hide-scroll-css')) {
+            const style = document.createElement('style');
+            style.id = 'hide-scroll-css';
+            style.innerHTML = `#flowingTaxisSliderContainer::-webkit-scrollbar { display: none; }`;
+            document.head.appendChild(style);
+        }
+
+        bookingPanel.innerHTML = `
+            <!-- THE HORIZONTAL SLIDER CONTAINER -->
+            <div id="flowingTaxisSliderContainer" style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; margin-bottom: 15px; padding-bottom: 10px; -webkit-overflow-scrolling: touch;">
+                <div style="min-width: 100%; display: flex; align-items: center; justify-content: center; padding: 30px 20px; background: #1C1C1E; border-radius: 16px; border: 1px solid #3A3A3C;">
+                    <div class="spinner" style="border-left-color: #FF9F0A; width: 30px; height: 30px; border-width: 3px;"></div>
+                </div>
+            </div>
+
+            <!-- INFO BANNER UNDER THE SLIDER -->
+            <div style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #FF9F0A; text-align: left;">
+                <h5 style="margin: 0 0 8px 0; color: #FF9F0A; font-size: 1.05rem;"><i class="fas fa-street-view"></i> Catch a moving taxi</h5>
+                <p style="margin: 0; color: #EBEBF5; font-size: 0.85rem; line-height: 1.45;">
+                    Swipe through active taxis flowing in your area above and request a seat instantly for <strong>R${price}</strong>.
+                </p>
+            </div>
+        `;
+        
+        // Fetch data and populate the slider
+        window.fetchAndRenderFlowingTaxisSlider(price);
+    }
+};
+
+// =======================================================================
+// 🚀 NATIVE SWIPEABLE TAXI SLIDER (DYNAMIC EMPTY/FULL ROUTING)
+// =======================================================================
+window.fetchAndRenderFlowingTaxisSlider = async function(basePrice) {
+    const sliderContainer = document.getElementById('flowingTaxisSliderContainer');
+    if (!sliderContainer) return;
+
+    const uLat = parseFloat(window.commuterLat);
+    const uLng = parseFloat(window.commuterLng);
+
+    if (!Number.isFinite(uLat) || !Number.isFinite(uLng) || uLat === 0) {
+        sliderContainer.innerHTML = `<div style="min-width: 100%; text-align: center; color: #aaa; font-size: 0.85rem; padding: 20px; background: #1C1C1E; border-radius: 16px;">GPS signal not ready.</div>`;
+        return;
+    }
+
+    try {
+        const snapshot = await database.ref("taxis").once("value");
+        const taxisData = snapshot.val() || {};
+        const flowingTaxis = [];
+
+        let destSet = !!(window.ehailingDestLat && window.ehailingDestLng);
+
+        // Fetch Live Taxis
+        for (const taxiId in taxisData) {
+            const taxi = { taxiId, ...taxisData[taxiId] };
+            if (taxi.isOnline && taxi.isBroadcasting && !taxi.isFull && taxi.verificationStatus === 'verified') {
+                const distToPassenger = calculateDistance(uLat, uLng, parseFloat(taxi.latitude), parseFloat(taxi.longitude));
+                if (distToPassenger <= 10) { 
+                    taxi.distanceToPassenger = distToPassenger;
+                    taxi.displayPrice = destSet ? basePrice : (taxi.rate || 15);
+                    flowingTaxis.push(taxi);
+                }
+            }
+        }
+
+        // Fetch Dummy Taxis (For visualization if no real ones exist)
+        if (window.dummyTaxisList && window.dummyTaxisList.length > 0) {
+            window.dummyTaxisList.forEach(dummy => {
+                const dist = calculateDistance(uLat, uLng, dummy.latitude, dummy.longitude);
+                if (dist <= 10 && dummy.isBroadcasting && !dummy.isFull) {
+                    flowingTaxis.push({ ...dummy, distanceToPassenger: dist, displayPrice: destSet ? basePrice : 15 });
+                }
+            });
+        }
+
+        // Render the slider cards
+        if (flowingTaxis.length > 0) {
+            flowingTaxis.sort((a, b) => a.distanceToPassenger - b.distanceToPassenger);
+            window.zoomToFitTaxis(flowingTaxis); 
+            
+            let html = '';
+            
+            flowingTaxis.forEach(taxi => {
+                const driverName = taxi.name || 'Asiye Driver';
+                const maxPax = 3; 
+                const currentPax = taxi.passengerCount || 0;
+                const rating = taxi.averageRating ? parseFloat(taxi.averageRating).toFixed(1) : '5.0';
+                
+                // 🟢 FIXED: DECLARE VARIABLES PROPERLY
+                let routeLabel = "STATUS";
+                let routeText = "";
+                let routeColor = "#30D158"; // Default Green
+
+                if (currentPax === 0) {
+                    // IF EMPTY: Show Driver Name and Green Text
+                    routeText = `${driverName} (Empty)`;
+                    routeColor = "#30D158"; 
+                    routeLabel = "STATUS";
+                } else {
+                    // IF NOT EMPTY: Show Destination and Blue Text
+                    routeLabel = "HEADING TOWARDS";
+                    routeText = taxi.destination ? taxi.destination.split(',')[0] : "Local Route";
+                    routeColor = "#0A84FF"; 
+                }
+
+                const etaMins = Math.ceil((taxi.distanceToPassenger || 0.5) * 3);
+                const distanceStr = (taxi.distanceToPassenger || 0.5).toFixed(1);
+
+                html += `
+                    <div style="min-width: 85%; max-width: 85%; scroll-snap-align: center; background: #1C1C1E; border: 1px solid #3A3A3C; border-radius: 16px; padding: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; justify-content: space-between; margin-right:10px;">
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
+                            <div style="flex: 1; padding-right: 10px; overflow: hidden;">
+                                <div style="color: #888; font-size: 0.7rem; font-weight: 800; text-transform: uppercase;">${routeLabel}</div>
+                                <div style="color: ${routeColor}; font-size: 1.1rem; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                    ${routeText}
+                                </div>
+                                <div style="color: #FFC107; font-size: 0.8rem; font-weight: 800; margin-top: 2px;">
+                                    <i class="fas fa-star"></i> ${rating} <span style="color: #666; font-weight: 400; margin-left: 5px;">Rating</span>
+                                </div>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="color: #FF9F0A; font-size: 1.25rem; font-weight: 900;">R${taxi.displayPrice}</div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; align-items: center; justify-content: space-between; background: #2C2C2E; padding: 10px 12px; border-radius: 12px; margin-bottom: 15px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(48, 209, 88, 0.1); color: #30D158; display: flex; align-items: center; justify-content: center; font-size: 0.85rem;">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div>
+                                    <div style="color: white; font-weight: 800; font-size: 0.85rem;">${currentPax}/${maxPax} Seats</div>
+                                    <div style="color: #30D158; font-size: 0.7rem; font-weight: 800;">${maxPax - currentPax} Available</div>
+                                </div>
+                            </div>
+                            <div style="text-align: right; color: #aaa; font-size: 0.75rem; font-weight: 600;">
+                                <i class="fas fa-map-marker-alt" style="color: #dc3545;"></i> ${distanceStr} km<br>
+                                <i class="far fa-clock"></i> ~${etaMins} mins
+                            </div>
+                        </div>
+
+                        <button onclick="requestDirectSeat('${taxi.taxiId}')" style="width: 100%; background: #FF9F0A; color: black; font-weight: 900; font-size: 1.05rem; border: none; padding: 14px; border-radius: 12px; cursor: pointer;">
+                            <i class="fas fa-hand-paper"></i> Request a Seat
+                        </button>
+                    </div>
+                `;
+            });
+
+            sliderContainer.innerHTML = html;
+            
+        } else {
+            sliderContainer.innerHTML = `
+                <div style="min-width: 100%; background: #1C1C1E; border: 1px dashed #444; border-radius: 16px; padding: 25px 20px; text-align: center;">
+                    <i class="fas fa-car-crash" style="font-size: 2rem; color: #666; margin-bottom: 10px;"></i>
+                    <h5 style="margin: 0 0 5px 0; color: white; font-weight: 800; font-size: 1rem;">No flowing taxis</h5>
+                    <p style="margin: 0; color: #aaa; font-size: 0.85rem;">There are no open taxis moving in your area right now.</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error("Search Error:", error);
+        sliderContainer.innerHTML = `<div style="min-width: 100%; text-align: center; color: #dc3545; font-size: 0.85rem; padding: 20px; background: #1C1C1E; border-radius: 16px;">Error loading taxis.</div>`;
+    }
+};// 3. OVERRIDE DIRECT SEAT REQUEST TO USE THE RIGHT PRICE
+window.requestDirectSeat = async function(taxiId) {
+    if (!window.userId) return;
+
+    if (!window.commuterLat || !window.commuterLng) {
+        showToast("GPS signal not found.", "danger");
+        return;
+    }
+
+    const fare = window.calculatedTripPrice || 15; 
+
+    // Hide the Home Bottom Sheet
+    const sheet = document.getElementById('homeBottomSheet');
+    if (sheet) sheet.classList.remove('open');
+
+    openModal('pendingRequestPopup');
+
+    const msgEl = document.getElementById('requestingMessage');
+    if (msgEl) {
+        msgEl.innerHTML = `
+            <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.2);">
+                <div class="logo-circle" style="box-shadow: 0 0 20px rgba(40, 167, 69, 0.4);">
+                    <i class="fas fa-hand-paper" style="color: #28a745; font-size: 24px;"></i>
+                </div>
+            </div>
+            <div style="font-weight:900; color:#fff; font-size:1.4rem; margin-bottom:5px;">
+                Requesting Seat...
+            </div>
+            <p style="color:#aaa; font-size:0.9rem;">
+                Sending request directly to the driver.
+            </p>
+        `;
+    }
+
+    let preciseAddress = "Current Location";
+    try {
+        const fullAddr = await getAddressFromCoordsPromise(window.commuterLng, window.commuterLat);
+        preciseAddress = fullAddr.split(',')[0].trim();
+    } catch (e) {}
+
+    const finalDest = window.userDropOffDestination || "As Directed";
+    const requestNode = database.ref("requests").push();
+    window.currentRequestId = requestNode.key;
+
+    const requestData = {
+        requestId: window.currentRequestId,
+        taxiId: taxiId, 
+        carCategory: 'standard', 
+        commuterId: window.userId,
+        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
+        commuterPhone: window.commuterData?.phone || "",
+        calculatedPrice: fare,
+        paymentMethod: 'cash',
+        appliedCredit: 0, 
+        finalAmount: fare,
+        commuterLocation: { latitude: window.commuterLat, longitude: window.commuterLng },
+        pickupAddress: preciseAddress,
+        destination: finalDest,
+        status: "pending", 
+        type: "passenger", 
+        requirePin: true,
+        pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    try {
+        await requestNode.set(requestData);
+        await database.ref(`commuters/${window.userId}`).update({ currentRequest: window.currentRequestId });
+        
+        if (window.commuterData) window.commuterData.currentRequest = window.currentRequestId;
+        localStorage.setItem('currentRequestId', window.currentRequestId);
+
+        // Ping the specific driver
+        database.ref(`notifications/taxis/${taxiId}`).push({
+            type: 'passenger',
+            title: 'New Passenger on Route!',
+            message: `A passenger requested a seat for R${fare}.`,
+            requestId: window.currentRequestId,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+
+        window.listenForRequestStatus(window.currentRequestId);
+        window.startTaxiSearchTimer(window.currentRequestId);
+
+    } catch (error) {
+        console.error("Database save failed:", error);
+        closeModal('pendingRequestPopup');
+        showToast("Could not send booking details. Please try again.", "danger");
+    }
+};
+window.checkForExistingClubsAndShowStep3 = function() {
+    window.calculateOnboardPricing(); 
+    for (let i = 0; i <= 5; i++) {
+        const el = document.getElementById('onboardStep' + i);
+        if (el) el.style.display = (i === 3) ? 'flex' : 'none';
+    }
+    const existingClubDiv = document.getElementById('existingClubMatches');
+    if (existingClubDiv) existingClubDiv.style.display = 'none'; 
 };
 </script>
 </body>

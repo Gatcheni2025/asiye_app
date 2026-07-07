@@ -3625,7 +3625,8 @@ model-viewer {
 
     </div>
 
-    <!-- 4. Go Online Buttons -->
+   
+   <!-- 4. Go Online Buttons -->
     <div style="display: flex; gap: 10px; margin-bottom: 20px;">
         <button onclick="openMyClientsPopup()" style="flex: 1; padding: 20px; border-radius: 20px; background: #fff; border: 2px solid #eee; color: #111; font-weight: 900; font-size: 1rem; cursor: pointer; transition: all 0.2s ease;">
             <i class="fas fa-users" style="color: var(--primary);"></i> My Clients
@@ -3633,7 +3634,8 @@ model-viewer {
         <button id="dashMainGoOnlineBtn" onclick="toggleBroadcast()" style="flex: 1; padding: 20px; border-radius: 20px; background: linear-gradient(135deg, #28a745, #1e7e34); color: white; font-weight: 900; font-size: 1rem; border: none; box-shadow: 0 10px 25px rgba(40,167,69,0.3); text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: transform 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px;">
             <i class="fas fa-power-off"></i> Go Online
         </button>
-    </div>
+    </div> 
+
 
    
 </div>
@@ -5953,289 +5955,136 @@ function setupTaxiDataListener() {
         return;
     }
     
-    console.log("📡 Setting up bulletproof notification listener for driver:", userId);
+    console.log("📡 Notification listener active for Club & Go...");
     const notificationsRef = database.ref(`notifications/taxis/${userId}`);
-    notificationsRef.off(); // Prevent duplicate listeners
+    notificationsRef.off(); 
     
     notificationsRef.on('child_added', async (snapshot) => {
         const notification = snapshot.val();
         if (!notification) return;
         
-        console.log("📬 Driver Notification Received:", notification);
+        console.log("📬 Notification Type:", notification.type);
 
-        // A. Trigger System Notification via Flutter Bridge
-        if (window.Android && window.Android.postMessage) {
-            window.Android.postMessage(JSON.stringify({
-                action: 'showNotification',
-                title: notification.title || 'New Update',
-                message: notification.message || 'You have a new update.',
-                type: notification.type === 'chat_message' ? 'INFO' : 'DANGER',
-                payload: JSON.stringify(notification)
-            }));
-        }
-
-        // B. Handle Admin Broadcasts
-        if (notification.type === 'admin_broadcast') {
-            if (typeof showGenericMessage === 'function') {
-                showGenericMessage(notification.title || "Admin Message", notification.message, "fa-bullhorn", "info");
-            }
+        // 1. Handle Admin or Chat Messages
+        if (notification.type === 'admin_broadcast' || notification.type === 'chat_message') {
+            handleIncomingNotification(notification);
             snapshot.ref.remove();
             return;
         }
 
-        // C. Handle New Passenger/Parcel Requests
-        if (notification.type === 'passenger' || notification.type === 'parcel') {
+        // 2. Handle Ride Requests (Go, Club, or Parcel)
+        if (notification.type === 'passenger' || notification.type === 'club' || notification.type === 'parcel') {
             const reqId = notification.requestId;
             if (!reqId) return;
 
-            // Fetch actual request from database
+            // Fetch actual request to ensure it's still available
             const requestSnap = await database.ref(`requests/${reqId}`).once('value');
-            if (!requestSnap.exists()) return;
+            if (!requestSnap.exists()) {
+                snapshot.ref.remove();
+                return;
+            }
 
             const request = { key: requestSnap.key, ...requestSnap.val() };
             
-            // Only pop up if the ride is still actively searching
+            // Validate availability
             if (request.status !== 'pending' && request.status !== 'pooling') {
-                console.log("⚠️ Request already processed or taken:", request.status);
                 snapshot.ref.remove();
                 return;
             }
 
-            // Ensure Driver is not Full
-            if (taxiData && taxiData.isFull) {
+            // Block if driver is busy
+            if (taxiData && taxiData.isFull || acceptedPassengers.length > 0) {
                 snapshot.ref.remove();
                 return;
             }
 
-            console.log("🚀 Valid request found via Notification! Opening popup...");
             activeRequest = request;
             currentRequestId = request.key;
 
+            // Trigger Ringtone
             try { new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3').play().catch(()=>{}); } catch(e) {}
 
-            // Force clear stuck flags
-            window.isShowingRequestPopup = false; 
-
-            if (request.type === 'parcel') {
-                if (typeof window.openParcelRequestPopup === 'function') window.openParcelRequestPopup(request);
-            } else if (request.type === 'club') {
-                if (typeof window.showPoolingRoomPopup === 'function') window.showPoolingRoomPopup(request);
+            // 🚨 ROUTE TO CORRECT POPUP 🚨
+            if (request.type === 'club' || request.status === 'pooling') {
+                if (typeof window.showPoolingRoomPopup === 'function') {
+                    window.showPoolingRoomPopup(request);
+                }
+            } else if (request.type === 'parcel') {
+                if (typeof window.openParcelRequestPopup === 'function') {
+                    window.openParcelRequestPopup(request);
+                }
             } else {
-                if (typeof window.openCommuterRequestPopupWithCount === 'function') window.openCommuterRequestPopupWithCount(request);
+                if (typeof window.openCommuterRequestPopup === 'function') {
+                    window.openCommuterRequestPopup(request);
+                }
             }
         } 
         
-        // D. Handle Cancellations
-        else if (notification.type === 'ride_cancelled' || notification.type === 'request_cancelled') {
-            if (typeof showCommunicationBanner === 'function') showCommunicationBanner("Passenger cancelled the request.", "warning");
-            
-            const reqId = notification.requestId;
-            if (reqId && typeof acceptedPassengers !== 'undefined') {
-                const index = acceptedPassengers.findIndex(p => p.key === reqId);
-                if (index !== -1) {
-                    acceptedPassengers.splice(index, 1);
-                    if (window.passengerLocations) window.passengerLocations.delete(reqId);
-                    if (typeof removePassengerFromMap === 'function') removePassengerFromMap(reqId);
-                    if (typeof updatePassengerCounter === 'function') updatePassengerCounter();
-                    if (typeof updateBottomMenu === 'function') updateBottomMenu();
-                    if (typeof updateUIWithTaxiData === 'function') updateUIWithTaxiData();
-                    
-                    if (acceptedPassengers.length === 0) {
-                        const tripCard = document.getElementById('ehailingActiveTripCard');
-                        if (tripCard) tripCard.style.display = 'none';
-                        if (typeof window.exitNavigation === 'function') window.exitNavigation();
-                        if (typeof window.clearAllRoutes === 'function') window.clearAllRoutes();
-                        if (taxiData && taxiData.isFull) {
-                            database.ref('taxis/' + userId).update({ isFull: false });
-                            taxiData.isFull = false;
-                        }
-                    }
-                }
-            }
-
-            if (activeRequest && (activeRequest.key === reqId || activeRequest.commuterId === notification.commuterId)) {
-                if (typeof window.closeActivePopupAndReset === 'function') window.closeActivePopupAndReset();
-                activeRequest = null;
-                currentRequestId = null;
-            }
-        }
-        
-        // E. Handle Chat Messages
-        else if (notification.type === 'chat_message') {
-            const chatPopup = document.getElementById('chatPopup');
-            const isChatOpen = chatPopup && chatPopup.classList.contains('open');
-            const isChattingWithSender = typeof currentChatParticipant !== 'undefined' && currentChatParticipant && currentChatParticipant.id === notification.senderId;
-
-            if (!isChatOpen || !isChattingWithSender) {
-                if (typeof showStickyNotification === 'function') {
-                    showStickyNotification(`Message: ${notification.senderName || 'Passenger'}`, notification.message, () => {
-                        if (typeof openChat === 'function') openChat(notification.senderId, notification.senderName || "Passenger");
-                    });
-                }
-            }
-        }
-        
-        // Remove processed notification
+        // Remove notification from queue after processing
         snapshot.ref.remove();
     });
-};
-
-// 2. DATABASE LISTENER (Catches requests even if push notification fails)
+};// 2. DATABASE LISTENER (Catches requests even if push notification fails)
 // 2. DATABASE LISTENER (Catches requests even if push notification fails)
 window.listenForRequests = function() {
     if (window.isListeningForRequests || !userId) return;
     window.isListeningForRequests = true;
 
-    console.log("🚕 Driver " + userId + " is now LISTENING for requests...");
+    console.log("🚕 Driver " + userId + " is now LISTENING for Go & Club requests...");
     const requestsRef = database.ref('requests');
 
-    // A. STANDARD & ASIYE GO REQUESTS
-    if (window.requestListener) requestsRef.off('child_added', window.requestListener);
-    window.requestListener = requestsRef.orderByChild('status').equalTo('pending').on('child_added', async (snapshot) => {
-        if (!snapshot.exists()) return;
+    // 🎯 MASTER REQUEST HANDLER
+  const handleNewRequest = async (snapshot) => {
+    if (!snapshot.exists()) return;
+    const request = { key: snapshot.key, ...snapshot.val() };
 
-        let driverData = taxiData;
-        if (!driverData) {
-            const dSnap = await database.ref((window.dbNode || 'taxis') + '/' + userId).once('value');
-            driverData = dSnap.val();
-        }
-        if (!driverData || !driverData.isOnline || driverData.isFull) return;
+    let driverData = taxiData;
+    if (!driverData || !driverData.isOnline || driverData.isFull) return;
 
-        const request = { key: snapshot.key, ...snapshot.val() };
-        if (request.type === 'club') return; // Handled below
+    // CHECK RADIUS
+    let targetLat = request.poolCenterLat || request.commuterLocation?.latitude || request.pickupLat;
+    let targetLng = request.poolCenterLng || request.commuterLocation?.longitude || request.pickupLng;
+    let dist = calculateDistance(driverData.latitude, driverData.longitude, targetLat, targetLng);
+    
+    if (dist > 15 && request.taxiId !== userId) return;
 
-        // 🚨 STRICT CARD-ONLY ENFORCEMENT 🚨
-        if (driverData.forceCardOnly && request.paymentMethod === 'cash') {
-            console.log("🚫 Ignored CASH request due to Card-Only mode (Unsettled Debt).");
-            return; 
-        }
-
-        const isAsiyeGoDriver = (driverData.vehicleType === 'ehailing');
-        const isTargetedToMe = request.taxiId === userId;
-        const isGlobalEHailing = (!request.taxiId || request.taxiId === 'null');
-
-        let shouldAccept = false;
-        if (isAsiyeGoDriver) {
-            shouldAccept = isGlobalEHailing || isTargetedToMe;
-        } else {
-            shouldAccept = isTargetedToMe;
-        }
-
-        if (!shouldAccept) return;
-
-        if (request.commuterLocation && request.commuterLocation.latitude && driverData.latitude) {
-            let dist = calculateDistance(driverData.latitude, driverData.longitude, request.commuterLocation.latitude, request.commuterLocation.longitude);
-            if (isAsiyeGoDriver && dist > 20) return; // Ignore far requests
-        }
-
+    // 🚨 ROUTING LOGIC: MUST BE STRICT 🚨
+    if (request.type === 'club' || request.carCategory === 'club' || request.status === 'pooling') {
+        console.log("👥 Routing to Club Pooling Room");
         activeRequest = request;
         currentRequestId = request.key;
-
-        window.isShowingRequestPopup = false; 
-
-        if (request.type === 'parcel') {
-            if (typeof window.openParcelRequestPopup === 'function') window.openParcelRequestPopup(request);
-        } else {
-            if (typeof window.openCommuterRequestPopup === 'function') window.openCommuterRequestPopup(request);
+        // This is the specific UI for Club
+        if (typeof window.showPoolingRoomPopup === 'function') {
+            window.showPoolingRoomPopup(request);
         }
-    });
+    } 
+    else if (request.type === 'parcel') {
+        activeRequest = request;
+        currentRequestId = request.key;
+        if (typeof window.openParcelRequestPopup === 'function') window.openParcelRequestPopup(request);
+    } 
+    else {
+        // This is ONLY for Asiye Go (Private)
+        activeRequest = request;
+        currentRequestId = request.key;
+        if (typeof window.openCommuterRequestPopup === 'function') window.openCommuterRequestPopup(request);
+    }
+};
+    // Listen for both 'pending' (Solo) and 'pooling' (Club) statuses
+    requestsRef.orderByChild('status').equalTo('pending').on('child_added', handleNewRequest);
+    requestsRef.orderByChild('status').equalTo('pooling').on('child_added', handleNewRequest);
 
-    // B. POOLING REQUESTS (CLUB)
-    if (window.poolAddListener) requestsRef.off('child_added', window.poolAddListener);
-    window.poolAddListener = requestsRef.orderByChild('status').equalTo('pooling').on('child_added', async (snapshot) => {
-        if (!snapshot || !snapshot.exists()) return;
-
-        let driverData = taxiData;
-        if (!driverData) {
-            const dSnap = await database.ref((window.dbNode || 'taxis') + '/' + userId).once('value');
-            driverData = dSnap.val();
-        }
-        if (!driverData) return;
-
-        const isOnline = (driverData.isOnline === true || driverData.isOnline === "true");
-        if (!isOnline || driverData.isFull === true) return;
-
-        const isAsiyeGoDriver = (driverData.vehicleType === 'ehailing');
-        if (!isAsiyeGoDriver) return;
-
-        const request = { key: snapshot.key, ...snapshot.val() };
-        
-        // 🚨 STRICT CARD-ONLY ENFORCEMENT 🚨
-        if (driverData.forceCardOnly && request.paymentMethod === 'cash') {
-            console.log("🚫 Ignored CASH club request due to Card-Only mode.");
-            return; 
-        }
-
-        // 🛑 PREVENT IGNORED POOLS FROM SHOWING AGAIN
-        if (window.ignoredClubRequests && window.ignoredClubRequests[request.key]) return;
-
-        if (request.type === 'club') {
-            if (request.carCategory === 'clubxl' && driverData.rideCategory !== 'xl') return;
-
-            let dist = 0;
-            if (request.poolCenterLat && driverData.latitude) {
-                dist = calculateDistance(driverData.latitude, driverData.longitude, request.poolCenterLat, request.poolCenterLng);
-            }
-            if (dist > 10) return;
-
-            if (typeof window.showPoolingRoomPopup === 'function') window.showPoolingRoomPopup(request);
-        }
-    });
-
-    if (window.poolChangeListener) requestsRef.off('child_changed', window.poolChangeListener);
-    window.poolChangeListener = requestsRef.orderByChild('status').equalTo('pooling').on('child_changed', async (snapshot) => {
-        if (!snapshot || !snapshot.exists()) return;
-        const request = { key: snapshot.key, ...snapshot.val() };
-        
-        // 🛑 PREVENT IGNORED POOLS FROM SHOWING AGAIN
-        if (window.ignoredClubRequests && window.ignoredClubRequests[request.key]) return;
-        
-        if (request.type === 'club') {
-            const popup = document.getElementById('commuterRequestPopup');
-            if (popup && popup.classList.contains('open') && activeRequest && activeRequest.key === request.key) {
-                // Update live timer / UI inside existing popup
-                const btnSpan = document.getElementById(`poolAcceptBtnTxt_${request.key}`);
-                const amountSpan = document.getElementById(`poolAmount_${request.key}`);
-                const listContainer = document.getElementById(`passengerListContainer_${request.key}`);
-                
-                const passCount = request.passengers ? Object.keys(request.passengers).length : 1;
-                const totalFare = window.calculateTotalFare(request);
-                
-                if (btnSpan) btnSpan.textContent = `Accept & Go (${passCount} Pax)`;
-                if (amountSpan) amountSpan.textContent = `R${totalFare}`;
-                
-                if (listContainer && request.passengers) {
-                    let newHtml = '';
-                    Object.values(request.passengers).forEach(p => {
-                        newHtml += `<div style="background: #ffffff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <div style="font-weight: 800; color: #111;">${escapeHtml(p.commuterName)}</div>
-                                <div style="font-weight: 900; color: #28a745;">R${p.price || request.originalPerPersonPrice}</div>
-                            </div>
-                        </div>`;
-                    });
-                    listContainer.innerHTML = newHtml;
-                }
-            } else {
-                if (typeof window.showPoolingRoomPopup === 'function') window.showPoolingRoomPopup(request);
-            }
-        }
-    });
-
-    // D. CANCELLATION LISTENER
-    if (window.requestChangeListener) requestsRef.off('child_changed', window.requestChangeListener);
-    window.requestChangeListener = requestsRef.on('child_changed', (snapshot) => {
+    // Listen for cancellations
+    requestsRef.on('child_changed', (snapshot) => {
         const request = snapshot.val();
         if (activeRequest && activeRequest.key === snapshot.key && request && request.status && request.status.includes('cancelled')) {
-            if (typeof window.closeActivePopupAndReset === 'function') window.closeActivePopupAndReset();
-            else if (typeof window.closeActivePopup === 'function') window.closeActivePopup();
-            
+            closeActivePopup();
             activeRequest = null;
             currentRequestId = null;
-            if (typeof showCommunicationBanner === 'function') showCommunicationBanner("Passenger cancelled the request", "warning");
+            showCommunicationBanner("Request was cancelled by passenger", "warning");
         }
     });
 };
+
  function completeAppSetup() {
     console.log("Starting complete app setup...");
 
@@ -9680,7 +9529,18 @@ function escapeHtml(text) {
                   Math.sin(startLat) * Math.cos(endLat) * Math.cos(endLng - startLng);
         return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
     } // <--- This was missing!
-
+// Add this helper to ensure the driver is eligible for Club rides
+async function verifyClubEligibility() {
+    if (!userId || !taxiData) return;
+    
+    // If they don't have a vehicle type, or if they are Asiye Go but not flagged correctly
+    if (!taxiData.vehicleType || (taxiData.name === "Asiye Go" && taxiData.vehicleType !== "ehailing")) {
+        console.log("Repairing vehicle type for Club compatibility...");
+        await database.ref('taxis/' + userId).update({
+            vehicleType: 'ehailing'
+        });
+    }
+}
 // Call this function right after you set taxiData in your initializeApp
 window.forceShowDashboardOnLoad = function() {
     if (!taxiData) return;
@@ -14305,33 +14165,36 @@ window.handleDeleteAccount = function() {
                 }
                 break;
 
-            case 'passenger':
-            case 'parcel':
-                console.log("🔔 Driver received direct request notification!", notification);
-                // Active intercept: Fetch the request and open the popup if it's still pending
-                if (notification.requestId) {
-                    database.ref(`requests/${notification.requestId}`).once('value').then(snap => {
-                        if (!snap.exists()) return;
-                        const req = { key: snap.key, ...snap.val() };
-                        if (req.status === 'pending' && (!activeRequest || activeRequest.key !== req.key)) {
-                            // Ensure the driver isn't full
-                            if (taxiData && taxiData.isFull === true) return;
+          // Add 'club' to this case list
+case 'passenger':
+case 'parcel':
+case 'club': // <--- ADD THIS LINE
+    console.log("🔔 Driver received request notification:", notification);
+    
+    if (notification.requestId) {
+        database.ref(`requests/${notification.requestId}`).once('value').then(snap => {
+            if (!snap.exists()) return;
+            const req = { key: snap.key, ...snap.val() };
+            
+            // Allow if status is pending (Asiye Go) OR pooling (Asiye Club)
+            if ((req.status === 'pending' || req.status === 'pooling') && (!activeRequest || activeRequest.key !== req.key)) {
+                
+                activeRequest = req;
+                currentRequestId = req.key;
 
-                            activeRequest = req;
-                            currentRequestId = req.key;
-
-                            // Play sound and show popup
-                            try { new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3').play().catch(()=>{}); } catch(e) {}
-
-                            if (req.type === 'parcel') {
-                                if (typeof openParcelRequestPopup === 'function') openParcelRequestPopup(req);
-                            } else {
-                                if (typeof openCommuterRequestPopup === 'function') openCommuterRequestPopup(req);
-                            }
-                        }
-                    });
+                // ROUTE TO THE CORRECT POPUP
+                if (req.type === 'club') {
+                    // This opens the specialized "形成 Pool" screen for the driver
+                    if (typeof window.showPoolingRoomPopup === 'function') window.showPoolingRoomPopup(req);
+                } else if (req.type === 'parcel') {
+                    if (typeof window.openParcelRequestPopup === 'function') window.openParcelRequestPopup(req);
+                } else {
+                    if (typeof window.openCommuterRequestPopup === 'function') window.openCommuterRequestPopup(req);
                 }
-                break;
+            }
+        });
+    }
+    break;
         }
     }
 
@@ -14339,28 +14202,28 @@ window.handleDeleteAccount = function() {
     // =================================================================
     // NOTIFICATION CLICK HANDLER (Triggered by Flutter)
     // =================================================================
-    window.onNotificationClicked = function(payload) {
-        console.log("📱 Notification clicked, payload received:", payload);
-        if (!payload) return;
+   window.onNotificationClicked = function(payload) {
+    if (!payload) return;
+    closeActivePopup();
 
-        // 1. If it's a Chat Message -> Open the Chat Window
-        if (payload.type === 'chat_message') {
-            openChat(payload.senderId, payload.senderName);
+    if (payload.type === 'chat_message') {
+        openChat(payload.senderId, payload.senderName || "Passenger");
+    }
+    // 👇 THIS IS THE FIX 👇
+    else if (payload.type === 'passenger' || payload.type === 'parcel' || payload.status === 'pending' || payload.type === 'club') {
+        activeRequest = payload;
+        currentRequestId = payload.key || payload.requestId || payload.id;
+
+        // Strict Type Routing
+        if (payload.type === 'parcel') {
+            if (typeof openParcelRequestPopup === 'function') openParcelRequestPopup(payload);
+        } else if (payload.type === 'club') {
+            if (typeof window.showPoolingRoomPopup === 'function') window.showPoolingRoomPopup(payload);
+        } else {
+            if (typeof openCommuterRequestPopup === 'function') openCommuterRequestPopup(payload);
         }
-        // 2. If it's a Ride/Parcel Request -> Open the Accept/Decline Popup
-        else if (payload.type === 'passenger' || payload.type === 'parcel' || payload.status === 'pending') {
-            // Set as active request just in case it was missed
-            activeRequest = payload;
-            currentRequestId = payload.key || payload.id;
-
-            if (payload.type === 'parcel') {
-                openParcelRequestPopup(payload);
-            } else {
-                openCommuterRequestPopup(payload);
-            }
-        }
-    };
-
+    }
+};
    // 1. Global Confirmation Popup
     window.showConfirmPopup = function(title, message, onConfirm, confirmText = "Yes", cancelText = "No", type = "danger") {
         const popup = document.getElementById('genericMessagePopup');
@@ -16430,81 +16293,124 @@ window.completeRide = function(key, index) {
 
 window.finalizeCompleteRide = function(key, index, rating) {
     const passenger = acceptedPassengers[index];
+    
+    // Determine database paths (Individual Passenger vs Master Club Pool)
+    const path = passenger.subKey ? `requests/${key}/passengers/${passenger.subKey}` : `requests/${key}`;
+    const masterPath = `requests/${key}`;
+
     const fareInput = document.getElementById('finalFareInput');
     const payMethodInput = document.getElementById('payMethodInput');
 
     var finalFare = fareInput ? Math.round(parseFloat(fareInput.value)) : 0;
     const payMethod = payMethodInput ? payMethodInput.value : 'Cash';
+    const appliedCredit = passenger.appliedCredit || 0;
+    const finalAmount = Math.max(0, finalFare - appliedCredit);
     
     const btn = document.getElementById('finalizeRideBtn');
     if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>'; btn.disabled = true; }
 
-    stopPassengerMonitoring();
+    if (typeof stopPassengerMonitoring === 'function') stopPassengerMonitoring();
 
-    database.ref('requests/' + key).update({
+    // 1. UPDATE REQUEST STATUS IN DATABASE
+    database.ref(path).update({
         status: 'completed',
         completedAt: firebase.database.ServerValue.TIMESTAMP,
         paidAmount: finalFare,
+        finalAmount: finalAmount,
         paymentMethod: payMethod.toLowerCase()
     }).then(async () => {
-        if (rating && passenger.commuterId) {
-            database.ref(`commuters/${passenger.commuterId}/ratings`).push({
-                rating: rating,
-                driverId: userId,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
+        
+        // 🚨 2. MASTER PATH COMPLETION FOR POOL RIDES (3-4 PAX CARS) 🚨
+        if (passenger.subKey) {
+            database.ref(masterPath + '/passengers').once('value').then(snap => {
+                let activeCount = 0;
+                snap.forEach(child => {
+                    const st = child.val().status;
+                    if (st !== 'completed' && st !== 'cancelled_by_driver' && st !== 'cancelled_by_commuter' && st !== 'rejected') {
+                        activeCount++;
+                    }
+                });
+                
+                // If all 3 or 4 passengers in this pool are dropped off, close out the master request
+                if (activeCount === 0) {
+                    database.ref(masterPath).update({ 
+                        status: 'completed', 
+                        completedAt: firebase.database.ServerValue.TIMESTAMP 
+                    });
+                }
             });
+        }
 
+        // 3. SEND NOTIFICATION TO THE COMMUTER
+        if (passenger.commuterId) {
+            const notificationData = {
+                type: 'ride_completed',
+                driverId: userId,
+                driverName: `${taxiData?.name || ''} ${taxiData?.surname || ''}`.trim() || 'Driver',
+                message: `Trip has ended. Pay driver R${finalAmount} (${payMethod})`,
+                amount: finalFare,
+                finalAmount: finalAmount,
+                appliedCredit: appliedCredit,
+                paymentMethod: payMethod,
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                requestId: passenger.subKey ? passenger.subKey : key,
+                driverRating: taxiData?.rating || 5.0
+            };
+            await database.ref(`notifications/commuters/${passenger.commuterId}`).push(notificationData);
+        }
+
+        // 4. RATE PASSENGER, PROCESS EARNINGS & INCREMENT TOTAL TRIPS (CRITICAL FOR REFERRALS)
+        if (passenger.commuterId) {
+            if (rating) {
+                database.ref(`commuters/${passenger.commuterId}/ratings`).push({
+                    rating: rating,
+                    driverId: userId,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+
+            // CRITICAL FIX: ALWAYS increment totalTrips so Ambassador gets paid!
             database.ref(`commuters/${passenger.commuterId}`).once('value', s => {
                 if (s.exists()) {
                     var pData = s.val();
                     var currentAvg = pData.averageRating || 5.0;
                     var trips = pData.totalTrips || 0;
-                    var newAvg = ((currentAvg * trips) + rating) / (trips + 1);
+                    
+                    var newAvg = rating ? ((currentAvg * trips) + rating) / (trips + 1) : currentAvg;
+                    
                     database.ref(`commuters/${passenger.commuterId}`).update({
                         averageRating: newAvg,
-                        totalTrips: trips + 1
+                        totalTrips: trips + 1 // 👈 ALWAYS increment to unlock Ambassador rewards
                     });
                 }
             });
         }
-        
-        const stats = await processTripEarnings(passenger, finalFare, payMethod);
 
-        acceptedPassengers.splice(index, 1);
-        if (window.passengerLocations) window.passengerLocations.delete(key);
-        
-        if (acceptedPassengers.length === 0) {
-            if (taxiData && taxiData.isFull) database.ref('taxis/' + userId).update({ isFull: false });
-            const tripCard = document.getElementById('ehailingActiveTripCard');
-            if (tripCard) tripCard.style.display = 'none';
-            if (typeof window.exitNavigation === 'function') window.exitNavigation();
-            if (typeof window.clearAllRoutes === 'function') window.clearAllRoutes();
+        if (typeof processTripEarnings === 'function') {
+            await processTripEarnings(passenger, finalFare, payMethod);
         }
 
         closeActivePopup();
-        if (typeof updatePassengerCounter === 'function') updatePassengerCounter();
-        if (typeof updateBottomMenu === 'function') updateBottomMenu();
-        if (typeof updatePassengerListUI === 'function') updatePassengerListUI();
-        updateUIWithTaxiData();
+        
+        // 5. Update Local Array IMMEDIATELY so the routing engine knows to move on to the next passenger
+        passenger.status = 'completed'; 
+        
+        showCommunicationBanner(`Trip complete! ${payMethod === 'cash' ? 'Collected R' + finalAmount + ' cash' : 'Digital Payment processed'}`, "success");
 
-        var message = `Trip complete! `;
-        if (stats.cashCollected > 0 && stats.walletIncrease > 0) {
-            message += `Collected R${stats.cashCollected} cash. R${stats.walletIncrease.toFixed(2)} added to wallet.`;
-        } else if (stats.cashCollected > 0) {
-            message += `You collected R${stats.cashCollected} cash.`;
-        } else if (stats.walletIncrease > 0) {
-            message += `R${stats.walletIncrease.toFixed(2)} added to wallet.`;
-        } else {
-            message += `Trip logged.`;
-        }
-        showCommunicationBanner(message, "success");
+        // 6. TRIGGER NAVIGATION CALCULATOR FOR THE NEXT PERSON IN THE POOL
+        setTimeout(() => {
+            console.log("Passenger dropped off. Routing to next waypoint...");
+            if (typeof window.calculateNextWaypoint === 'function') {
+                window.calculateNextWaypoint();
+            }
+        }, 1000);
 
     }).catch(err => {
+        console.error("Complete Ride failed:", err);
         if(btn) { btn.innerHTML = 'Complete'; btn.disabled = false; }
+        showCommunicationBanner("Failed to complete trip. Check connection.", "danger");
     });
 };
-
-
     window.executeTripCancellation = function(passengerKey) {
         const reasonInput = document.getElementById('cancelReasonInput');
         const reason = reasonInput ? reasonInput.value.trim() : "No reason provided";
@@ -16865,7 +16771,7 @@ window.startNavigationForPassengerByKey = function(passengerKey) {
             const isOnline = (driverData.isOnline === true || driverData.isOnline === "true");
             if (!isOnline || driverData.isFull === true) return;
 
-            const isAsiyeGoDriver = (driverData.vehicleType === 'ehailing');
+            const isAsiyeGoDriver = (driverData.vehicleType === 'ehailing' || driverData.registration.toLowerCase().includes('polo') || !driverData.assignedRank);
             if (!isAsiyeGoDriver) return;
 
             const request = { key: snapshot.key, ...snapshot.val() };
@@ -17436,237 +17342,6 @@ window.updateCommuterRequestPopupWithCount = function(requestData) {
     `;
 };
 
-// Modify the openCommuterRequestPopup to include passenger count
-window.openCommuterRequestPopupWithCount = function(req) {
- if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(req)) return;
-
-    console.log("openCommuterRequestPopup called with request:", req);
-
-    if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) {
-        console.log("Popup already showing, ignoring.");
-        return;
-    }
-
-    window.isShowingRequestPopup = true;
-    window.currentShowingRequestId = req.key;
-
-    let popup = document.getElementById('commuterRequestPopup');
-    if (!popup) {
-        popup = document.createElement('div');
-        popup.id = 'commuterRequestPopup';
-        popup.className = 'popup';
-        document.body.appendChild(popup);
-    }
-
-    // Force absolute styling so the popup is on top and fully interactive
-    popup.style.cssText = `
-        display: block !important; visibility: visible !important; opacity: 1 !important;
-        position: fixed !important; top: 50% !important; left: 50% !important;
-        transform: translate(-50%, -50%) !important; background: white !important;
-        border-radius: 20px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important;
-        width: 90% !important; max-width: 420px !important; max-height: 85vh !important;
-        overflow-y: auto !important; z-index: 2147483647 !important; padding: 0 !important;
-        pointer-events: auto !important;
-    `;
-    popup.classList.add('open');
-
-    let overlay = document.getElementById('popupOverlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'popupOverlay';
-        document.body.appendChild(overlay);
-    }
-    overlay.style.cssText = `
-        display: block !important; visibility: visible !important; opacity: 1 !important;
-        background: rgba(0,0,0,0.6) !important; position: fixed !important; top: 0 !important;
-        left: 0 !important; width: 100% !important; height: 100% !important;
-        z-index: 2147483646 !important; pointer-events: auto !important;
-    `;
-    overlay.classList.add('open');
-
-    const topBanners = document.getElementById('top-notifications-container');
-    if (topBanners) topBanners.style.display = 'none';
-
-    let distance = 0;
-    if (typeof taxiData !== 'undefined' && taxiData && taxiData.latitude && req.commuterLocation) {
-        distance = calculateDistance(taxiData.latitude, taxiData.longitude, req.commuterLocation.latitude, req.commuterLocation.longitude);
-    }
-
-    const streetAddress = req.pickupAddress || 'Near your location';
-    const destination = (req.destination && req.destination !== "As Directed" && req.destination !== "Not Specified") ? req.destination.split(',')[0] : "Route";
-    const calculatedPrice = req.calculatedPrice ? Math.round(parseFloat(req.calculatedPrice)) : 25;
-    const payMethod = req.paymentMethod || 'cash';
-    const appliedCredit = req.appliedCredit || 0;
-    const finalAmount = Math.max(0, calculatedPrice - appliedCredit);
-    
-    const isCard = payMethod.toLowerCase() === 'card';
-    const isCreditPromo = payMethod.toLowerCase() === 'credit' && appliedCredit > 0;
-    
-    const payColor = isCard ? '#007BFF' : (isCreditPromo ? '#FFC107' : '#28a745');
-    const payBg = isCard ? '#e6f2ff' : (isCreditPromo ? '#fff3cd' : '#e8f5e9');
-    const payIcon = isCard ? 'fa-credit-card' : (isCreditPromo ? 'fa-gift' : 'fa-money-bill-wave');
-    const payText = isCard ? 'PREPAID CARD' : (isCreditPromo ? 'PROMO APPLIED' : 'CASH PAYMENT');
-
-    const passCount = req.passengers ? Object.keys(req.passengers).length : 1;
-    const maxCapacity = req.maxCapacity || 4;
-
-    let promoHtml = '';
-    if (isCreditPromo && appliedCredit > 0) {
-        promoHtml = `
-            <div style="background: #fff3cd; color: #856404; padding: 10px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 15px; border: 1px solid #ffeeba; text-align: center;">
-                <i class="fas fa-gift"></i> <strong>Promo Booking:</strong> Passenger pays R${finalAmount} cash. You receive +R${appliedCredit.toFixed(2)} to your wallet.
-            </div>
-        `;
-    }
-
-    const picHtml = req.commuterProfilePic
-        ? `<img src="${req.commuterProfilePic}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">`
-        : `<i class="fas fa-user" style="font-size: 2.2rem; color: #28a745;"></i>`;
-
-    let passengerListHtml = '';
-    if (req.type === 'club' && req.passengers) {
-        passengerListHtml = `
-            <div style="background: #f8f9fa; border-radius: 12px; padding: 12px; margin-bottom: 15px;">
-                <div style="font-weight: 800; margin-bottom: 10px; color: #333;">
-                    <i class="fas fa-users" style="color: #007BFF;"></i> Passengers (${passCount}/${maxCapacity})
-                </div>
-        `;
-        
-        Object.values(req.passengers).forEach(passenger => {
-            passengerListHtml += `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <div style="width: 30px; height: 30px; border-radius: 50%; background: #e6f2ff; display: flex; align-items: center; justify-content: center;">
-                            <i class="fas fa-user" style="font-size: 0.8rem; color: #007BFF;"></i>
-                        </div>
-                        <div>
-                            <div style="font-weight: 600; font-size: 0.85rem;">${escapeHtml(passenger.commuterName)}</div>
-                            <div style="font-size: 0.7rem; color: #666;">To: ${passenger.destination ? passenger.destination.split(',')[0] : 'Route'}</div>
-                        </div>
-                    </div>
-                    <div style="font-weight: 800; color: #28a745;">R${passenger.price || calculatedPrice}</div>
-                </div>
-            `;
-        });
-        
-        passengerListHtml += `</div>`;
-    }
-
-    popup.innerHTML = `
-        <button class="popup-close" onclick="rejectRequestAndClose()" style="position: absolute; right: 15px; top: 15px; font-size: 1.5rem; background: none; border: none; cursor: pointer; color: #999; z-index: 10;">&times;</button>
-        <div style="padding: 10px; text-align: left;">
-            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #eee; padding-bottom: 15px; margin-bottom: 15px;">
-                <div style="display: flex; align-items: center; gap: 15px;">
-                    <div style="width: 55px; height: 55px; border-radius: 50%; background: #e8f5e9; display: flex; align-items: center; justify-content: center; border: 2px solid #28a745; overflow: hidden;">
-                        ${picHtml}
-                    </div>
-                    <div>
-                        <h3 style="margin: 0; font-weight: 900; font-size: 1.2rem; color: #111;">${req.type === 'club' ? 'Asiye Club Request!' : 'New Ride Request!'}</h3>
-                        <span style="font-size: 0.8rem; color: #666;">${distance.toFixed(1)} km away</span>
-                    </div>
-                </div>
-                <div style="text-align: right;">
-                    <span style="font-size: 1.6rem; font-weight: 900; color: ${payColor === '#FFC107' ? '#d39e00' : payColor}; display: block; line-height: 1;">R${finalAmount}</span>
-                    <span style="font-size: 0.7rem; color: ${payColor === '#FFC107' ? '#d39e00' : payColor}; background: ${payBg}; padding: 2px 6px; border-radius: 6px; font-weight: bold; border: 1px solid ${payColor};"><i class="fas ${payIcon}"></i> ${payText}</span>
-                </div>
-            </div>
-
-            <div style="text-align: center; margin-bottom: 15px;">
-                <div style="background: #f0f7ff; padding: 8px 15px; border-radius: 20px; display: inline-block;">
-                    <i class="fas fa-users" style="color: #007BFF;"></i>
-                    <span style="font-weight: 800; color: #007BFF;"> Passengers: ${passCount}/${maxCapacity}</span>
-                </div>
-            </div>
-            
-            ${promoHtml}
-            ${passengerListHtml}
-
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #eee;">
-                <div style="display: flex; gap: 12px; margin-bottom: 12px; align-items: center;">
-                    <i class="fas fa-user" style="color: #007BFF; width: 20px;"></i>
-                    <div><strong style="color: #333;">${escapeHtml(req.commuterName)}</strong></div>
-                </div>
-                <div style="display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start;">
-                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #fff0f0; color: #dc3545; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <i class="fas fa-map-marker-alt"></i>
-                    </div>
-                    <div>
-                        <div style="font-size: 0.75rem; color: #888; font-weight: 800;">PICK UP</div>
-                        <div style="font-weight: 800; color: #111; font-size: 1rem;">${escapeHtml(streetAddress)}</div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 12px; align-items: flex-start;">
-                    <div style="width: 28px; height: 28px; border-radius: 50%; background: #e6f2ff; color: #007BFF; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                        <i class="fas fa-flag-checkered"></i>
-                    </div>
-                    <div>
-                        <div style="font-size: 0.75rem; color: #888; font-weight: 800;">DROP OFF</div>
-                        <div style="font-weight: 800; color: #111; font-size: 1rem;">${escapeHtml(destination)}</div>
-                    </div>
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 10px;">
-                <button class="btn btn-danger" style="flex: 1; border-radius: 12px; font-weight: 800; padding: 16px; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2; cursor: pointer;" onclick="rejectRequestAndClose()">Decline</button>
-                <button class="btn btn-success" style="flex: 2; border-radius: 12px; font-weight: 800; padding: 16px; background: #007BFF; border: none; box-shadow: 0 6px 15px rgba(0,123,255,0.3); color: white; cursor: pointer;" onclick="acceptRequestAndClose()"><i class="fas fa-check"></i> Accept Ride</button>
-            </div>
-        </div>
-    `;
-
-    if (window.requestPopupTimeout) clearTimeout(window.requestPopupTimeout);
-    window.requestPopupTimeout = setTimeout(() => {
-        if (window.isShowingRequestPopup) {
-            closeRequestPopupNow();
-            showCommunicationBanner("Request timed out", "warning");
-        }
-    }, 60000);
-
-    window.safeVibrate([500, 200, 500]);
-    try { new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3').play().catch(()=>{}); } catch(e){}
-};
-
-// IMPORTANT: Alias the function so old calls still work!
-window.openCommuterRequestPopup = window.openCommuterRequestPopupWithCount;
-
-window.executePassengerOnboard = function(passengerName, requestKey, subKey = '') {
-    closeActivePopup();
-    showCommunicationBanner(`${passengerName} is onboard.`, "success");
-
-    const path = subKey ? `requests/${requestKey}/passengers/${subKey}` : `requests/${requestKey}`;
-
-    database.ref(path).update({
-        status: 'passenger_onboard',
-        passengerOnboardAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        // Sync local memory
-        const pIndex = acceptedPassengers.findIndex(p => p.key === requestKey && (subKey ? p.subKey === subKey : true));
-        if (pIndex !== -1) {
-            acceptedPassengers[pIndex].status = 'passenger_onboard';
-            
-            // Notify commuter (safely removed the emoji from title to prevent Syntax Errors)
-            const commId = acceptedPassengers[pIndex].commuterId;
-            if (commId) {
-                database.ref(`notifications/commuters/${commId}`).push({
-                    type: 'trip_started',
-                    driverId: userId,
-                    title: 'Trip Started',
-                    message: 'You are safely onboard.',
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                }).catch(()=>{});
-            }
-        }
-
-        // TRIGGER NAVIGATION CALCULATOR
-        setTimeout(() => {
-            if (typeof window.calculateNextWaypoint === 'function') {
-                window.calculateNextWaypoint();
-            }
-        }, 500);
-
-    }).catch(err => {
-        console.error("Failed to mark onboard:", err);
-    });
-};
 
 
 // 4. FIX HANDLE DROPOFF (Add subKey routing for clubs)
@@ -17775,7 +17450,108 @@ window.checkExistingClubTrip = async function() {
         });
     }
 };
+window.showDriverAcceptedPopup = async function(taxiId, restoredState = null) {
+    console.log("🎯 Monitoring active trip for taxi:", taxiId);
+    
+    try {
+        let activeReqId = restoredState?.requestKey || window.currentRequestId || localStorage.getItem('currentRequestId');
+        if (!activeReqId) return;
 
+        const reqSnapshot = await database.ref('requests/' + activeReqId).once('value');
+        const reqData = reqSnapshot.val();
+        if (!reqData) return;
+
+        // 🏷️ DETECT TYPE
+        const isClub = reqData.type === 'club';
+        const brandColor = isClub ? '#FF9F0A' : '#007BFF';
+
+        // 👥 GET PASSENGER INFO (Handle Pool vs Solo)
+        let myTripData = reqData;
+        if (isClub && reqData.passengers && reqData.passengers[window.userId]) {
+            myTripData = reqData.passengers[window.userId];
+        } else if (isClub && reqData.passengers) {
+            // If Driver is viewing the whole pool
+            const firstId = Object.keys(reqData.passengers)[0];
+            myTripData = reqData.passengers[firstId];
+        }
+
+        const passCount = reqData.passengers ? Object.keys(reqData.passengers).length : 1;
+        const maxCap = reqData.maxCapacity || 3;
+
+        const modal = document.getElementById('driverAcceptedPopup');
+        modal.classList.add('open');
+        modal.style.display = 'flex';
+
+        const modalContent = modal.querySelector('.modal-content');
+        
+        // BUILD THE CONTENT
+        modalContent.innerHTML = `
+            <div class="uber-popup-container">
+                <div class="uber-drag-handle"></div>
+                
+                <div style="text-align: center; margin-bottom: 20px;">
+                    ${isClub ? 
+                        `<div style="background: #fff4e5; color: #FF9F0A; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 800; font-size: 0.8rem; margin-bottom: 10px; border: 1px solid #FF9F0A;">
+                            <i class="fas fa-users"></i> ASIYE CLUB ROUTE (${passCount}/${maxCap})
+                        </div>` : ''
+                    }
+                    <h2 style="font-size: 22px; font-weight: 900; margin: 0; color: #111;">
+                        ${reqData.status === 'passenger_onboard' ? 'Heading to destination' : 'Heading to Pickup'}
+                    </h2>
+                    <p style="color: #888; font-size: 14px; margin-top: 5px;">
+                        Arriving in <span id="liveEtaBigNumber" style="color: ${brandColor}; font-weight: 800;">--</span> min
+                    </p>
+                </div>
+
+                <div class="uber-map-container" style="height: 150px; border-radius: 16px; margin-bottom: 20px;">
+                    <div id="acceptedTripMiniMap" style="width: 100%; height: 100%;"></div>
+                </div>
+
+                <!-- Shared Info Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 14px; text-align: center; border: 1px solid #eee;">
+                        <div style="font-size: 10px; font-weight: 800; color: #888; text-transform: uppercase;">FARE</div>
+                        <div style="font-size: 1.2rem; font-weight: 900; color: #28a745;">R${reqData.calculatedPrice}</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 14px; text-align: center; border: 1px solid #eee;">
+                        <div style="font-size: 10px; font-weight: 800; color: #888; text-transform: uppercase;">PIN</div>
+                        <div style="font-size: 1.2rem; font-weight: 900; color: #111; letter-spacing: 2px;">${reqData.pickupPin || '----'}</div>
+                    </div>
+                </div>
+
+                <div class="uber-action-row" style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button class="uber-btn-chat" style="flex: 1; border: 2px solid ${brandColor}; color: ${brandColor};" onclick="openTripChat(event, '${reqData.commuterId}', '${escapeHtml(reqData.commuterName)}')">
+                        <i class="fas fa-comment"></i> Chat
+                    </button>
+                    <button class="uber-btn-emergency" style="flex: 1;" onclick="openEmergencyAlert()">
+                        <i class="fas fa-shield-alt"></i> Panic
+                    </button>
+                </div>
+
+                ${reqData.status !== 'passenger_onboard' ? 
+                    `<button class="uber-btn-onboard" onclick="confirmPassengerOnboard()" style="width: 100%; background: #28a745; color: white;">
+                        <i class="fas fa-check-circle"></i> Passenger is Onboard
+                    </button>` : 
+                    `<button class="uber-btn-onboard" onclick="window.directEndTrip('${activeReqId}')" style="width: 100%; background: #dc3545; color: white;">
+                        <i class="fas fa-flag-checkered"></i> End Trip / Drop-off
+                    </button>`
+                }
+            </div>
+        `;
+
+        // Initialize Map
+        setTimeout(() => {
+            if (typeof initBoltStyleMiniMap === 'function') {
+                initBoltStyleMiniMap(taxiId, reqData.commuterLocation.latitude, reqData.commuterLocation.longitude);
+            }
+        }, 500);
+
+        if (typeof startRealTimeETACalculation === 'function') startRealTimeETACalculation(taxiId);
+
+    } catch (error) {
+        console.error("Error showing Driver Accepted Popup:", error);
+    }
+};
 // Also add a listener for request changes to update UI
 window.setupRequestPersistenceListener = function() {
     if (!userId) return;
@@ -18321,151 +18097,81 @@ function renderPassengerList(requestData) {
 
 // COMPLETE REPLACEMENT FOR showPoolingRoomPopup
 window.showPoolingRoomPopup = async function(request) {
- if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(request)) return;
     if (!request) return;
-    if (window.ignoredClubRequests && window.ignoredClubRequests[request.key]) return; // Block ignored
-    if (activeRequest && activeRequest.type === 'club' && activeRequest.key !== request.key) return; // Busy
-    
+    if (activeRequest && activeRequest.key !== request.key) return; 
+
     activeRequest = request; 
     currentRequestId = request.key;
-    window.isViewingClubRequest = true;
 
-    const passKeys = request.passengers ? Object.keys(request.passengers) : [];
-    const passCount = passKeys.length;
-    
-    let totalFare = 0;
-    for (const passenger of Object.values(request.passengers || {})) {
-        totalFare += (passenger.price || request.originalPerPersonPrice || 25);
-    }
-    
-    const isClubXL = request.carCategory === 'xl' || request.carCategory === 'clubxl';
-    const typeTitle = isClubXL ? 'Asiye XL Request' : 'Asiye Club Request';
-    const minCapacity = request.minCapacity || (isClubXL ? 5 : 3);
-    const maxCapacity = request.maxCapacity || (isClubXL ? 7 : 4);
-    
-    const remainingMs = Math.max(0, (request.expiresAt || Date.now() + 20 * 60000) - Date.now());
+    const passCount = request.passengers ? Object.keys(request.passengers).length : 1;
+    const maxCapacity = 3; 
+    const baseFare = request.originalPerPersonPrice || 25;
+    const totalFare = passCount * baseFare;
+
+    // Timer Logic
+    const remainingMs = Math.max(0, (request.expiresAt || Date.now()) - Date.now());
     const mins = Math.floor(remainingMs / 60000);
     const secs = Math.floor((remainingMs % 60000) / 1000);
-    
-    const canAcceptEarly = passCount >= minCapacity || request.forceDispatch === true;
-    const isTimerExpired = remainingMs <= 0;
-    const canAccept = canAcceptEarly || isTimerExpired;
-    
-    let acceptBtnMessage = `Waiting for ${minCapacity} Pax`;
-    if (request.forceDispatch === true) {
-        acceptBtnMessage = `Accept (Passenger Paid Full!)`;
-    } else if (canAcceptEarly) {
-        acceptBtnMessage = `Accept & Go (${passCount} Pax)`;
-    }
 
+    // Build Passenger List HTML
     let passengersHtml = '';
     if (request.passengers) {
         Object.values(request.passengers).forEach(p => {
             passengersHtml += `
-                <div style="background: #ffffff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="font-weight: 800; color: #111;">${escapeHtml(p.commuterName)}</div>
-                        <div style="font-weight: 900; color: #28a745;">R${p.price || request.originalPerPersonPrice}</div>
+                <div style="background: #f8f9fa; border: 1px solid #eee; border-radius: 14px; padding: 12px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div style="width: 35px; height: 35px; background: #eef4ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #007BFF;">
+                            <i class="fas fa-user"></i>
+                        </div>
+                        <div>
+                            <div style="font-weight: 800; color: #111; font-size: 0.9rem;">${escapeHtml(p.commuterName)}</div>
+                            <div style="font-size: 0.75rem; color: #888;">To: ${p.destination.split(',')[0]}</div>
+                        </div>
                     </div>
-                    <div style="font-size: 0.8rem; color: #555; background: #f8f9fa; padding: 8px; border-radius: 8px; margin-top: 8px;">
-                        <div style="margin-bottom: 4px;"><i class="fas fa-map-marker-alt" style="color:#dc3545; width:15px;"></i> ${p.pickupAddress.split(',')[0]}</div>
-                        <div><i class="fas fa-flag-checkered" style="color:#28a745; width:15px;"></i> ${p.destination.split(',')[0]}</div>
-                    </div>
+                    <div style="font-weight: 900; color: #28a745;">R${p.price || baseFare}</div>
                 </div>
             `;
         });
     }
 
     let popup = document.getElementById('commuterRequestPopup');
-    if (!popup) {
-        popup = document.createElement('div');
-        popup.id = 'commuterRequestPopup';
-        popup.className = 'popup';
-        document.body.appendChild(popup);
-    }
-    
-    popup.style.cssText = `
-        display: block !important; visibility: visible !important; opacity: 1 !important;
-        position: fixed !important; top: 50% !important; left: 50% !important;
-        transform: translate(-50%, -50%) !important; background: white !important;
-        border-radius: 20px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important;
-        width: 90% !important; max-width: 420px !important; max-height: 85vh !important;
-        overflow-y: auto !important; z-index: 2147483647 !important; padding: 0 !important;
-    `;
-    popup.classList.add('open');
-
-    let overlay = document.getElementById('popupOverlay');
-    if (overlay) overlay.classList.add('open');
+    popup.style.cssText = `display: block !important; visibility: visible !important; opacity: 1 !important; position: fixed !important; top: 50% !important; left: 50% !important; transform: translate(-50%, -50%) !important; background: white !important; border-radius: 24px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.4) !important; width: 92% !important; max-width: 420px !important; z-index: 100000 !important; padding: 0 !important; overflow: hidden;`;
 
     popup.innerHTML = `
-        <button class="popup-close" onclick="declineClubRequest('${request.key}')" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 35px; height: 35px; border-radius: 50%; color: #333; z-index: 10; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
+        <button class="popup-close" onclick="closeRequestPopupNow()" style="position: absolute; right: 20px; top: 20px; z-index: 10;">&times;</button>
         
-        <div style="padding: 20px; text-align: left; background: white; border-radius: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div>
-                    <h3 style="color: #007BFF; margin: 0; font-weight: 900; font-size: 1.4rem;">${typeTitle}</h3>
-                    <p style="color: #666; font-size: 0.85rem; margin: 5px 0 0 0; font-weight: bold;">
-                        <i class="fas fa-stopwatch fa-spin"></i> Forming Pool: <span id="poolTimer_${request.key}">${mins}:${secs.toString().padStart(2, '0')}</span>
-                    </p>
+        <div style="padding: 25px;">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="background: #fff4e5; color: #FF9F0A; padding: 6px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.8rem; border: 1px solid #FF9F0A; margin-bottom: 10px;">
+                    <i class="fas fa-users"></i> ASIYE CLUB POOL
                 </div>
-                <div style="text-align: right; background: #eef4ff; border: 1px solid #cce0ff; padding: 8px 12px; border-radius: 12px;">
-                    <div style="font-size: 0.7rem; color: #007BFF; font-weight: bold;">TOTAL PAYOUT</div>
-                    <div id="poolAmount_${request.key}" style="font-size: 1.6rem; font-weight: 900; color: #007BFF; line-height: 1;">R${totalFare}</div>
-                </div>
+                <h3 style="margin: 0; font-weight: 900; color: #111; font-size: 1.5rem;">New Pool Forming</h3>
+                <p style="color: #666; font-size: 0.9rem; margin-top: 5px;">
+                    <i class="fas fa-clock"></i> Time Left to Join: <span id="poolTimer_${request.key}" style="color: #FF9F0A; font-weight: 800;">${mins}:${secs.toString().padStart(2, '0')}</span>
+                </p>
             </div>
-            
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div style="background: #f0f7ff; padding: 8px 15px; border-radius: 20px;">
-                    <i class="fas fa-users" style="color: #007BFF;"></i>
-                    <span style="font-weight: 800; color: #007BFF;"> Passengers: <span id="passengerCount_${request.key}">${passCount}</span>/${maxCapacity}</span>
+
+            <div style="background: #f8f9fa; border-radius: 20px; padding: 15px; border: 1px solid #eee; margin-bottom: 20px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <span style="font-weight: 800; color: #888; font-size: 0.75rem; text-transform: uppercase;">Passengers (${passCount}/${maxCapacity})</span>
+                    <span style="font-weight: 900; color: #28a745; font-size: 1.2rem;">Total: R${totalFare}</span>
                 </div>
-            </div>
-            
-            <div style="max-height: 40vh; overflow-y: auto; padding-right: 5px; margin-bottom: 15px;">
-                <div id="passengerListContainer_${request.key}">
+                <div style="max-height: 200px; overflow-y: auto;">
                     ${passengersHtml}
                 </div>
             </div>
-            
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-outline" onclick="declineClubRequest('${request.key}')" style="flex: 1; border-radius: 16px; padding: 14px; font-weight: bold; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2; cursor: pointer;">Decline</button>
-                
-                <button id="poolAcceptBtn_${request.key}" class="btn btn-success" onclick="acceptClubPoolEarly('${request.key}')" 
-                        style="flex: 2; border-radius: 16px; padding: 14px; font-weight: 900; background: ${canAccept ? '#28a745' : '#6c757d'}; color: white; border: none; cursor: ${canAccept ? 'pointer' : 'not-allowed'}; opacity: ${canAccept ? '1' : '0.6'};">
-                    <span id="poolAcceptBtnTxt_${request.key}">${acceptBtnMessage}</span>
+
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-danger" style="flex: 1; border-radius: 15px;" onclick="closeRequestPopupNow()">Ignore</button>
+                <button id="poolAcceptBtn_${request.key}" class="btn btn-success" style="flex: 2; border-radius: 15px; background: #FF9F0A !important; border: none; font-weight: 900;" onclick="acceptClubPoolEarly('${request.key}')">
+                    Accept Pool & Go
                 </button>
             </div>
         </div>
     `;
 
-    if (popup.dataset.timerId) clearInterval(parseInt(popup.dataset.timerId));
-    const timerId = setInterval(() => {
-        const ms = request.expiresAt - Date.now();
-        if (ms <= 0 || !document.getElementById(`poolTimer_${request.key}`)) {
-            clearInterval(timerId);
-            const t = document.getElementById(`poolTimer_${request.key}`);
-            if (t) t.innerHTML = `0:00`;
-            const btn = document.getElementById(`poolAcceptBtn_${request.key}`);
-            const btnTxt = document.getElementById(`poolAcceptBtnTxt_${request.key}`);
-            if (btn && btnTxt) { 
-                btn.disabled = false; 
-                btn.style.opacity = '1';
-                btn.style.background = '#28a745';
-                btn.style.cursor = 'pointer';
-                btnTxt.textContent = `Time's Up! Accept & Go`;
-            }
-        } else {
-            const m = Math.floor(ms / 60000);
-            const s = Math.floor((ms % 60000) / 1000);
-            const t = document.getElementById(`poolTimer_${request.key}`);
-            if (t) t.innerHTML = `${m}:${s.toString().padStart(2, '0')}`;
-        }
-    }, 1000);
-    popup.dataset.timerId = timerId;
-    
-    window.safeVibrate([500, 200, 500]);
+    openPopup('commuterRequestPopup');
 };
-
 
 // Fix for acceptClubPoolEarly to handle passenger data correctly
 function closeActivePopupAndReset() {
@@ -18809,76 +18515,6 @@ function startNavigationForPassengerPickup(lat, lng, name, idx) {
     // We will reuse the function but with a special flag for club pickup
     showDirectionsOnMap(lat, lng, `Pick up ${name}`, null, 'pickup');
 }
-// --- COMPLETE FUNCTION FOR taxi.html ---
-window.openCommuterRequestPopup = function(req) {
-    console.log("📞 openCommuterRequestPopup called with request:", req);
-
-    if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) return;
-
-    window.isShowingRequestPopup = true;
-    window.currentShowingRequestId = req.key;
-
-    // 1. Calculate System Price vs Passenger Offer
-    const tripDist = parseFloat(req.tripDistance || 0);
-    const normalPrice = Math.round(Math.max(35, 30 + (tripDist * 8.00)));
-    const passengerOffer = req.calculatedPrice || 25;
-
-    let popup = document.getElementById('commuterRequestPopup');
-    if (!popup) {
-        popup = document.createElement('div');
-        popup.id = 'commuterRequestPopup';
-        popup.className = 'popup';
-        document.body.appendChild(popup);
-    }
-
-    // Ensure popup is visible and styled as a card
-    popup.style.cssText = `
-        display: block !important; visibility: visible !important; opacity: 1 !important;
-        position: fixed !important; top: 50% !important; left: 50% !important;
-        transform: translate(-50%, -50%) !important; background: white !important;
-        border-radius: 20px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.4) !important;
-        width: 90% !important; max-width: 420px !important; max-height: 85vh !important;
-        overflow-y: auto !important; z-index: 100000 !important; padding: 0 !important;
-    `;
-
-    popup.innerHTML = `
-        <button class="popup-close" onclick="closeRequestPopupNow()" style="position: absolute; right: 15px; top: 15px;">&times;</button>
-        <div style="padding: 20px; text-align: left;">
-            <h3 style="margin: 0 0 15px 0; font-weight: 800; color: #111;">Asiye Go Request</h3>
-            
-            <!-- Comparison Box -->
-            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                <div style="flex: 1; background: #f8f9fa; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #eee;">
-                    <div style="font-size: 0.65rem; color: #888; font-weight: 800;">NORMAL PRICE</div>
-                    <div style="font-size: 1.1rem; font-weight: 800; color: #444;">R${normalPrice}</div>
-                </div>
-                <div style="flex: 1; background: #e8f5e9; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #28a745;">
-                    <div style="font-size: 0.65rem; color: #28a745; font-weight: 800;">OFFER</div>
-                    <div style="font-size: 1.1rem; font-weight: 900; color: #28a745;">R${passengerOffer}</div>
-                </div>
-            </div>
-
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 16px; border: 1px solid #eee; margin-bottom: 20px;">
-                <div style="font-weight: 800; color: #111; margin-bottom:5px;">${escapeHtml(req.commuterName)}</div>
-                <div style="font-size: 0.85rem; color: #666;"><i class="fas fa-map-marker-alt"></i> ${escapeHtml(req.pickupAddress)}</div>
-            </div>
-
-            <!-- BUTTONS -->
-            <div style="display: flex; gap: 8px;">
-                <button class="btn btn-danger" style="flex: 1; border-radius: 12px; padding: 14px; font-weight:bold;" onclick="rejectRequestAndClose()">Decline</button>
-                
-                <button class="btn" style="flex: 1; background: #fff4e5; color: #f8961e; border: 1px solid #ffe8cc; border-radius: 12px; padding: 14px; font-weight: 800;" 
-                        onclick="showCounterPrompt('${req.key}', ${passengerOffer}, ${normalPrice})">Counter</button>
-                
-                <button class="btn btn-success" style="flex: 1.5; background: #007BFF; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800;" 
-                        onclick="executeDriverAccept('${req.key}')">Accept R${passengerOffer}</button>
-            </div>
-        </div>
-    `;
-
-    // Correct function call for your file
-    openPopup('commuterRequestPopup');
-};
 
 // Driver Accept Logic
 window.executeDriverAccept = function(reqKey) {
@@ -18901,7 +18537,95 @@ window.executeDriverAccept = function(reqKey) {
         }
     });
 };
+window.openCommuterRequestPopup = function(req) {
+    console.log("📞 openCommuterRequestPopup called with request:", req);
 
+    if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) return;
+
+    window.isShowingRequestPopup = true;
+    window.currentShowingRequestId = req.key;
+
+    // 🏷️ 1. DETECT TYPE (Club vs Go)
+    const isClub = (req.type === 'club' || req.carCategory === 'club' || req.status === 'pooling');
+    const typeTitle = isClub ? 'Asiye Club Request' : 'Asiye Go Request';
+    const brandColor = isClub ? '#FF9F0A' : '#007BFF'; // Orange for Club, Blue for Go
+    
+    // 👥 2. PASSENGER COUNT (For Club)
+    const passCount = req.passengers ? Object.keys(req.passengers).length : 1;
+    const maxCapacity = req.maxCapacity || 3;
+    const countBadge = isClub ? 
+        `<span style="background: #fff4e5; color: #FF9F0A; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 800; border: 1.5px solid #FF9F0A; margin-left: 10px;">${passCount}/${maxCapacity} Pax</span>` 
+        : '';
+
+    // 💰 3. PRICING LOGIC
+    const tripDist = parseFloat(req.tripDistance || 0);
+    const normalPrice = Math.round(Math.max(35, 30 + (tripDist * 8.00)));
+    const passengerOffer = req.calculatedPrice || 25;
+
+    let popup = document.getElementById('commuterRequestPopup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'commuterRequestPopup';
+        popup.className = 'popup';
+        document.body.appendChild(popup);
+    }
+
+    // Force styling to match your screenshot
+    popup.style.cssText = `
+        display: block !important; visibility: visible !important; opacity: 1 !important;
+        position: fixed !important; top: 50% !important; left: 50% !important;
+        transform: translate(-50%, -50%) !important; background: white !important;
+        border-radius: 24px !important; box-shadow: 0 25px 60px rgba(0,0,0,0.4) !important;
+        width: 92% !important; max-width: 420px !important; z-index: 100000 !important; 
+        padding: 0 !important; overflow: hidden;
+    `;
+
+    popup.innerHTML = `
+        <button class="popup-close" onclick="closeRequestPopupNow()" style="position: absolute; right: 20px; top: 20px; z-index: 10; font-size: 1.5rem; background: none; border: none; color: #888;">&times;</button>
+        
+        <div style="padding: 30px 25px;">
+            <!-- Header Section -->
+            <div style="margin-bottom: 25px; display: flex; align-items: center;">
+                <h2 style="margin: 0; font-weight: 900; color: #111; font-size: 1.4rem;">${typeTitle}</h2>
+                ${countBadge}
+            </div>
+            
+            <!-- Price Comparison Grid -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
+                <div style="background: #f8f9fa; padding: 15px; border-radius: 16px; text-align: center; border: 1px solid #eee;">
+                    <div style="font-size: 0.7rem; color: #888; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">NORMAL PRICE</div>
+                    <div style="font-size: 1.3rem; font-weight: 800; color: #555;">R${normalPrice}</div>
+                </div>
+                <div style="background: ${isClub ? '#fffbf2' : '#eef4ff'}; padding: 15px; border-radius: 16px; text-align: center; border: 2px solid ${brandColor};">
+                    <div style="font-size: 0.7rem; color: ${brandColor}; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">OFFER</div>
+                    <div style="font-size: 1.6rem; font-weight: 900; color: ${brandColor};">R${passengerOffer}</div>
+                </div>
+            </div>
+
+            <!-- Passenger Details -->
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 20px; border: 1px solid #eee; margin-bottom: 30px;">
+                <div style="font-weight: 900; color: #111; margin-bottom: 8px; font-size: 1.15rem;">${escapeHtml(req.commuterName)}</div>
+                <div style="font-size: 0.95rem; color: #666; display: flex; align-items: flex-start; gap: 8px;">
+                    <i class="fas fa-map-marker-alt" style="color: #dc3545; margin-top: 3px;"></i>
+                    <span>${escapeHtml(req.pickupAddress)}</span>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div style="display: flex; gap: 12px;">
+                <button class="btn btn-danger" style="flex: 1; border-radius: 16px; padding: 18px; font-weight: 800; font-size: 1rem; background: #e91e63 !important;" onclick="rejectRequestAndClose()">Decline</button>
+                
+                <button class="btn btn-success" style="flex: 2; background: ${brandColor} !important; color: white !important; border: none; border-radius: 16px; padding: 18px; font-weight: 900; font-size: 1rem; box-shadow: 0 8px 20px ${brandColor}44;" 
+                        onclick="executeDriverAccept('${req.key}')">
+                    Accept ${isClub ? 'Club' : 'Go'} Ride
+                </button>
+            </div>
+        </div>
+    `;
+
+    openPopup('commuterRequestPopup');
+    try { new Audio('https://www.soundjay.com/misc/sounds/bell-ringing-05.mp3').play().catch(()=>{}); } catch(e){}
+};
 // Driver Counter Logic
 window.showCounterPrompt = function(reqKey, offer, normal) {
     const newPrice = prompt(`Passenger offered R${offer}. System normal is R${normal}. Enter your price (R):`, Math.max(offer + 5, normal));
@@ -19284,132 +19008,145 @@ window.loadAcceptedPassengersAndParcels = function() {
                 const activeStatuses = ['accepted', 'picked_up', 'passenger_here', 'passenger_onboard', 'in_transit', 'driver_on_way', 'arrived', 'picking_up_others', 'pickup_method_selected', 'assigned', 'taxi_assigned', 'collected'];
                 
                 if (activeStatuses.includes(request.status)) {
-                    // CRITICAL FIX: Include 'ehailing' in the passenger-ride type checks
+                    // Private Rides (Asiye Go)
                     if (request.type === 'passenger' || request.type === 'ehailing') {
                         if (!seenCommuterIds.has(request.commuterId)) {
                             seenCommuterIds.add(request.commuterId);
                             acceptedPassengers.push(request);
                         }
-                    } else if (request.type === 'club') {
-                        // Spread passengers for club pool ride
+                    } 
+                    // Shared Rides (Asiye Club)
+                    else if (request.type === 'club') {
                         if (request.passengers) {
                             Object.keys(request.passengers).forEach(commId => {
                                 const passData = request.passengers[commId];
-                                acceptedPassengers.push({
-                                    key: request.key,
-                                    subKey: commId,
-                                    commuterId: commId,
-                                    commuterName: passData.commuterName,
-                                    pickupAddress: passData.pickupAddress,
-                                    destination: passData.destination,
-                                    calculatedPrice: passData.price,
-                                    finalAmount: passData.finalAmount,
-                                    paymentMethod: passData.paymentMethod,
-                                    commuterLocation: passData.location,
-                                    status: passData.status || request.status,
-                                    type: 'club',
-                                    requirePin: passData.requirePin,
-                                    pickupPin: passData.pickupPin
-                                });
+                                // Ensure we only show passengers who haven't been completed/cancelled
+                                if (passData.status && !['completed', 'cancelled_by_driver', 'cancelled_by_commuter', 'cancelled_by_admin', 'rejected'].includes(passData.status)) {
+                                    acceptedPassengers.push({
+                                        key: request.key,
+                                        subKey: commId,
+                                        commuterId: commId,
+                                        commuterName: passData.commuterName,
+                                        pickupAddress: passData.pickupAddress,
+                                        destination: passData.destination,
+                                        calculatedPrice: passData.price,
+                                        finalAmount: passData.finalAmount,
+                                        paymentMethod: passData.paymentMethod,
+                                        commuterLocation: passData.location,
+                                        status: passData.status || request.status,
+                                        type: 'club',
+                                        requirePin: passData.requirePin,
+                                        pickupPin: passData.pickupPin
+                                    });
+                                }
                             });
                         }
-                    } else if (request.type === 'parcel') {
+                    } 
+                    // Parcels
+                    else if (request.type === 'parcel') {
                         acceptedParcels.push(request);
                     }
                 }
             });
         }
 
-        // --- Auto Full/Loading Logic ---
-        const isAsiyeGo = (taxiData && taxiData.vehicleType === 'ehailing');
-        const MAX_PASSENGERS = isAsiyeGo ? 4 : 15;
+        // --- Auto Full/Loading Logic (Asiye Go = 1, Asiye Club = 3) ---
         const currentCount = acceptedPassengers.length;
+        let MAX_PASSENGERS = 3; // Default to Club (3 people max)
 
-        if (currentCount >= MAX_PASSENGERS && (!taxiData || !taxiData.isFull)) {
-            database.ref('taxis/' + userId).update({ isFull: true });
-        } else if (currentCount < MAX_PASSENGERS && (taxiData && taxiData.isFull)) {
-            database.ref('taxis/' + userId).update({ isFull: false });
+        // If the driver accepted a private Asiye Go ride, capacity instantly drops to 1
+        if (currentCount > 0) {
+            const currentRideType = acceptedPassengers[0].type;
+            if (currentRideType === 'ehailing' || currentRideType === 'passenger') {
+                MAX_PASSENGERS = 1; // Private ride, car is immediately full
+            }
         }
 
-        // --- e-Hailing Active Trip UI ---
-        if (isAsiyeGo) {
-            const passengerNavBtn = document.querySelector('.nav__link[onclick="openPassengersMenu()"]');
-            if (passengerNavBtn && passengerNavBtn.parentElement) passengerNavBtn.parentElement.style.display = 'none';
+        // If seats are filled, automatically mark driver as FULL and pull off map
+        if (currentCount >= MAX_PASSENGERS && (!taxiData || !taxiData.isFull)) {
+            database.ref('taxis/' + userId).update({ isFull: true, isBroadcasting: false });
+        } 
+        // If seats open up (someone dropped off), mark driver as AVAILABLE
+        else if (currentCount < MAX_PASSENGERS && (taxiData && taxiData.isFull)) {
+            database.ref('taxis/' + userId).update({ isFull: false, isBroadcasting: true });
+        }
 
-            const tripCard = document.getElementById('ehailingActiveTripCard');
-            if (currentCount > 0 && tripCard) {
-                let cardContent = `
-                <div style="padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
-                    <h3 style="margin: 0; font-weight: 900; color: #111;">Active Passengers (${currentCount})</h3>
-                    <button onclick="window.updateMultiPassengerRoute(event)" style="background: #007BFF; color: white; border: none; padding: 6px 12px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(0,123,255,0.3);">
-                        <i class="fas fa-car-side"></i> Fetch Passengers
-                    </button>
-                </div>
-                <div style="max-height: 40vh; overflow-y: auto; padding: 15px; background: #f4f5f7;">`;
+        // --- Active Trip UI Rendering (Small Cars / e-Hailing layout) ---
+        const passengerNavBtn = document.querySelector('.nav__link[onclick="openPassengersMenu()"]');
+        if (passengerNavBtn && passengerNavBtn.parentElement) passengerNavBtn.parentElement.style.display = 'none';
 
-                acceptedPassengers.forEach(passenger => {
-                    const pickupLoc = (window.passengerLocations && window.passengerLocations.get(passenger.key)) || passenger.pickupAddress || 'Fetching Location...';
-                    const dropoffLoc = passenger.destination ? passenger.destination.split(',')[0] : 'Route';
-                    const fare = passenger.calculatedPrice ? parseFloat(passenger.calculatedPrice).toFixed(2) : (passenger.price ? parseFloat(passenger.price).toFixed(2) : '25.00');
+        const tripCard = document.getElementById('ehailingActiveTripCard');
+        if (currentCount > 0 && tripCard) {
+            let cardContent = `
+            <div style="padding: 15px 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;">
+                <h3 style="margin: 0; font-weight: 900; color: #111;">Active Passengers (${currentCount}/${MAX_PASSENGERS})</h3>
+                <button onclick="window.updateMultiPassengerRoute(event)" style="background: #007BFF; color: white; border: none; padding: 6px 12px; border-radius: 12px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 6px; box-shadow: 0 4px 10px rgba(0,123,255,0.3);">
+                    <i class="fas fa-car-side"></i> Fetch Passengers
+                </button>
+            </div>
+            <div style="max-height: 40vh; overflow-y: auto; padding: 15px; background: #f4f5f7;">`;
 
-                    var actionButton = '';
-                    var safeCommuterName = passenger.commuterName ? passenger.commuterName.replace(/'/g, "\\'") : 'Passenger';
+            acceptedPassengers.forEach(passenger => {
+                const pickupLoc = (window.passengerLocations && window.passengerLocations.get(passenger.key)) || passenger.pickupAddress || 'Fetching Location...';
+                const dropoffLoc = passenger.destination ? passenger.destination.split(',')[0] : 'Route';
+                const fare = passenger.calculatedPrice ? parseFloat(passenger.calculatedPrice).toFixed(2) : (passenger.price ? parseFloat(passenger.price).toFixed(2) : '25.00');
 
-                    if (passenger.status === 'accepted' || passenger.status === 'passenger_here' || passenger.status === 'driver_on_way') {
-                        actionButton = `
-                            <button class="btn btn-danger" style="flex: 0.6; border-radius: 12px; font-weight: 800; padding: 10px; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2;" onclick="promptCancelTrip('${passenger.key}')">Cancel</button>
-                            <button class="btn btn-outline" style="flex: 0.8; border-radius: 12px; font-weight: 800; padding: 10px; border: 2px solid #007BFF; color: #007BFF; background: white;" onclick="window.startNavigationForPassengerByKey('${passenger.key}')">Map</button>
-                            <button class="btn btn-primary" style="flex: 1.2; border-radius: 12px; font-weight: 800; padding: 10px;" onclick="window.showPassengerOnboardPopup('${safeCommuterName}', '${passenger.key}', '${passenger.subKey || ''}')"><i class="fas fa-play"></i> Pick Up</button>
-                        `;
-                    } else if (passenger.status === 'passenger_onboard' || passenger.status === 'in_transit' || passenger.status === 'picked_up') {
-                        actionButton = `
-                            <button class="btn btn-outline" style="flex: 1; border-radius: 12px; font-weight: 800; padding: 10px; border: 2px solid #4361ee; color: #4361ee; background: white;" onclick="window.startNavigationForPassengerByKey('${passenger.key}')"><i class="fas fa-map"></i> Map</button>
-                            <button class="btn btn-danger" style="flex: 1.5; border-radius: 12px; font-weight: 800; padding: 10px; background: #dc3545; border: none; color: white;" onclick="window.directEndTrip('${passenger.key}')"><i class="fas fa-flag-checkered"></i> Drop Off</button>
-                        `;
-                    } else {
-                        actionButton = `<button class="btn btn-success" style="flex: 1; border-radius: 12px; font-weight: 800; padding: 10px;" onclick="window.directEndTrip('${passenger.key}')"><i class="fas fa-check-circle"></i> Complete</button>`;
-                    }
+                var actionButton = '';
+                var safeCommuterName = passenger.commuterName ? passenger.commuterName.replace(/'/g, "\\'") : 'Passenger';
 
-                    cardContent += `
-                        <div style="background: white; border: 1px solid #eee; border-radius: 16px; padding: 15px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
-                            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #f8f9fa; padding-bottom: 10px; margin-bottom: 10px;">
-                                <h3 style="margin: 0; font-weight: 800; font-size: 1.1rem; color: #111;"><i class="fas fa-user" style="color: #007BFF;"></i> ${passenger.commuterName}</h3>
-                                <span style="font-size: 1.3rem; font-weight: 900; color: #28a745;">R${fare}</span>
-                            </div>
-                            <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: flex-start;">
-                                <i class="fas fa-map-marker-alt" style="color: #dc3545; margin-top: 3px;"></i>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #888; font-weight: 800;">PICK UP</div>
-                                    <div style="font-weight: 700; color: #111; font-size: 0.9rem;">${pickupLoc}</div>
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: flex-start;">
-                                <i class="fas fa-flag-checkered" style="color: #007BFF; margin-top: 3px;"></i>
-                                <div>
-                                    <div style="font-size: 0.7rem; color: #888; font-weight: 800;">DROP OFF</div>
-                                    <div style="font-weight: 700; color: #111; font-size: 0.9rem;">${dropoffLoc}</div>
-                                </div>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button class="btn btn-light" style="width: 45px; border-radius: 12px; background: #f1f3f5; color: #007BFF; border: 1px solid #ddd; padding: 0; display: flex; align-items: center; justify-content: center;" onclick="window.openChat('${passenger.commuterId}', '${passenger.commuterName}')">
-                                    <i class="fas fa-comments"></i>
-                                </button>
-                                ${actionButton}
+                if (passenger.status === 'accepted' || passenger.status === 'passenger_here' || passenger.status === 'driver_on_way') {
+                    actionButton = `
+                        <button class="btn btn-danger" style="flex: 0.6; border-radius: 12px; font-weight: 800; padding: 10px; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2;" onclick="promptCancelTrip('${passenger.key}')">Cancel</button>
+                        <button class="btn btn-outline" style="flex: 0.8; border-radius: 12px; font-weight: 800; padding: 10px; border: 2px solid #007BFF; color: #007BFF; background: white;" onclick="window.startNavigationForPassengerByKey('${passenger.key}')">Map</button>
+                        <button class="btn btn-primary" style="flex: 1.2; border-radius: 12px; font-weight: 800; padding: 10px;" onclick="window.showPassengerOnboardPopup('${safeCommuterName}', '${passenger.key}', '${passenger.subKey || ''}')"><i class="fas fa-play"></i> Pick Up</button>
+                    `;
+                } else if (passenger.status === 'passenger_onboard' || passenger.status === 'in_transit' || passenger.status === 'picked_up') {
+                    actionButton = `
+                        <button class="btn btn-outline" style="flex: 1; border-radius: 12px; font-weight: 800; padding: 10px; border: 2px solid #4361ee; color: #4361ee; background: white;" onclick="window.startNavigationForPassengerByKey('${passenger.key}')"><i class="fas fa-map"></i> Map</button>
+                        <button class="btn btn-danger" style="flex: 1.5; border-radius: 12px; font-weight: 800; padding: 10px; background: #dc3545; border: none; color: white;" onclick="window.directEndTrip('${passenger.key}')"><i class="fas fa-flag-checkered"></i> Drop Off</button>
+                    `;
+                } else {
+                    actionButton = `<button class="btn btn-success" style="flex: 1; border-radius: 12px; font-weight: 800; padding: 10px;" onclick="window.directEndTrip('${passenger.key}')"><i class="fas fa-check-circle"></i> Complete</button>`;
+                }
+
+                cardContent += `
+                    <div style="background: white; border: 1px solid #eee; border-radius: 16px; padding: 15px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid #f8f9fa; padding-bottom: 10px; margin-bottom: 10px;">
+                            <h3 style="margin: 0; font-weight: 800; font-size: 1.1rem; color: #111;"><i class="fas fa-user" style="color: #007BFF;"></i> ${passenger.commuterName}</h3>
+                            <span style="font-size: 1.3rem; font-weight: 900; color: #28a745;">R${fare}</span>
+                        </div>
+                        <div style="display: flex; gap: 10px; margin-bottom: 8px; align-items: flex-start;">
+                            <i class="fas fa-map-marker-alt" style="color: #dc3545; margin-top: 3px;"></i>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #888; font-weight: 800;">PICK UP</div>
+                                <div style="font-weight: 700; color: #111; font-size: 0.9rem;">${pickupLoc}</div>
                             </div>
                         </div>
-                    `;
-                });
+                        <div style="display: flex; gap: 10px; margin-bottom: 12px; align-items: flex-start;">
+                            <i class="fas fa-flag-checkered" style="color: #007BFF; margin-top: 3px;"></i>
+                            <div>
+                                <div style="font-size: 0.7rem; color: #888; font-weight: 800;">DROP OFF</div>
+                                <div style="font-weight: 700; color: #111; font-size: 0.9rem;">${dropoffLoc}</div>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="btn btn-light" style="width: 45px; border-radius: 12px; background: #f1f3f5; color: #007BFF; border: 1px solid #ddd; padding: 0; display: flex; align-items: center; justify-content: center;" onclick="window.openChat('${passenger.commuterId}', '${passenger.commuterName}')">
+                                <i class="fas fa-comments"></i>
+                            </button>
+                            ${actionButton}
+                        </div>
+                    </div>
+                `;
+            });
 
-                cardContent += `</div>`;
-                tripCard.innerHTML = cardContent;
-                tripCard.style.display = 'block';
-            } else if (tripCard) {
-                tripCard.style.display = 'none';
-            }
+            cardContent += `</div>`;
+            tripCard.innerHTML = cardContent;
+            tripCard.style.display = 'block';
+        } else if (tripCard) {
+            tripCard.style.display = 'none';
         }
     });
 };
-
 // =======================================================================
 // FIX: "FETCH PASSENGERS" BUTTON & SEQUENTIAL NAVIGATION UI
 // =======================================================================
@@ -20115,301 +19852,6 @@ window.safeVibrate = function(pattern) {
 };
 
 
-// =======================================================================
-// UNIFIED DRIVER TRACKING POPUP (Live Waypoints & Onboard Actions)
-// =======================================================================
-window.showDriverAcceptedPopup = async function(taxiId, restoredState = null) {
-    console.log("🎯 showDriverAcceptedPopup called for taxi:", taxiId);
-    
-    // Ensure popup styles are injected
-    if (typeof injectDriverPopupStyles === 'function') {
-        injectDriverPopupStyles();
-    }
-    
-    if (typeof hideModernDashboard === 'function') hideModernDashboard();
-    const mainActionSheet = document.getElementById('mainActionSheet');
-    if (mainActionSheet) mainActionSheet.style.display = 'none';
-
-    try {
-        // Close other overlapping alerts
-        if (typeof closeModal === 'function') {
-            closeModal('pendingRequestPopup');
-            closeModal('genericMessagePopup');
-        }
-        
-        let reqData = null;
-        let activeReqId = restoredState?.requestKey || window.currentRequestId || localStorage.getItem('currentRequestId');
-        
-        if (!activeReqId) {
-            console.error("No active request ID found.");
-            return;
-        }
-
-        const reqSnapshot = await database.ref('requests/' + activeReqId).once('value');
-        reqData = reqSnapshot.val();
-        
-        if (!reqData) {
-            console.error("Request data not found in DB.");
-            return;
-        }
-
-        if (reqData.taxiId) taxiId = reqData.taxiId;
-        window.currentRequestId = activeReqId;
-        localStorage.setItem('currentRequestId', activeReqId);
-        
-        const taxiSnapshot = await database.ref('taxis/' + taxiId).once('value');
-        const taxi = taxiSnapshot.val();
-        if (!taxi) {
-            console.error("Taxi data not found in DB.");
-            return;
-        }
-
-        // Determine if this is a pooled Club ride
-        const isClubRide = reqData.type === 'club';
-        let myTripData = reqData; 
-        
-        if (isClubRide && reqData.passengers && window.userId && reqData.passengers[window.userId]) {
-            myTripData = reqData.passengers[window.userId]; 
-        }
-        
-        let destText = myTripData.destination || reqData.destination || "As Directed";
-        if (destText === "Destination not set" || destText === "Not Specified") destText = "As Directed";
-        destText = destText.split(',')[0].trim();
-        
-        let pickupPin = myTripData.pickupPin || reqData.pickupPin || "----";
-        let tripPriceRaw = myTripData.finalAmount || myTripData.price || myTripData.calculatedPrice || reqData.calculatedPrice || taxi.rate || 25;
-        let priceNum = parseFloat(tripPriceRaw);
-        if (isNaN(priceNum) || priceNum <= 0) priceNum = 25;
-
-        const appliedCredit = parseFloat(myTripData.appliedCredit || reqData.appliedCredit || 0);
-        const promoRemaining = window.commuterData?.promoRemaining || 0;
-        
-        let fareHtml = '';
-        if (appliedCredit > 0) {
-            const finalPrice = Math.max(0, priceNum - appliedCredit);
-            fareHtml = `
-                <div class="uber-info-value fare" style="font-size: 16px; font-weight: 900; color: #28a745;">R${finalPrice.toFixed(2)}</div>
-                <div style="font-size: 10px; color: #888; text-decoration: line-through; margin-top: 2px;">R${priceNum.toFixed(2)}</div>
-            `;
-        } else {
-            fareHtml = `<div class="uber-info-value fare" style="font-size: 16px; font-weight: 900; color: #28a745;">R${priceNum.toFixed(2)}</div>`;
-        }
-
-        let myLat = parseFloat(myTripData.location?.latitude || myTripData.commuterLocation?.latitude || window.commuterLat);
-        let myLng = parseFloat(myTripData.location?.longitude || myTripData.commuterLocation?.longitude || window.commuterLng);
-        
-        const driverName = taxi.name || 'Driver';
-        const driverPhone = taxi.phone || taxi.mobile || taxi.phoneNumber || '10111'; 
-        const driverRating = taxi.rating ? parseFloat(taxi.rating).toFixed(1) : '5.0';
-        const getValidImg = typeof getValidImageUrl === 'function' ? getValidImageUrl : (url) => url;
-        const profilePicUrl = taxi.profile_picture_url ? getValidImg(taxi.profile_picture_url) : 'https://ui-avatars.com/api/?name=' + encodeURIComponent(driverName);
-        
-        const vInfo = typeof getVehicleDisplayInfo === 'function' ? getVehicleDisplayInfo(taxi) : {
-            reg: taxi.taxiRegistrationNumber || taxi.registration || taxi.licenseNumber || 'N/A',
-            color: taxi.vehicleColor || '',
-            makeModel: taxi.vehicleModel || taxi.registration || 'Vehicle'
-        };
-        
-        let tripStatus = myTripData.status || reqData.status;
-        let isArrived = tripStatus === 'arrived' || tripStatus === 'passenger_here';
-        let isOnboard = tripStatus === 'passenger_onboard' || tripStatus === 'in_transit' || tripStatus === 'picked_up';
-        
-        let clubBadgeHtml = '';
-        if (isClubRide) {
-            const passCount = reqData.passengers ? Object.keys(reqData.passengers).length : 1;
-            const maxCap = reqData.maxCapacity || 3;
-            clubBadgeHtml = `
-                <div style="background: #fff4e5; color: #000000 !important; padding: 6px 15px; border-radius: 20px; display: inline-flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 800; border: 1px solid #ffe8cc; margin-bottom: 10px;">
-                    <i class="fas fa-users" style="color: #000000 !important;"></i> Asiye Club Ride &bull; ${passCount}/${maxCap} Pax
-                </div>
-            `;
-        }
-        
-        let modal = document.getElementById('driverAcceptedPopup');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'driverAcceptedPopup';
-            modal.className = 'modal-overlay';
-            document.body.appendChild(modal);
-        }
-        
-        modal.style.cssText = `
-            display: flex !important; visibility: visible !important; opacity: 1 !important;
-            background: rgba(0,0,0,0.75) !important; pointer-events: auto !important;
-            z-index: 100005 !important; position: fixed !important; top: 0 !important;
-            left: 0 !important; width: 100vw !important; height: 100vh !important;
-            align-items: flex-end !important; justify-content: center !important;
-        `;
-        
-        let modalContent = modal.querySelector('.modal-content');
-        if (!modalContent) {
-            modalContent = document.createElement('div');
-            modalContent.className = 'modal-content';
-            modal.appendChild(modalContent);
-        }
-        
-        modalContent.style.cssText = `
-            position: relative !important; bottom: 0 !important; left: 0 !important;
-            width: 100% !important; max-width: 500px !important; 
-            height: auto !important; max-height: 90vh !important; 
-            overflow-y: auto !important; overflow-x: hidden !important; 
-            margin: 0 auto !important; padding: 25px 20px !important;
-            pointer-events: auto !important; background: #ffffff !important;
-            border-radius: 28px 28px 0 0 !important; box-shadow: 0 -10px 40px rgba(0,0,0,0.2) !important;
-            border: none !important; transform: translateY(0) !important; 
-            animation: slideUp 0.3s ease-out !important; -webkit-overflow-scrolling: touch;
-        `;
-
-        const mapHtml = (!isArrived && !isOnboard) ? `
-            <div id="trackingMapMiniContainer" style="width: 100%; height: 160px; border-radius: 16px; overflow: hidden; margin-bottom: 20px; background-color: #e9ecef; border: 1px solid #ddd; position: relative;">
-                <div id="acceptedTripMiniMap" style="width: 100%; height: 100%;"></div>
-            </div>
-        ` : '';
-        
-        modalContent.innerHTML = `
-            <div style="width: 40px; height: 5px; background: #ddd; border-radius: 3px; margin: 0 auto 15px auto;"></div>
-            
-            <div style="text-align: center; margin-bottom: 15px;">
-                ${clubBadgeHtml}
-                <h2 id="commuterTrackingTitle" style="font-size: 22px; font-weight: 900; margin: 0 0 5px 0; color: #000000 !important;">
-                    ${isOnboard ? 'Heading to destination' : (isArrived ? 'Your driver is here' : 'Your driver is on the way')}
-                </h2>
-                <p id="commuterTrackingSubtitle" style="color: #000000 !important; font-size: 14px; font-weight: 800; margin: 0; display: ${!isArrived && !isOnboard ? 'block' : 'none'};">
-                    Arriving in <span id="liveEtaBigNumber">--</span> min
-                </p>
-            </div>
-            
-            ${mapHtml}
-            
-            <div style="background: #ffffff; border: 1px solid #eee; border-radius: 16px; padding: 12px 16px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 15px rgba(0,0,0,0.03);">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                    <img src="${profilePicUrl}" style="width: 55px; height: 55px; border-radius: 50%; object-fit: cover; border: 2px solid #f8f9fa;" onerror="this.src='data/AsiyeNew.png'">
-                    <div>
-                        <div style="font-size: 16px; font-weight: 900; color: #000000 !important;">${escapeHtml(driverName)}</div>
-                        <div style="font-size: 13px; font-weight: 700; color: #FFA500 !important;">
-                            <i class="fas fa-star" style="color: #FFA500 !important;"></i> ${driverRating}
-                        </div>
-                    </div>
-                </div>
-                <div style="text-align: right;">
-                    <div style="background: #f8f9fa; border: 1px solid #ddd; padding: 4px 8px; border-radius: 8px; font-family: monospace; font-weight: 900; color: #111; font-size: 1.1rem;">${escapeHtml(vInfo.reg)}</div>
-                    <div style="font-size: 11px; font-weight: 800; color: #000000 !important; margin-top: 4px; text-transform: uppercase;">${vInfo.color ? escapeHtml(vInfo.color) + ' ' : ''}${escapeHtml(vInfo.makeModel)}</div>
-                </div>
-            </div>
-            
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
-                <div style="background: #f8f9fa; border-radius: 14px; padding: 12px 8px; text-align: center; border: 1px solid #eee;">
-                    <div style="font-size: 10px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 6px;">Your Fare</div>
-                    ${fareHtml}
-                </div>
-                <div style="background: #f8f9fa; border-radius: 14px; padding: 12px 8px; text-align: center; border: 1px solid #eee;">
-                    <div style="font-size: 10px; font-weight: 800; color: #888; text-transform: uppercase; margin-bottom: 6px;">Drop-off</div>
-                    <div style="font-size: 12px; font-weight: 800; color: #111; word-break: break-word; line-height: 1.2;">${escapeHtml(destText)}</div>
-                </div>
-                <div style="background: #eef4ff; border-radius: 14px; padding: 12px 8px; text-align: center; border: 1px solid #cce0ff;">
-                    <div style="font-size: 10px; font-weight: 800; color: #003366 !important; text-transform: uppercase; margin-bottom: 6px;">Your PIN</div>
-                    <div style="font-size: 18px; letter-spacing: 2px; font-family: monospace; font-weight: 900; color: #003366 !important;">${pickupPin}</div>
-                </div>
-            </div>
-            
-            <div style="display: flex; gap: 12px; margin-bottom: 15px;">
-                <button onclick="openTripChat(event, '${taxiId}', '${escapeHtml(driverName)}')" style="flex: 1; background: #f8f9fa; border: 2px solid #007BFF; border-radius: 30px; padding: 14px; font-weight: 800; color: #007BFF; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer;">
-                    <i class="fas fa-comment"></i> Chat
-                </button>
-                <button onclick="window.location.href='tel:${driverPhone}'" style="width: 50px; border-radius: 50%; background: #111; border: none; color: white; cursor: pointer;">
-                    <i class="fas fa-phone-alt"></i>
-                </button>
-            </div>
-            
-            <button onclick="openEmergencyAlert()" style="width: 100%; background: #fff0f0; border: 1px solid #ffcdd2; border-radius: 30px; padding: 14px; font-weight: 900; color: #dc3545 !important; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 12px; cursor: pointer;">
-                <i class="fas fa-shield-alt" style="color: #dc3545 !important;"></i> Safety / Emergency Alert
-            </button>
-            
-            <div id="commuterActionContainer">
-                ${!isOnboard ? `
-                <button onclick="cancelCurrentRequest()" style="width: 100%; background: white; border: 1px solid #ccc; border-radius: 30px; padding: 14px; font-weight: 900; color: #000000 !important; cursor: pointer; margin-bottom: 10px;">
-                    Cancel Trip
-                </button>
-                ` : `
-                <button onclick="window.directEndTrip('${activeReqId}')" style="width: 100%; background: #dc3545; border: none; border-radius: 16px; padding: 16px; font-weight: 800; color: white; margin-top: 10px; cursor: pointer; box-shadow: 0 4px 15px rgba(220,53,69,0.3);">
-                    <i class="fas fa-flag-checkered"></i> End Trip / Drop-off
-                </button>
-                `}
-                
-                ${isArrived && !isOnboard ? `
-                <button onclick="confirmPassengerOnboard()" style="width: 100%; background: #28a745; border: none; border-radius: 16px; padding: 16px; font-weight: 800; color: white; margin-top: 10px; cursor:pointer;">
-                    <i class="fas fa-car-side"></i> Confirm Passenger Onboard
-                </button>
-                ` : ''}
-            </div>
-        `;
-        
-        modal.classList.add('open');
-        modal.style.display = 'flex';
-        
-        // --- Start Maps and Intervals ---
-        if (!isArrived && !isOnboard && !isNaN(myLat) && !isNaN(myLng) && taxi.latitude && taxi.longitude) {
-            setTimeout(() => {
-                if (typeof window.initBoltStyleMiniMap === 'function') {
-                    window.initBoltStyleMiniMap(taxiId, myLat, myLng);
-                }
-            }, 300);
-        }
-        
-        if (typeof showConfirmedTaxi === 'function') showConfirmedTaxi(taxiId, activeReqId);
-        if (!isArrived && !isOnboard && typeof startRealTimeETACalculation === 'function') startRealTimeETACalculation(taxiId);
-
-        // --- 10. Lightweight Live Sync listener (No complete HTML re-injection) ---
-        if (window.activeTripMonitor) {
-            database.ref('requests/' + activeReqId).off('value', window.activeTripMonitor);
-        }
-
-        window.activeTripMonitor = database.ref('requests/' + activeReqId).on('value', (snap) => {
-            const liveReq = snap.val();
-            if (!liveReq) return;
-
-            let liveMyTrip = liveReq;
-            if (isClubRide && liveReq.passengers && liveReq.passengers[window.userId]) {
-                liveMyTrip = liveReq.passengers[window.userId];
-            }
-
-            const liveStatus = liveMyTrip.status || liveReq.status;
-            
-            const titleEl = document.getElementById('commuterTrackingTitle');
-            const actionContainer = document.getElementById('commuterActionContainer');
-
-            if (liveStatus === 'passenger_here' || liveStatus === 'arrived') {
-                if (titleEl) titleEl.innerText = 'Your driver is here!';
-                if (actionContainer) {
-                    actionContainer.innerHTML = `
-                        <button onclick="confirmPassengerOnboard()" style="width: 100%; background: #28a745; border: none; border-radius: 16px; padding: 16px; font-weight: 800; color: white; cursor:pointer;">
-                            <i class="fas fa-car-side"></i> Confirm Passenger Onboard
-                        </button>
-                    `;
-                }
-            } else if (liveStatus === 'passenger_onboard' || liveStatus === 'in_transit' || liveStatus === 'picked_up') {
-                if (titleEl) titleEl.innerHTML = '<i class="fas fa-route"></i> Heading to destination';
-                if (actionContainer) {
-                    actionContainer.innerHTML = `
-                        <button onclick="window.directEndTrip('${activeReqId}')" style="width: 100%; background: #dc3545; border: none; border-radius: 16px; padding: 16px; font-weight: 800; color: white; cursor: pointer; box-shadow: 0 4px 15px rgba(220,53,69,0.3);">
-                            <i class="fas fa-flag-checkered"></i> End Trip / Drop-off
-                        </button>
-                    `;
-                }
-            } else if (liveStatus === 'completed') {
-                database.ref('requests/' + activeReqId).off('value', window.activeTripMonitor);
-                window.activeTripMonitor = null;
-            } else if (liveStatus === 'cancelled_by_driver' || liveStatus === 'cancelled_by_admin') {
-                database.ref('requests/' + activeReqId).off('value', window.activeTripMonitor);
-                window.activeTripMonitor = null;
-                if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
-            }
-        });
-        
-    } catch (error) {
-        console.error("❌ Error in showDriverAcceptedPopup:", error);
-    }
-};
 
 window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passengerData = null, routeType = 'pickup') {
     if (typeof closeActivePopup === 'function') closeActivePopup();
@@ -20739,98 +20181,33 @@ window.startHotspotSync = function() {
         clearHotspotMarkers();
         const coordinatesList = [];
 
-        try {
-            // 1. Fetch Active Live Requests (Immediate Need - Pink Dots)
-            const reqSnap = await database.ref('requests').once('value');
-            if (reqSnap.exists()) {
-                reqSnap.forEach(child => {
-                    const req = child.val();
-                    const isPending = req.status === 'pending' || req.status === 'pooling';
-                    
-                    if (isPending && req.commuterLocation && req.commuterLocation.latitude) {
-                        plotHotspot(
-                            req.commuterLocation.latitude, 
-                            req.commuterLocation.longitude, 
-                            "Live Request", 
-                            "Passenger waiting right now", 
-                            "#f72585", // Pink/Red
-                            coordinatesList
-                        );
-                    }
-                });
-            }
-
-            // 2. Fetch Commuter Everyday Preferred Locations (Persistent Demand - Gold Dots)
-            const commSnap = await database.ref('commuters').once('value');
-            if (commSnap.exists() && taxiData && taxiData.latitude && taxiData.longitude) {
-                commSnap.forEach(child => {
-                    const commuter = child.val();
-                    
-                    // Check if commuter saved an everyday hotspot preference
-                    if (commuter.preferredLocation && commuter.preferredLocation.lat && commuter.preferredLocation.lng) {
-                        // ✨ STRICT 20km RADIUS ENFORCEMENT
-                        const dist = calculateDistance(
-                            taxiData.latitude, 
-                            taxiData.longitude, 
-                            commuter.preferredLocation.lat, 
-                            commuter.preferredLocation.lng
-                        );
-                        
-                        if (dist <= 20) {
-                            plotHotspot(
-                                commuter.preferredLocation.lat, 
-                                commuter.preferredLocation.lng, 
-                                "Commuter Hotspot", 
-                                "Everyday pickup preference", 
-                                "#FFC107", // Gold/Orange
-                                coordinatesList
-                            );
-                        }
-                    }
-                });
-            }
-
-            // 3. Dynamic Auto-Zoom / Camera Framing
-            if (hotspotModeActive) {
-                if (coordinatesList.length > 0 && map) {
-                    const bounds = new mapboxgl.LngLatBounds();
-                    
-                    // Include the driver's current position so they see themselves relative to the hotspots
-                    if (typeof taxiLngLat !== 'undefined' && taxiLngLat) {
-                        bounds.extend(taxiLngLat);
-                    }
-                    
-                    // Add all the hotspots we just found
-                    coordinatesList.forEach(coord => bounds.extend(coord));
-                    
-                    // Smoothly fly to fit everything on screen (flat 2D view for clarity)
-                    map.fitBounds(bounds, { 
-                        padding: { top: 150, bottom: 100, left: 50, right: 50 }, // Padding avoids UI overlapping the dots
-                        maxZoom: 14.5, 
-                        pitch: 0, // Keep map flat top-down
-                        duration: 2000,
-                        essential: true
-                    });
-                } else {
-                    showCommunicationBanner("No passenger hotspots found within your 20km radius.", "warning");
-                }
-            }
-        } catch (error) {
-            console.error("Hotspot Sync Error:", error);
+        // 🚀 FIX: Pull users who are "Availing" themselves for Club rides
+        const reqSnap = await database.ref('requests').orderByChild('status').equalTo('availing_on_route').once('value');
+        
+        if (reqSnap.exists()) {
+            reqSnap.forEach(child => {
+                const req = child.val();
+                // Plot them as Green "Pick Me Up" dots on the driver's route
+                plotHotspot(
+                    req.poolCenterLat, 
+                    req.poolCenterLng, 
+                    "Passenger on Route", 
+                    `Going to: ${req.dropoffAddress.split(',')[0]}`, 
+                    "#30D158", // Bright Green for Club
+                    coordinatesList
+                );
+            });
+        }
+        
+        // Auto-route the driver through these points if they are moving
+        if (coordinatesList.length >= 2 && !window.navActive) {
+            calculateOptimizedRoute(coordinatesList.map(c => ({lng: c[0], lat: c[1]})));
         }
     };
-
-    // Run the sync immediately upon opening the mode
-    syncData();
     
-    // Refresh the data automatically every 60 seconds while the mode is active
-    if (window.hotspotInterval) clearInterval(window.hotspotInterval);
-    window.hotspotInterval = setInterval(() => {
-        if (hotspotModeActive) syncData();
-        else clearInterval(window.hotspotInterval);
-    }, 60000);
+    syncData();
+    setInterval(syncData, 15000); // Refresh every 15 seconds
 };
-
 window.plotHotspot = function(lat, lng, title, subtitle, color, coordinatesList) {
     lat = parseFloat(lat);
     lng = parseFloat(lng);
@@ -21380,6 +20757,229 @@ window.processPendingReferralCounters = async function(newUserId, referrerCode) 
         }
     }
 };
+
+window.openClubContractsBoard = async function() {
+    closeActivePopup();
+    
+    let popup = document.getElementById('genericMessagePopup');
+    popup.innerHTML = `
+        <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+        <div style="padding: 10px; text-align: left;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <div style="width: 50px; height: 50px; border-radius: 12px; background: #fff4e5; color: #FF9F0A; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
+                    <i class="fas fa-handshake"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; color: #111; font-weight: 900;">Club Contracts</h3>
+                    <p style="margin: 0; color: #666; font-size: 0.85rem;">Guaranteed daily income routes.</p>
+                </div>
+            </div>
+            
+            <div id="clubContractsList" style="max-height: 60vh; overflow-y: auto; padding-right: 5px;">
+                <div class="spinner" style="margin: 20px auto; border-left-color: #FF9F0A;"></div>
+            </div>
+        </div>
+    `;
+    openPopup('genericMessagePopup');
+
+    try {
+        // Fetch "waiting_pool" requests that have reached the Threshold (e.g., 3 people)
+        const snap = await database.ref('requests').orderByChild('type').equalTo('club').once('value');
+        const listDiv = document.getElementById('clubContractsList');
+        let html = '';
+        let foundValidContract = false;
+
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const contract = child.val();
+                
+                // Only show unassigned pools that have passengers
+                if (contract.status === 'waiting_pool' && !contract.taxiId) {
+                    const passKeys = contract.passengers ? Object.keys(contract.passengers) : [];
+                    const passCount = passKeys.length;
+                    
+                    // 🚨 THRESHOLD LOGIC: Only show to drivers if at least 2 or 3 people are subscribed,
+                    // OR if the system forces it to be visible. This guarantees no driver runs empty.
+                    if (passCount >= 2 || contract.forceDispatch) {
+                        foundValidContract = true;
+                        
+                        // Calculate guaranteed total payout
+                        const perPerson = contract.originalPerPersonPrice || 25;
+                        const dailyTotal = passCount * perPerson;
+                        const monthlyTotal = dailyTotal * 20; // 20 working days
+
+                        const shortPickup = contract.poolCenterLat ? "Suburbs" : "Local Area"; // Geocode if needed
+                        const shortDropoff = contract.destination ? contract.destination.split(',')[0] : "City Center";
+
+                        html += `
+                        <div style="background: #ffffff; border: 2px solid #FF9F0A; border-radius: 16px; padding: 15px; margin-bottom: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                <div style="background: #fff4e5; color: #FF9F0A; padding: 4px 10px; border-radius: 8px; font-weight: 900; font-size: 0.75rem;">
+                                    ${passCount} SUBSCRIBERS READY
+                                </div>
+                                <div style="color: #28a745; font-weight: 900; font-size: 1.1rem;">R${monthlyTotal}/mo</div>
+                            </div>
+                            
+                            <div style="margin-bottom: 12px; font-size: 0.9rem; color: #444;">
+                                <div style="margin-bottom: 4px;"><i class="fas fa-map-marker-alt" style="color: #dc3545; width: 15px;"></i> Pickup: <strong>Various in Area</strong></div>
+                                <div><i class="fas fa-flag-checkered" style="color: #007BFF; width: 15px;"></i> Dropoff: <strong>${shortDropoff}</strong></div>
+                            </div>
+                            
+                            <div style="background: #f8f9fa; padding: 10px; border-radius: 8px; font-size: 0.8rem; color: #666; margin-bottom: 15px; display: flex; justify-content: space-between;">
+                                <span><i class="fas fa-clock"></i> Departs: <strong>${contract.morningDeparture || '07:00'}</strong></span>
+                                <span><i class="fas fa-undo"></i> Returns: <strong>${contract.afternoonReturn || '17:00'}</strong></span>
+                            </div>
+
+                            <button onclick="claimClubContract('${child.key}')" style="width: 100%; background: #111; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer;">
+                                Claim Daily Contract
+                            </button>
+                        </div>`;
+                    }
+                }
+            });
+        }
+
+        if (foundValidContract) {
+            listDiv.innerHTML = html;
+        } else {
+            listDiv.innerHTML = `
+                <div style="text-align: center; padding: 20px;">
+                    <i class="fas fa-users-slash" style="font-size: 3rem; color: #ccc; margin-bottom: 15px;"></i>
+                    <h4 style="color: #333; margin: 0 0 5px 0;">No Active Contracts</h4>
+                    <p style="color: #888; font-size: 0.9rem;">There are no subscriber groups in your area that meet the minimum threshold yet. Check back later.</p>
+                </div>
+            `;
+        }
+
+    } catch (e) {
+        console.error(e);
+        document.getElementById('clubContractsList').innerHTML = '<p style="color:red; text-align:center;">Failed to load contracts.</p>';
+    }
+};
+
+window.claimClubContract = function(poolId) {
+    const btn = event.target;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Claiming...';
+    btn.disabled = true;
+
+    // 1. Assign driver to the pool and change status to 'pooling' (active club)
+    database.ref(`requests/${poolId}`).update({
+        taxiId: userId,
+        driverName: `${taxiData.name || ''} ${taxiData.surname || ''}`.trim(),
+        driverPhone: taxiData.phone || '',
+        status: 'pooling', // It is now an active moving club
+        assignedAt: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+        // 2. Notify all subscribed commuters that their driver is locked in!
+        database.ref(`requests/${poolId}/passengers`).once('value').then(snap => {
+            if (snap.exists()) {
+                snap.forEach(passSnap => {
+                    const commuterId = passSnap.key;
+                    database.ref(`notifications/commuters/${commuterId}`).push({
+                        type: 'admin_broadcast', // Pushes a generic popup
+                        title: 'Club Driver Assigned!',
+                        message: `Great news! ${taxiData.name} has claimed your daily route. They will arrive at your scheduled time.`,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                });
+            }
+        });
+
+        closeActivePopup();
+        showCommunicationBanner("Contract Claimed! Check 'My Clients' to view your daily schedule.", "success");
+        
+    }).catch(err => {
+        btn.innerHTML = 'Claim Daily Contract';
+        btn.disabled = false;
+        showCommunicationBanner("Failed to claim contract.", "danger");
+    });
+};
+
+// Override the capacity toggle logic to allow Hybrid Loading
+window.checkHybridCapacity = function() {
+    // If the driver is doing a Club Route, they can stay 'Online' until physical seats are filled
+    const currentPassengerCount = acceptedPassengers.length;
+    const maxVehicleCapacity = taxiData.vehicleType === 'ehailing' ? 4 : 15;
+
+    if (currentPassengerCount > 0 && currentPassengerCount < maxVehicleCapacity) {
+        // Ensure driver stays broadcasting on the "Sho't Left" map!
+        database.ref('taxis/' + userId).update({ 
+            isBroadcasting: true,
+            isFull: false 
+        });
+        
+        // Show hybrid banner on driver dashboard
+        showCommunicationBanner(`Hybrid Mode: You have ${maxVehicleCapacity - currentPassengerCount} empty seats. You are visible to cash passengers along your route!`, "info");
+    } else if (currentPassengerCount >= maxVehicleCapacity) {
+        // Car is actually full, pull them off the map
+        database.ref('taxis/' + userId).update({ 
+            isBroadcasting: false,
+            isFull: true 
+        });
+    }
+};
+
+// Call this every time a passenger gets picked up or dropped off
+// (Add a call to window.checkHybridCapacity() inside your executePassengerOnboard and directEndTrip functions)
+
+// =======================================================================
+// 🚕 DYNAMIC ROUTE DIRECTION ENGINE (Sho't Left Logic)
+// =======================================================================
+window.monitorTaxiRouteState = function() {
+    if (!userId) return;
+    
+    // Listen to all requests assigned to this driver
+    database.ref('requests').orderByChild('taxiId').equalTo(userId).on('value', (snapshot) => {
+        let activeCount = 0;
+        let firstDest = null;
+        
+        if (snapshot.exists()) {
+            let activeReqs = [];
+            snapshot.forEach(child => {
+                let r = child.val();
+                // Check if it's an active trip
+                if (['accepted', 'driver_on_way', 'passenger_here', 'passenger_onboard', 'in_transit', 'picked_up'].includes(r.status)) {
+                    // Handle Club Pooling passengers count
+                    if (r.type === 'club' && r.passengers) {
+                        let activeClubPax = Object.values(r.passengers).filter(p => 
+                            ['accepted', 'passenger_onboard', 'in_transit', 'picked_up'].includes(p.status)
+                        );
+                        activeCount += activeClubPax.length;
+                        if (!firstDest && activeClubPax.length > 0) firstDest = activeClubPax[0].destination;
+                    } else {
+                        // Standard ride
+                        activeCount++;
+                        if (!firstDest) firstDest = r.destination;
+                    }
+                }
+            });
+        }
+        
+        // Determine the dynamic destination
+        const destToSave = (activeCount > 0 && firstDest) ? firstDest : "As Directed";
+        const maxPax = (taxiData && taxiData.vehicleType === 'ehailing') ? 4 : 15;
+        const isFull = activeCount >= maxPax;
+
+        // Update the Taxi's public profile so commuters see the changes instantly
+        database.ref('taxis/' + userId).update({
+            passengerCount: activeCount,
+            destination: destToSave,
+            isFull: isFull,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        });
+        
+        if (taxiData) {
+            taxiData.passengerCount = activeCount;
+            taxiData.destination = destToSave;
+            taxiData.isFull = isFull;
+        }
+    });
+};
+
+// Start the monitor as soon as the app loads the driver's profile
+setTimeout(() => {
+    if (typeof window.monitorTaxiRouteState === 'function') window.monitorTaxiRouteState();
+}, 4000);
 </script>
 
 </body>
