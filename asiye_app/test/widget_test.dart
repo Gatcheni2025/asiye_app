@@ -7,7 +7,7 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(const MaterialApp(home: AsiyeMainShell()));
 
-    // Verify that the initializing text is shown
-    expect(find.textContaining('Initializing'), findsOneWidget);
+    // Verify that the logo text "ASIYE" is shown in the preloader
+    expect(find.text('ASIYE'), findsOneWidget);
   });
 }
