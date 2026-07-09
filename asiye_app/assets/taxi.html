@@ -4894,57 +4894,6 @@ window.promptCancelTrip = function(passengerKey) {
 /**
  * Restore driver's active trip/pool state on page refresh
  */
-function restoreDriverTripState() {
-    if (!userId) return;
-
-    console.log("🔄 Restoring driver trip state...");
-
-    database.ref(`taxis/${userId}/currentRequest`).once('value', (snapshot) => {
-        const reqId = snapshot.val();
-        if (!reqId) {
-            console.log("No active request found for driver.");
-            return;
-        }
-
-        database.ref('requests/' + reqId).once('value', (reqSnapshot) => {
-            const reqData = reqSnapshot.val();
-            if (!reqData) {
-                // Stale request, clean up
-                database.ref(`taxis/${userId}`).update({ currentRequest: null });
-                return;
-            }
-
-            console.log("Found active request for driver:", reqId, "Status:", reqData.status);
-
-            // Check if it's a club pool with passengers
-            if (reqData.type === 'club' && reqData.passengers) {
-                const passKeys = Object.keys(reqData.passengers);
-                if (passKeys.length > 0) {
-                    console.log(`Restoring pool with ${passKeys.length} passengers`);
-                    // Show the driver pool view with passenger list
-                    if (typeof showDriverPoolView === 'function') {
-                        showDriverPoolView(reqId, reqData);
-                    }
-                    return;
-                }
-            }
-
-            // Check if it's a standard ride
-            const activeStatuses = ['accepted', 'driver_on_way', 'in_transit', 'passenger_here', 'passenger_onboard'];
-            if (activeStatuses.includes(reqData.status) && reqData.taxiId === userId) {
-                console.log("Restoring active ride navigation");
-                if (typeof startNavigationForPassengerByKey === 'function') {
-                    startNavigationForPassengerByKey(reqId);
-                }
-            }
-        });
-    });
-}
-
-// =================================================================
-// MODIFY your existing initializeApp function
-// Add the restoreDriverTripState() call at the end
-// =================================================================
 
 async function initializeApp(uid) {
     userId = uid;
@@ -7293,6 +7242,35 @@ window.currentShowingRequestId = null;
 window.requestPopupTimeout = null;
 
 
+function closeRequestPopupNow() {
+    const popup = document.getElementById('commuterRequestPopup');
+    const overlay = document.getElementById('popupOverlay');
+    const topBanners = document.getElementById('top-notifications-container');
+    
+    if (popup) {
+        popup.classList.remove('open');
+        popup.style.display = 'none';
+        popup.style.visibility = 'hidden';
+        popup.style.opacity = '0';
+    }
+    
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.display = 'none';
+        overlay.style.visibility = 'hidden';
+        overlay.style.opacity = '0';
+    }
+    
+    if (topBanners) topBanners.style.display = 'flex';
+    
+    if (window.requestPopupTimeout) {
+        clearTimeout(window.requestPopupTimeout);
+        window.requestPopupTimeout = null;
+    }
+    
+    window.isShowingRequestPopup = false;
+    window.currentShowingRequestId = null;
+}
 
 function acceptCurrentRequest() {
     if (!window.currentShowingRequestId) {
@@ -17495,6 +17473,32 @@ function initTripPersistence() {
 // initTripPersistence();
 
 // Make sure these helper functions exist
+function closeRequestPopupNow() {
+    const popup = document.getElementById('commuterRequestPopup');
+    const overlay = document.getElementById('popupOverlay');
+    
+    if (popup) {
+        popup.classList.remove('open');
+        popup.style.display = 'none';
+        popup.style.visibility = 'hidden';
+        popup.style.opacity = '0';
+    }
+    
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.display = 'none';
+        overlay.style.visibility = 'hidden';
+        overlay.style.opacity = '0';
+    }
+    
+    if (window.requestPopupTimeout) {
+        clearTimeout(window.requestPopupTimeout);
+        window.requestPopupTimeout = null;
+    }
+    
+    window.isShowingRequestPopup = false;
+    window.currentShowingRequestId = null;
+}
 
 function declineCurrentRequest() {
     if (window.currentShowingRequestId) {
@@ -19488,62 +19492,98 @@ window.checkHybridCapacity = function() {
 // =======================================================================
 // 🚕 DYNAMIC ROUTE DIRECTION ENGINE (Sho't Left Logic)
 // =======================================================================
+// =================================================================
+// 2. DRIVER APP: ROUTE & SEAT SYNCHRONIZER (Wipes Stale Data)
+// =================================================================
+
+window.syncDriverRouteState = function() {
+    if (!window.userId) return;
+
+    // Filter out completed or cancelled passengers from local memory
+    const activePax = (window.acceptedPassengers || []).filter(p => {
+        const st = String(p.status).toLowerCase().trim();
+        return !['completed', 'cancelled_by_driver', 'cancelled_by_commuter', 'cancelled_by_admin', 'rejected'].includes(st);
+    });
+
+    const currentCount = activePax.length;
+    const maxPax = 3; // Hardcoded Club Max Capacity
+    const isFull = currentCount >= maxPax;
+
+    let destToSave = "";
+    if (currentCount === 0) {
+        // 🚨 EMPTY CAR: Wipe old destinations (like "Durban") so it shows as "Empty & Ready"!
+        destToSave = "";
+    } else {
+        // 🚨 OCCUPIED CAR: Use the destination of the first active passenger in the car!
+        const firstDest = activePax[0].destination;
+        destToSave = (firstDest && firstDest !== "As Directed" && firstDest !== "Not Specified") ? firstDest : "Local Route";
+    }
+
+    console.log(`🔄 Syncing Driver State -> Seats: ${currentCount}/3 | Destination: "${destToSave}" | Full: ${isFull}`);
+
+    // Update Firebase Realtime Database immediately
+    database.ref('taxis/' + window.userId).update({
+        passengerCount: currentCount,
+        destination: destToSave,
+        isFull: isFull,
+        isBroadcasting: !isFull, // Keep visible on map until all 3 seats are taken
+        updatedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    // Update local variables
+    if (window.taxiData) {
+        window.taxiData.passengerCount = currentCount;
+        window.taxiData.destination = destToSave;
+        window.taxiData.isFull = isFull;
+        window.taxiData.isBroadcasting = !isFull;
+    }
+};
+
+// Replace the old monitor with our new strict synchronizer
 window.monitorTaxiRouteState = function() {
-    if (!userId) return;
+    if (!window.userId) return;
     
-    // Listen to all requests assigned to this driver
-    database.ref('requests').orderByChild('taxiId').equalTo(userId).on('value', (snapshot) => {
-        let activeCount = 0;
-        let firstDest = null;
-        
+    // Listen to all requests assigned to this driver in real-time
+    database.ref('requests').orderByChild('taxiId').equalTo(window.userId).on('value', (snapshot) => {
+        window.acceptedPassengers = [];
         if (snapshot.exists()) {
-            let activeReqs = [];
             snapshot.forEach(child => {
-                let r = child.val();
-                // Check if it's an active trip
-                if (['accepted', 'driver_on_way', 'passenger_here', 'passenger_onboard', 'in_transit', 'picked_up'].includes(r.status)) {
-                    // Handle Club Pooling passengers count
+                let r = { key: child.key, ...child.val() };
+                const activeStatuses = ['accepted', 'driver_on_way', 'passenger_here', 'passenger_onboard', 'in_transit', 'picked_up'];
+                
+                if (activeStatuses.includes(r.status)) {
                     if (r.type === 'club' && r.passengers) {
-                        let activeClubPax = Object.values(r.passengers).filter(p => 
-                            ['accepted', 'passenger_onboard', 'in_transit', 'picked_up'].includes(p.status)
-                        );
-                        activeCount += activeClubPax.length;
-                        if (!firstDest && activeClubPax.length > 0) firstDest = activeClubPax[0].destination;
+                        Object.entries(r.passengers).forEach(([cId, p]) => {
+                            if (activeStatuses.includes(p.status || r.status)) {
+                                window.acceptedPassengers.push({ key: r.key, subKey: cId, commuterId: cId, ...p });
+                            }
+                        });
                     } else {
-                        // Standard ride
-                        activeCount++;
-                        if (!firstDest) firstDest = r.destination;
+                        window.acceptedPassengers.push(r);
                     }
                 }
             });
         }
         
-        // Determine the dynamic destination
-        const destToSave = (activeCount > 0 && firstDest) ? firstDest : "As Directed";
-        const maxPax = (taxiData && taxiData.vehicleType === 'ehailing') ? 4 : 15;
-        const isFull = activeCount >= maxPax;
-
-        // Update the Taxi's public profile so commuters see the changes instantly
-        database.ref('taxis/' + userId).update({
-            passengerCount: activeCount,
-            destination: destToSave,
-            isFull: isFull,
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        });
-        
-        if (taxiData) {
-            taxiData.passengerCount = activeCount;
-            taxiData.destination = destToSave;
-            taxiData.isFull = isFull;
-        }
+        // Trigger sync immediately
+        window.syncDriverRouteState();
     });
 };
 
-// Start the monitor as soon as the app loads the driver's profile
+// Start synchronizer when driver app loads
 setTimeout(() => {
     if (typeof window.monitorTaxiRouteState === 'function') window.monitorTaxiRouteState();
-}, 4000);
+    if (typeof window.syncDriverRouteState === 'function') window.syncDriverRouteState();
+}, 2500);
 
+// Hook into Trip Completion to guarantee wipe when the last passenger gets off
+const originalDirectEndTrip = window.directEndTrip;
+window.directEndTrip = function(passengerKey) {
+    if (typeof originalDirectEndTrip === 'function') originalDirectEndTrip(passengerKey);
+    setTimeout(() => {
+        if (typeof window.syncDriverRouteState === 'function') window.syncDriverRouteState();
+    }, 1000);
+};
 // =================================================================
 // 1. MASTER INITIALIZER (Fixes "not defined" scope errors)
 // =================================================================
@@ -19804,64 +19844,16 @@ window.handleIncomingNotification = function(notification) {
     }
 };
 
-// =================================================================
-// 5. APP SETUP (Ensures it hooks into the global properly)
-// =================================================================
-window.completeAppSetup = function() {
-    console.log("Starting complete app setup...");
-
-    if (!window.userId) {
-        console.log("Waiting for userId...");
-        setTimeout(window.completeAppSetup, 500);
-        return;
-    }
-
-    if (typeof window.loadTaxiDataAndSetupListeners === 'function') window.loadTaxiDataAndSetupListeners();
-    if (typeof window.startLocationUpdates === 'function') window.startLocationUpdates();
-    if (typeof window.setupEventListeners === 'function') window.setupEventListeners();
-
-    // These call the strictly bound global functions from above
-    window.setupNotificationListener();
-    if (typeof window.setupChatListeners === 'function') window.setupChatListeners();
-    if (typeof window.initializePassengerCounter === 'function') window.initializePassengerCounter();
-    if (typeof window.initializeLocationIndicator === 'function') window.initializeLocationIndicator();
-    
-    try {
-        if (typeof window.setupSubscriptionListener === 'function') window.setupSubscriptionListener();
-    } catch(e) { console.warn("setupSubscriptionListener not found, skipping."); }
-
-    if (typeof window.fixExistingDriversVehicleType === 'function') window.fixExistingDriversVehicleType();
-
-    // CRITICAL: Call the global function
-    window.initializeRequestListener();
-
-    if (typeof window.loadCourierInventory === 'function') {
-        window.loadCourierInventory().catch(e => console.error("Failed to load courier inventory:", e));
-    }
-
-    setTimeout(() => {
-        if (typeof window.loadAcceptedPassengersAndParcels === 'function') {
-            window.loadAcceptedPassengersAndParcels();
-        }
-    }, 1000);
-};
-
-// Map original to global mapping just in case
-function completeAppSetup() {
-    window.completeAppSetup();
-}
 
 window.forceStartClubTrip = function(reqKey) {
+    // When driver clicks "Start Now (1 Pax)", lock the pool and change status to driver_on_way
     database.ref(`requests/${reqKey}`).update({
-        status: 'accepted' // This stops 'pooling' so no one else can join
+        status: 'driver_on_way',
+        startedAt: firebase.database.ServerValue.TIMESTAMP
     }).then(() => {
-        showCommunicationBanner("Pool locked. Proceed to pickup your passengers.", "success");
+        showCommunicationBanner("Pool locked! Proceed to your passengers.", "success");
     });
 };
-
-
-
-window.closeActivePopupAndReset = window.closeRequestPopupNow;
 
 window.closeActivePopup = function() {
     window.closeRequestPopupNow();
@@ -19872,8 +19864,275 @@ window.closeActivePopup = function() {
         p.style.setProperty('opacity', '0', 'important');
     });
 };
+window.closeRequestPopupNow = function() {
+    console.log("Forcibly closing request popups and tracking screens...");
+    const reqPopup = document.getElementById('commuterRequestPopup');
+    if (reqPopup) {
+        reqPopup.classList.remove('open');
+        reqPopup.style.setProperty('display', 'none', 'important');
+        reqPopup.style.setProperty('visibility', 'hidden', 'important');
+        reqPopup.style.setProperty('opacity', '0', 'important');
+    }
+    
+    const accPopup = document.getElementById('driverAcceptedPopup');
+    if (accPopup) {
+        accPopup.classList.remove('open');
+        accPopup.style.setProperty('display', 'none', 'important');
+        accPopup.style.setProperty('visibility', 'hidden', 'important');
+        accPopup.style.setProperty('opacity', '0', 'important');
+    }
+    
+    const overlay = document.getElementById('popupOverlay');
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.setProperty('display', 'none', 'important');
+    }
+    
+    window.isShowingRequestPopup = false;
+    window.currentShowingRequestId = null;
+    window.isViewingClubRequest = false;
+};
+// =================================================================
+// DRIVER APP: UI CRASH PREVENTION, EXPECTED FARES, & PERSISTENCE
+// =================================================================
 
+// 1. Securely define the popup closer globally for the Driver
+window.showPoolingRoomPopup = function(request) {
+    if (!request) return;
+    if (['cancelled_by_commuter', 'cancelled_by_driver', 'rejected'].includes(request.status)) {
+        window.closeRequestPopupNow(); return;
+    }
+    if (request.taxiId && request.taxiId !== userId) return;
 
+    window.activeRequest = request;
+    window.currentRequestId = request.key;
+
+    const passengers = request.passengers || {};
+    const passKeys = Object.keys(passengers);
+    const passCount = passKeys.length;
+    const maxCapacity = request.maxCapacity || 3;
+    const isPoolFull = passCount >= maxCapacity;
+    
+    let totalFare = 0;
+    let passengersListHtml = '';
+    
+    if (passCount > 0) {
+        passKeys.forEach((key) => {
+            const p = passengers[key];
+            const price = p.price || request.originalPerPersonPrice || 25;
+            const rating = p.rating || '5.0';
+            totalFare += price;
+            
+            passengersListHtml += `
+                <div style="background: #ffffff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px; border-left: 4px solid #007BFF;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 35px; height: 35px; border-radius: 50%; background: #e6f2ff; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #007BFF;">
+                                ${p.commuterName ? p.commuterName.charAt(0).toUpperCase() : 'P'}
+                            </div>
+                            <div>
+                                <div style="font-weight: 800; color: #111;">${escapeHtml(p.commuterName || 'Passenger')}</div>
+                                <div style="font-size: 0.7rem; color: #FFC107; font-weight: bold;"><i class="fas fa-star"></i> ${rating}</div>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-weight: 900; color: #28a745; font-size: 1.1rem;">R${price}</div>
+                        </div>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 0.8rem; color: #666; background: #f8f9fa; padding: 5px 8px; border-radius: 8px;">
+                        <i class="fas fa-map-marker-alt" style="color: #dc3545;"></i> <strong>Area:</strong> ${p.pickupAddress ? p.pickupAddress.split(',')[0] : 'Local Area'}
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    // 🚨 EXPECTED FARE FIX: If passengers are 0 or not full, show what the driver WILL earn!
+    const singleFareEstimate = request.originalPerPersonPrice || 25;
+    const expectedTotalFare = totalFare > 0 ? totalFare : (singleFareEstimate * maxCapacity);
+
+    let statusBadge = '';
+    let acceptBtnMessage = '';
+    
+    if (isPoolFull) {
+        statusBadge = `<div style="background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; margin-bottom: 10px;">✅ POOL IS FULL (${passCount}/${maxCapacity})</div>`;
+        acceptBtnMessage = `Start Trip Now`;
+    } else {
+        statusBadge = `<div style="background: #f0f0f0; color: #666; padding: 5px 15px; border-radius: 20px; font-weight: 900; font-size: 0.85rem; border: 1px solid #ddd; margin-bottom: 10px;">
+            <i class="fas fa-clock"></i> Waiting for ${maxCapacity - passCount} more people until full
+        </div>`;
+        acceptBtnMessage = `Accept (${passCount}/${maxCapacity} Pax)`;
+    }
+
+    const popup = document.getElementById('commuterRequestPopup') || (function(){
+        let p = document.createElement('div');
+        p.id = 'commuterRequestPopup';
+        p.className = 'popup';
+        document.body.appendChild(p);
+        return p;
+    })();
+    
+    popup.innerHTML = `
+        <button class="popup-close" onclick="declineClubRequest('${request.key}')" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 35px; height: 35px; border-radius: 50%; color: #333; z-index: 10; cursor: pointer;">&times;</button>
+        
+        <div style="padding: 20px; text-align: left; background: white; border-radius: 20px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                <div>
+                    <h3 style="color: #FF9F0A; margin: 0; font-weight: 900; font-size: 1.4rem;">Asiye Club Request</h3>
+                    ${statusBadge}
+                </div>
+                <div style="text-align: right; background: #eef4ff; border: 1px solid #cce0ff; padding: 8px 12px; border-radius: 12px;">
+                    <div style="font-size: 0.7rem; color: #007BFF; font-weight: bold;">TOTAL PAYOUT</div>
+                    <div style="font-size: 1.6rem; font-weight: 900; color: #007BFF; line-height: 1;">R${expectedTotalFare}</div>
+                </div>
+            </div>
+            
+            <div style="max-height: 40vh; overflow-y: auto; padding-right: 5px; margin-bottom: 15px;">
+                ${passCount > 0 ? passengersListHtml : '<div style="text-align: center; color: #888; padding: 20px;">No passengers yet</div>'}
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-top: 10px;">
+                <button class="btn btn-outline" onclick="declineClubRequest('${request.key}')" style="flex: 1; border-radius: 16px; padding: 14px; font-weight: bold; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2;">Decline</button>
+                <button class="btn btn-success" onclick="acceptClubPoolEarly('${request.key}')" style="flex: 2; border-radius: 16px; padding: 14px; font-weight: 900; background: #28a745; color: white; border: none;">
+                    ${acceptBtnMessage}
+                </button>
+            </div>
+        </div>
+    `;
+
+    window.openPopup('commuterRequestPopup');
+    if (typeof window.setupPoolPassengerListener === 'function') {
+        window.setupPoolPassengerListener(request.key);
+    }
+};
+
+// 3. Fix the Acceptance Button crash that bypassed tracking UI
+window.acceptClubPoolEarly = async function(reqKey) {
+    if (!reqKey) return;
+    
+    const btn = document.querySelector('#commuterRequestPopup .btn-success');
+    if (btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...'; btn.disabled = true; }
+
+    database.ref('requests/' + reqKey).transaction((currentData) => {
+        if (currentData === null) return currentData;
+        if (currentData.taxiId && currentData.taxiId !== userId) return; 
+        
+        const passKeys = currentData.passengers ? Object.keys(currentData.passengers) : [];
+        const passCount = passKeys.length;
+        const maxCapacity = 3; 
+        
+        currentData.taxiId = userId;
+        currentData.driverName = `${taxiData.name || ''} ${taxiData.surname || ''}`.trim();
+        currentData.acceptedAt = firebase.database.ServerValue.TIMESTAMP;
+        
+        if (passCount >= maxCapacity) {
+            currentData.status = 'driver_on_way'; 
+        } else {
+            currentData.status = 'pooling'; 
+        }
+        
+        if (passCount > 0) {
+            passKeys.forEach(k => {
+                currentData.passengers[k].status = 'accepted';
+                if (!currentData.passengers[k].pickupPin) {
+                    currentData.passengers[k].pickupPin = Math.floor(1000 + Math.random() * 9000).toString();
+                }
+            });
+        }
+        return currentData;
+    }, (error, committed, snapshot) => {
+        if (committed) {
+            // 🚨 CRITICAL FIX: Explicitly call the safe closer
+            window.closeRequestPopupNow();
+            
+            const req = snapshot.val();
+            req.key = reqKey;
+            
+            window.acceptedPassengers = [];
+            if (req.passengers) {
+                Object.entries(req.passengers).forEach(([cId, p]) => {
+                    window.acceptedPassengers.push({ key: reqKey, subKey: cId, commuterId: cId, ...p });
+                    database.ref(`notifications/commuters/${cId}`).push({
+                        type: 'request_accepted', driverId: userId, driverName: req.driverName, requestId: reqKey, 
+                        message: req.status === 'driver_on_way' ? 'Pool is full! Driver is on the way.' : 'Driver accepted. Waiting for Car to get people.',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    }).catch(()=>{});
+                });
+            }
+            
+            // Generate tracking Screen!
+            setTimeout(() => {
+                if (typeof window.showCommunicationBanner === 'function') window.showCommunicationBanner("Club Trip Accepted!", "success");
+                if (typeof window.showDriverMultiPassengerTracking === 'function') window.showDriverMultiPassengerTracking(req);
+                if (typeof window.setupPassengerChangeListener === 'function') window.setupPassengerChangeListener(reqKey);
+            }, 300);
+        } else {
+            window.closeRequestPopupNow();
+            if (typeof window.showCommunicationBanner === 'function') window.showCommunicationBanner("Failed to accept trip.", "danger");
+        }
+    });
+};
+
+// 4. Ensure Driver's Tracking Screen Persists Across Page Reloads
+window.restoreDriverTripState = function() {
+    if (!userId) return;
+    console.log("🔄 Restoring driver trip state...");
+
+    database.ref(`taxis/${userId}/currentRequest`).once('value', (snapshot) => {
+        const reqId = snapshot.val();
+        if (!reqId) return;
+
+        database.ref('requests/' + reqId).once('value', (reqSnapshot) => {
+            const reqData = reqSnapshot.val();
+            if (!reqData) {
+                database.ref(`taxis/${userId}`).update({ currentRequest: null });
+                return;
+            }
+
+            // Set global state
+            window.activeRequest = reqData;
+            window.currentRequestId = reqId;
+
+            // Re-build passenger manifests
+            window.acceptedPassengers = [];
+            if (reqData.passengers) {
+                Object.entries(reqData.passengers).forEach(([cId, p]) => {
+                    window.acceptedPassengers.push({ key: reqId, subKey: cId, commuterId: cId, ...p });
+                });
+            } else if (reqData.commuterId) {
+                window.acceptedPassengers.push({ key: reqId, ...reqData });
+            }
+
+            // Restore UI tracking based on type
+            if (reqData.type === 'club') {
+                if (typeof window.showDriverMultiPassengerTracking === 'function') {
+                    window.showDriverMultiPassengerTracking(reqData);
+                }
+                if (typeof window.setupPassengerChangeListener === 'function') {
+                    window.setupPassengerChangeListener(reqId);
+                }
+            } else {
+                const activeStatuses = ['accepted', 'driver_on_way', 'in_transit', 'passenger_here', 'passenger_onboard'];
+                if (activeStatuses.includes(reqData.status) && reqData.taxiId === userId) {
+                    if (typeof window.showDriverAcceptedPopup === 'function') {
+                        window.showDriverAcceptedPopup(userId, { requestKey: reqId });
+                    }
+                }
+            }
+        });
+    });
+};
+
+// Mount trip persistence to application setup
+const originalCompleteAppSetupDriver = window.completeAppSetup;
+window.completeAppSetup = function() {
+    if (typeof originalCompleteAppSetupDriver === 'function') originalCompleteAppSetupDriver();
+    setTimeout(() => {
+        if (typeof window.restoreDriverTripState === 'function') {
+            window.restoreDriverTripState();
+        }
+    }, 1500);
+};
 // =================================================================
 // 🚨 FIX 2: DRIVER ACCEPTANCE FOR ASIYE CLUB POOLS
 // =================================================================
@@ -20242,231 +20501,6 @@ setTimeout(setupCancellationListener, 3000);
 // 🚨 FIX 2: SAME GATEKEEPER FOR POOLING ROOM
 // =================================================================
 
-// =================================================================
-// DRIVER: Show Pooling Room Popup with Real-time Updates
-// =================================================================
-
-window.showPoolingRoomPopup = function(request) {
-    if (!request) return;
-
-    // Check if request was cancelled
-    if (request.status === 'cancelled_by_commuter' || 
-        request.status === 'cancelled_by_driver' || 
-        request.status === 'cancelled_by_admin' ||
-        request.status === 'rejected') {
-        window.closeRequestPopupNow();
-        return;
-    }
-
-    // Block already assigned pools
-    if (request.taxiId && request.taxiId !== userId) {
-        return;
-    }
-
-    if (window.ignoredClubRequests && window.ignoredClubRequests[request.key]) return;
-    if (activeRequest && activeRequest.type === 'club' && activeRequest.key !== request.key) return;
-    
-    activeRequest = request;
-    currentRequestId = request.key;
-    window.isViewingClubRequest = true;
-
-    // ================================================================
-    // 🔥 FIX 1: Get the latest passengers directly from the request
-    // ================================================================
-    const passKeys = request.passengers ? Object.keys(request.passengers) : [];
-    
-    // Filter out cancelled passengers
-    const activePassengers = passKeys.filter(key => {
-        const p = request.passengers[key];
-        return p.status !== 'cancelled_by_commuter' && 
-               p.status !== 'cancelled_by_driver' && 
-               p.status !== 'completed' &&
-               p.status !== 'rejected';
-    });
-    
-    const passCount = activePassengers.length;
-    const maxCapacity = request.maxCapacity || 3;
-    const isPoolFull = passCount >= maxCapacity;
-    const canAcceptEarly = passCount >= 2 || request.forceDispatch === true;
-    
-    // ================================================================
-    // 🔥 FIX 2: Calculate remaining spots correctly
-    // ================================================================
-    const remainingSpots = Math.max(0, maxCapacity - passCount);
-    
-    let acceptBtnMessage = `Waiting for ${Math.max(0, 2 - passCount)} more`;
-    let statusBadge = '';
-    let statusColor = '#FF9F0A';
-    
-    if (isPoolFull) {
-        statusBadge = `
-            <div style="background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #28a745; margin-bottom: 10px;">
-                <i class="fas fa-check-circle"></i> POOL IS FULL (${passCount}/${maxCapacity})
-            </div>
-        `;
-        acceptBtnMessage = `Accept Full Pool (${passCount} Pax)`;
-        statusColor = '#28a745';
-    } else if (canAcceptEarly) {
-        statusBadge = `
-            <div style="background: #FF9F0A; color: black; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #FF9F0A; margin-bottom: 10px;">
-                <i class="fas fa-hourglass-half"></i> NEEDS ${remainingSpots} MORE (${passCount}/${maxCapacity})
-            </div>
-        `;
-        acceptBtnMessage = `Accept & Go (${passCount} Pax)`;
-    } else {
-        statusBadge = `
-            <div style="background: #f0f0f0; color: #666; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #ddd; margin-bottom: 10px;">
-                <i class="fas fa-clock"></i> WAITING FOR PASSENGERS (${passCount}/${maxCapacity})
-            </div>
-        `;
-        acceptBtnMessage = `Waiting for ${remainingSpots} more`;
-    }
-
-    // ================================================================
-    // 🔥 FIX 3: Build passenger list HTML with all passengers
-    // ================================================================
-    let passengersHtml = '';
-    let totalFare = 0;
-    
-    if (request.passengers) {
-        for (const key of activePassengers) {
-            const p = request.passengers[key];
-            const price = p.price || request.originalPerPersonPrice || 25;
-            totalFare += price;
-            
-            passengersHtml += `
-                <div style="background: #ffffff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px; border-left: 4px solid #007BFF;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 32px; height: 32px; border-radius: 50%; background: #e6f2ff; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #007BFF;">
-                                ${p.commuterName ? p.commuterName.charAt(0) : 'P'}
-                            </div>
-                            <div>
-                                <div style="font-weight: 800; color: #111;">${escapeHtml(p.commuterName || 'Passenger')}</div>
-                                <div style="font-size: 0.7rem; color: #666;">
-                                    <i class="fas fa-map-marker-alt" style="color: #dc3545;"></i> ${p.pickupAddress ? p.pickupAddress.split(',')[0] : 'Pickup'}
-                                </div>
-                            </div>
-                        </div>
-                        <div style="font-weight: 900; color: #28a745; font-size: 1.1rem;">R${price}</div>
-                    </div>
-                </div>
-            `;
-        }
-    }
-
-    // ================================================================
-    // 🔥 FIX 4: Build the popup with real-time count
-    // ================================================================
-    let popup = document.getElementById('commuterRequestPopup');
-    if (!popup) {
-        popup = document.createElement('div');
-        popup.id = 'commuterRequestPopup';
-        popup.className = 'popup';
-        document.body.appendChild(popup);
-    }
-    
-    popup.style.cssText = `
-        display: block !important; visibility: visible !important; opacity: 1 !important;
-        position: fixed !important; top: 50% !important; left: 50% !important;
-        transform: translate(-50%, -50%) !important; background: white !important;
-        border-radius: 20px !important; box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important;
-        width: 90% !important; max-width: 420px !important; max-height: 85vh !important;
-        overflow-y: auto !important; z-index: 2147483647 !important; padding: 0 !important;
-    `;
-    
-    popup.classList.add('open');
-    let overlay = document.getElementById('popupOverlay');
-    if (overlay) overlay.classList.add('open');
-
-    const remainingMs = Math.max(0, (request.expiresAt || Date.now() + 10 * 60000) - Date.now());
-    const mins = Math.floor(remainingMs / 60000);
-    const secs = Math.floor((remainingMs % 60000) / 1000);
-
-    popup.innerHTML = `
-        <button class="popup-close" onclick="window.declineClubRequest('${request.key}')" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 35px; height: 35px; border-radius: 50%; color: #333; z-index: 10; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
-        
-        <div style="padding: 20px; text-align: left; background: white; border-radius: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div>
-                    <h3 style="color: ${statusColor}; margin: 0; font-weight: 900; font-size: 1.4rem;">Asiye Club Request</h3>
-                    ${statusBadge}
-                    <p style="color: #666; font-size: 0.85rem; margin: 5px 0 0 0; font-weight: bold;">
-                        <i class="fas fa-stopwatch fa-spin"></i> Time Remaining: <span id="poolTimer_${request.key}">${mins}:${secs.toString().padStart(2, '0')}</span>
-                    </p>
-                </div>
-                <div style="text-align: right; background: #eef4ff; border: 1px solid #cce0ff; padding: 8px 12px; border-radius: 12px;">
-                    <div style="font-size: 0.7rem; color: #007BFF; font-weight: bold;">TOTAL PAYOUT</div>
-                    <div id="poolAmount_${request.key}" style="font-size: 1.6rem; font-weight: 900; color: #007BFF; line-height: 1;">R${totalFare || (request.originalPerPersonPrice * passCount)}</div>
-                </div>
-            </div>
-            
-            <!-- Passenger List -->
-            <div style="max-height: 40vh; overflow-y: auto; padding-right: 5px; margin-bottom: 15px;">
-                <div id="passengerListContainer_${request.key}">
-                    ${passengersHtml || '<div style="text-align: center; padding: 20px; color: #888;">No passengers yet</div>'}
-                </div>
-                <div style="text-align: center; font-size: 0.8rem; color: #666; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
-                    <strong>${passCount}</strong> of <strong>${maxCapacity}</strong> seats filled
-                </div>
-            </div>
-            
-            <!-- Action Buttons -->
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-outline" onclick="window.declineClubRequest('${request.key}')" style="flex: 1; border-radius: 16px; padding: 14px; font-weight: bold; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2; cursor: pointer;">Decline</button>
-                
-                <button id="poolAcceptBtn_${request.key}" class="btn btn-success" onclick="acceptClubPoolEarly('${request.key}')" 
-                        style="flex: 2; border-radius: 16px; padding: 14px; font-weight: 900; background: ${canAcceptEarly || isPoolFull ? '#28a745' : '#6c757d'}; color: white; border: none; cursor: ${canAcceptEarly || isPoolFull ? 'pointer' : 'not-allowed'}; opacity: ${canAcceptEarly || isPoolFull ? '1' : '0.6'};">
-                    <span id="poolAcceptBtnTxt_${request.key}">${acceptBtnMessage}</span>
-                </button>
-            </div>
-            
-            ${isPoolFull ? `<div style="margin-top: 10px; text-align: center; font-size: 0.8rem; color: #28a745; font-weight: bold; background: #e8f5e9; padding: 8px; border-radius: 8px;">
-                <i class="fas fa-check-circle"></i> Pool is full! All ${passCount} passengers are ready to go.
-            </div>` : ''}
-            
-            ${!isPoolFull && passCount > 0 ? `<div style="margin-top: 10px; text-align: center; font-size: 0.8rem; color: #FF9F0A; font-weight: bold; background: #fff4e5; padding: 8px; border-radius: 8px;">
-                <i class="fas fa-hourglass-half"></i> ${passCount} passenger(s) waiting. Need ${remainingSpots} more to fill the pool.
-            </div>` : ''}
-        </div>
-    `;
-
-    // ================================================================
-    // 🔥 FIX 5: Set up real-time listener for passenger changes
-    // ================================================================
-    setupPoolPassengerListener(request.key);
-    
-    // Timer
-    if (popup.dataset.timerId) clearInterval(parseInt(popup.dataset.timerId));
-    const timerId = setInterval(() => {
-        const ms = request.expiresAt - Date.now();
-        if (ms <= 0 || !document.getElementById(`poolTimer_${request.key}`)) {
-            clearInterval(timerId);
-            const t = document.getElementById(`poolTimer_${request.key}`);
-            if (t) t.innerHTML = `0:00`;
-            const btn = document.getElementById(`poolAcceptBtn_${request.key}`);
-            const btnTxt = document.getElementById(`poolAcceptBtnTxt_${request.key}`);
-            if (btn && btnTxt) { 
-                btn.disabled = false; 
-                btn.style.opacity = '1';
-                btn.style.background = '#28a745';
-                btn.style.cursor = 'pointer';
-                btnTxt.textContent = `Time's Up! Accept & Go`;
-            }
-        } else {
-            const m = Math.floor(ms / 60000);
-            const s = Math.floor((ms % 60000) / 1000);
-            const t = document.getElementById(`poolTimer_${request.key}`);
-            if (t) t.innerHTML = `${m}:${s.toString().padStart(2, '0')}`;
-        }
-    }, 1000);
-    popup.dataset.timerId = timerId;
-    
-    // Vibrate to alert the driver
-    if (navigator.vibrate) {
-        navigator.vibrate([500, 200, 500]);
-    }
-};
 
 // =================================================================
 // DRIVER: Real-time Passenger List Listener
@@ -20613,315 +20647,233 @@ function setupPoolPassengerListener(poolId) {
     });
 }
 
-// =================================================================
-// DRIVER: Accept Club Pool Early (Updated)
-// =================================================================
+window.openCommuterRequestPopup = function(req) {
+    console.log("📞 openCommuterRequestPopup called with request:", req);
 
-window.acceptClubPoolEarly = async function(reqKey) {
-    if (!reqKey) return;
-
-    const btn = document.getElementById(`poolAcceptBtn_${reqKey}`);
-    if (btn) {
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
-        btn.disabled = true;
-    }
-
-    const reqRef = database.ref('requests/' + reqKey);
-    const result = await reqRef.transaction((currentData) => {
-        if (currentData === null) return currentData;
-        
-        if (currentData.status !== 'pooling' && currentData.status !== 'pending' && currentData.status !== 'waiting_pool') {
-            return; // Abort
+    // 🛑 CRITICAL FIX: If a driver is already assigned, DO NOT show the "New Request" screen!
+    if (req.taxiId) {
+        console.log("🚫 Blocking Popup: Request already assigned to driver:", req.taxiId);
+        if (req.taxiId === window.userId) {
+            window.closeRequestPopupNow();
+            if (req.type === 'club' || req.carCategory === 'club' || req.carCategory === 'clubxl') {
+                if (typeof window.showDriverMultiPassengerTracking === 'function') {
+                    window.showDriverMultiPassengerTracking(req);
+                }
+            } else {
+                if (typeof window.showDriverAcceptedPopup === 'function') {
+                    window.showDriverAcceptedPopup(req.taxiId, { requestKey: req.key });
+                }
+            }
         }
-        
-        if (currentData.taxiId && currentData.taxiId !== userId) {
-            return; // Already taken
-        }
-        
-        // Get passenger count
-        const passKeys = currentData.passengers ? Object.keys(currentData.passengers) : [];
-        const passCount = passKeys.length;
-        const maxCapacity = currentData.maxCapacity || 3;
-        
-        // Assign driver
-        currentData.taxiId = userId;
-        currentData.driverName = `${taxiData.name || ''} ${taxiData.surname || ''}`.trim() || 'Driver';
-        currentData.driverPhone = taxiData.phone || '';
-        currentData.acceptedAt = firebase.database.ServerValue.TIMESTAMP;
-        
-        // Set status based on passenger count
-        if (passCount >= maxCapacity) {
-            currentData.status = 'accepted';
-        } else {
-            currentData.status = 'pooling'; // Keep pooling for more passengers
-        }
-        
-        // Update pricing for all passengers
-        if (passCount > 0 && currentData.originalPerPersonPrice) {
-            const totalCarFare = currentData.originalPerPersonPrice * maxCapacity;
-            const newPerPersonFare = Math.round(totalCarFare / passCount);
-            
-            currentData.totalPoolPrice = totalCarFare;
-            
-            passKeys.forEach(k => {
-                const passAppliedCredit = currentData.passengers[k].appliedCredit || 0;
-                currentData.passengers[k].price = newPerPersonFare;
-                currentData.passengers[k].finalAmount = Math.max(0, newPerPersonFare - passAppliedCredit);
-                currentData.passengers[k].status = 'accepted';
-            });
-        }
-        
-        return currentData;
-    });
-
-    if (!result.committed) {
-        if (typeof showCommunicationBanner === 'function') showCommunicationBanner("Trip already accepted or expired.", "warning");
-        if (btn) { btn.innerHTML = 'Accept Now'; btn.disabled = false; }
-        if (typeof window.closeRequestPopupNow === 'function') window.closeRequestPopupNow();
         return;
     }
 
-    if (typeof window.closeRequestPopupNow === 'function') window.closeRequestPopupNow();
+    // Check if this request has been cancelled
+    if (req.status === 'cancelled_by_commuter' || 
+        req.status === 'cancelled_by_driver' || 
+        req.status === 'cancelled_by_admin' ||
+        req.status === 'rejected') {
+        console.log("🚫 Request was cancelled, ignoring.");
+        return;
+    }
 
-    const snap = await reqRef.once('value');
-    const request = snap.val();
-    if (!request) return;
-    request.key = reqKey;
+    if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) return;
 
-    await database.ref(`taxis/${userId}`).update({ currentRequest: reqKey });
+    window.isShowingRequestPopup = true;
+    window.currentShowingRequestId = req.key;
 
-    // Build local memory array
-    acceptedPassengers = [];
-    if (request.passengers) {
-        Object.entries(request.passengers).forEach(([commuterId, passenger]) => {
-            acceptedPassengers.push({
-                key: reqKey, 
-                subKey: commuterId, 
-                commuterId: commuterId, 
-                ...passenger
+    // 🏷️ DETECT TYPE
+    const isClub = (req.type === 'club' || req.carCategory === 'club' || req.carCategory === 'clubxl' || req.status === 'pooling' || req.status === 'waiting_pool');
+    
+    // 👤 EXTRACT SAFE COMMUTER OBJECT
+    let commuterObj = req;
+    let passengerCount = 1;
+    let maxCapacity = 3;
+    let passengersList = [];
+    
+    if (isClub && req.passengers) {
+        const passKeys = Object.keys(req.passengers);
+        passengerCount = passKeys.length;
+        maxCapacity = req.maxCapacity || 3;
+        
+        // Get the first passenger (or the one that triggered this notification)
+        const firstKey = passKeys[0];
+        if (firstKey) {
+            commuterObj = req.passengers[firstKey];
+            commuterObj.commuterId = firstKey;
+        }
+        
+        // Build list of all passengers
+        for (const key of passKeys) {
+            const p = req.passengers[key];
+            passengersList.push({
+                commuterId: key,
+                commuterName: p.commuterName || 'Passenger',
+                pickupAddress: p.pickupAddress || 'Location provided',
+                destination: p.destination || 'Route',
+                price: p.price || req.originalPerPersonPrice || 25,
+                pickupPin: p.pickupPin || '----'
             });
-            // Notify commuter
-            database.ref(`notifications/commuters/${commuterId}`).push({
-                type: 'request_accepted', 
-                driverId: userId, 
-                driverName: request.driverName, 
-                requestId: reqKey, 
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            }).catch(()=>{});
-        });
+        }
     }
 
-    // ================================================================
-    // 🔥 FIX: Show the driver tracking popup with all passengers
-    // ================================================================
-    setTimeout(() => {
-        if (typeof showCommunicationBanner === 'function') {
-            const passCount = Object.keys(request.passengers || {}).length;
-            showCommunicationBanner(`Club Trip Accepted! ${passCount} passengers in the pool.`, "success");
-        }
+    // 📍 CALCULATE DISTANCE
+    let distance = 0;
+    const targetLat = commuterObj.location?.latitude || commuterObj.pickupLat || req.poolCenterLat || 0;
+    const targetLng = commuterObj.location?.longitude || commuterObj.pickupLng || req.poolCenterLng || 0;
+    
+    if (taxiData && taxiData.latitude && targetLat) {
+        distance = calculateDistance(taxiData.latitude, taxiData.longitude, targetLat, targetLng);
+    }
+
+    // 🎨 SET UI VARIABLES
+    const typeTitle = isClub ? 'Asiye Club Request' : 'Asiye Go Request';
+    const brandColor = isClub ? '#FF9F0A' : '#007BFF';
+    const iconClass = isClub ? 'fa-users' : 'fa-car-side';
+    
+    // 💬 INSTRUCTION TEXT
+    let instructionText = "";
+    let countBadge = "";
+    let passengerListHtml = "";
+
+    if (isClub) {
+        countBadge = `<span style="background: #fff4e5; color: #FF9F0A; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 900; border: 1.5px solid #FF9F0A; margin-left: 10px;">Pool ${passengerCount}/${maxCapacity}</span>`;
+        instructionText = `<i class="fas fa-users" style="color: #FF9F0A; margin-right: 5px;"></i> <strong>${passengerCount}</strong> passenger(s) looking for a ride. Accept to start the pool.`;
         
-        // Show tracking with all passengers
-        if (typeof window.showDriverMultiPassengerTracking === 'function') {
-            window.showDriverMultiPassengerTracking(request);
+        // Build passenger list HTML
+        if (passengersList.length > 0) {
+            passengerListHtml = `
+                <div style="background: #f8f9fa; border-radius: 12px; padding: 12px; margin: 12px 0; border: 1px solid #eee; max-height: 150px; overflow-y: auto;">
+                    <div style="font-size: 0.75rem; color: #888; font-weight: 800; text-transform: uppercase; margin-bottom: 8px;">Passengers in this pool:</div>
+            `;
+            passengersList.forEach((p, idx) => {
+                const shortPickup = p.pickupAddress ? p.pickupAddress.split(',')[0] : 'Pickup';
+                const shortDest = p.destination ? p.destination.split(',')[0] : 'Destination';
+                passengerListHtml += `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: ${idx < passengersList.length - 1 ? '1px solid #eee' : 'none'};">
+                        <div style="display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-user" style="color: #007BFF; font-size: 0.8rem;"></i>
+                            <span style="font-weight: 700; font-size: 0.85rem;">${escapeHtml(p.commuterName)}</span>
+                            <span style="font-size: 0.7rem; color: #888;">→ ${escapeHtml(shortDest)}</span>
+                        </div>
+                        <span style="font-weight: 900; color: #28a745; font-size: 0.85rem;">R${p.price}</span>
+                    </div>
+                `;
+            });
+            passengerListHtml += `</div>`;
         }
-        
-        // Set up passenger change listener
-        if (typeof window.setupPassengerChangeListener === 'function') {
-            window.setupPassengerChangeListener(reqKey);
-        }
-    }, 300);
-};
-window.showDriverMultiPassengerTracking = function(request) {
-    if (!request) return;
-
-    // 🛠️ FAILSAFE: Normalize data
-    if (!request.passengers && request.commuterId) {
-        request.passengers = {};
-        request.passengers[request.commuterId] = {
-            commuterName: request.commuterName,
-            pickupAddress: request.pickupAddress,
-            destination: request.destination,
-            price: request.calculatedPrice || 25,
-            location: request.commuterLocation,
-            status: 'accepted',
-            pickupPin: request.pickupPin || '----'
-        };
-    }
-
-    if (!request.passengers) {
-        console.error("CRASH PREVENTED: No passengers found in request object.", request);
-        return; 
-    }
-
-    if (typeof hideModernDashboard === 'function') hideModernDashboard();
-    
-    let modal = document.getElementById('driverAcceptedPopup');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'driverAcceptedPopup';
-        document.body.appendChild(modal);
-    }
-    
-    modal.className = 'modal-overlay'; 
-
-    const driverLat = taxiData.latitude || 0;
-    const driverLng = taxiData.longitude || 0;
-    
-    let passengersList = Object.values(request.passengers).map(pass => ({
-        ...pass,
-        commuterId: Object.keys(request.passengers).find(id => request.passengers[id] === pass)
-    }));
-
-    passengersList = passengersList.map(pass => {
-        let dist = 0;
-        if (pass.location && pass.location.latitude) {
-            dist = calculateDistance(driverLat, driverLng, pass.location.latitude, pass.location.longitude);
-        }
-        return { ...pass, distance: dist };
-    }).sort((a, b) => a.distance - b.distance);
-
-    const maxCapacity = request.maxCapacity || 3;
-    const totalCount = passengersList.length;
-    const isPoolFull = totalCount >= maxCapacity;
-    const remaining = maxCapacity - totalCount;
-
-    let headerText = '';
-    let btnHtml = '';
-    let statusColor = '';
-    let statusIcon = '';
-    let statusMessage = '';
-
-    if (isPoolFull) {
-        statusColor = '#28a745';
-        statusIcon = 'fa-check-circle';
-        statusMessage = `✅ Pool is FULL! ${totalCount}/${maxCapacity} passengers ready to go.`;
-        headerText = `
-            <div style="background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #28a745; margin-bottom: 10px;">
-                <i class="fas fa-check-circle"></i> POOL FULL (${totalCount}/${maxCapacity})
-            </div>
-            <h3 style="margin:0 0 5px 0; color: #111; font-weight: 900;">All Passengers Ready!</h3>
-            <p style="margin:0; color: #28a745; font-weight: bold;">Proceed to pickups and start the trip.</p>
-        `;
-        btnHtml = `
-            <button onclick="window.calculateNextWaypoint()" class="btn btn-success" style="width:100%; padding: 15px; border-radius: 16px; font-weight: 900; background: #28a745; color: white; border: none;">
-                <i class="fas fa-route"></i> Start Trip & Pick Up Passengers
-            </button>
-            <button onclick="cancelCurrentRequest()" class="btn btn-danger" style="width:100%; margin-top: 10px; padding: 15px; border-radius: 16px; font-weight: 800; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2;">Cancel Entire Trip</button>
-        `;
-    } else if (request.taxiId) {
-        statusColor = '#FF9F0A';
-        statusIcon = 'fa-hourglass-half';
-        statusMessage = `⏳ Driver accepted! Waiting for ${remaining} more passenger(s) to join (${totalCount}/${maxCapacity})`;
-        headerText = `
-            <div style="background: #FF9F0A; color: black; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #FF9F0A; margin-bottom: 10px;">
-                <i class="fas fa-hourglass-half"></i> WAITING FOR ${remaining} MORE (${totalCount}/${maxCapacity})
-            </div>
-            <h3 style="margin:0 0 5px 0; color: #111; font-weight: 900;">Waiting for Pool to Fill</h3>
-            <p style="margin:0; color: #FF9F0A; font-weight: bold;">${totalCount} passenger(s) currently in the pool.</p>
-        `;
-        btnHtml = `
-            <button onclick="forceStartClubTrip('${request.key}')" class="btn btn-warning" style="width:100%; padding: 15px; border-radius: 16px; font-weight: 900; background: #FF9F0A; color: black; border: none;">
-                <i class="fas fa-play"></i> Start Now (${totalCount} Pax)
-            </button>
-            <button onclick="cancelCurrentRequest()" class="btn btn-danger" style="width:100%; margin-top: 10px; padding: 15px; border-radius: 16px; font-weight: 800; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2;">Cancel Trip</button>
-        `;
     } else {
-        statusColor = '#888';
-        statusIcon = 'fa-clock';
-        statusMessage = `⏳ Waiting for driver to accept the ride...`;
-        headerText = `
-            <div style="background: #f0f0f0; color: #666; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #ddd; margin-bottom: 10px;">
-                <i class="fas fa-clock"></i> WAITING FOR DRIVER
-            </div>
-            <h3 style="margin:0 0 5px 0; color: #111; font-weight: 900;">No Driver Assigned Yet</h3>
-            <p style="margin:0; color: #888; font-weight: bold;">${totalCount} passenger(s) waiting for a driver.</p>
-        `;
+        instructionText = `<i class="fas fa-bolt" style="color: #007BFF; margin-right: 5px;"></i> Private ride. Proceed to pickup immediately.`;
     }
 
-    let passengersHtml = '';
-    passengersList.forEach((pass, idx) => {
-        const isOnboard = ['passenger_onboard', 'picked_up', 'in_transit'].includes(pass.status);
-        const destShort = pass.destination ? pass.destination.split(',')[0] : "Route";
-        const pickupShort = pass.pickupAddress ? pass.pickupAddress.split(',')[0] : "Pickup";
-        const price = pass.price || request.originalPerPersonPrice || 25;
+    const passengerOffer = commuterObj.price || commuterObj.calculatedPrice || req.calculatedPrice || req.originalPerPersonPrice || 25;
+    const safePickupAddress = commuterObj.pickupAddress || 'Location provided';
+    const safeDestination = (commuterObj.destination && commuterObj.destination !== "As Directed" && commuterObj.destination !== "Not Specified") ? commuterObj.destination : 'Route';
+    const safeCommuterName = commuterObj.commuterName || 'Passenger';
+    
+    const shortPickup = safePickupAddress.split(',')[0].trim();
+    const shortDest = safeDestination.split(',')[0].trim();
 
-        if (isOnboard) {
-            passengersHtml += `
-                <div style="background:#e8f5e9; border-radius:16px; padding:15px; margin-bottom:12px; border: 1px solid #c8e6c9; border-left:5px solid #28a745;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 5px;">
-                        <div>
-                            <div style="font-weight:900; font-size:1.1rem; color:#111;">${escapeHtml(pass.commuterName)}</div>
-                            <div style="font-size:0.85rem; color:#28a745; font-weight:800; margin-top: 3px;"><i class="fas fa-check-circle"></i> On Board</div>
-                        </div>
-                        <div style="font-weight:900; color:#28a745;">R${price}</div>
-                    </div>
-                    <div style="margin:8px 0; font-size:0.85rem; color:#555;">
-                        <div><i class="fas fa-route" style="color:#28a745; width: 15px;"></i> Going to: <strong>${escapeHtml(destShort)}</strong></div>
-                    </div>
-                </div>
-            `;
-        } else {
-            passengersHtml += `
-                <div style="background:#ffffff; border-radius:16px; padding:15px; margin-bottom:12px; border: 1px solid #eee; border-left:5px solid #007BFF;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
-                        <div>
-                            <div style="font-weight:900; font-size:1.1rem; color:#111;">${escapeHtml(pass.commuterName)}</div>
-                            <div style="font-size:0.8rem; color:#dc3545; font-weight:bold;">${(pass.distance || 0).toFixed(1)} km away</div>
-                        </div>
-                        <div>
-                            <span style="background:#007BFF; color:white; padding:4px 10px; border-radius:12px; font-size:0.75rem; font-weight:bold;">Passenger #${idx+1}</span>
-                            <div style="font-weight:900; color:#28a745; margin-top:4px; text-align:right;">R${price}</div>
-                        </div>
-                    </div>
-                    
-                    <div style="font-size:0.85rem; color:#555; background:#f8f9fa; padding:8px; border-radius:8px; margin-bottom:10px;">
-                        <div><i class="fas fa-map-marker-alt" style="color:#dc3545; width:15px;"></i> From: <strong>${escapeHtml(pickupShort)}</strong></div>
-                        <div><i class="fas fa-flag-checkered" style="color:#28a745; width:15px;"></i> To: <strong>${escapeHtml(destShort)}</strong></div>
-                    </div>
-                    
-                    <div style="display:flex; gap:10px;">
-                        <button onclick="openChat('${pass.commuterId}', '${escapeHtml(pass.commuterName)}')" style="flex:1; background:white; border:2px solid #007BFF; color:#007BFF; border-radius:12px; font-weight:bold; padding:10px;">
-                            <i class="fas fa-comment"></i> Chat
-                        </button>
-                        <button onclick="window.showDirectionsOnMap(${pass.location?.latitude || 0}, ${pass.location?.longitude || 0}, '${escapeHtml(pass.commuterName)}')" style="flex:2; background:#007BFF; color:white; border:none; border-radius:12px; font-weight:bold; padding:10px;">
-                            <i class="fas fa-location-arrow"></i> Navigate
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-    });
+    let popup = document.getElementById('commuterRequestPopup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'commuterRequestPopup';
+        popup.className = 'popup';
+        document.body.appendChild(popup);
+    }
 
-    modal.style.cssText = `
-        display: flex !important; visibility: visible !important; opacity: 1 !important;
-        position: fixed !important; top: 0 !important; left: 0 !important;
-        background: rgba(0,0,0,0.6) !important; width: 100vw !important; height: 100vh !important;
-        align-items: flex-end !important; justify-content: center !important; z-index: 100005 !important;
+    popup.style.cssText = `
+        display: block !important; visibility: visible !important; opacity: 1 !important;
+        position: fixed !important; top: 50% !important; left: 50% !important;
+        transform: translate(-50%, -50%) !important; background: white !important;
+        border-radius: 24px !important; box-shadow: 0 25px 60px rgba(0,0,0,0.4) !important;
+        width: 92% !important; max-width: 420px !important; z-index: 100000 !important; 
+        padding: 0 !important; overflow: hidden;
     `;
 
-    modal.innerHTML = `
-        <div class="modal-content" style="background: white !important; width: 100% !important; max-width: 500px !important; border-radius: 28px 28px 0 0 !important; padding: 25px 20px max(35px, env(safe-area-inset-bottom)) 20px !important; box-shadow: 0 -15px 40px rgba(0,0,0,0.15) !important; transform: none !important; position: relative !important; margin: 0 !important; max-height: 85vh !important; display: flex !important; flex-direction: column !important;">
-            <div class="uber-drag-handle" style="width: 40px; height: 5px; background-color: #e0e0e0; border-radius: 3px; margin: 0 auto 15px auto; flex-shrink: 0;"></div>
+    popup.innerHTML = `
+        <button class="popup-close" onclick="window.closeRequestPopupNow()" style="position: absolute; right: 15px; top: 15px; z-index: 10; font-size: 1.5rem; background: #f0f0f0; border: none; color: #333; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;">&times;</button>
+        
+        <div style="padding: 25px 20px;">
+            <div style="margin-bottom: 15px; display: flex; align-items: center; flex-wrap: wrap;">
+                <div style="width: 42px; height: 42px; border-radius: 50%; background: ${brandColor}15; color: ${brandColor}; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 1.2rem; flex-shrink: 0;">
+                    <i class="fas ${iconClass}"></i>
+                </div>
+                <h2 style="margin: 0; font-weight: 900; color: #111; font-size: 1.3rem;">${typeTitle}</h2>
+                ${countBadge}
+            </div>
+
+            ${isClub ? `
+                <div style="background: #fff4e5; border: 1px solid #FF9F0A44; border-left: 4px solid #FF9F0A; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; font-size: 0.85rem; color: #333; font-weight: 600; line-height: 1.4;">
+                    ${instructionText}
+                </div>
+                ${passengerListHtml}
+            ` : `
+                <div style="background: #eef4ff; border: 1px solid #007BFF44; border-left: 4px solid #007BFF; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; font-size: 0.85rem; color: #333; font-weight: 600; line-height: 1.4;">
+                    ${instructionText}
+                </div>
+            `}
             
-            <!-- Status Message -->
-            <div style="background: ${statusColor}22; border: 2px solid ${statusColor}; color: ${statusColor}; padding: 12px 16px; border-radius: 12px; font-weight: 800; font-size: 0.95rem; margin: 0 0 15px 0; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; flex-shrink: 0;">
-                <i class="fas ${statusIcon}"></i>
-                ${statusMessage}
+            <!-- --- FIX: Show individual passenger details for Club --- -->
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 16px; text-align: center; border: 1px solid #eee; margin-bottom: 20px;">
+                <div style="font-size: 0.75rem; color: #888; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
+                    ${isClub ? 'FARE PER PASSENGER' : 'AMOUNT TO PAY'}
+                </div>
+                <div style="font-size: 2.2rem; font-weight: 900; color: #28a745; margin-top: 5px; line-height: 1;">R${passengerOffer}</div>
+                ${isClub ? `<div style="font-size: 0.7rem; color: #888; margin-top: 4px;">Total pool payout: R${passengerOffer * passengerCount}</div>` : ''}
+            </div>
+
+            <div style="background: #ffffff; padding: 15px; border-radius: 16px; border: 1px solid #e0e0e0; margin-bottom: 25px; box-shadow: 0 4px 10px rgba(0,0,0,0.02);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f0f0f0; padding-bottom: 12px;">
+                    <div style="font-weight: 900; color: #111; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-user-circle" style="color: #ccc; font-size: 1.5rem;"></i> 
+                        ${isClub ? `${passengerCount} Passenger(s)` : escapeHtml(safeCommuterName)}
+                    </div>
+                    <span style="font-size: 0.8rem; color: #888;">${distance.toFixed(1)} km away</span>
+                </div>
+                
+                <div style="font-size: 0.9rem; color: #444; display: flex; flex-direction: column; gap: 12px;">
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <div style="width: 20px; text-align: center; flex-shrink: 0;"><i class="fas fa-map-marker-alt" style="color: #dc3545; margin-top: 3px;"></i></div>
+                        <div>
+                            <span style="font-size: 0.7rem; color: #888; font-weight: 800; display: block; text-transform: uppercase;">Pickup From</span>
+                            <strong style="color: #111;">${escapeHtml(shortPickup)}</strong>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 10px; align-items: flex-start;">
+                        <div style="width: 20px; text-align: center; flex-shrink: 0;"><i class="fas fa-flag-checkered" style="color: #007BFF; margin-top: 3px;"></i></div>
+                        <div>
+                            <span style="font-size: 0.7rem; color: #888; font-weight: 800; display: block; text-transform: uppercase;">Going To</span>
+                            <strong style="color: #111;">${escapeHtml(shortDest)}</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- --- FIX: Accept/Decline buttons for Club requests --- -->
+            <div style="display: flex; gap: 12px;">
+                <button class="btn btn-danger" style="flex: 1; border-radius: 14px; padding: 16px; font-weight: 800; font-size: 1rem; background: #fff0f0 !important; color: #dc3545 !important; border: 1px solid #ffcdd2;" onclick="window.rejectRequestAndClose()">
+                    <i class="fas fa-times"></i> Decline
+                </button>
+                <button class="btn btn-success" style="flex: 2; background: ${brandColor} !important; color: white !important; border: none; border-radius: 14px; padding: 16px; font-weight: 900; font-size: 1rem; box-shadow: 0 8px 20px ${brandColor}44;" onclick="executeDriverAccept('${req.key}')">
+                    <i class="fas fa-check"></i> ${isClub ? 'Accept Pool' : 'Accept Ride'}
+                </button>
             </div>
             
-            <div style="text-align:center; margin-bottom: 15px; flex-shrink: 0;">
-                ${headerText}
-            </div>
-            
-            <div id="multiPassengerList" style="flex: 1; overflow-y:auto; padding-right: 5px; text-align: left; margin-bottom: 15px;">
-                ${passengersHtml}
-            </div>
-            
-            <div style="flex-shrink: 0;">
-                ${btnHtml}
-            </div>
+            ${isClub ? `
+                <div style="margin-top: 12px; text-align: center; font-size: 0.75rem; color: #888; background: #f8f9fa; padding: 8px; border-radius: 8px; border: 1px solid #eee;">
+                    <i class="fas fa-info-circle"></i> Accepting will start the pool. Other passengers can still join until the pool is full.
+                </div>
+            ` : ''}
         </div>
     `;
+
+    window.openPopup('commuterRequestPopup');
+    
+    // Play notification sound
+    try { 
+        new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play().catch(()=>{}); 
+    } catch(e){}
 };
 
 window.sendClubStatusUpdate = function(requestKey) {
@@ -20956,39 +20908,6 @@ window.sendClubStatusUpdate = function(requestKey) {
     });
 };
 
-window.setupPassengerChangeListener = function(requestKey) {
-    const requestRef = database.ref(`requests/${requestKey}`);
-    
-    if (window.passengerChangeListener) {
-        requestRef.off('value', window.passengerChangeListener);
-    }
-    
-    window.passengerChangeListener = requestRef.on('value', (snapshot) => {
-        const request = { key: snapshot.key, ...snapshot.val() };
-        if (!request || !request.passengers) return;
-
-        // Update local array dynamically
-        acceptedPassengers = [];
-        Object.entries(request.passengers).forEach(([cId, p]) => {
-            acceptedPassengers.push({ key: requestKey, subKey: cId, commuterId: cId, ...p });
-        });
-
-        // --- Send status update to all passengers ---
-        if (request.taxiId === window.userId) {
-            window.sendClubStatusUpdate(requestKey);
-        }
-
-        // Re-render the UI dynamically ONLY if the popup is open
-        const popup = document.getElementById('driverAcceptedPopup');
-        if (popup && popup.classList.contains('open')) {
-            showDriverMultiPassengerTracking(request);
-        }
-    });
-};
-
-// =================================================================
-// FIX 1: PROPER CLUB TRIP CANCELLATION
-// =================================================================
 window.cancelCurrentRequest = function() {
     const reqId = window.currentRequestId || (taxiData ? taxiData.currentRequest : null);
     
@@ -21182,6 +21101,54 @@ window.executeTripCancellation = async function(passengerKey, isClub = false, pa
     }
 };
 
+// =================================================================
+// FIX 3: PROPER REJECTION FOR CLUB REQUESTS (Cleans up fully)
+// =================================================================
+window.rejectRequestAndClose = function() {
+    if (window.currentShowingRequestId || activeRequest) {
+        const reqKey = window.currentShowingRequestId || activeRequest.key;
+        const isClub = activeRequest && (activeRequest.type === 'club' || activeRequest.carCategory === 'club' || activeRequest.carCategory === 'clubxl');
+        
+        // Update the request status
+        database.ref(`requests/${reqKey}`).update({
+            status: 'rejected',
+            rejectedByDriver: userId,
+            rejectedAt: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            // If it's a Club ride, also clean up any passenger notifications
+            if (isClub && activeRequest && activeRequest.passengers) {
+                const passKeys = Object.keys(activeRequest.passengers);
+                passKeys.forEach(commuterId => {
+                    database.ref(`notifications/commuters/${commuterId}`).push({
+                        type: 'ride_cancelled',
+                        driverId: userId,
+                        driverName: (taxiData && taxiData.name) ? `${taxiData.name} ${taxiData.surname || ''}`.trim() : "Driver",
+                        title: "Club Trip Declined",
+                        message: "The driver declined the Club trip. You can request another driver.",
+                        timestamp: firebase.database.ServerValue.TIMESTAMP,
+                        requestId: reqKey,
+                        isClub: true
+                    }).catch(()=>{});
+                });
+            }
+            // Reset the ignored flag so the driver can see it again if it re-pools
+            if (window.ignoredClubRequests) {
+                delete window.ignoredClubRequests[reqKey];
+            }
+        }).catch(err => console.error("Reject error:", err));
+    }
+    
+    // Force close everything
+    closeRequestPopupNow();
+    closeActivePopup();
+    
+    if (typeof showCommunicationBanner === 'function') {
+        showCommunicationBanner("Request Declined", "info");
+    }
+    activeRequest = null;
+    currentRequestId = null;
+    window.isViewingClubRequest = false;
+};
 
 // =================================================================
 // FIX 4: DECLINE CLUB REQUEST (Cleaner version)
@@ -21415,18 +21382,8 @@ if (request.key) {
 // DRIVER: Show Pool with Passenger List
 // =================================================================
 
-// =================================================================
-// FIXED: showDriverPoolView - Clean HTML template
-// =================================================================
-
 function showDriverPoolView(poolId, poolData) {
     if (!poolId || !poolData) return;
-
-    // Clean up any existing listeners
-    if (window.poolChangeListener) {
-        database.ref('requests/' + poolId).off('value', window.poolChangeListener);
-        window.poolChangeListener = null;
-    }
 
     // Close any existing popups
     closeActivePopup();
@@ -21443,93 +21400,6 @@ function showDriverPoolView(poolId, poolData) {
     const popup = document.getElementById('genericMessagePopup');
     if (!popup) return;
 
-    // Build passenger list HTML
-    let passengerListHtml = '';
-    if (passengerKeys.length > 0) {
-        passengerListHtml = passengerKeys.map((key, index) => {
-            const pass = passengers[key];
-            const isYou = key === userId;
-            return `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: ${index < passengerKeys.length - 1 ? '1px solid #eee' : 'none'};">
-                    <div style="display: flex; align-items: center; gap: 10px;">
-                        <div style="width: 32px; height: 32px; border-radius: 50%; background: ${isYou ? '#007BFF' : '#e9ecef'}; display: flex; align-items: center; justify-content: center; color: ${isYou ? 'white' : '#333'}; font-weight: 800; font-size: 0.75rem;">
-                            ${isYou ? 'You' : (pass.commuterName ? pass.commuterName.charAt(0).toUpperCase() : 'P')}
-                        </div>
-                        <div>
-                            <span style="font-weight: 600; font-size: 0.9rem; color: #111;">${escapeHtml(pass.commuterName || 'Passenger')}</span>
-                            ${pass.requirePin ? `<span style="font-size: 0.65rem; color: #007BFF; margin-left: 5px;">PIN: ${pass.pickupPin || '****'}</span>` : ''}
-                        </div>
-                    </div>
-                    <span style="color: #28a745; font-size: 0.7rem; font-weight: 700;">
-                        <i class="fas fa-check-circle"></i> Joined
-                    </span>
-                </div>
-            `;
-        }).join('');
-    } else {
-        passengerListHtml = `
-            <div style="text-align: center; padding: 20px; color: #888;">
-                <i class="fas fa-user-plus"></i> No passengers yet
-            </div>
-        `;
-    }
-
-    // Build action buttons based on assignment status
-    let actionButtonsHtml = '';
-    
-    if (isAssigned) {
-        // Driver is assigned to this pool
-        if (isFull) {
-            actionButtonsHtml = `
-                <button onclick="startPoolTrip('${poolId}')" 
-                        style="background: #28a745; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer; width: 100%;">
-                    <i class="fas fa-play"></i> Start Trip (${passCount} Passengers)
-                </button>
-                <button onclick="cancelPoolTripForDriver('${poolId}')" 
-                        style="background: transparent; border: 1px solid #ccc; border-radius: 12px; padding: 12px; color: #666; font-weight: 700; cursor: pointer; width: 100%;">
-                    Cancel Pool
-                </button>
-            `;
-        } else {
-            actionButtonsHtml = `
-                <button onclick="broadcastPoolToDriversForDriver('${poolId}')" 
-                        style="background: #FF9F0A; color: black; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer; width: 100%;">
-                    <i class="fas fa-broadcast-tower"></i> Broadcast for More Passengers
-                </button>
-                <button onclick="cancelPoolTripForDriver('${poolId}')" 
-                        style="background: transparent; border: 1px solid #ccc; border-radius: 12px; padding: 12px; color: #666; font-weight: 700; cursor: pointer; width: 100%;">
-                    Cancel Pool
-                </button>
-            `;
-        }
-    } else {
-        // Driver is not assigned - show accept/decline buttons
-        if (isFull) {
-            actionButtonsHtml = `
-                <button onclick="acceptPoolRequest('${poolId}')" 
-                        style="background: #007BFF; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer; width: 100%;">
-                    <i class="fas fa-check"></i> Accept Pool (${passCount} Passengers)
-                </button>
-                <button onclick="closeActivePopup()" 
-                        style="background: transparent; border: 1px solid #ccc; border-radius: 12px; padding: 12px; color: #666; font-weight: 700; cursor: pointer; width: 100%;">
-                    Decline
-                </button>
-            `;
-        } else {
-            actionButtonsHtml = `
-                <button onclick="acceptPoolRequest('${poolId}')" 
-                        style="background: #007BFF; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer; width: 100%;">
-                    <i class="fas fa-check"></i> Accept & Wait for More
-                </button>
-                <button onclick="closeActivePopup()" 
-                        style="background: transparent; border: 1px solid #ccc; border-radius: 12px; padding: 12px; color: #666; font-weight: 700; cursor: pointer; width: 100%;">
-                    Decline
-                </button>
-            `;
-        }
-    }
-
-    // Build the complete popup HTML
     popup.innerHTML = `
         <button class="popup-close" onclick="closeActivePopup()">&times;</button>
         <div style="padding: 10px; text-align: left;">
@@ -21563,391 +21433,71 @@ function showDriverPoolView(poolId, poolData) {
                     <i class="fas fa-user-friends"></i> Passengers (${passCount})
                 </div>
                 <div style="max-height: 200px; overflow-y: auto;">
-                    ${passengerListHtml}
+                    ${passengerKeys.map((key, index) => {
+                        const pass = passengers[key];
+                        const isYou = key === userId;
+                        return `
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: ${index < passengerKeys.length - 1 ? '1px solid #eee' : 'none'};">
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <div style="width: 32px; height: 32px; border-radius: 50%; background: ${isYou ? '#007BFF' : '#e9ecef'}; display: flex; align-items: center; justify-content: center; color: ${isYou ? 'white' : '#333'}; font-weight: 800; font-size: 0.75rem;">
+                                        ${isYou ? 'You' : (pass.commuterName ? pass.commuterName.charAt(0) : 'P')}
+                                    </div>
+                                    <div>
+                                        <span style="font-weight: 600; font-size: 0.9rem; color: #111;">${escapeHtml(pass.commuterName || 'Passenger')}</span>
+                                        ${pass.requirePin ? `<span style="font-size: 0.65rem; color: #007BFF; margin-left: 5px;">PIN: ${pass.pickupPin || '****'}</span>` : ''}
+                                    </div>
+                                </div>
+                                <span style="color: #28a745; font-size: 0.7rem; font-weight: 700;">
+                                    <i class="fas fa-check-circle"></i> Joined
+                                </span>
+                            </div>
+                        `;
+                    }).join('')}
                 </div>
             </div>
 
             <!-- Action Buttons -->
             <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-                ${actionButtonsHtml}
+                ${isAssigned ? `
+                    ${isFull ? `
+                        <button onclick="startPoolTrip('${poolId}')" 
+                                style="background: #28a745; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer;">
+                            <i class="fas fa-play"></i> Start Trip (${passCount} Passengers)
+                        </button>
+                    ` : `
+                        <button onclick="broadcastPoolToDriversForDriver('${poolId}')" 
+                                style="background: #FF9F0A; color: black; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer;">
+                            <i class="fas fa-broadcast-tower"></i> Broadcast for More Passengers
+                        </button>
+                    `}
+                    <button onclick="cancelPoolTripForDriver('${poolId}')" 
+                            style="background: transparent; border: 1px solid #ccc; border-radius: 12px; padding: 12px; color: #666; font-weight: 700; cursor: pointer;">
+                        Cancel Pool
+                    </button>
+                ` : `
+                    ${isFull ? `
+                        <button onclick="acceptPoolRequest('${poolId}')" 
+                                style="background: #007BFF; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer;">
+                            <i class="fas fa-check"></i> Accept Pool (${passCount} Passengers)
+                        </button>
+                    ` : `
+                        <button onclick="acceptPoolRequest('${poolId}')" 
+                                style="background: #007BFF; color: white; border: none; border-radius: 12px; padding: 14px; font-weight: 800; cursor: pointer;">
+                            <i class="fas fa-check"></i> Accept & Wait for More
+                        </button>
+                    `}
+                    <button onclick="closeActivePopup()" 
+                            style="background: transparent; border: 1px solid #ccc; border-radius: 12px; padding: 12px; color: #666; font-weight: 700; cursor: pointer;">
+                        Decline
+                    </button>
+                `}
             </div>
         </div>
     `;
 
     openPopup('genericMessagePopup');
-
-    // Set up real-time listener for pool updates
-    setupPoolPassengerListener(poolId);
 }
 
-// =================================================================
-// FIXED: cancelPoolTripForDriver - Global version
-// =================================================================
-
-window.cancelPoolTripForDriver = function(poolId) {
-    if (!poolId) {
-        showCommunicationBanner("No pool ID provided", "danger");
-        return;
-    }
-
-    // Check if we have a valid user ID
-    if (!userId) {
-        showCommunicationBanner("You must be logged in", "danger");
-        return;
-    }
-
-    showConfirmPopup(
-        "Cancel Pool Trip?",
-        "All passengers will be notified that the trip has been cancelled.",
-        () => {
-            // Show loading state on all cancel buttons
-            const btns = document.querySelectorAll('button[onclick*="cancelPoolTripForDriver"]');
-            btns.forEach(btn => {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
-            });
-
-            database.ref('requests/' + poolId).once('value')
-                .then((snapshot) => {
-                    const poolData = snapshot.val();
-                    if (!poolData) {
-                        showCommunicationBanner("Pool not found", "danger");
-                        closeActivePopup();
-                        return;
-                    }
-
-                    const passengers = poolData.passengers || {};
-                    const passengerKeys = Object.keys(passengers);
-
-                    // Update status to cancelled
-                    return database.ref('requests/' + poolId).update({
-                        status: 'cancelled_by_driver',
-                        cancelledAt: firebase.database.ServerValue.TIMESTAMP,
-                        cancelReason: 'Driver cancelled the pool trip'
-                    }).then(() => {
-                        // Notify all passengers
-                        const notifyPromises = passengerKeys.map(passId => {
-                            return database.ref(`notifications/commuters/${passId}`).push({
-                                type: 'ride_cancelled',
-                                poolId: poolId,
-                                title: 'Pool Trip Cancelled',
-                                message: 'The driver has cancelled this pool trip. You can request a new ride.',
-                                driverId: userId,
-                                driverName: taxiData ? `${taxiData.name || ''} ${taxiData.surname || ''}`.trim() : 'Driver',
-                                timestamp: firebase.database.ServerValue.TIMESTAMP
-                            }).catch(() => {});
-                        });
-
-                        return Promise.all(notifyPromises);
-                    }).then(() => {
-                        // Clean up driver profile
-                        return database.ref('taxis/' + userId).update({
-                            currentRequest: null,
-                            passengerCount: 0,
-                            isFull: false,
-                            isBroadcasting: true
-                        });
-                    }).then(() => {
-                        // Update local taxiData
-                        if (taxiData) {
-                            taxiData.currentRequest = null;
-                            taxiData.passengerCount = 0;
-                            taxiData.isFull = false;
-                            taxiData.isBroadcasting = true;
-                        }
-
-                        // Clear local accepted passengers
-                        if (typeof acceptedPassengers !== 'undefined') {
-                            acceptedPassengers = acceptedPassengers.filter(p => p.key !== poolId);
-                        }
-
-                        // Clean up the pool request listener
-                        if (window.poolPassengerListener) {
-                            database.ref('requests/' + poolId).off('value', window.poolPassengerListener);
-                            window.poolPassengerListener = null;
-                        }
-                        if (window.poolChangeListener) {
-                            database.ref('requests/' + poolId).off('value', window.poolChangeListener);
-                            window.poolChangeListener = null;
-                        }
-
-                        // Close all popups
-                        closeActivePopup();
-                        closeRequestPopupNow();
-
-                        // Show confirmation
-                        showCommunicationBanner("Pool trip cancelled successfully.", "warning");
-
-                        // Update UI
-                        if (typeof updatePassengerCounter === 'function') updatePassengerCounter();
-                        if (typeof updateBottomMenu === 'function') updateBottomMenu();
-                        if (typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
-
-                        // Show dashboard
-                        setTimeout(() => {
-                            if (typeof showModernDashboard === 'function') showModernDashboard();
-                        }, 500);
-                    });
-                })
-                .catch(err => {
-                    console.error("Failed to cancel pool:", err);
-                    showCommunicationBanner("Failed to cancel pool. Check connection.", "danger");
-                    // Re-enable buttons
-                    btns.forEach(btn => {
-                        btn.disabled = false;
-                        btn.innerHTML = 'Cancel Pool';
-                    });
-                });
-        },
-        "Yes, Cancel",
-        "No, Keep Trip",
-        "danger"
-    );
-};
-
-// =================================================================
-// FIXED: acceptPoolRequest - Handle acceptance properly
-// =================================================================
-
-window.acceptPoolRequest = function(poolId) {
-    if (!poolId || !userId) {
-        showCommunicationBanner("Invalid request", "danger");
-        return;
-    }
-
-    const btn = document.querySelector('button[onclick*="acceptPoolRequest"]');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accepting...';
-    }
-
-    database.ref('requests/' + poolId).once('value')
-        .then((snapshot) => {
-            const poolData = snapshot.val();
-            if (!poolData) {
-                showCommunicationBanner("Pool no longer available", "danger");
-                closeActivePopup();
-                return;
-            }
-
-            // Check if already assigned
-            if (poolData.taxiId && poolData.taxiId !== userId) {
-                showCommunicationBanner("This pool was already accepted by another driver.", "warning");
-                closeActivePopup();
-                return;
-            }
-
-            const passengers = poolData.passengers || {};
-            const passCount = Object.keys(passengers).length;
-            const driverName = taxiData ? `${taxiData.name || ''} ${taxiData.surname || ''}`.trim() : 'Driver';
-
-            // Update pool with driver info
-            return database.ref('requests/' + poolId).update({
-                taxiId: userId,
-                driverName: driverName,
-                driverPhone: taxiData ? taxiData.phone : '',
-                status: passCount >= (poolData.maxCapacity || 3) ? 'accepted' : 'pooling',
-                acceptedAt: firebase.database.ServerValue.TIMESTAMP
-            }).then(() => {
-                // Update driver profile
-                return database.ref('taxis/' + userId).update({
-                    currentRequest: poolId,
-                    passengerCount: passCount
-                });
-            }).then(() => {
-                // Notify all passengers
-                const notifyPromises = Object.keys(passengers).map(passId => {
-                    return database.ref(`notifications/commuters/${passId}`).push({
-                        type: 'request_accepted',
-                        poolId: poolId,
-                        driverId: userId,
-                        driverName: driverName,
-                        title: '🚗 Driver Accepted!',
-                        message: `Your pool of ${passCount} passengers has been accepted.`,
-                        passCount: passCount,
-                        maxCapacity: poolData.maxCapacity || 3,
-                        isClub: true,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    }).catch(() => {});
-                });
-
-                return Promise.all(notifyPromises);
-            }).then(() => {
-                showCommunicationBanner(`Pool accepted with ${passCount} passengers!`, "success");
-                closeActivePopup();
-
-                // Show driver's pool view with updated data
-                setTimeout(() => {
-                    database.ref('requests/' + poolId).once('value', (updatedSnapshot) => {
-                        const updatedData = updatedSnapshot.val();
-                        if (updatedData) {
-                            showDriverPoolView(poolId, updatedData);
-                            // Set up listener for changes
-                            setupPoolPassengerListener(poolId);
-                        }
-                    });
-                }, 500);
-            });
-        })
-        .catch(err => {
-            console.error("Error accepting pool:", err);
-            showCommunicationBanner("Failed to accept pool. Try again.", "danger");
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = 'Accept Pool';
-            }
-        });
-};
-
-// =================================================================
-// FIXED: startPoolTrip - Start the trip
-// =================================================================
-
-window.startPoolTrip = function(poolId) {
-    if (!poolId) return;
-
-    const btn = document.querySelector('button[onclick*="startPoolTrip"]');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Starting...';
-    }
-
-    database.ref('requests/' + poolId).once('value')
-        .then((snapshot) => {
-            const poolData = snapshot.val();
-            if (!poolData) {
-                showCommunicationBanner("Pool not found", "danger");
-                return;
-            }
-
-            const passengers = poolData.passengers || {};
-            const passengerKeys = Object.keys(passengers);
-            const passCount = passengerKeys.length;
-
-            if (passCount === 0) {
-                showCommunicationBanner("No passengers in the pool!", "warning");
-                return;
-            }
-
-            // Update pool status
-            return database.ref('requests/' + poolId).update({
-                status: 'in_transit',
-                startedAt: firebase.database.ServerValue.TIMESTAMP
-            }).then(() => {
-                // Notify all passengers
-                const notifyPromises = passengerKeys.map(passId => {
-                    return database.ref(`notifications/commuters/${passId}`).push({
-                        type: 'trip_started',
-                        poolId: poolId,
-                        title: '🚗 Trip Started!',
-                        message: `Your pool of ${passCount} passengers is on the way!`,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    }).catch(() => {});
-                });
-
-                return Promise.all(notifyPromises);
-            }).then(() => {
-                // Update driver profile
-                return database.ref('taxis/' + userId).update({
-                    currentRequest: poolId,
-                    passengerCount: passCount,
-                    isFull: true,
-                    isBroadcasting: false
-                });
-            }).then(() => {
-                showCommunicationBanner(`Trip started with ${passCount} passengers!`, "success");
-                closeActivePopup();
-
-                // Start navigation
-                setTimeout(() => {
-                    if (typeof startNavigationForPassengerByKey === 'function') {
-                        startNavigationForPassengerByKey(poolId);
-                    }
-                }, 500);
-            });
-        })
-        .catch(err => {
-            console.error("Error starting pool trip:", err);
-            showCommunicationBanner("Failed to start trip. Try again.", "danger");
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-play"></i> Start Trip';
-            }
-        });
-};
-
-// =================================================================
-// FIXED: broadcastPoolToDriversForDriver - Broadcast for more passengers
-// =================================================================
-
-window.broadcastPoolToDriversForDriver = function(poolId) {
-    if (!poolId) return;
-
-    const btn = document.querySelector('button[onclick*="broadcastPoolToDriversForDriver"]');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Broadcasting...';
-    }
-
-    database.ref('requests/' + poolId).once('value')
-        .then((snapshot) => {
-            const poolData = snapshot.val();
-            if (!poolData) return;
-
-            const passengers = poolData.passengers || {};
-            const passCount = Object.keys(passengers).length;
-            const maxCapacity = poolData.maxCapacity || 3;
-
-            return database.ref('requests/' + poolId).update({
-                broadcastCount: (poolData.broadcastCount || 0) + 1,
-                lastBroadcast: firebase.database.ServerValue.TIMESTAMP
-            }).then(() => {
-                // Notify nearby drivers
-                return database.ref('taxis').once('value');
-            }).then((taxiSnapshot) => {
-                const taxis = taxiSnapshot.val() || {};
-                const poolLat = poolData.poolCenterLat || 0;
-                const poolLng = poolData.poolCenterLng || 0;
-                let notifiedCount = 0;
-
-                const notifyPromises = Object.keys(taxis).map(taxiId => {
-                    const taxi = taxis[taxiId];
-                    if (taxi.isOnline && !taxi.isFull && taxi.verificationStatus === 'verified' && taxiId !== userId) {
-                        const dist = calculateDistance(poolLat, poolLng, taxi.latitude, taxi.longitude);
-                        if (dist <= 8) {
-                            notifiedCount++;
-                            return database.ref(`notifications/taxis/${taxiId}`).push({
-                                type: 'club',
-                                title: '👥 Pool Needs More Passengers',
-                                message: `${passCount}/${maxCapacity} passengers joined. Driver waiting.`,
-                                poolId: poolId,
-                                passCount: passCount,
-                                maxCapacity: maxCapacity,
-                                timestamp: firebase.database.ServerValue.TIMESTAMP
-                            }).catch(() => {});
-                        }
-                    }
-                    return Promise.resolve();
-                });
-
-                return Promise.all(notifyPromises).then(() => {
-                    showCommunicationBanner(`Broadcast sent to ${notifiedCount} drivers!`, "success");
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fas fa-broadcast-tower"></i> Broadcast for More Passengers';
-                    }
-                });
-            });
-        })
-        .catch(err => {
-            console.error("Error broadcasting:", err);
-            showCommunicationBanner("Failed to broadcast. Try again.", "danger");
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fas fa-broadcast-tower"></i> Broadcast for More Passengers';
-            }
-        });
-};
 // =================================================================
 // DRIVER: Accept Pool Request
 // =================================================================
@@ -22079,6 +21629,48 @@ function startPoolTrip(poolId) {
 // DRIVER: Cancel Pool Trip
 // =================================================================
 
+function cancelPoolTripForDriver(poolId) {
+    if (!poolId) return;
+
+    showConfirmPopup(
+        "Cancel Pool Trip?",
+        "All passengers will be notified.",
+        () => {
+            database.ref('requests/' + poolId).once('value', (snapshot) => {
+                const poolData = snapshot.val();
+                if (!poolData) return;
+
+                const passengers = poolData.passengers || {};
+                const passengerKeys = Object.keys(passengers);
+
+                // Notify all passengers
+                passengerKeys.forEach(passId => {
+                    database.ref(`notifications/commuters/${passId}`).push({
+                        type: 'ride_cancelled',
+                        poolId: poolId,
+                        title: 'Pool Cancelled',
+                        message: 'The driver has cancelled this pool trip.',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                });
+
+                // Remove the pool
+                database.ref('requests/' + poolId).remove().then(() => {
+                    // Clean up driver profile
+                    database.ref('taxis/' + userId).update({
+                        currentRequest: null,
+                        passengerCount: 0,
+                        isFull: false,
+                        isBroadcasting: true
+                    });
+
+                    showCommunicationBanner("Pool cancelled.", "warning");
+                    closeActivePopup();
+                });
+            });
+        }
+    );
+}
 
 // =================================================================
 // DRIVER: Broadcast for More Passengers
@@ -22167,634 +21759,8 @@ database.ref('requests').orderByChild('status').equalTo('pending').on('child_add
     }
 });
 
-// =================================================================
-// FIX: CLEAN REQUEST LISTENER - REPLACE ALL EXISTING LISTENERS
-// =================================================================
 
-// 1. CLEANUP FUNCTION - Call this before setting up new listeners
-function cleanupAllRequestListeners() {
-    // Remove all existing listeners to prevent duplicates
-    if (window.requestListener) {
-        database.ref('requests').off('child_added', window.requestListener);
-        window.requestListener = null;
-    }
-    if (window.requestChangeListener) {
-        database.ref('requests').off('child_changed', window.requestChangeListener);
-        window.requestChangeListener = null;
-    }
-    if (window.poolAddListener) {
-        database.ref('requests').off('child_added', window.poolAddListener);
-        window.poolAddListener = null;
-    }
-    if (window.poolChangeListener) {
-        database.ref('requests').off('child_changed', window.poolChangeListener);
-        window.poolChangeListener = null;
-    }
-    if (window.poolPassengerListener) {
-        database.ref('requests').off('value', window.poolPassengerListener);
-        window.poolPassengerListener = null;
-    }
-    if (window.driverPassengerListener) {
-        database.ref('requests').off('value', window.driverPassengerListener);
-        window.driverPassengerListener = null;
-    }
-    if (window.passengerChangeListener) {
-        database.ref('requests').off('value', window.passengerChangeListener);
-        window.passengerChangeListener = null;
-    }
-    console.log("✅ All request listeners cleaned up");
-}
-
-// 2. SINGLE UNIFIED REQUEST LISTENER
-function setupUnifiedRequestListener() {
-    if (!userId) {
-        setTimeout(setupUnifiedRequestListener, 1000);
-        return;
-    }
-
-    // Clean up any existing listeners first
-    cleanupAllRequestListeners();
-
-    console.log("🚀 Setting up UNIFIED request listener for driver:", userId);
-
-    // Listen for ALL request statuses we care about
-    const validStatuses = ['pending', 'pooling', 'waiting_pool'];
-    
-    validStatuses.forEach(status => {
-        database.ref('requests').orderByChild('status').equalTo(status).on('child_added', (snapshot) => {
-            const request = { key: snapshot.key, ...snapshot.val() };
-            handleNewRequest(request);
-        });
-    });
-
-    // Also listen for status changes (so we catch requests that transition to pooling)
-    database.ref('requests').on('child_changed', (snapshot) => {
-        const request = { key: snapshot.key, ...snapshot.val() };
-        if (validStatuses.includes(request.status)) {
-            handleNewRequest(request);
-        }
-    });
-
-    // Listen for cancellations
-    database.ref('requests').on('child_changed', (snapshot) => {
-        const request = snapshot.val();
-        if (activeRequest && activeRequest.key === snapshot.key && 
-            (request.status === 'cancelled_by_commuter' || 
-             request.status === 'cancelled_by_driver' || 
-             request.status === 'cancelled_by_admin' ||
-             request.status === 'rejected')) {
-            
-            console.log("❌ Request was cancelled:", snapshot.key);
-            closeRequestPopupNow();
-            activeRequest = null;
-            currentRequestId = null;
-            window.isShowingRequestPopup = false;
-            window.currentShowingRequestId = null;
-            
-            // Clean up from acceptedPassengers
-            if (window.acceptedPassengers) {
-                window.acceptedPassengers = window.acceptedPassengers.filter(p => p.key !== snapshot.key);
-            }
-            
-            showCommunicationBanner("The request was cancelled.", "warning");
-        }
-    });
-}
-
-// 3. HANDLE NEW REQUEST - Single entry point
-function handleNewRequest(request) {
-    if (!request) return;
-    
-    // Skip if driver is not online or is full
-    if (!taxiData || !taxiData.isOnline) {
-        console.log("⏸️ Driver is offline, ignoring request");
-        return;
-    }
-    
-    if (taxiData.isFull === true) {
-        console.log("⏸️ Driver is full, ignoring request");
-        return;
-    }
-    
-    // Skip if already showing a popup for this request
-    if (window.currentShowingRequestId === request.key) {
-        return;
-    }
-    
-    // Skip if already accepted by this driver
-    if (request.taxiId === userId) {
-        return;
-    }
-    
-    // Skip if already accepted by another driver
-    if (request.taxiId && request.taxiId !== userId) {
-        return;
-    }
-
-    // 🚨 STRICT CARD-ONLY ENFORCEMENT
-    if (taxiData && taxiData.forceCardOnly && request.paymentMethod === 'cash') {
-        console.log("🚫 Cash ride blocked due to Card-Only mode");
-        return;
-    }
-
-    // Determine if this is a Club pool request
-    const isClub = (request.type === 'club' || 
-                    request.carCategory === 'club' || 
-                    request.carCategory === 'clubxl' ||
-                    request.status === 'pooling' ||
-                    request.status === 'waiting_pool');
-
-    // For Club rides, check distance from driver
-    if (isClub && request.poolCenterLat) {
-        const dist = calculateDistance(taxiData.latitude, taxiData.longitude, request.poolCenterLat, request.poolCenterLng);
-        if (dist > 10) {
-            console.log(`⏸️ Club request too far (${dist.toFixed(1)}km), ignoring`);
-            return;
-        }
-    }
-
-    // For Asiye Go rides, check distance from driver
-    if (!isClub && request.commuterLocation) {
-        const dist = calculateDistance(
-            taxiData.latitude, taxiData.longitude,
-            request.commuterLocation.latitude, request.commuterLocation.longitude
-        );
-        if (dist > 15) {
-            console.log(`⏸️ Ride request too far (${dist.toFixed(1)}km), ignoring`);
-            return;
-        }
-    }
-
-    // Check if driver already has an active trip
-    if (acceptedPassengers && acceptedPassengers.length > 0) {
-        // If driver has a Club trip, they can still accept Go rides if not full
-        const hasClubTrip = acceptedPassengers.some(p => p.type === 'club');
-        if (hasClubTrip && isClub) {
-            console.log("⏸️ Already has a Club trip, ignoring another club");
-            return;
-        }
-        if (!hasClubTrip && !isClub) {
-            console.log("⏸️ Already has a ride, ignoring another");
-            return;
-        }
-    }
-
-    console.log(`✅ Showing request popup for: ${request.key} (${isClub ? 'Club' : 'Go'})`);
-    
-    // Set active request
-    activeRequest = request;
-    currentRequestId = request.key;
-    window.isShowingRequestPopup = true;
-    window.currentShowingRequestId = request.key;
-
-    // Route to the appropriate popup
-    if (isClub) {
-        showPoolingRoomPopup(request);
-    } else if (request.type === 'parcel') {
-        if (typeof openParcelRequestPopup === 'function') {
-            openParcelRequestPopup(request);
-        }
-    } else {
-        // Show regular ride request
-        openCommuterRequestPopup(request);
-    }
-}
-
-// 4. FIXED openCommuterRequestPopup - Better handling
-window.openCommuterRequestPopup = function(req) {
-    console.log("📞 openCommuterRequestPopup called with request:", req.key);
-
-    // Prevent duplicates
-    if (window.isShowingRequestPopup && window.currentShowingRequestId === req.key) {
-        return;
-    }
-
-    // Check if already assigned
-    if (req.taxiId && req.taxiId !== userId) {
-        console.log("🚫 Request already assigned to another driver");
-        return;
-    }
-
-    // Check if cancelled
-    if (['cancelled_by_commuter', 'cancelled_by_driver', 'cancelled_by_admin', 'rejected'].includes(req.status)) {
-        console.log("🚫 Request was cancelled");
-        return;
-    }
-
-    window.isShowingRequestPopup = true;
-    window.currentShowingRequestId = req.key;
-
-    // Determine if Club
-    const isClub = (req.type === 'club' || req.carCategory === 'club' || req.carCategory === 'clubxl' || req.status === 'pooling' || req.status === 'waiting_pool');
-
-    // Get passenger info
-    let commuterObj = req;
-    let passengerCount = 1;
-    let maxCapacity = 3;
-    let passengersList = [];
-    let totalFare = 0;
-
-    if (isClub && req.passengers) {
-        const passKeys = Object.keys(req.passengers);
-        passengerCount = passKeys.length;
-        maxCapacity = req.maxCapacity || 3;
-        
-        // Get first passenger
-        const firstKey = passKeys[0];
-        if (firstKey) {
-            commuterObj = req.passengers[firstKey];
-            commuterObj.commuterId = firstKey;
-        }
-        
-        // Build passenger list with all details
-        for (const key of passKeys) {
-            const p = req.passengers[key];
-            const price = p.price || req.originalPerPersonPrice || 25;
-            totalFare += price;
-            
-            passengersList.push({
-                commuterId: key,
-                commuterName: p.commuterName || 'Passenger',
-                pickupAddress: p.pickupAddress || 'Location provided',
-                destination: p.destination || 'Route',
-                price: price,
-                pickupPin: p.pickupPin || '----'
-            });
-        }
-    } else {
-        // Regular ride - get single passenger
-        const price = req.calculatedPrice || req.price || 25;
-        totalFare = price;
-        
-        passengersList.push({
-            commuterId: req.commuterId,
-            commuterName: req.commuterName || 'Passenger',
-            pickupAddress: req.pickupAddress || 'Location provided',
-            destination: req.destination || 'Route',
-            price: price,
-            pickupPin: req.pickupPin || '----'
-        });
-    }
-
-    // Calculate distance
-    let distance = 0;
-    const targetLat = commuterObj.location?.latitude || req.poolCenterLat || 0;
-    const targetLng = commuterObj.location?.longitude || req.poolCenterLng || 0;
-    
-    if (taxiData && taxiData.latitude && targetLat) {
-        distance = calculateDistance(taxiData.latitude, taxiData.longitude, targetLat, targetLng);
-    }
-
-    // Build the popup
-    const popup = document.getElementById('commuterRequestPopup') || createPopupElement('commuterRequestPopup');
-    
-    const brandColor = isClub ? '#FF9F0A' : '#007BFF';
-    const typeTitle = isClub ? 'Asiye Club Request' : 'Asiye Go Request';
-    const iconClass = isClub ? 'fa-users' : 'fa-car-side';
-    
-    let passengerListHtml = '';
-    if (isClub && passengersList.length > 0) {
-        passengerListHtml = `
-            <div style="background: #f8f9fa; border-radius: 12px; padding: 12px; margin: 12px 0; border: 1px solid #eee; max-height: 150px; overflow-y: auto;">
-                <div style="font-size: 0.75rem; color: #888; font-weight: 800; text-transform: uppercase; margin-bottom: 8px;">Passengers in this pool (${passengerCount}/${maxCapacity}):</div>
-                ${passengersList.map((p, idx) => `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: ${idx < passengerCount - 1 ? '1px solid #eee' : 'none'};">
-                        <div style="display: flex; align-items: center; gap: 6px;">
-                            <i class="fas fa-user" style="color: #007BFF; font-size: 0.8rem;"></i>
-                            <span style="font-weight: 700; font-size: 0.85rem;">${escapeHtml(p.commuterName)}</span>
-                            <span style="font-size: 0.7rem; color: #888;">→ ${escapeHtml(p.destination ? p.destination.split(',')[0] : 'Route')}</span>
-                        </div>
-                        <span style="font-weight: 900; color: #28a745; font-size: 0.85rem;">R${p.price}</span>
-                    </div>
-                `).join('')}
-            </div>
-        `;
-    }
-
-    const shortPickup = (commuterObj.pickupAddress || 'Location provided').split(',')[0].trim();
-    const shortDest = (commuterObj.destination && commuterObj.destination !== "As Directed" && commuterObj.destination !== "Not Specified") ? commuterObj.destination.split(',')[0].trim() : 'Route';
-    const passengerOffer = commuterObj.price || req.calculatedPrice || req.originalPerPersonPrice || 25;
-
-    popup.innerHTML = `
-        <button class="popup-close" onclick="closeRequestPopupNow()" style="position: absolute; right: 15px; top: 15px; z-index: 10; font-size: 1.5rem; background: #f0f0f0; border: none; color: #333; width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer;">&times;</button>
-        
-        <div style="padding: 25px 20px;">
-            <div style="margin-bottom: 15px; display: flex; align-items: center; flex-wrap: wrap;">
-                <div style="width: 42px; height: 42px; border-radius: 50%; background: ${brandColor}15; color: ${brandColor}; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 1.2rem; flex-shrink: 0;">
-                    <i class="fas ${iconClass}"></i>
-                </div>
-                <h2 style="margin: 0; font-weight: 900; color: #111; font-size: 1.3rem;">${typeTitle}</h2>
-                ${isClub ? `<span style="background: #fff4e5; color: #FF9F0A; padding: 4px 12px; border-radius: 12px; font-size: 0.85rem; font-weight: 900; border: 1.5px solid #FF9F0A; margin-left: 10px;">Pool ${passengerCount}/${maxCapacity}</span>` : ''}
-            </div>
-
-            <div style="background: ${isClub ? '#fff4e5' : '#eef4ff'}; border: 1px solid ${brandColor}44; border-left: 4px solid ${brandColor}; padding: 12px 15px; border-radius: 12px; margin-bottom: 20px; font-size: 0.85rem; color: #333; font-weight: 600; line-height: 1.4;">
-                ${isClub ? `<i class="fas fa-users" style="color: #FF9F0A; margin-right: 5px;"></i> <strong>${passengerCount}</strong> passenger(s) looking for a ride. Accept to start the pool.` : `<i class="fas fa-bolt" style="color: #007BFF; margin-right: 5px;"></i> Private ride. Proceed to pickup immediately.`}
-            </div>
-
-            ${passengerListHtml}
-
-            <div style="background: #f8f9fa; padding: 15px; border-radius: 16px; text-align: center; border: 1px solid #eee; margin-bottom: 20px;">
-                <div style="font-size: 0.75rem; color: #888; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">
-                    ${isClub ? 'FARE PER PASSENGER' : 'AMOUNT TO PAY'}
-                </div>
-                <div style="font-size: 2.2rem; font-weight: 900; color: #28a745; margin-top: 5px; line-height: 1;">R${passengerOffer}</div>
-                ${isClub ? `<div style="font-size: 0.7rem; color: #888; margin-top: 4px;">Total pool payout: R${totalFare}</div>` : ''}
-            </div>
-
-            <div style="background: #ffffff; padding: 15px; border-radius: 16px; border: 1px solid #e0e0e0; margin-bottom: 25px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f0f0f0; padding-bottom: 12px;">
-                    <div style="font-weight: 900; color: #111; font-size: 1.1rem; display: flex; align-items: center; gap: 8px;">
-                        <i class="fas fa-user-circle" style="color: #ccc; font-size: 1.5rem;"></i> 
-                        ${isClub ? `${passengerCount} Passenger(s)` : escapeHtml(commuterObj.commuterName || 'Passenger')}
-                    </div>
-                    <span style="font-size: 0.8rem; color: #888;">${distance.toFixed(1)} km away</span>
-                </div>
-                
-                <div style="font-size: 0.9rem; color: #444; display: flex; flex-direction: column; gap: 12px;">
-                    <div style="display: flex; gap: 10px; align-items: flex-start;">
-                        <div style="width: 20px; text-align: center; flex-shrink: 0;"><i class="fas fa-map-marker-alt" style="color: #dc3545; margin-top: 3px;"></i></div>
-                        <div>
-                            <span style="font-size: 0.7rem; color: #888; font-weight: 800; display: block; text-transform: uppercase;">Pickup From</span>
-                            <strong style="color: #111;">${escapeHtml(shortPickup)}</strong>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 10px; align-items: flex-start;">
-                        <div style="width: 20px; text-align: center; flex-shrink: 0;"><i class="fas fa-flag-checkered" style="color: #007BFF; margin-top: 3px;"></i></div>
-                        <div>
-                            <span style="font-size: 0.7rem; color: #888; font-weight: 800; display: block; text-transform: uppercase;">Going To</span>
-                            <strong style="color: #111;">${escapeHtml(shortDest)}</strong>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 12px;">
-                <button class="btn btn-danger" style="flex: 1; border-radius: 14px; padding: 16px; font-weight: 800; font-size: 1rem; background: #fff0f0 !important; color: #dc3545 !important; border: 1px solid #ffcdd2;" onclick="rejectRequestAndClose()">
-                    <i class="fas fa-times"></i> Decline
-                </button>
-                <button class="btn btn-success" style="flex: 2; background: ${brandColor} !important; color: white !important; border: none; border-radius: 14px; padding: 16px; font-weight: 900; font-size: 1rem; box-shadow: 0 8px 20px ${brandColor}44;" onclick="executeDriverAccept('${req.key}')">
-                    <i class="fas fa-check"></i> ${isClub ? 'Accept Pool' : 'Accept Ride'}
-                </button>
-            </div>
-            
-            ${isClub ? `
-                <div style="margin-top: 12px; text-align: center; font-size: 0.75rem; color: #888; background: #f8f9fa; padding: 8px; border-radius: 8px; border: 1px solid #eee;">
-                    <i class="fas fa-info-circle"></i> Accepting will start the pool. Other passengers can still join until the pool is full.
-                </div>
-            ` : ''}
-        </div>
-    `;
-
-    // Open the popup
-    openPopup('commuterRequestPopup');
-    
-    // Play notification sound
-    try { 
-        new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3').play().catch(()=>{}); 
-    } catch(e){}
-};
-
-// 5. FIXED rejectRequestAndClose
-window.rejectRequestAndClose = function() {
-    const reqKey = window.currentShowingRequestId || (activeRequest ? activeRequest.key : null);
-    
-    if (reqKey) {
-        database.ref(`requests/${reqKey}`).update({
-            status: 'rejected',
-            rejectedByDriver: userId,
-            rejectedAt: firebase.database.ServerValue.TIMESTAMP
-        }).catch(err => console.error("Reject error:", err));
-    }
-    
-    closeRequestPopupNow();
-    closeActivePopup();
-    
-    activeRequest = null;
-    currentRequestId = null;
-    window.isShowingRequestPopup = false;
-    window.currentShowingRequestId = null;
-    
-    showCommunicationBanner("Request Declined", "info");
-};
-
-// 6. HELPER: Create popup element if missing
-function createPopupElement(id) {
-    let popup = document.getElementById(id);
-    if (!popup) {
-        popup = document.createElement('div');
-        popup.id = id;
-        popup.className = 'popup';
-        document.body.appendChild(popup);
-    }
-    return popup;
-}
-
-// 7. FIXED showPoolingRoomPopup - Ensure it works properly
-window.showPoolingRoomPopup = function(request) {
-    if (!request) return;
-
-    // Check if request was cancelled
-    if (['cancelled_by_commuter', 'cancelled_by_driver', 'cancelled_by_admin', 'rejected'].includes(request.status)) {
-        closeRequestPopupNow();
-        return;
-    }
-
-    // Block if already assigned to another driver
-    if (request.taxiId && request.taxiId !== userId) {
-        return;
-    }
-
-    // Check if we're already showing this
-    if (window.isShowingRequestPopup && window.currentShowingRequestId === request.key) {
-        return;
-    }
-
-    // Set active state
-    activeRequest = request;
-    currentRequestId = request.key;
-    window.isShowingRequestPopup = true;
-    window.currentShowingRequestId = request.key;
-
-    // Get passenger data
-    const passengers = request.passengers || {};
-    const passKeys = Object.keys(passengers);
-    const passCount = passKeys.length;
-    const maxCapacity = request.maxCapacity || 3;
-    const isPoolFull = passCount >= maxCapacity;
-    const remainingSpots = Math.max(0, maxCapacity - passCount);
-    const canAcceptEarly = passCount >= 2 || request.forceDispatch === true;
-
-    // Calculate total fare
-    let totalFare = 0;
-    let passengersListHtml = '';
-    
-    if (passCount > 0) {
-        passKeys.forEach((key, index) => {
-            const p = passengers[key];
-            const price = p.price || request.originalPerPersonPrice || 25;
-            totalFare += price;
-            
-            passengersListHtml += `
-                <div style="background: #ffffff; border: 1px solid #eee; border-radius: 12px; padding: 12px; margin-bottom: 10px; border-left: 4px solid #007BFF;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 32px; height: 32px; border-radius: 50%; background: #e6f2ff; display: flex; align-items: center; justify-content: center; font-weight: 800; color: #007BFF;">
-                                ${p.commuterName ? p.commuterName.charAt(0).toUpperCase() : 'P'}
-                            </div>
-                            <div>
-                                <div style="font-weight: 800; color: #111;">${escapeHtml(p.commuterName || 'Passenger')}</div>
-                                <div style="font-size: 0.7rem; color: #666;">
-                                    <i class="fas fa-map-marker-alt" style="color: #dc3545;"></i> ${p.pickupAddress ? p.pickupAddress.split(',')[0] : 'Pickup'}
-                                </div>
-                            </div>
-                        </div>
-                        <div style="font-weight: 900; color: #28a745; font-size: 1.1rem;">R${price}</div>
-                    </div>
-                </div>
-            `;
-        });
-    }
-
-    // Status badge
-    let statusBadge = '';
-    let statusColor = '#FF9F0A';
-    let acceptBtnMessage = `Waiting for ${Math.max(0, 2 - passCount)} more`;
-    
-    if (isPoolFull) {
-        statusBadge = `
-            <div style="background: #28a745; color: white; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #28a745; margin-bottom: 10px;">
-                <i class="fas fa-check-circle"></i> POOL IS FULL (${passCount}/${maxCapacity})
-            </div>
-        `;
-        acceptBtnMessage = `Accept Full Pool (${passCount} Pax)`;
-        statusColor = '#28a745';
-    } else if (canAcceptEarly) {
-        statusBadge = `
-            <div style="background: #FF9F0A; color: black; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #FF9F0A; margin-bottom: 10px;">
-                <i class="fas fa-hourglass-half"></i> NEEDS ${remainingSpots} MORE (${passCount}/${maxCapacity})
-            </div>
-        `;
-        acceptBtnMessage = `Accept & Go (${passCount} Pax)`;
-    } else {
-        statusBadge = `
-            <div style="background: #f0f0f0; color: #666; padding: 5px 15px; border-radius: 20px; display: inline-block; font-weight: 900; font-size: 0.85rem; border: 1px solid #ddd; margin-bottom: 10px;">
-                <i class="fas fa-clock"></i> WAITING FOR PASSENGERS (${passCount}/${maxCapacity})
-            </div>
-        `;
-        acceptBtnMessage = `Waiting for ${remainingSpots} more`;
-    }
-
-    // Build the popup
-    const popup = document.getElementById('commuterRequestPopup') || createPopupElement('commuterRequestPopup');
-    
-    popup.innerHTML = `
-        <button class="popup-close" onclick="declineClubRequest('${request.key}')" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 35px; height: 35px; border-radius: 50%; color: #333; z-index: 10; cursor: pointer; display: flex; align-items: center; justify-content: center;">&times;</button>
-        
-        <div style="padding: 20px; text-align: left; background: white; border-radius: 20px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <div>
-                    <h3 style="color: ${statusColor}; margin: 0; font-weight: 900; font-size: 1.4rem;">Asiye Club Request</h3>
-                    ${statusBadge}
-                </div>
-                <div style="text-align: right; background: #eef4ff; border: 1px solid #cce0ff; padding: 8px 12px; border-radius: 12px;">
-                    <div style="font-size: 0.7rem; color: #007BFF; font-weight: bold;">TOTAL PAYOUT</div>
-                    <div id="poolAmount_${request.key}" style="font-size: 1.6rem; font-weight: 900; color: #007BFF; line-height: 1;">R${totalFare || (request.originalPerPersonPrice * Math.max(1, passCount))}</div>
-                </div>
-            </div>
-            
-            <!-- Passenger List -->
-            <div style="max-height: 40vh; overflow-y: auto; padding-right: 5px; margin-bottom: 15px;">
-                ${passCount > 0 ? passengersListHtml : '<div style="text-align: center; padding: 20px; color: #888;">No passengers yet</div>'}
-                <div style="text-align: center; font-size: 0.8rem; color: #666; margin-top: 10px; padding-top: 10px; border-top: 1px solid #eee;">
-                    <strong>${passCount}</strong> of <strong>${maxCapacity}</strong> seats filled
-                </div>
-            </div>
-            
-            <!-- Action Buttons -->
-            <div style="display: flex; gap: 10px; margin-top: 10px;">
-                <button class="btn btn-outline" onclick="declineClubRequest('${request.key}')" style="flex: 1; border-radius: 16px; padding: 14px; font-weight: bold; background: #fff0f0; color: #dc3545; border: 1px solid #ffcdd2; cursor: pointer;">Decline</button>
-                
-                <button id="poolAcceptBtn_${request.key}" class="btn btn-success" onclick="acceptClubPoolEarly('${request.key}')" 
-                        style="flex: 2; border-radius: 16px; padding: 14px; font-weight: 900; background: ${(canAcceptEarly || isPoolFull) ? '#28a745' : '#6c757d'}; color: white; border: none; cursor: ${(canAcceptEarly || isPoolFull) ? 'pointer' : 'not-allowed'}; opacity: ${(canAcceptEarly || isPoolFull) ? '1' : '0.6'};">
-                    <span id="poolAcceptBtnTxt_${request.key}">${acceptBtnMessage}</span>
-                </button>
-            </div>
-            
-            ${isPoolFull ? `
-                <div style="margin-top: 10px; text-align: center; font-size: 0.8rem; color: #28a745; font-weight: bold; background: #e8f5e9; padding: 8px; border-radius: 8px;">
-                    <i class="fas fa-check-circle"></i> Pool is full! All ${passCount} passengers are ready to go.
-                </div>
-            ` : ''}
-            
-            ${!isPoolFull && passCount > 0 ? `
-                <div style="margin-top: 10px; text-align: center; font-size: 0.8rem; color: #FF9F0A; font-weight: bold; background: #fff4e5; padding: 8px; border-radius: 8px;">
-                    <i class="fas fa-hourglass-half"></i> ${passCount} passenger(s) waiting. Need ${remainingSpots} more to fill the pool.
-                </div>
-            ` : ''}
-        </div>
-    `;
-
-    // Open the popup
-    openPopup('commuterRequestPopup');
-
-    // Set up real-time listener for passenger changes
-    setupPoolPassengerListener(request.key);
-};
-
-// 8. FIXED closeRequestPopupNow
-window.closeRequestPopupNow = function() {
-    const popup = document.getElementById('commuterRequestPopup');
-    if (popup) {
-        popup.classList.remove('open');
-        popup.style.display = 'none';
-        popup.style.visibility = 'hidden';
-        popup.style.opacity = '0';
-        
-        // Clear any timer
-        if (popup.dataset.timerId) {
-            clearInterval(parseInt(popup.dataset.timerId));
-            delete popup.dataset.timerId;
-        }
-    }
-    
-    const overlay = document.getElementById('popupOverlay');
-    if (overlay) {
-        overlay.classList.remove('open');
-        overlay.style.display = 'none';
-        overlay.style.visibility = 'hidden';
-        overlay.style.opacity = '0';
-    }
-    
-    // Clean up any listeners
-    if (window.poolPassengerListener && window.currentShowingRequestId) {
-        database.ref('requests/' + window.currentShowingRequestId).off('value', window.poolPassengerListener);
-        window.poolPassengerListener = null;
-    }
-    
-    window.isShowingRequestPopup = false;
-    window.currentShowingRequestId = null;
-    window.isViewingClubRequest = false;
-};
-
-// 9. INITIALIZATION - Replace your existing listener setup
-function initRequestSystem() {
-    // Clean up all existing listeners
-    cleanupAllRequestListeners();
-    
-    // Set up the unified listener
-    setupUnifiedRequestListener();
-    
-    // Also set up notification listener for push notifications
-    if (typeof setupNotificationListener === 'function') {
-        setupNotificationListener();
-    }
-    
-    console.log("✅ Request system initialized successfully");
-}
-
-// Call this when the app starts
-setTimeout(initRequestSystem, 3000);
 
 </script>
 </body>
-</html>
+</html>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
