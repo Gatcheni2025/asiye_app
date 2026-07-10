@@ -8969,184 +8969,91 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 <!-- 1. CLEAN UNIFIED ONBOARDING MODAL (WITH OPTIONAL CLUB)   -->
 <!-- ======================================================== -->
 <div id="phoneEnforcementModal" class="modal-overlay" style="display: none; z-index: 99999999 !important; background: rgba(0,0,0,0.95) !important; align-items: center; justify-content: center;">
-    <div class="modal-content" style="max-width: 420px; width: 92%; background: #1C1C1E !important; color: white !important; border-radius: 24px !important; border: 1px solid #333 !important; padding: 25px 20px !important; text-align: left !important; overflow: hidden; display: flex; flex-direction: column; height: auto; max-height: 90vh; box-shadow: 0 15px 40px rgba(0,0,0,0.5);">
+    <div class="modal-content" style="max-width: 420px; width: 92%; background: #1C1C1E !important; color: white !important; border-radius: 24px !important; border: 1px solid #333 !important; padding: 25px 20px !important; text-align: left !important; overflow: hidden; display: flex; flex-direction: column; height: auto; min-height: 550px; max-height: 90vh; box-shadow: 0 15px 40px rgba(0,0,0,0.5);">
         
         <!-- STEP 0: Welcome -->
-        <div id="onboardStep0" style="display: flex; flex-direction: column; width: 100%; height: 100%;">
-            <div style="text-align: center; margin-bottom: 20px;">
+        <div id="onboardStep0" style="display: flex; flex-direction: column; width: 100%; height: 100%; flex: 1;">
+            <div style="text-align: center; flex: 1;">
                 <div style="width: 100px; height: 100px; border-radius: 50%; overflow: hidden; margin: 0 auto 15px auto; border: 3px solid #30D158; box-shadow: 0 0 25px rgba(48, 209, 88, 0.3);">
                     <img src="data/AsiyeNew.png" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://asiye.cloud/images/logo.png'">
                 </div>
                 <h3 style="color: white !important; font-weight: 800; margin-bottom: 6px; font-size: 1.5rem;">Welcome to Asiye Club!</h3>
                 <p style="color: #aaa !important; font-size: 0.95rem; line-height: 1.5; margin-bottom: 15px;">
-                    <strong style="color: #30D158;">Asiye Club</strong> is a dedicated shared vehicle network designed for your daily commute to work, school, or church.
+                    <strong style="color: #30D158;">Asiye Club</strong> is a shared vehicle network designed for your daily commute.
                 </p>
-                <div style="background: #2C2C2E; border: 1px solid #444; border-radius: 12px; padding: 15px; text-align: left; margin-bottom: 15px;">
-                    <ul style="color: #ddd; font-size: 0.85rem; line-height: 1.8; padding-left: 20px; margin: 0;">
-                        <li><i class="fas fa-car-side" style="color:#007BFF; margin-left:-20px; margin-right:5px;"></i> Share a dedicated ride safely with neighbors.</li>
-                        <li><i class="fas fa-wallet" style="color:#28a745; margin-left:-20px; margin-right:5px;"></i> Save up to 40% on your monthly travel.</li>
-                        <li><i class="fas fa-clock" style="color:#FF9F0A; margin-left:-20px; margin-right:5px;"></i> Guaranteed & reliable pickup times.</li>
-                        <li><i class="fas fa-gift" style="color:#FFC107; margin-left:-20px; margin-right:5px;"></i> <strong style="color: #FFC107;">Get your 1st trip completely FREE!</strong></li>
+                <div style="background: #2C2C2E; border: 1px solid #444; border-radius: 12px; padding: 15px; text-align: left;">
+                    <ul style="color: #ddd; font-size: 0.85rem; line-height: 1.8; padding-left: 20px; margin: 0; list-style: none;">
+                        <li><i class="fas fa-check" style="color:#30D158; margin-left:-20px; margin-right:8px;"></i> Share rides safely with neighbors.</li>
+                        <li><i class="fas fa-check" style="color:#30D158; margin-left:-20px; margin-right:8px;"></i> Save up to 40% on travel.</li>
+                        <li><i class="fas fa-check" style="color:#30D158; margin-left:-20px; margin-right:8px;"></i> 1st Trip is completely FREE!</li>
                     </ul>
                 </div>
             </div>
-            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 15px;">
-                <button onclick="window.onboardInterestedYes()" style="background: #30D158; color: #000; border: none; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(48,209,88,0.3);">
-                    <i class="fas fa-check-circle"></i> Yes, I'm interested
+            <!-- Footer Buttons -->
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+                <button onclick="window.nextOnboardStep(1)" style="background: #30D158; color: #000; border: none; padding: 16px; border-radius: 16px; font-weight: 800; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(48,209,88,0.3);">
+                    Yes, I'm interested
                 </button>
-                <button onclick="window.onboardInterestedNo()" style="background: transparent; color: #fff; border: 1px solid #444; padding: 18px; border-radius: 16px; font-weight: 700; font-size: 1rem; cursor: pointer;">
-                    Skip Club (Standard Rides)
+                <button onclick="window.saveUnifiedOnboardingData(true)" style="background: transparent; color: #fff; border: 1px solid #444; padding: 16px; border-radius: 16px; font-weight: 700; font-size: 0.9rem; cursor: pointer;">
+                    Skip & Standard Rides
                 </button>
             </div>
         </div>
 
-        <!-- STEP 1: Phone & Commute -->
-        <div id="onboardStep1" style="display: none; flex-direction: column; width: 100%; height: 100%;">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <i class="fas fa-mobile-alt" style="color: #0A84FF; font-size: 2.5rem; margin-bottom: 10px;"></i>
-                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Add phone number</h3>
-                <p>Your number is used for bookings and for safety checks</p>
-            </div>
-            <div style="flex: 1; overflow-y: auto; margin-bottom: 15px;">
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label style="color: #aaa; font-size: 0.75rem; font-weight: bold;">PHONE NUMBER *</label>
-                    <input type="tel" id="enforcedPhoneInput" placeholder="e.g. 071 234 5678" style="background: #2c2c2c !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 12px; border-radius: 12px; font-weight: bold; text-align: center;">
-                </div>
-                <div class="form-group" style="margin-bottom: 15px;">
-                    <label style="color: #aaa; font-size: 0.75rem; font-weight: bold;">INVITE CODE / PHONE (OPTIONAL)</label>
-                    <input type="text" id="onboardReferralCode" placeholder="Enter Referrer's Phone or Code" style="background: #2c2c2c !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 12px; border-radius: 12px; font-weight: bold; text-align: center;">
-                </div>
-            </div>
-            <button class="btn btn-primary" onclick="window.nextOnboardStep(2)" style="width: 100%; border-radius: 12px; padding: 14px; font-weight: 800; background: #0A84FF; color: white; border: none;">
-                Next: Set Route <i class="fas fa-arrow-right"></i>
-            </button>
-        </div>
-
-        <!-- STEP 2: Route Search -->
-       <!-- STEP 2: Route Search & Club Matching -->
-        <div id="onboardStep2" style="display: none; flex-direction: column; width: 100%; height: 100%; overflow: visible !important;">
-            <div style="text-align: center; margin-bottom: 15px;">
-                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Find Your Route</h3>
-               <p style="color: #aaa; font-size: 0.85rem; margin: 0;">
-                We'll check if there's a club in your area, or help you start a new one.
-                </p>
-            </div>
-            
-            <div style="flex: 1; position: relative; z-index: 100; overflow: visible !important; display: flex; flex-direction: column; gap: 15px;">
+        <!-- STEP 1: Phone & Code -->
+        <div id="onboardStep1" style="display: none; flex-direction: column; width: 100%; height: 100%; flex: 1;">
+            <div style="text-align: center; flex: 1;">
+                <i class="fas fa-mobile-alt" style="color: #0A84FF; font-size: 2.5rem; margin-bottom: 15px;"></i>
+                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Verify Details</h3>
+                <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 25px;">Enter your phone to secure your account and any referral code you have.</p>
                 
-                <!-- PICKUP AREA -->
-                <div class="form-group" style="margin-bottom: 0; position: relative; z-index: 20;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin: 0;">PICKUP AREA / TOWN *</label>
-                        <span onclick="window.useCurrentGpsForOnboard()" style="color: #007BFF; font-size: 0.8rem; font-weight: 800; cursor: pointer;"><i class="fas fa-crosshairs"></i> Refresh GPS</span>
-                    </div>
-                    <input type="text" id="onboardPickupInput" placeholder="Locating GPS..." autocomplete="off" style="background: #2c2c2c !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 12px; border-radius: 12px; font-weight: bold;">
-                    <div id="onboardPickupSuggestions" style="position: absolute; top: 100%; left: 0; width: 100%; display: none;"></div>
+                <div class="form-group" style="margin-bottom: 20px; text-align: left;">
+                    <label style="color: #888; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">Phone Number *</label>
+                    <input type="tel" id="enforcedPhoneInput" placeholder="071 234 5678" style="background: #2c2c2c !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px; font-weight: bold; margin-top: 5px;">
                 </div>
-                <input type="hidden" id="onboardPickupLat"><input type="hidden" id="onboardPickupLng"><input type="hidden" id="onboardPickupText">
-
-                <!-- AREA CLUBS RESULTS (Injected by JS) -->
-                <div id="onboardAreaClubs" style="display: none; flex-direction: column; gap: 10px;"></div>
-
-                <!-- DROP-OFF AREA (Hidden until needed) -->
-                <div id="onboardDropoffSection" style="display: none; flex-direction: column; position: relative; z-index: 10;">
-                    <div style="display: flex; align-items: center; gap: 10px; margin: 10px 0;">
-                        <div style="flex: 1; height: 1px; background: #444;"></div>
-                        <span style="color: #888; font-size: 0.75rem; font-weight: bold;">CREATE NEW ROUTE</span>
-                        <div style="flex: 1; height: 1px; background: #444;"></div>
-                    </div>
-                    <label style="color: #888; font-size: 0.75rem; font-weight: bold; display: block; margin-bottom: 6px;">DROP-OFF (MALL, SCHOOL, TOWN) *</label>
-                    <input type="text" id="onboardDropoffInput" placeholder="Where do you commute to?" autocomplete="off" style="background: #2c2c2c !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 12px; border-radius: 12px; font-weight: bold;">
-                    <div id="onboardDropoffSuggestions" style="position: absolute; top: 100%; left: 0; width: 100%; display: none;"></div>
-                </div>
-                <input type="hidden" id="onboardDropoffLat"><input type="hidden" id="onboardDropoffLng"><input type="hidden" id="onboardDropoffText">
-            </div>
-            
-            <div style="display: flex; gap: 10px; margin-top: 15px; flex-shrink: 0;">
-                <button class="btn btn-light" onclick="window.nextOnboardStep(1)" style="flex: 1; background: #333; color: white; border: none; border-radius: 12px; font-weight: 700;">Back</button>
-                <button id="onboardStep2NextBtn" class="btn btn-primary" onclick="window.nextOnboardStep(3)" disabled style="flex: 2; background: #30D158; color: black; font-weight: 800; border: none; border-radius: 12px; opacity: 0.5;">Next: Schedule</button>
-            </div>
-        </div>
-        <!-- STEP 3: Club Schedule & Pricing -->
-       <!-- STEP 3: Club Schedule & Pricing -->
-        <div id="onboardStep3" style="display: none; flex-direction: column; width: 100%; height: 100%; overflow: visible !important;">
-            <div style="text-align: center; margin-bottom: 15px;">
-                <h3 style="color: white !important; font-weight: 800; font-size: 1.3rem;">Schedule & Pricing</h3>
-                <!-- ADDED ID HERE so JS can inject the dynamic text -->
-                <p id="onboardStep3Desc" style="color: #aaa !important; font-size: 0.85rem; line-height: 1.4;">
-                    Set your times to lock in your seat.
-                </p>
-            </div>
-            <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
                 
-               
-
-                <div style="display:flex; gap: 10px; margin-bottom: 20px;">
-                    <div style="flex:1;">
-                        <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; display:block;">MORNING PICKUP *</label>
-                        <input type="time" id="onboardMorningTime" value="07:00" style="width: 100%; padding: 12px; background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; border-radius: 12px; outline: none; font-weight: bold;">
-                    </div>
-                    <div style="flex:1;">
-                        <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; display:block;">RETURN TRIP *</label>
-                        <input type="time" id="onboardReturnTime" value="17:00" style="width: 100%; padding: 12px; background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; border-radius: 12px; outline: none; font-weight: bold;">
-                    </div>
-                </div>
-
-                <label style="color: #888; font-size: 0.75rem; font-weight: bold; margin-bottom: 5px; display:block;">What you might pay (round trip) *</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 15px;">
-                    <div id="obPlanCardDaily" onclick="window.selectOnboardPlan('daily')" style="background: #2C2C2E; border: 2px solid transparent; border-radius: 12px; padding: 12px 5px; cursor: pointer; text-align: center;">
-                        <span style="display: block; font-weight: bold; font-size: 0.85rem; color: white;">Daily</span>
-                        <strong id="obPlanPriceDaily" style="color: #30D158; font-size: 1rem;">R0</strong>
-                    </div>
-                    <div id="obPlanCardWeekly" onclick="window.selectOnboardPlan('weekly')" style="background: #2C2C2E; border: 2px solid transparent; border-radius: 12px; padding: 12px 5px; cursor: pointer; text-align: center;">
-                        <span style="display: block; font-weight: bold; font-size: 0.85rem; color: white;">Weekly</span>
-                        <strong id="obPlanPriceWeekly" style="color: #30D158; font-size: 1rem;">R0</strong>
-                    </div>
-                    <div id="obPlanCardMonthly" onclick="window.selectOnboardPlan('monthly')" style="background: #2C2C2E; border: 2px solid #30D158; border-radius: 12px; padding: 12px 5px; cursor: pointer; text-align: center; position: relative;">
-                        <div style="position: absolute; top: -8px; right: -8px; background: #FF9F0A; color: black; font-size: 0.55rem; font-weight: 900; padding: 2px 6px; border-radius: 10px; text-transform: uppercase;">1st Trip Free</div>
-                        <span style="display: block; font-weight: bold; font-size: 0.85rem; color: white;">Monthly</span>
-                        <strong id="obPlanPriceMonthly" style="color: #30D158; font-size: 1rem;">R0</strong>
-                    </div>
-                </div>
-
-                <div id="onboardClubPriceDisplay" style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #3A3A3C; text-align: center;">
-                    <!-- Updated by JS -->
+                <div class="form-group" style="margin-bottom: 20px; text-align: left;">
+                    <label style="color: #888; font-size: 0.75rem; font-weight: bold; text-transform: uppercase;">Invite Code (Optional)</label>
+                    <input type="text" id="onboardReferralCode" placeholder="Enter Code" style="background: #2c2c2c !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px; font-weight: bold; margin-top: 5px; text-transform: uppercase;">
                 </div>
             </div>
-
-            <!-- Modified buttons to allow skipping -->
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px; flex-shrink: 0;">
-                <div style="display: flex; gap: 10px; width: 100%;">
-                    <button class="btn btn-light" onclick="window.nextOnboardStep(2)" style="flex: 1; background: #333; color: white; border: none; border-radius: 12px;">Back</button>
-                    <button class="btn btn-primary" onclick="window.confirmClubAndProceed()" style="flex: 2; background: #30D158; color: black; font-weight: 800; border: none; border-radius: 12px;">Add me in</button>
-                </div>
-                <button onclick="window.skipClubAndProceed()" style="width: 100%; padding: 14px; background: transparent; border: 1px solid #444; color: #888; border-radius: 12px; font-weight: 700; cursor: pointer;">
-                    Charge me normal e-hailing fee
+            <!-- Footer Buttons -->
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <button onclick="window.nextOnboardStep(0)" style="flex: 1; background: #333; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 700; cursor: pointer;">
+                    Back
+                </button>
+                <!-- NOTE: nextOnboardStep(4) skips 2 and 3 -->
+                <button onclick="window.nextOnboardStep(4)" style="flex: 2; background: #0A84FF; color: white; border: none; padding: 16px; border-radius: 16px; font-weight: 800; font-size: 1rem; cursor: pointer;">
+                    Next <i class="fas fa-arrow-right" style="margin-left: 5px;"></i>
                 </button>
             </div>
         </div>
 
-        <!-- STEP 4: Share -->
-        <div id="onboardStep4" style="display: none; flex-direction: column; width: 100%; height: 100%;">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <i class="fas fa-users" style="color: #007BFF; font-size: 3rem; margin-bottom: 10px;"></i>
-                <h3 style="color: white !important; font-weight: 800;">Invite Someone to Join</h3>
-                <p style="color: #aaa !important; font-size: 0.95rem; line-height: 1.5;">
-                    Know someone who might be interested in joining the club? Invite them to travel with you, and help everyone save more! Plus, earn real cash rewards for every successful invite.
+        <!-- STEP 4: Share & Complete -->
+        <div id="onboardStep4" style="display: none; flex-direction: column; width: 100%; height: 100%; flex: 1;">
+            <div style="text-align: center; flex: 1;">
+                <i class="fas fa-users" style="color: #30D158; font-size: 3rem; margin-bottom: 15px;"></i>
+                <h3 style="color: white !important; font-weight: 800;">Refer & Earn</h3>
+                <p style="color: #aaa !important; font-size: 0.95rem; line-height: 1.5; margin-bottom: 20px;">
+                    Earn real cash rewards for every successful invite. Share Asiye with your friends to help them save!
                 </p>
+                <div style="background: rgba(48, 209, 88, 0.1); border: 1px dashed #30D158; padding: 15px; border-radius: 12px; color: #30D158; font-weight: 700; font-size: 0.9rem;">
+                    You get R50 Ride Voucher when they take their first trip!
+                </div>
             </div>
-            <div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 15px;">
-                <button onclick="window.onboardShareAndComplete()" style="background: #007BFF; color: white; border: none; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
+            <!-- Footer Buttons -->
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+                <button onclick="window.onboardShareAndComplete()" style="background: #007BFF; color: white; border: none; padding: 18px; border-radius: 16px; font-weight: 800; font-size: 1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
                     <i class="fas fa-share-alt"></i> Share and Invite
                 </button>
-                <button onclick="window.saveUnifiedOnboardingData(true)" style="background: transparent; color: #fff; border: 1px solid #444; padding: 18px; border-radius: 16px; font-weight: 700; cursor: pointer;">
-                    No thanks, complete registration
+                <button onclick="window.saveUnifiedOnboardingData(true)" style="background: transparent; color: #888; border: none; padding: 10px; font-weight: 700; font-size: 0.9rem; cursor: pointer;">
+                    Complete Registration
                 </button>
             </div>
         </div>
 
-    </div> <!-- CRITICAL: CLoses Modal Content -->
-</div> <!-- CRITICAL: Closes Modal Overlay -->
+    </div>
+</div><!-- CRITICAL: Closes Modal Overlay -->
 
 <div id="map"></div>
 
@@ -10856,53 +10763,14 @@ function initializeApp(uid) {
     });
 }
 
-window.processPendingReferralCounters = async function(newUserId, referralToken) {
-    if (!referralToken || newUserId === referralToken) return;
+window.processPendingReferralCounters = async function(newUserId, ambassadorId) {
+    if (!ambassadorId || newUserId === ambassadorId) return;
 
-    const userRef = database.ref(`commuters/${newUserId}`);
-    const snap = await userRef.once('value');
-    const userData = snap.val() || {};
+    console.log("Updating Ambassador Stats for ID:", ambassadorId);
 
-    if (userData.binaryCountsProcessed) return;
-
-    let ambId = null;
-
-    // 1. Try treating token as a UID
-    let checkSnap = await database.ref(`commuters/${referralToken}`).once('value');
-    if (checkSnap.exists()) {
-        ambId = checkSnap.key;
-    } else {
-        // 2. Try treating token as an AMB- Code
-        let codeSnap = await database.ref('commuters').orderByChild('referralCode').equalTo(referralToken.toUpperCase()).once('value');
-        if (codeSnap.exists()) {
-            codeSnap.forEach(c => ambId = c.key);
-        } else {
-            // 3. Try treating token as a Phone Number
-            let phoneSnap = await database.ref('commuters').orderByChild('phone').equalTo(referralToken).once('value');
-            if (phoneSnap.exists()) {
-                phoneSnap.forEach(c => ambId = c.key);
-            }
-        }
-    }
-
-    if (!ambId) {
-        console.error("Referral failed: Ambassador not found for token", referralToken);
-        return; 
-    }
-
-    // Mark processed on the new user
-    await userRef.update({ 
-        binaryCountsProcessed: true, 
-        referredBy: ambId 
-    });
-
-    if (window.commuterData) {
-        window.commuterData.referredBy = ambId;
-        window.commuterData.binaryCountsProcessed = true;
-    }
-
-    // Give Ambassador the Pending Stat
-    await database.ref(`commuters/${ambId}`).transaction(data => {
+    // 1. Increment the Ambassador's stats
+    const ambassadorRef = database.ref(`commuters/${ambassadorId}`);
+    await ambassadorRef.transaction(data => {
         if (data) {
             data.level1_invites = (data.level1_invites || 0) + 1;
             data.referralCount = (data.referralCount || 0) + 1; 
@@ -10911,21 +10779,21 @@ window.processPendingReferralCounters = async function(newUserId, referralToken)
         return data;
     });
 
-    // Create ledger entry
-    await database.ref(`commuters/${ambId}/earnings/ref_pending_${newUserId}`).set({
-        id: 'ref_pending_' + newUserId,
+    // 2. Create a ledger entry so it shows up in ambassador.html history
+    await database.ref(`commuters/${ambassadorId}/earnings/pending_${newUserId}`).set({
         type: 'referral_reward',
         amount: 50.00,
-        description: `Pending: ${userData.name || 'New User'} (Awaiting 1st Trip)`,
+        description: `Pending: New User Sign-up`,
         timestamp: firebase.database.ServerValue.TIMESTAMP,
         status: 'pending',
         linkedUserId: newUserId
     });
 
-    database.ref(`notifications/commuters/${ambId}`).push({
+    // 3. Notify the Ambassador
+    database.ref(`notifications/commuters/${ambassadorId}`).push({
         type: 'referral_bonus_pending',
-        title: 'New Sign-up! 🎉',
-        message: `A user registered using your link! R50 is pending until they take their first trip.`,
+        title: 'New Referral! 🎉',
+        message: `A new user joined with your code. R50 is pending their first trip.`,
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
 };
@@ -11881,7 +11749,79 @@ if (progressBar && progressText) {
           }
       }
   }
+window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
+    try {
+        const uid = window.userId || localStorage.getItem('userId');
+        
+        // 1. Get Phone Number (Required)
+        const phoneInput = document.getElementById('enforcedPhoneInput');
+        const phone = phoneInput ? phoneInput.value.replace(/\s+/g, '').trim() : '';
+        
+        if (!phone || phone.length < 10) {
+            showToast("Please enter a valid phone number", "danger");
+            return;
+        }
 
+        // 2. Get Referral Code (Optional)
+        const refCodeInput = document.getElementById('onboardReferralCode');
+        const refCode = refCodeInput ? refCodeInput.value.replace(/\s+/g, '').trim().toUpperCase() : '';
+
+        // 3. Set Default Data (Since Step 2 & 3 are deleted, we use placeholders or nulls)
+        const updates = {
+            phone: phone,
+            onboardingComplete: true,
+            clubOptOut: true, // User skipped club setup
+            onboardRoute: null, // No route provided during onboarding anymore
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        // 4. Referral Logic
+        if (refCode) {
+            // Search for the Ambassador by Referral Code, Phone, or UID
+            const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(refCode).once('value');
+            let matchedReferrerId = null;
+            
+            if (codeQuery.exists()) { 
+                codeQuery.forEach(c => { matchedReferrerId = c.key; }); 
+            } else {
+                const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(refCode).once('value');
+                if (phoneQuery.exists()) {
+                    phoneQuery.forEach(c => { matchedReferrerId = c.key; });
+                }
+            }
+
+            if (matchedReferrerId && matchedReferrerId !== uid) {
+                updates.referredBy = matchedReferrerId; 
+                updates.promoRemaining = 1;
+                updates.promoValue = 25; 
+                
+                // Alert the Ambassador's dashboard
+                if (typeof window.processPendingReferralCounters === 'function') {
+                    window.processPendingReferralCounters(uid, matchedReferrerId);
+                }
+            }
+        }
+
+        // 5. Save to Firebase
+        await database.ref(`commuters/${uid}`).update(updates);
+        if (window.commuterData) Object.assign(window.commuterData, updates);
+
+        // 6. Close Modal and Show Dashboard
+        const modal = document.getElementById('phoneEnforcementModal');
+        if (modal) {
+            modal.classList.remove('open');
+            modal.style.setProperty('display', 'none', 'important');
+        }
+        
+        showToast("Registration Complete!", "success");
+        showModernDashboard();
+
+    } catch (err) {
+        console.error("Save Onboarding Error:", err);
+        showToast("Error saving profile.", "warning");
+        showModernDashboard();
+    }
+};
 // =======================================================================
 // UPDATED: NOTIFICATIONS POPUP (Fixed Text Visibility)
 // =======================================================================
@@ -29218,129 +29158,6 @@ async function fetchAndRenderNearby(lat, lon) {
     }
 }
 
-// =======================================================================
-// 2. COMMUTER.HTML: FIX REFERRAL LOGIC FOR ONBOARDING
-// =======================================================================
-window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
-    try {
-        const uid = window.userId || localStorage.getItem('userId');
-        const phone = document.getElementById('enforcedPhoneInput').value.replace(/\s+/g, '').trim();
-        const pLat = parseFloat(document.getElementById('onboardPickupLat')?.value || 0);
-        const pLng = parseFloat(document.getElementById('onboardPickupLng')?.value || 0);
-        const pText = document.getElementById('onboardPickupText')?.value || '';
-        const dLat = parseFloat(document.getElementById('onboardDropoffLat')?.value || 0);
-        const dLng = document.getElementById('onboardDropoffLng')?.value || 0;
-        const dText = document.getElementById('onboardDropoffText')?.value || '';
-        
-        // 🚨 GET THE REFERRAL CODE
-        const refCodeInput = document.getElementById('onboardReferralCode');
-        const refCode = refCodeInput ? refCodeInput.value.replace(/\s+/g, '').trim() : '';
-
-        const updates = {
-            phone: phone,
-            onboardingComplete: true,
-            clubOptOut: !window.wantsClub,
-            onboardRoute: {
-                pickupAddress: pText, pickupLat: pLat, pickupLng: pLng,
-                dropoffAddress: dText, dropoffLat: dLat, dropoffLng: dLng,
-                distanceKm: window.onboardRouteDistance || 0
-            },
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        if (window.wantsClub) {
-            const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
-            
-            updates.onboardRoute.morningTime = window.onboardMorningTime || '07:00';
-            updates.onboardRoute.returnTime = window.onboardReturnTime || '17:00';
-            updates.onboardRoute.days = window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'];
-            updates.onboardRoute.estimatedClubPrice = window.onboardCalculatedPrice || 0;
-            updates.onboardRoute.billingTerm = window.onboardBillingTerm || 'monthly';
-
-            const clubSubscriptionPayload = {
-                commuterId: uid,
-                commuterName: window.commuterData?.name || 'Passenger',
-                commuterPhone: phone,
-                pickupAddress: pText, pickupLat: pLat, pickupLng: pLng,
-                dropoffAddress: dText, dropoffLat: dLat, dropoffLng: dLng,
-                morningDeparture: window.onboardMorningTime || '07:00',
-                afternoonReturn: window.onboardReturnTime || '17:00',
-                days: window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'],
-                paymentTerms: window.onboardBillingTerm || 'monthly',
-                estimatedCost: window.onboardCalculatedPrice || 0,
-                routeDistance: window.onboardRouteDistance || 0,
-                voucherCode: voucherRefCode,
-                status: 'pending_allocation', 
-                trialApplied: (window.onboardBillingTerm === 'monthly'),
-                createdAt: firebase.database.ServerValue.TIMESTAMP
-            };
-
-            updates.clubSubscription = clubSubscriptionPayload;
-            
-            if (window.onboardJoinedPoolId) {
-                await database.ref(`requests/${window.onboardJoinedPoolId}/passengers/${uid}`).set(clubSubscriptionPayload);
-            } else {
-                const waitlistRef = database.ref("requests").push();
-                const poolPayload = Object.assign({}, clubSubscriptionPayload, {
-                    requestId: waitlistRef.key,
-                    status: 'waiting_pool', 
-                    type: 'club',
-                    poolCenterLat: parseFloat(pLat),
-                    poolCenterLng: parseFloat(pLng),
-                    maxCapacity: 3, 
-                    passengers: {}
-                });
-                
-                poolPayload.passengers[uid] = Object.assign({}, clubSubscriptionPayload);
-                await waitlistRef.set(poolPayload);
-            }
-        }
-
-        // 🚨 FIX: ACCURATE AMBASSADOR MATCHING & INSTANT COUNTER TRIGGER
-        if (refCode) {
-            const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(refCode.toUpperCase()).once('value');
-            const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(refCode).once('value');
-            
-            let matchedReferrerId = null;
-            if (codeQuery.exists()) { codeQuery.forEach(c => { matchedReferrerId = c.key; }); } 
-            else if (phoneQuery.exists()) { phoneQuery.forEach(c => { matchedReferrerId = c.key; }); }
-
-            if (matchedReferrerId && matchedReferrerId !== uid) {
-                updates.referredBy = matchedReferrerId; // STORE THE UID INSTEAD OF THE STRING CODE
-                updates.promoRemaining = 1;
-                updates.promoPercentage = 20; 
-                updates.binaryCountsProcessed = false;
-                
-                // INSTANTLY INCREASE AMBASSADOR'S STATS 
-                if (typeof window.processPendingReferralCounters === 'function') {
-                    window.processPendingReferralCounters(uid, matchedReferrerId);
-                }
-            }
-        }
-
-        document.querySelectorAll(".modal-overlay").forEach(p => {
-            p.classList.remove("open");
-            p.style.setProperty('display', 'none', 'important');
-        });
-
-        await database.ref(`commuters/${uid}`).update(updates);
-        if (window.commuterData) Object.assign(window.commuterData, updates);
-        
-        if (!skipGoalSetup) {
-            window.onboardShareAndComplete();
-        } else {
-            showToast(window.wantsClub ? "Welcome to Asiye Club! Matching you with a pool." : "Welcome to Asiye!", "success");
-            showModernDashboard();
-        }
-
-    } catch (err) {
-        console.error("Save Unified Onboarding Error:", err);
-        showToast("An error occurred. Saving profile and closing.", "warning");
-        document.querySelectorAll(".modal-overlay").forEach(p => p.classList.remove("open"));
-        showModernDashboard();
-    }
-};
-
 
 window.checkFirstTripCompletion = function() {
     if (!window.userId || !window.commuterData || !window.commuterData.referredBy) return;
@@ -30590,42 +30407,24 @@ window.leaveClubAndStartNew = function(poolId) {
 // =================================================================
 
 window.nextOnboardStep = function(stepNum) {
-    if (stepNum === 3 && window.wantsClub === false) stepNum = 4;
+    // Logic to skip removed steps: If user is on Step 1 and clicks Next, go straight to Step 4
+    if (stepNum === 2 || stepNum === 3) {
+        stepNum = 4;
+    }
 
+    // Hide all steps
     for (let i = 0; i <= 5; i++) {
         const el = document.getElementById('onboardStep' + i);
-        if (el) el.style.display = (i === stepNum) ? 'flex' : 'none';
+        if (el) el.style.display = 'none';
     }
 
-    if (stepNum === 2 && !window.onboardGeocodersInit) {
-        window.onboardGeocodersInit = true;
-        setupOnboardAutocomplete('onboardPickupInput', 'onboardPickupSuggestions', 'onboardPickupLat', 'onboardPickupLng', 'onboardPickupText');
-        
-        // 🚀 FIX: AUTO-CAPTURE LOCATION IMMEDIATELY
-        document.getElementById('onboardPickupInput').value = "Locating you automatically...";
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(async (pos) => {
-                const lat = pos.coords.latitude;
-                const lng = pos.coords.longitude;
-                window.commuterLat = lat; window.commuterLng = lng;
-                
-                try {
-                    const address = await getAddressFromCoordsPromise(lng, lat);
-                    document.getElementById('onboardPickupInput').value = address;
-                    document.getElementById('onboardPickupLat').value = lat;
-                    document.getElementById('onboardPickupLng').value = lng;
-                    
-                    // 🚀 INSTANTLY BROADCAST TO DRIVERS THAT SOMEONE IS IN THIS AREA
-                    database.ref('demand_hotspots').push({
-                        lat: lat, lng: lng, timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-                    
-                    window.scanForAreaClubs(lat, lng);
-                } catch(e) {}
-            });
-        }
+    // Show the requested step
+    const targetStep = document.getElementById('onboardStep' + stepNum);
+    if (targetStep) {
+        targetStep.style.display = 'flex';
     }
-    if (stepNum === 3) window.calculateOnboardPricing();
+
+    // REMOVED: demand_hotspots code that was causing PERMISSION_DENIED errors
 };
 window.useCurrentGpsForOnboard = async function() {
     const input = document.getElementById('onboardPickupInput');
@@ -30670,108 +30469,6 @@ window.joinExistingOnboardPool = function(poolId, destText, dLat, dLng) {
     
     showToast("Club Selected!", "success");
     window.nextOnboardStep(3); // Proceed to schedule validation
-};
-
-// 🚨 PERMISSION FIX 🚨
-// This saves waitlists to the permitted `requests` node instead of `club_pools/waiting_list`
-window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
-    try {
-        const uid = window.userId || localStorage.getItem('userId');
-        const phone = document.getElementById('enforcedPhoneInput').value.replace(/\s+/g, '').trim();
-        const pLat = parseFloat(document.getElementById('onboardPickupLat')?.value || 0);
-        const pLng = parseFloat(document.getElementById('onboardPickupLng')?.value || 0);
-        const pText = document.getElementById('onboardPickupText')?.value || '';
-        const dLat = parseFloat(document.getElementById('onboardDropoffLat')?.value || 0);
-        const dLng = document.getElementById('onboardDropoffLng')?.value || 0;
-        const dText = document.getElementById('onboardDropoffText')?.value || '';
-
-        const updates = {
-            phone: phone,
-            onboardingComplete: true,
-            clubOptOut: !window.wantsClub,
-            onboardRoute: {
-                pickupAddress: pText, pickupLat: pLat, pickupLng: pLng,
-                dropoffAddress: dText, dropoffLat: dLat, dropoffLng: dLng,
-                distanceKm: window.onboardRouteDistance || 0
-            },
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        };
-
-        if (window.wantsClub) {
-            const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
-            
-            updates.onboardRoute.morningTime = window.onboardMorningTime || '07:00';
-            updates.onboardRoute.returnTime = window.onboardReturnTime || '17:00';
-            updates.onboardRoute.days = window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'];
-            updates.onboardRoute.estimatedClubPrice = window.onboardCalculatedPrice || 0;
-            updates.onboardRoute.billingTerm = window.onboardBillingTerm || 'monthly';
-
-            const clubSubscriptionPayload = {
-                commuterId: uid,
-                commuterName: window.commuterData?.name || 'Passenger',
-                commuterPhone: phone,
-                pickupAddress: pText, pickupLat: pLat, pickupLng: pLng,
-                dropoffAddress: dText, dropoffLat: dLat, dropoffLng: dLng,
-                morningDeparture: window.onboardMorningTime || '07:00',
-                afternoonReturn: window.onboardReturnTime || '17:00',
-                days: window.onboardSelectedDays || ['Mon','Tue','Wed','Thu','Fri'],
-                paymentTerms: window.onboardBillingTerm || 'monthly',
-                estimatedCost: window.onboardCalculatedPrice || 0,
-                routeDistance: window.onboardRouteDistance || 0,
-                voucherCode: voucherRefCode,
-                status: 'pending_allocation', 
-                trialApplied: (window.onboardBillingTerm === 'monthly'),
-                createdAt: firebase.database.ServerValue.TIMESTAMP
-            };
-
-            updates.clubSubscription = clubSubscriptionPayload;
-            
-      // 🚨 FIX: Push to the `requests` node to bypass the Permission Denied Error
-            if (window.onboardJoinedPoolId) {
-                // Add commuter to the existing pool
-                await database.ref(`requests/${window.onboardJoinedPoolId}/passengers/${uid}`).set(clubSubscriptionPayload);
-            } else {
-                // Create new waitlist pool in `requests`
-                const waitlistRef = database.ref("requests").push();
-                
-                // Create a clean payload so we don't cause a circular JSON crash
-                const poolPayload = Object.assign({}, clubSubscriptionPayload, {
-                    requestId: waitlistRef.key,
-                    status: 'waiting_pool', 
-                    type: 'club',
-                    poolCenterLat: parseFloat(pLat),
-                    poolCenterLng: parseFloat(pLng),
-                    maxCapacity: 3, // FIXED: Max 3 Passengers
-                    passengers: {}
-                });
-                
-                poolPayload.passengers[uid] = Object.assign({}, clubSubscriptionPayload);
-                await waitlistRef.set(poolPayload);
-            }
-        }
-
-        // Extremely aggressive popup shutdown (Prevents locking)
-        document.querySelectorAll(".modal-overlay").forEach(p => {
-            p.classList.remove("open");
-            p.style.setProperty('display', 'none', 'important');
-        });
-
-        await database.ref(`commuters/${uid}`).update(updates);
-        if (window.commuterData) Object.assign(window.commuterData, updates);
-        
-        if (!skipGoalSetup) {
-            window.onboardShareAndComplete();
-        } else {
-            showToast(window.wantsClub ? "Welcome to Asiye Club! Matching you with a pool." : "Welcome to Asiye!", "success");
-            showModernDashboard();
-        }
-
-    } catch (err) {
-        console.error("Save Unified Onboarding Error:", err);
-        showToast("An error occurred. Saving profile and closing.", "warning");
-        document.querySelectorAll(".modal-overlay").forEach(p => p.classList.remove("open"));
-        showModernDashboard();
-    }
 };
 
 window.selectOnboardLoc = function(inputId, suggId, latId, lngId, textId, lng, lat, name) {
