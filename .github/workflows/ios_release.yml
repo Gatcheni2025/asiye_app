@@ -1,0 +1,55 @@
+name: iOS TestFlight Release
+
+# This triggers the workflow when you push to the 'main' branch
+# or you can trigger it manually from the Actions tab (workflow_dispatch)
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-release-ios:
+    # iOS builds MUST run on macOS runners
+    runs-on: macos-latest
+    
+    steps:
+      # 1. Checkout your app's code
+      - name: Checkout App Code
+        uses: actions/checkout@v4
+
+      # 2. Setup Flutter environment
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          # You can specify exact version based on your pubspec:
+          # flutter-version: '3.19.0' 
+
+      # 3. Get Flutter dependencies
+      - name: Install Flutter Dependencies
+        run: flutter pub get
+
+      # 4. CRITICAL: Configure Git to access your private asiye-certs repo
+      # This swaps out standard https for auth using your PAT
+      - name: Configure Git for Private Match Repo
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      # 5. Install Fastlane Ruby dependencies
+      - name: Install Fastlane Dependencies
+        working-directory: ios
+        run: bundle install
+
+      # 6. Run Fastlane to fetch certs, build, and upload
+      - name: Build and Upload to TestFlight
+        working-directory: ios
+        env:
+          # Match Secrets
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          # App Store Connect Secrets
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        # This calls the 'beta' lane we defined in your Fastfile
+        run: bundle exec fastlane beta
