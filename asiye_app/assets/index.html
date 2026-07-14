@@ -8892,81 +8892,89 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     </div>
 </div>
 
-<!-- NEW HOME BOTTOM SHEET (IMAGE 1) -->
-<!-- NEW HOME BOTTOM SHEET (DRAGGABLE) -->
+
 <!-- FLOATING "WHERE FROM" BUBBLE -->
 <div id="homePickupBubble" style="position: fixed; top: 120px; left: 50%; transform: translateX(-50%); background: #222222; color: white; padding: 12px 24px; border-radius: 20px; z-index: 10000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; align-items: center; cursor: pointer; border: 1px solid #444;" onclick="openModal('changeLocationPopup')">
     <span style="font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Where from</span>
     <span id="homeCurrentAddress" style="font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">Fetching...</span>
 </div>
 
-<!-- NEW HOME BOTTOM SHEET (TALLER) -->
+
 <!-- BEAUTIFIED DRAGGABLE DASHBOARD (IMAGE 1 STYLE) -->
 <div id="homeBottomSheet" class="modal-overlay open" style="display: flex; align-items: flex-end; background: transparent; z-index: 10000; pointer-events: none; position: fixed; bottom: 0; left: 0; width: 100vw; height: 100vh;">
     
     <div class="modal-content indrive-sheet" id="homeSheetContent" style="pointer-events: auto; background: #1C1C1E !important; padding: 0 20px 20px 20px !important; border-radius: 28px 28px 0 0 !important; width: 100%; height: 65vh; display: flex; flex-direction: column; transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s ease-out; box-shadow: 0 -5px 30px rgba(0,0,0,0.5); border: 1px solid #333 !important;">  
+        
         <!-- DRAG HANDLE -->
         <div id="homeSheetDragHandle" style="width: 100%; padding: 15px 0; cursor: grab; display: flex; justify-content: center; flex-shrink: 0; touch-action: none;">
             <div class="sheet-handle" style="width: 48px; height: 6px; background: #48484A; border-radius: 6px;"></div>
         </div>
         
-        <!-- SCROLLABLE CONTENT -->
-        <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding-bottom: 20px; -webkit-overflow-scrolling: touch;">
+        <!-- SCROLLABLE CONTENT (NEW UI) -->
+        <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 20px 0; -webkit-overflow-scrolling: touch;">
             
-            <!-- Search Bar (Pill Style) -->
-            <div class="indrive-search-bar" onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #000000; padding: 18px 20px; border-radius: 20px; display: flex; align-items: center; gap: 15px; cursor: pointer; margin-bottom: 25px; border: 1px solid #3A3A3C; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
-                <i class="fas fa-search" style="color: #0A84FF; font-size: 1.3rem;"></i>
-                <span style="color: #EBEBF5; font-size: 1.15rem; font-weight: 700;">Where to & for how much?</span>
+            <h3 style="color: #fff; margin: 0 0 15px 0; font-weight: 800; font-size: 1.35rem; letter-spacing: -0.5px;">How will you be travelling today?</h3>
+            
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 30px;">
+                <!-- 1. Club Option -->
+                <div onclick="openAsiyeClubGateway()" style="background: #2C2C2E; border: 2px solid #FF9F0A; border-radius: 20px; padding: 18px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 8px 20px rgba(255, 159, 10, 0.15); transition: transform 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div style="background: rgba(255, 159, 10, 0.2); width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-users" style="color: #FF9F0A; font-size: 1.6rem;"></i>
+                        </div>
+                        <div>
+                            <strong style="color: white; font-size: 1.2rem; display: block; margin-bottom: 2px;">Asiye Club</strong>
+                            <span style="color: #A1A1AA; font-size: 0.9rem;">Shared commute (e.g. to work/school)</span>
+                        </div>
+                    </div>
+                    <i class="fas fa-arrow-right" style="color: #FF9F0A; font-size: 1.2rem;"></i>
+                </div>
+
+                <!-- 2. Private Option -->
+                <div onclick="openEHailingTaxis()" style="background: #2C2C2E; border: 2px solid #0A84FF; border-radius: 20px; padding: 18px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 8px 20px rgba(10, 132, 255, 0.15); transition: transform 0.2s;">
+                    <div style="display: flex; align-items: center; gap: 16px;">
+                        <div style="background: rgba(10, 132, 255, 0.2); width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                            <i class="fas fa-car-side" style="color: #0A84FF; font-size: 1.6rem;"></i>
+                        </div>
+                        <div>
+                            <strong style="color: white; font-size: 1.2rem; display: block; margin-bottom: 2px;">Private Ride</strong>
+                            <span style="color: #A1A1AA; font-size: 0.9rem;">Travel alone (Asiye Go)</span>
+                        </div>
+                    </div>
+                    <i class="fas fa-arrow-right" style="color: #0A84FF; font-size: 1.2rem;"></i>
+                </div>
             </div>
 
-        <!-- Suggested Locations Container -->
-<!-- Suggested Locations Container -->
-<div id="suggested-nearby-wrapper" style="margin-bottom: 25px;">
-    <div style="color: #98989D; font-size: 0.85rem; padding: 10px 10px 5px 10px; text-align: left; font-weight: 600;">
-        SUGGESTED NEARBY
-    </div>
-    <div id="suggested-locations-list">
-        <!-- Loader shown while fetching coordinates and places -->
-        <div id="suggestions-loader" style="display: flex; align-items: center; gap: 12px; padding: 14px 10px; color: #98989D;">
-            <i class="fas fa-spinner fa-spin"></i>
-            <span style="font-size: 0.95rem;">Finding locations near you...</span>
-        </div>
-    </div>
-</div>
-
-            <!-- 4 Grid Items (Modern iOS/App Style) -->
+            <!-- Other Services Grid -->
+            <div style="color: #98989D; font-size: 0.85rem; padding: 0 0 10px 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Other Services</div>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
                 <div onclick="openHandlers()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-people-carry" style="color: #FF9F0A; font-size: 1.8rem;"></i>
+                    <i class="fas fa-people-carry" style="color: #30D158; font-size: 1.8rem;"></i>
                     <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Handlers</span>
                 </div>
-                <div onclick="openSafetyCenter()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-shield-alt" style="color: #30D158; font-size: 1.8rem;"></i>
-                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Safety</span>
-                </div>
                 <div onclick="openAsiyeDelivery()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-box-open" style="color: #0A84FF; font-size: 1.8rem;"></i>
+                    <i class="fas fa-box-open" style="color: #BF5AF2; font-size: 1.8rem;"></i>
                     <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Asiye Delivery</span>
                 </div>
+                <div onclick="openSafetyCenter()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
+                    <i class="fas fa-shield-alt" style="color: #FF3B30; font-size: 1.8rem;"></i>
+                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Safety</span>
+                </div>
                 <div onclick="showPaymentNotices()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-wallet" style="color: #BF5AF2; font-size: 1.8rem;"></i>
-                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Wallet & Receipts</span>
+                    <i class="fas fa-wallet" style="color: #0A84FF; font-size: 1.8rem;"></i>
+                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Wallet</span>
                 </div>
             </div>
-
+            
+            <div style="height: 30px;"></div> <!-- Padding for scroll bottom -->
         </div>
-    </div>
-</div>
 
+    </div>
+</div>         
+           
 
 <!-- ======================================================== -->
 <!-- 1. CLEAN UNIFIED ONBOARDING MODAL -->
-<!-- ======================================================== -->
-<!-- ======================================================== -->
-<!-- 1. CLEAN UNIFIED ONBOARDING MODAL (WITH OPTIONAL CLUB)   -->
-<!-- ======================================================== -->
-<!-- ======================================================== -->
-<!-- 1. CLEAN UNIFIED ONBOARDING MODAL (WITH OPTIONAL CLUB)   -->
 <!-- ======================================================== -->
 <div id="phoneEnforcementModal" class="modal-overlay" style="display: none; z-index: 99999999 !important; background: rgba(0,0,0,0.95) !important; align-items: center; justify-content: center;">
     <div class="modal-content" style="max-width: 420px; width: 92%; background: #1C1C1E !important; color: white !important; border-radius: 24px !important; border: 1px solid #333 !important; padding: 25px 20px !important; text-align: left !important; overflow: hidden; display: flex; flex-direction: column; height: auto; min-height: 550px; max-height: 90vh; box-shadow: 0 15px 40px rgba(0,0,0,0.5);">
@@ -10165,19 +10173,24 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 </div>
 
 <!-- UNIFIED ASIYE CLUB GATEWAY MODAL -->
+<!-- UNIFIED ASIYE CLUB GATEWAY MODAL -->
 <div id="asiyeClubGatewayPopup" class="modal-overlay" style="z-index: 100005 !important;">
     <div class="modal-content" style="background: #ffffff !important; color: #111111 !important; border-radius: 24px; padding: 30px 25px !important; max-width: 420px; text-align: center; margin: auto;">
         <div class="uber-drag-handle"></div>
-        <div style="width: 70px; height: 70px; background: rgba(0, 123, 255, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-            <i class="fas fa-users" style="font-size: 2.2rem; color: #007BFF;"></i>
+        <div style="width: 70px; height: 70px; background: rgba(255, 159, 10, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+            <i class="fas fa-users" style="font-size: 2.2rem; color: #FF9F0A;"></i>
         </div>
         <h3 style="color: #111111 !important; font-weight: 800; margin-bottom: 8px;">Asiye Club</h3>
         <p style="color: #666666 !important; font-size: 0.95rem; line-height: 1.5; margin-bottom: 25px;">
             Convenient, pooled daily transit for work, school, or church. Share a dedicated vehicle and save up to 40% on monthly travel.
         </p>
         <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-            <button class="btn btn-primary" onclick="openAsiyeClubBookNow()" style="width: 100%; padding: 16px; font-weight: 800; background: #007BFF !important; color: white !important; border: none; border-radius: 14px;">
-                <i class="fas fa-ticket-alt"></i> Book Now (With Voucher)
+            <!-- NEW LIVE POOL BUTTON (Request a Seat) -->
+            <button class="btn btn-primary" onclick="window.openLiveClubPools()" style="width: 100%; padding: 16px; font-weight: 800; background: #FF9F0A !important; color: white !important; border: none; border-radius: 14px;">
+                <i class="fas fa-street-view"></i> Request a Seat Now
+            </button>
+            <button class="btn btn-light" onclick="openAsiyeClubBookNow()" style="width: 100%; padding: 16px; font-weight: 800; background: #f8f9fa !important; border: 1px solid #ddd !important; color: #333 !important; border-radius: 14px;">
+                <i class="fas fa-ticket-alt"></i> Summon with Voucher
             </button>
             <button class="btn btn-light" onclick="openAsiyeClubRegister()" style="width: 100%; padding: 16px; font-weight: 800; background: #f8f9fa !important; border: 1px solid #ddd !important; color: #333 !important; border-radius: 14px;">
                 <i class="fas fa-user-plus"></i> New Subscription Registration
@@ -10211,87 +10224,129 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 </div>
 
 <!-- CLUB SUBSCRIPTION REGISTRATION WIZARD -->
+<!-- CLUB SUBSCRIPTION REGISTRATION WIZARD -->
 <div id="asiyeClubRegisterPopup" class="modal-overlay" style="z-index: 100005 !important; background: rgba(0,0,0,0.8) !important;">
     <div class="modal-content" style="background: #1C1C1E !important; color: white !important; height: 95vh !important; max-height: 95vh !important; border-radius: 28px 28px 0 0 !important; padding: 0 !important; margin: 0 !important; display: flex; flex-direction: column;">
+        
         <div class="popup-fixed-header" style="background: #000000 !important; border-bottom: 1px solid #333 !important; display: flex; align-items: center; padding: 15px 20px; flex-shrink: 0;">
             <button class="back-btn" onclick="closeModal('asiyeClubRegisterPopup'); openModal('asiyeClubGatewayPopup');" style="color: #0A84FF; background: transparent; border: none; font-size: 1.1rem; display: flex; align-items: center; gap: 5px;">
                 <i class="fas fa-chevron-left"></i> Back
             </button>
             <h3 style="color: #fff; margin:0; flex-grow: 1; text-align: center; font-size: 1.2rem; font-weight: 700; padding-right: 60px;">Club Registration</h3>
         </div>
+
         <div id="wizardStepsContainer" style="padding: 24px; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+            
+            <!-- STEP 1: DESTINATION & PURPOSE -->
             <div id="clubStep1" class="wizard-step" style="display: block;">
-                <h4 style="color: #0A84FF; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-map-marked-alt"></i> Route Details</h4>
-                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 20px;">Provide your morning pickup location and destination.</p>
+                <h4 style="color: #0A84FF; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-building"></i> Where are you going?</h4>
+                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 20px;">Select your travel purpose to find colleagues or schoolmates.</p>
+                
+                <!-- Purpose Selection -->
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button id="btnClubWork" onclick="window.setClubPurpose('work')" style="flex:1; background: rgba(10,132,255,0.15); border: 2px solid #0A84FF; color: white; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer;">
+                        <i class="fas fa-briefcase" style="color: #0A84FF; margin-right: 5px;"></i> Work
+                    </button>
+                    <button id="btnClubSchool" onclick="window.setClubPurpose('school')" style="flex:1; background: #2C2C2E; border: 2px solid transparent; color: white; padding: 14px; border-radius: 12px; font-weight: 800; cursor: pointer;">
+                        <i class="fas fa-graduation-cap" style="color: #BF5AF2; margin-right: 5px;"></i> School
+                    </button>
+                </div>
+                <input type="hidden" id="clubPurpose" value="work">
+
+                <!-- Name Search -->
                 <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Morning Pickup Address *</label>
+                    <label id="clubDestLabel" style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Company Name *</label>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" id="clubInstName" placeholder="e.g. Standard Bank Sandton" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px; font-weight: 700; outline: none;">
+                        <button id="btnSearchInst" onclick="window.searchClubDestination()" style="background: #0A84FF; color: white; border: none; border-radius: 12px; padding: 0 20px; font-weight: 800; cursor: pointer;"><i class="fas fa-search"></i></button>
+                    </div>
+                </div>
+
+                <!-- Search Results -->
+                <div id="clubInstResults" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;"></div>
+
+                <!-- Manual Address Geocoder (Hidden until requested/fallback) -->
+                <div id="clubManualDropoff" style="display: none; margin-top: 20px; padding-top: 20px; border-top: 1px solid #333;">
+                    <label style="color: #FF9F0A; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Enter Exact Address Manually *</label>
+                    <div id="clubRegisterDropoffContainer" class="uber-geocoder" style="background: #2C2C2E !important; border-radius: 12px;"></div>
+                </div>
+
+                <input type="hidden" id="clubDropoffLat"><input type="hidden" id="clubDropoffLng"><input type="hidden" id="clubDropoffAddress">
+            </div>
+
+            <!-- STEP 2: MATCHMAKING, PICKUP & SCHEDULE -->
+            <div id="clubStep2" class="wizard-step" style="display: none;">
+                <!-- Dynamic Matchmaking Banner -->
+                <div id="clubMatchBanner" style="background: #2C2C2E; border: 1px solid #444; border-radius: 16px; padding: 15px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px;">
+                    <div class="spinner" style="border-left-color: #0A84FF; width: 30px; height: 30px; border-width: 3px;"></div>
+                    <span style="color: white; font-weight: 700; font-size: 0.9rem;">Checking for commuters in your area...</span>
+                </div>
+
+                <h4 style="color: #30D158; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-map-pin"></i> Pickup & Rate</h4>
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Home / Pickup Location *</label>
                     <div id="clubRegisterPickupContainer" class="uber-geocoder" style="background: #2C2C2E !important; border-radius: 12px;"></div>
                     <input type="hidden" id="clubPickupLat"><input type="hidden" id="clubPickupLng"><input type="hidden" id="clubPickupAddress">
                 </div>
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Morning Drop-off Address *</label>
-                    <div id="clubRegisterDropoffContainer" class="uber-geocoder" style="background: #2C2C2E !important; border-radius: 12px;"></div>
-                    <input type="hidden" id="clubDropoffLat"><input type="hidden" id="clubDropoffLng"><input type="hidden" id="clubDropoffAddress">
+
+                <div style="background: rgba(48, 209, 88, 0.1); border-radius: 12px; padding: 12px; margin-bottom: 20px; border: 1px solid rgba(48, 209, 88, 0.3); display: flex; justify-content: space-between; align-items: center;">
+                    <span style="color: #ddd; font-size: 0.85rem; font-weight: 600;">Estimated Rate Per Trip:</span>
+                    <strong id="clubEstRateDisplay" style="color: #30D158; font-size: 1.3rem; font-weight: 900;">Calculating...</strong>
+                </div>
+
+                <h4 style="color: #FF9F0A; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-clock"></i> Schedule</h4>
+                <div class="form-group" style="margin-bottom: 15px;">
+                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Days per week *</label>
+                    <select id="clubDaysPerWeek" onchange="window.calculateClubDistanceAndPrice()" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px;">
+                        <option value="5" selected>5 Days (Mon - Fri)</option>
+                        <option value="6">6 Days (Mon - Sat)</option>
+                        <option value="7">7 Days (Everyday)</option>
+                    </select>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Morning Pickup *</label>
+                        <input type="time" id="clubMorningTime" value="07:00" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 12px; border-radius: 12px;">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Afternoon Return *</label>
+                        <input type="time" id="clubReturnTime" value="17:00" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 12px; border-radius: 12px;">
+                    </div>
                 </div>
             </div>
-            <div id="clubStep2" class="wizard-step" style="display: none;">
-                <h4 style="color: #FF9F0A; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-business-time"></i> Purpose & Timeline</h4>
-                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 20px;">Let us know why and when you travel so we can match you with nearby commuters.</p>
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Purpose of Commute *</label>
-                    <select id="clubPurpose" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px; font-weight: 700;">
-                        <option value="work">Travelling to Work</option>
-                        <option value="school">Travelling to School / University</option>
-                        <option value="church">Travelling to Church</option>
-                        <option value="other">Other Regular Commitments</option>
-                    </select>
-                </div>
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Preferred Morning Departure *</label>
-                    <select id="clubMorningTime" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px;">
-                        <option value="06:00">06:00 AM - 06:30 AM</option>
-                        <option value="06:30">06:30 AM - 07:00 AM</option>
-                        <option value="07:00" selected>07:00 AM - 07:30 AM</option>
-                        <option value="07:30">07:30 AM - 08:00 AM</option>
-                        <option value="08:00">08:00 AM - 08:30 AM</option>
-                    </select>
-                </div>
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="color: #ccc; font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 8px;">Preferred Return Time (Afternoon) *</label>
-                    <select id="clubReturnTime" style="background: #2C2C2E !important; color: white !important; border: 1px solid #444 !important; width: 100%; padding: 14px; border-radius: 12px;">
-                        <option value="15:30">03:30 PM - 04:00 PM</option>
-                        <option value="16:00">04:00 PM - 04:30 PM</option>
-                        <option value="16:30">04:30 PM - 05:00 PM</option>
-                        <option value="17:00" selected>05:00 PM - 05:30 PM</option>
-                        <option value="17:30">05:30 PM - 06:00 PM</option>
-                    </select>
-                </div>
-            </div>
+
+            <!-- STEP 3: TAXI MATCHES & BILLING -->
             <div id="clubStep3" class="wizard-step" style="display: none;">
-                <h4 style="color: #30D158; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-coins"></i> Select Billing Plan</h4>
-                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 20px;">Choose how often you prefer to pay. Add a card to activate.</p>
+                <h4 style="color: #0A84FF; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-car"></i> Available Taxis on Your Route</h4>
+                <p style="color: #aaa; font-size: 0.85rem; line-height: 1.4; margin-bottom: 15px;">Here are drivers operating near your schedule and route.</p>
+
+                <div id="clubMatchedTaxisList" style="margin-bottom: 25px; max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Taxis Injected Here -->
+                    <div style="text-align: center; padding: 20px; color: #888;"><i class="fas fa-spinner fa-spin"></i> Finding Taxis...</div>
+                </div>
+
+                <h4 style="color: #30D158; margin: 0 0 8px 0; font-weight: 800;"><i class="fas fa-wallet"></i> Select Billing Plan</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 25px;">
                     <div id="termCardDaily" onclick="window.selectClubBillingTerm('daily')" style="background: #2C2C2E; border: 2px solid transparent; border-radius: 16px; padding: 12px; cursor: pointer; text-align: center;">
                         <i class="fas fa-calendar-day" style="font-size: 1.3rem; color: #30D158; margin-bottom: 6px;"></i>
-                        <span style="display: block; font-weight: bold; font-size: 0.85rem;">Daily</span>
-                        <small style="color: #888; font-size: 0.65rem;">Pay Daily</small>
+                        <span style="display: block; font-weight: bold; font-size: 0.85rem; color:white;">Daily</span>
                     </div>
                     <div id="termCardWeekly" onclick="window.selectClubBillingTerm('weekly')" style="background: #2C2C2E; border: 2px solid transparent; border-radius: 16px; padding: 12px; cursor: pointer; text-align: center;">
                         <i class="fas fa-calendar-week" style="font-size: 1.3rem; color: #30D158; margin-bottom: 6px;"></i>
-                        <span style="display: block; font-weight: bold; font-size: 0.85rem;">Weekly</span>
-                        <small style="color: #888; font-size: 0.65rem;">Upfront Weekly</small>
+                        <span style="display: block; font-weight: bold; font-size: 0.85rem; color:white;">Weekly</span>
                     </div>
                     <div id="termCardMonthly" onclick="window.selectClubBillingTerm('monthly')" style="background: #2C2C2E; border: 2px solid #30D158; border-radius: 16px; padding: 12px; cursor: pointer; text-align: center; position: relative;">
                         <div style="position: absolute; top: -8px; right: -8px; background: #FF9F0A; color: black; font-size: 0.55rem; font-weight: 900; padding: 2px 6px; border-radius: 10px; text-transform: uppercase;">Trial</div>
                         <i class="fas fa-calendar-alt" style="font-size: 1.3rem; color: #30D158; margin-bottom: 6px;"></i>
-                        <span style="display: block; font-weight: bold; font-size: 0.85rem;">Monthly</span>
-                        <small style="color: #30D158; font-size: 0.65rem; font-weight: bold;">1st Trip Free</small>
+                        <span style="display: block; font-weight: bold; font-size: 0.85rem; color:white;">Monthly</span>
                     </div>
                 </div>
-                <div style="background: #000; border-radius: 16px; padding: 20px; border: 1px solid #333; margin-bottom: 15px;">
-                    <h5 style="color: #8e8e93; font-size: 0.75rem; text-transform: uppercase; margin: 0 0 12px 0; font-weight: 800; letter-spacing: 0.5px;">Fares Breakdown</h5>
+
+                <div style="background: #000; border-radius: 16px; padding: 20px; border: 1px solid #333;">
+                    <h5 style="color: #8e8e93; font-size: 0.75rem; text-transform: uppercase; margin: 0 0 12px 0; font-weight: 800;">Estimated Fares</h5>
                     <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #ccc;">
-                        <span>Estimated Route Distance:</span>
+                        <span>Route Distance:</span>
                         <span id="clubEstDistance" style="font-weight: bold; color: white;">-- km</span>
                     </div>
                     <div id="clubTrialPromotionRow" style="display: none; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #FF9F0A;">
@@ -10299,16 +10354,17 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
                         <span id="clubTrialDiscountAmount" style="font-weight: bold;">-R0.00</span>
                     </div>
                     <div style="border-top: 1px solid #222; margin: 10px 0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="font-size: 1rem; font-weight: 800;">Estimated Cost:</span>
-                        <span id="clubEstCost" style="font-size: 1.6rem; font-weight: 900; color: #30D158;">R0.00</span>
+                        <span style="font-size: 1rem; font-weight: 800; color:white;">Total Subscription Cost:</span>
+                        <span id="clubEstCost" style="font-size: 1.4rem; font-weight: 900; color: #30D158;">R0.00</span>
                     </div>
                 </div>
             </div>
         </div>
+        
         <div class="form-navigation" style="flex-shrink: 0; background: #1C1C1E; border-top: 1px solid #333; padding: 20px !important;">
-            <button id="clubPrevBtn" class="btn btn-nav btn-back" onclick="window.navigateClubWizard(-1)">Back</button>
+            <button id="clubPrevBtn" class="btn btn-nav btn-back" onclick="window.navigateClubWizard(-1)">Cancel</button>
             <button id="clubNextBtn" class="btn btn-nav btn-next" onclick="window.navigateClubWizard(1)" style="background: white !important; color: black !important;">Next</button>
-            <button id="clubRegisterBtn" class="btn btn-nav btn-next" onclick="window.submitClubSubscription()" style="display: none; background: #30D158 !important; color: white !important;">Submit Register</button>
+            <button id="clubRegisterBtn" class="btn btn-nav btn-next" onclick="window.submitClubSubscription()" style="display: none; background: #30D158 !important; color: white !important;">Confirm & Register</button>
         </div>
     </div>
 </div>
@@ -21498,28 +21554,7 @@ window.findMinibusTaxis = window.findBroadcastingTaxis;
   var ehailingDestLat = null;
   var ehailingDestLng = null;
 
-  // 1. Trigger e-Hailing (from Dashboard)
-  window.openEHailingTaxis = function() {
-      hideModernDashboard();
-      window.currentRideMode = 'ehailing';
-      openModal('destinationPromptPopup');
-
-      // For e-Hailing, destination is required upfront, so jump straight to search view
-      document.getElementById('destInitialView').style.display = 'none';
-      document.getElementById('destSearchView').style.display = 'flex';
-
-      // Override Geocoder result to save exact coordinates for pricing math
-      if (geocoder) {
-          geocoder.on('result', (e) => {
-              ehailingDestLng = e.result.geometry.coordinates[0];
-              ehailingDestLat = e.result.geometry.coordinates[1];
-          });
-      }
-  };
-
-
-
-// =======================================================================
+  // =======================================================================
 // 1. BOLT/UBER SA REALISTIC PRICING ENGINE 
 // =======================================================================
 window.calculateDynamicPrice = function(distanceKm, activeDriversCount) {
@@ -23664,38 +23699,6 @@ window.calculateParcelPricing = function() {
  * @param {Array} userCoords - Optional user coordinates [lng, lat] to bias results nearby
  * @returns {Promise<Array>} List of matching place features
  */
-window.searchPOIByName = function(poiName, userCoords = null) {
-    if (!poiName || poiName.trim().length < 2) {
-        return Promise.resolve([]);
-    }
-
-    const accessToken = mapboxgl.accessToken;
-    const country = 'za'; // Limit results to South Africa
-    const types = 'poi';  // Strictly limit search to Points of Interest (business/malls/churches)
-    
-    // Bias search results to locations closest to the user's current coordinates
-    const proximity = (userCoords && userCoords.length === 2) 
-        ? `&proximity=${userCoords[0]},${userCoords[1]}` 
-        : (commuterLng && commuterLat) ? `&proximity=${commuterLng},${commuterLat}` : '';
-
-    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(poiName)}.json?access_token=${accessToken}&country=${country}&types=${types}${proximity}&limit=10`;
-
-    return fetch(url)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // Mapbox returns matching POI features containing name, address, and coordinates
-            return data.features || [];
-        })
-        .catch(error => {
-            console.error("Mapbox POI search failed:", error);
-            return [];
-        });
-};
   window.populateHandlerListSheet = function(handlers) {
       const sheet = document.getElementById('taxiListSheet');
       if (!sheet) return;
@@ -24405,50 +24408,6 @@ window.baseCalculatedFare = 0;
 window.currentNegotiatedFare = 0;
 
  // 3. Payment Method Updater
-window.selectPayment = function(method) {
-    window.selectedPaymentMethod = method;
-    const cashBtn = document.getElementById('payCashBtn');
-    const cardBtn = document.getElementById('payCardBtn');
-    const walletWarning = document.getElementById('walletBalanceWarning');
-    const findOffersBtn = document.getElementById('findOffersBtn');
-
-    if (cashBtn) { cashBtn.style.background = '#2c2c2e'; cashBtn.style.border = '1px solid #3a3a3c'; }
-    if (cardBtn) { cardBtn.style.background = '#2c2c2e'; cardBtn.style.border = '1px solid #3a3a3c'; }
-    if (walletWarning) walletWarning.style.display = 'none';
-
-    const fare = window.calculatedTripPrice || 45;
-    const availableCredit = parseFloat(window.commuterData?.credits || 0);
-    const promoRemaining = window.commuterData?.promoRemaining || 0;
-    const promoValue = window.commuterData?.promoValue || 25;
-
-    let finalPrice = fare;
-    if (promoRemaining > 0) {
-        let pDed = window.commuterData?.promoPercentage ? Math.round(fare * (window.commuterData.promoPercentage / 100)) : promoValue;
-        finalPrice = Math.max(0, fare - pDed);
-    }
-
-    if (method === 'cash') {
-        if (cashBtn) { cashBtn.style.background = '#28a745'; cashBtn.style.border = '1px solid #28a745'; }
-        if (findOffersBtn) findOffersBtn.disabled = false;
-    } 
-    else if (method === 'card') {
-        if (cardBtn) { cardBtn.style.background = '#007BFF'; cardBtn.style.border = '1px solid #007BFF'; }
-        
-        if (availableCredit < finalPrice) {
-            if (walletWarning) {
-                walletWarning.style.display = 'block';
-                walletWarning.innerHTML = `<i class="fas fa-info-circle"></i> Wallet balance: R${availableCredit.toFixed(2)}. Clicking request will redirect you to PayFast securely.`;
-            }
-        }
-    }
-
-    if (findOffersBtn) {
-        const methodLabel = method === 'card' ? 'CARD' : 'CASH';
-        const actionText = window.selectedRideCategory === 'standard' ? 'Request Asiye Go' : 'Book Asiye Club';
-        findOffersBtn.innerHTML = `${actionText} (${methodLabel} - R${finalPrice})`;
-    }
-};
-
 window.submitNegotiatedRide = function() {
     const floatingHeader = document.getElementById('floatingRouteHeader');
     if (floatingHeader) floatingHeader.style.display = 'none';
@@ -29446,75 +29405,12 @@ window.clubRegisterPickupGeocoder = null;
 window.clubRegisterDropoffGeocoder = null;
 window.calculatedClubTotalPrice = 0;
 
-window.openAsiyeClubGateway = function() {
-    closeAllPopups();
-    if (typeof hideModernDashboard === 'function') hideModernDashboard();
-    openModal('asiyeClubGatewayPopup');
-};
 
 window.openAsiyeClubBookNow = function() {
     closeModal('asiyeClubGatewayPopup');
     openModal('asiyeClubVoucherPopup');
 };
 
-window.openAsiyeClubRegister = function() {
-    closeModal('asiyeClubGatewayPopup');
-    openModal('asiyeClubRegisterPopup');
-    window.clubCurrentStep = 1;
-    window.navigateClubWizard(0);
-
-    if (!window.clubRegisterPickupGeocoder) {
-        const geoOptions = {
-            accessToken: mapboxgl.accessToken,
-            mapboxgl: mapboxgl,
-            marker: false,
-            placeholder: 'Morning Pickup Address...',
-            proximity: (window.commuterLng && window.commuterLat) ? [window.commuterLng, window.commuterLat] : null,
-            country: 'za'
-        };
-
-        window.clubRegisterPickupGeocoder = new MapboxGeocoder(geoOptions);
-        const pContainer = document.getElementById('clubRegisterPickupContainer');
-        if (pContainer) {
-            pContainer.innerHTML = '';
-            pContainer.appendChild(window.clubRegisterPickupGeocoder.onAdd(map));
-            window.clubRegisterPickupGeocoder.on('result', (e) => {
-                document.getElementById('clubPickupLng').value = e.result.geometry.coordinates[0];
-                document.getElementById('clubPickupLat').value = e.result.geometry.coordinates[1];
-                document.getElementById('clubPickupAddress').value = e.result.place_name;
-                window.calculateClubDistanceAndPrice();
-            });
-        }
-
-        window.clubRegisterDropoffGeocoder = new MapboxGeocoder(geoOptions);
-        const dContainer = document.getElementById('clubRegisterDropoffContainer');
-        if (dContainer) {
-            dContainer.innerHTML = '';
-            dContainer.appendChild(window.clubRegisterDropoffGeocoder.onAdd(map));
-            window.clubRegisterDropoffGeocoder.on('result', (e) => {
-                document.getElementById('clubDropoffLng').value = e.result.geometry.coordinates[0];
-                document.getElementById('clubDropoffLat').value = e.result.geometry.coordinates[1];
-                document.getElementById('clubDropoffAddress').value = e.result.place_name;
-                window.calculateClubDistanceAndPrice();
-            });
-        }
-
-        setTimeout(() => {
-            document.querySelectorAll('#asiyeClubRegisterPopup .mapboxgl-ctrl-geocoder--input').forEach(input => {
-                input.style.color = '#ffffff';
-                input.style.backgroundColor = 'transparent';
-                input.style.border = 'none';
-            });
-            document.querySelectorAll('#asiyeClubRegisterPopup .mapboxgl-ctrl-geocoder').forEach(container => {
-                container.style.backgroundColor = '#2C2C2E';
-                container.style.border = '1px solid #3A3A3C';
-                container.style.borderRadius = '12px';
-                container.style.maxWidth = '100%';
-                container.style.width = '100%';
-            });
-        }, 150);
-    }
-};
 
 window.launchPrePopulatedClubRegister = function(preferredTime = null) {
     closeModal('taxiListSheet');
@@ -29545,47 +29441,62 @@ window.launchPrePopulatedClubRegister = function(preferredTime = null) {
         window.calculateClubDistanceAndPrice();
     }, 300);
 };
+// =======================================================================
+// 1. OPEN ASIYE GO (PRIVATE RIDE) FLOW
+// =======================================================================
+window.openEHailingTaxis = function() {
+    // 1. Hide the Home Menu
+    hideModernDashboard();
+    
+    // 2. Set the global ride state parameters
+    window.currentRideMode = 'ehailing';
+    window.isAsiyeGoMode = true;
 
-window.navigateClubWizard = function(stepDirection) {
-    if (stepDirection === 1 && !window.validateClubStep(window.clubCurrentStep)) return;
+    // 3. Open the destination prompt
+    openModal('destinationPromptPopup');
 
-    for (let i = 1; i <= window.clubTotalSteps; i++) {
-        const stepElement = document.getElementById(`clubStep${i}`);
-        if (stepElement) stepElement.style.display = 'none';
+    // 4. Force the UI straight into Search Mode (Because Private Rides require an exact destination)
+    if (typeof showDestinationSearchMode === 'function') {
+        showDestinationSearchMode();
+    } else {
+        const initialView = document.getElementById('destInitialView');
+        const searchView = document.getElementById('destSearchView');
+        if (initialView) initialView.style.display = 'none';
+        if (searchView) searchView.style.display = 'flex';
     }
 
-    window.clubCurrentStep += stepDirection;
-    if (window.clubCurrentStep < 1) window.clubCurrentStep = 1;
-    if (window.clubCurrentStep > window.clubTotalSteps) window.clubCurrentStep = window.clubTotalSteps;
+    // 5. Update the titles to reflect the Private Ride intent
+    setTimeout(() => {
+        const promptTitle = document.querySelector('#destinationPromptPopup h3');
+        if (promptTitle) promptTitle.innerText = 'Request Private Ride';
 
-    const currentStepElement = document.getElementById(`clubStep${window.clubCurrentStep}`);
-    if (currentStepElement) currentStepElement.style.display = 'block';
+        const searchTitle = document.querySelector('#destSearchView h3');
+        if (searchTitle) searchTitle.innerText = 'Request Private Ride';
+    }, 150);
 
-    const prevBtn = document.getElementById('clubPrevBtn');
-    const nextBtn = document.getElementById('clubNextBtn');
-    const registerBtn = document.getElementById('clubRegisterBtn');
-
-    if (window.clubCurrentStep === 1) {
-        if(prevBtn) {
-            prevBtn.innerText = "Cancel";
-            prevBtn.onclick = () => { closeModal('asiyeClubRegisterPopup'); window.openAsiyeClubGateway(); };
-        }
-    } else {
-        if(prevBtn) {
-            prevBtn.innerText = "Back";
-            prevBtn.onclick = () => window.navigateClubWizard(-1);
-        }
-    }
-
-    if (window.clubCurrentStep === window.clubTotalSteps) {
-        if(nextBtn) nextBtn.style.display = 'none';
-        if(registerBtn) registerBtn.style.display = 'block';
-        window.calculateClubDistanceAndPrice();
-    } else {
-        if(nextBtn) nextBtn.style.display = 'block';
-        if(registerBtn) registerBtn.style.display = 'none';
+    // 6. Bind the Mapbox Geocoder to strictly track Private Ride pricing coordinates
+    if (typeof geocoder !== 'undefined' && geocoder) {
+        geocoder.on('result', (e) => {
+            window.ehailingDestLng = e.result.geometry.coordinates[0];
+            window.ehailingDestLat = e.result.geometry.coordinates[1];
+        });
     }
 };
+
+// =======================================================================
+// 2. OPEN ASIYE CLUB (SHARED RIDE) GATEWAY
+// =======================================================================
+window.openAsiyeClubGateway = function() {
+    // 1. Ensure all other popups are cleanly dismissed
+    closeAllPopups();
+    
+    // 2. Hide the Home Dashboard
+    if (typeof hideModernDashboard === 'function') hideModernDashboard();
+    
+    // 3. Open the gateway popup (Already exists in HTML, prompts for Voucher or Registration)
+    openModal('asiyeClubGatewayPopup');
+};
+
 
 window.validateClubStep = function(step) {
     if (step === 1) {
@@ -29689,166 +29600,6 @@ window.setupOnboardAutocomplete = function(inputId, suggId, latId, lngId, textId
     });
 };
 
-// 3. UNIVERSAL PRICING LOGIC: R15 BASE + R6.50/KM (Min R15 per pax)
-window.submitClubSubscription = async function() {
-    if (!window.userId) return;
-
-    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
-    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
-    const pAddr = document.getElementById('clubPickupAddress').value;
-    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
-    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
-    const dAddr = document.getElementById('clubDropoffAddress').value;
-
-    const purpose = document.getElementById('clubPurpose').value;
-    const morningTime = document.getElementById('clubMorningTime').value;
-    const returnTime = document.getElementById('clubReturnTime').value;
-    const billingPref = window.clubBillingTerm || 'monthly';
-
-    const btn = document.getElementById('clubRegisterBtn');
-    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reserving Slot...'; }
-
-    const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
-
-    const subscriptionData = {
-        commuterId: window.userId,
-        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
-        commuterPhone: window.commuterData?.phone || '',
-        pickupAddress: pAddr, pickupLat: pLat, pickupLng: pLng,
-        dropoffAddress: dAddr, dropoffLat: dLat, dropoffLng: dLng,
-        purpose: purpose, morningDeparture: morningTime, afternoonReturn: returnTime,
-        paymentTerms: billingPref, estimatedCost: window.calculatedClubTotalPrice,
-        routeDistance: window.clubRouteDistance, voucherCode: voucherRefCode,
-        status: 'availing_on_route', 
-        trialApplied: billingPref === 'monthly', 
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        price: window.calculatedClubSingleTripPrice || 15
-    };
-
-    try {
-        await database.ref(`commuters/${window.userId}/clubSubscription`).set(subscriptionData);
-        
-        let targetRequestId = window.onboardJoinedPoolId;
-
-        if (targetRequestId) {
-            // Join existing queue
-            await database.ref(`requests/${targetRequestId}/passengers/${window.userId}`).set(subscriptionData);
-        } else {
-            // Create new queue
-            const waitlistRef = database.ref("requests").push();
-            targetRequestId = waitlistRef.key;
-            
-            const poolPayload = Object.assign({}, subscriptionData, {
-                requestId: targetRequestId,
-                status: 'availing_on_route', 
-                type: 'club',
-                poolCenterLat: parseFloat(pLat),
-                poolCenterLng: parseFloat(pLng),
-                maxCapacity: 3, 
-                originalPerPersonPrice: window.calculatedClubSingleTripPrice || 15,
-                passengers: {}
-            });
-            poolPayload.passengers[window.userId] = Object.assign({}, subscriptionData);
-            await waitlistRef.set(poolPayload);
-        }
-
-        window.currentRequestId = targetRequestId;
-        localStorage.setItem('currentRequestId', targetRequestId);
-        await database.ref(`commuters/${window.userId}`).update({ currentRequest: targetRequestId });
-
-        closeAllPopups();
-        
-        // 🚀 SHOW THE VISUAL QUEUE UI IMMEDIATELY
-        window.showCommuterClubQueuePopup(targetRequestId);
-        window.listenForRequestStatus(targetRequestId);
-
-    } catch (err) {
-        console.error("Subscription write failed:", err);
-        showToast("Error reserving slot.", "danger");
-    } finally {
-        if(btn) { btn.disabled = false; btn.innerHTML = 'Submit Register'; }
-    }
-};
-
-window.submitClubSubscription = async function() {
-    if (!window.userId) return;
-
-    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
-    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
-    const pAddr = document.getElementById('clubPickupAddress').value;
-    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
-    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
-    const dAddr = document.getElementById('clubDropoffAddress').value;
-
-    const purpose = document.getElementById('clubPurpose').value;
-    const morningTime = document.getElementById('clubMorningTime').value;
-    const returnTime = document.getElementById('clubReturnTime').value;
-    const billingPref = window.clubBillingTerm || 'monthly';
-
-    const btn = document.getElementById('clubRegisterBtn');
-    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reserving Slot...'; }
-
-    const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
-
-    const subscriptionData = {
-        commuterId: window.userId,
-        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
-        commuterPhone: window.commuterData?.phone || '',
-        pickupAddress: pAddr, pickupLat: pLat, pickupLng: pLng,
-        dropoffAddress: dAddr, dropoffLat: dLat, dropoffLng: dLng,
-        purpose: purpose, morningDeparture: morningTime, afternoonReturn: returnTime,
-        paymentTerms: billingPref, estimatedCost: window.calculatedClubTotalPrice,
-        routeDistance: window.clubRouteDistance, voucherCode: voucherRefCode,
-        status: 'availing_on_route', 
-        trialApplied: billingPref === 'monthly', 
-        createdAt: firebase.database.ServerValue.TIMESTAMP,
-        price: window.calculatedClubSingleTripPrice || 15
-    };
-
-    try {
-        await database.ref(`commuters/${window.userId}/clubSubscription`).set(subscriptionData);
-        
-        let targetRequestId = window.onboardJoinedPoolId;
-
-        if (targetRequestId) {
-            // Join existing queue
-            await database.ref(`requests/${targetRequestId}/passengers/${window.userId}`).set(subscriptionData);
-        } else {
-            // Create new queue
-            const waitlistRef = database.ref("requests").push();
-            targetRequestId = waitlistRef.key;
-            
-            const poolPayload = Object.assign({}, subscriptionData, {
-                requestId: targetRequestId,
-                status: 'availing_on_route', 
-                type: 'club',
-                poolCenterLat: parseFloat(pLat),
-                poolCenterLng: parseFloat(pLng),
-                maxCapacity: 3, 
-                originalPerPersonPrice: window.calculatedClubSingleTripPrice || 15,
-                passengers: {}
-            });
-            poolPayload.passengers[window.userId] = Object.assign({}, subscriptionData);
-            await waitlistRef.set(poolPayload);
-        }
-
-        window.currentRequestId = targetRequestId;
-        localStorage.setItem('currentRequestId', targetRequestId);
-        await database.ref(`commuters/${window.userId}`).update({ currentRequest: targetRequestId });
-
-        closeAllPopups();
-        
-        // 🚀 SHOW THE VISUAL QUEUE UI IMMEDIATELY
-        window.showCommuterClubQueuePopup(targetRequestId);
-        window.listenForRequestStatus(targetRequestId);
-
-    } catch (err) {
-        console.error("Subscription write failed:", err);
-        showToast("Error reserving slot.", "danger");
-    } finally {
-        if(btn) { btn.disabled = false; btn.innerHTML = 'Submit Register'; }
-    }
-};
 window.verifyVoucherAndSummon = function() {
     const enteredCode = document.getElementById('clubVoucherInput')?.value.trim().toUpperCase();
     if (!enteredCode) {
@@ -30102,112 +29853,6 @@ window.initiatePayFastCardVerification = function() {
 // 🚨 OVERRIDE: CORRECTED ASIYE CLUB vs ASIYE GO PRICING ENGINE
 // =================================================================
 
-window.populateEHailingCategories = function(standardPriceParam, clubPriceParam, xlPriceParam) {
-    const sheet = document.getElementById('taxiListSheet');
-    if (!sheet) return;
-
-    let dist = window.calculatedTripDistance || 5;
-    if (dist < 1) dist = 1;
-    
-    // ----------------------------------------------------
-    // 🔴 1. ASIYE GO MATH (Base R30 + R8/km, Min R30)
-    // ----------------------------------------------------
-    let asiyeGoOriginal = Math.max(30, Math.round(30 + (dist * 8.00)));
-    let asiyeGoPrice = asiyeGoOriginal;
-
-    // ----------------------------------------------------
-    // 🟢 2. ASIYE CLUB MATH (Tied to Go, Split by 3)
-    // ----------------------------------------------------
-    // The whole car costs 25% less than a private Asiye Go ride
-    const totalClubCarPrice = asiyeGoPrice * 0.75; 
-    
-    // Split strictly by 3 seats
-    let asiyeClubSingleTripPrice = Math.round(totalClubCarPrice / 3);
-    
-    // HARD FLOOR: A taxi ride in SA is never less than ~R15
-    if (asiyeClubSingleTripPrice < 15) {
-        asiyeClubSingleTripPrice = 15; 
-    }
-
-    const isClubUser = window.commuterData && window.commuterData.clubSubscription && window.commuterData.clubOptOut !== true;
-    let goDiscountHtml = '';
-    
-    // 12% DISCOUNT FOR CLUB MEMBERS ON PRIVATE RIDES
-    if (isClubUser) {
-        asiyeGoPrice = Math.round(asiyeGoOriginal * 0.88); // 12% OFF
-        goDiscountHtml = `<div style="font-size: 0.65rem; color: #30D158; background: rgba(48, 209, 88, 0.15); padding: 3px 6px; border-radius: 6px; display: inline-block; margin-top: 4px; font-weight: 800;">12% CLUB DISCOUNT</div>`;
-    }
-
-    window.baseCalculatedFare = asiyeGoPrice;
-    window.currentNegotiatedFare = asiyeGoPrice;
-    window.calculatedTripPrice = asiyeClubSingleTripPrice; 
-    window.calculatedClubSingleTripPrice = asiyeClubSingleTripPrice;
-    window.selectedRideCategory = 'club'; 
-    window.selectedPaymentMethod = 'cash'; 
-
-    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
-
-    sheet.innerHTML = `
-        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
-        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; height: 100%;">
-            
-            <div style="display:flex; align-items:center; margin-bottom: 20px; flex-shrink: 0;">
-                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Choose a ride</h4>
-            </div>
-
-            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; flex-shrink: 0;">
-                <!-- Asiye Club -->
-                <div id="cat-club" onclick="selectCategory('club', ${asiyeClubSingleTripPrice})" style="border: 2.5px solid #FF9F0A; background: #2c2c2e; border-radius: 18px; padding: 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="width: 44px; height: 44px; background: rgba(255,159,10,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #FF9F0A;"><i class="fas fa-users"></i></div>
-                        <div>
-                            <div style="font-weight: 700; font-size: 1rem;">Asiye Club</div>
-                            <div style="font-size: 0.75rem; color: #8e8e93;">Shared with up to 2 others</div>
-                        </div>
-                    </div>
-                    <div style="font-size: 1.15rem; font-weight: 800; color: #FF9F0A;">R${asiyeClubSingleTripPrice}</div>
-                </div>
-
-                <!-- Asiye Go -->
-                <div id="cat-standard" onclick="selectCategory('standard', ${asiyeGoPrice})" style="border: 2.5px solid transparent; background: #2c2c2e; border-radius: 18px; padding: 14px; cursor: pointer;">
-                    <div style="display: flex; align-items: flex-start; justify-content: space-between;">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                             <div style="width: 44px; height: 44px; background: rgba(197,255,0,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #c5ff00;"><i class="fas fa-car"></i></div>
-                            <div>
-                                <div style="font-weight: 700; font-size: 1rem;">Asiye Go</div>
-                                <div style="font-size: 0.75rem; color: #8e8e93;">Travel alone or with family</div>
-                                ${goDiscountHtml}
-                            </div>
-                        </div>
-                        <div style="text-align: right;">
-                            ${isClubUser ? `<div style="font-size: 0.85rem; color: #8e8e93; text-decoration: line-through;">R${asiyeGoOriginal}</div>` : ''}
-                            <div style="font-size: 1.15rem; font-weight: 800; color: #c5ff00;">R${asiyeGoPrice}</div>
-                        </div>
-                    </div>
-
-                    <div id="negotiatorBox" style="background: #1c1c1e; border-radius: 14px; padding: 12px; display: none; align-items: center; justify-content: space-between; margin-top: 12px;">
-                        <button onclick="adjustFare(-5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">-</button>
-                        <div style="text-align: center;">
-                            <div id="negotiatedFareDisplay" style="font-size: 1.5rem; font-weight: 900; color: #ffffff !important;">R${window.currentNegotiatedFare}</div>
-                            <div style="font-size: 0.65rem; color: #8e8e93; text-transform: uppercase;">Your offer</div>
-                        </div>
-                        <button onclick="adjustFare(5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">+</button>
-                    </div>
-                </div>
-            </div>
-
-            <div id="dynamicBookingPanel" style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;"></div>
-        </div>
-    `;
-    
-    window.selectCategory('club', asiyeClubSingleTripPrice);
-    if (!sheet.classList.contains('open')) sheet.classList.add('open');
-    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
-};
-// 2. BACKGROUND SEARCH ENGINE (Fixes Mapbox Routing Math)
 window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
     window.currentRideMode = isDeliveryMode ? 'delivery' : 'ehailing';
     window.isAsiyeGoMode = true;
@@ -30252,56 +29897,10 @@ window.findAsiyeGoTaxis = async function(isDeliveryMode = false) {
     }
 };
 
-// 3. CLUB SUBSCRIPTION WIZARD (Sidebar Menu)
-window.calculateClubDistanceAndPrice = function() {
-    const pLat = parseFloat(document.getElementById('clubPickupLat')?.value);
-    const pLng = parseFloat(document.getElementById('clubPickupLng')?.value);
-    const dLat = parseFloat(document.getElementById('clubDropoffLat')?.value);
-    const dLng = parseFloat(document.getElementById('clubDropoffLng')?.value);
-
-    if (isNaN(pLat) || isNaN(pLng) || isNaN(dLat) || isNaN(dLng)) return;
-
-    let dist = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
-    if (dist < 1) dist = 1;
-    window.clubRouteDistance = dist;
-
-    // 🟢 ASIYE CLUB MATH
-    const clubGross = 15 + (dist * 6.00);
-    const singleTripPrice = Math.max(15, Math.round(clubGross / 3));
-
-    const activeTerm = window.clubBillingTerm || 'monthly';
-    let daysToBill = 20, discount = 0.15, trialDeduction = 0;
-
-    if (activeTerm === 'weekly') { daysToBill = 5; discount = 0.05; } 
-    else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
-
-    const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
-    const trialRow = document.getElementById('clubTrialPromotionRow');
-    const trialValueEl = document.getElementById('clubTrialDiscountAmount');
-
-    if (activeTerm === 'monthly') {
-        trialDeduction = singleTripPrice; 
-        if (trialRow && trialValueEl) { trialRow.style.display = 'flex'; trialValueEl.innerText = `-R${trialDeduction.toFixed(2)}`; }
-    } else {
-        if (trialRow) trialRow.style.display = 'none';
-    }
-
-    const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
-    const distEl = document.getElementById('clubEstDistance');
-    const costEl = document.getElementById('clubEstCost');
-
-    if (distEl) distEl.innerText = `${dist.toFixed(1)} km`;
-    if (costEl) costEl.innerText = `R${totalEstCost.toFixed(2)} (${activeTerm === 'monthly' ? 'MONTHLY TRIAL' : activeTerm.toUpperCase()})`;
-    window.calculatedClubTotalPrice = totalEstCost;
-};
-
 // 4. ONBOARDING (Step 3 Setup)
 // =================================================================
 // ONBOARDING PRICING ENGINE (STEP 3 SETUP)
 // =================================================================
-// =======================================================================
-// ONBOARDING ENGINE & CLUB ROUTING
-// =======================================================================
 
 
 window.onboardShareAndComplete = function() {
@@ -30663,6 +30262,210 @@ window.scanForAreaClubs = function(pLat, pLng) {
     if (nextBtn) {
         nextBtn.disabled = false;
         nextBtn.style.opacity = '1';
+    }
+};
+
+// =======================================================================
+// 1. ASIYE GO (PRIVATE RIDE) EXCLUSIVE SHEET
+// This explicitly strips out the Club option and shows only Asiye Go
+// =======================================================================
+window.populateEHailingCategories = function(standardPriceParam, clubPriceParam, xlPriceParam) {
+    const sheet = document.getElementById('taxiListSheet');
+    if (!sheet) return;
+
+    let dist = window.calculatedTripDistance || 5;
+    if (dist < 1) dist = 1;
+    
+    // Asiye Go Math (Base R30 + R8/km, Min R30)
+    let asiyeGoOriginal = Math.max(30, Math.round(30 + (dist * 8.00)));
+    let asiyeGoPrice = asiyeGoOriginal;
+
+    const isClubUser = window.commuterData && window.commuterData.clubSubscription && window.commuterData.clubOptOut !== true;
+    let goDiscountHtml = '';
+    
+    if (isClubUser) {
+        asiyeGoPrice = Math.round(asiyeGoOriginal * 0.88); // 12% OFF
+        goDiscountHtml = `<div style="font-size: 0.65rem; color: #30D158; background: rgba(48, 209, 88, 0.15); padding: 3px 6px; border-radius: 6px; display: inline-block; margin-top: 4px; font-weight: 800;">12% CLUB DISCOUNT</div>`;
+    }
+
+    // Lock global variables for Asiye Go (Private)
+    window.baseCalculatedFare = asiyeGoPrice;
+    window.currentNegotiatedFare = asiyeGoPrice;
+    window.calculatedTripPrice = asiyeGoPrice; 
+    window.selectedRideCategory = 'standard'; 
+    window.selectedPaymentMethod = 'cash'; 
+
+    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
+
+    sheet.innerHTML = `
+        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
+        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; height: 100%;">
+            
+            <div style="display:flex; align-items:center; margin-bottom: 20px; flex-shrink: 0;">
+                <button onclick="closeModal('taxiListSheet'); openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Confirm Private Ride</h4>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; flex-shrink: 0;">
+                <!-- Asiye Go Only -->
+                <div style="border: 2.5px solid #0A84FF; background: #2c2c2e; border-radius: 18px; padding: 14px;">
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="width: 44px; height: 44px; background: rgba(10,132,255,0.1); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #0A84FF;"><i class="fas fa-car"></i></div>
+                            <div>
+                                <div style="font-weight: 700; font-size: 1rem;">Asiye Go</div>
+                                <div style="font-size: 0.75rem; color: #8e8e93;">Travel alone or with family</div>
+                                ${goDiscountHtml}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            ${isClubUser ? `<div style="font-size: 0.85rem; color: #8e8e93; text-decoration: line-through;">R${asiyeGoOriginal}</div>` : ''}
+                            <div style="font-size: 1.15rem; font-weight: 800; color: #0A84FF;">R${asiyeGoPrice}</div>
+                        </div>
+                    </div>
+
+                    <div id="negotiatorBox" style="background: #1c1c1e; border-radius: 14px; padding: 12px; display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+                        <button onclick="adjustFare(-5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">-</button>
+                        <div style="text-align: center;">
+                            <div id="negotiatedFareDisplay" style="font-size: 1.5rem; font-weight: 900; color: #ffffff !important;">R${window.currentNegotiatedFare}</div>
+                            <div style="font-size: 0.65rem; color: #8e8e93; text-transform: uppercase;">Your offer</div>
+                        </div>
+                        <button onclick="adjustFare(5); event.stopPropagation();" style="width: 36px; height: 36px; border-radius: 50%; background: #3a3a3c; border: none; color: white; font-size: 1.2rem; cursor: pointer;">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div style="flex: 1; display: flex; flex-direction: column; justify-content: flex-end;">
+                <div style="margin-bottom: 20px; border-top: 1px solid #2c2c2e; padding-top: 15px;">
+                    <div style="font-size: 0.85rem; color: #8e8e93; margin-bottom: 12px; font-weight: 700; text-transform: uppercase;">Payment Method</div>
+                    <div style="display: flex; gap: 10px;">
+                        <button id="payCashBtn" onclick="selectPayment('cash')" style="flex: 1; padding: 14px; border-radius: 14px; background: #28a745; color: white; border: 1px solid #28a745; font-weight: 800;">Cash</button>
+                        <button id="payCardBtn" onclick="selectPayment('card')" style="flex: 1; padding: 14px; border-radius: 14px; background: #2c2c2e; color: white; border: 1px solid #3a3a3c; font-weight: 800;">Card/Wallet</button>
+                    </div>
+                    <div id="walletBalanceWarning" style="display:none; color: #FF9F0A; font-size: 0.8rem; margin-top: 10px; font-weight: 600;"></div>
+                </div>
+                <button id="findOffersBtn" onclick="submitNegotiatedRide()" style="width: 100%; background: #0A84FF; color: #fff; font-weight: 900; font-size: 1.1rem; padding: 16px; border-radius: 16px; border: none;">
+                    Request Asiye Go (CASH - R${window.currentNegotiatedFare})
+                </button>
+            </div>
+        </div>
+    `;
+
+    if (!sheet.classList.contains('open')) sheet.classList.add('open');
+    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
+};
+
+// =======================================================================
+// 2. ASIYE CLUB EXCLUSIVE SHEET ("Request a Seat" Slider)
+// =======================================================================
+window.openLiveClubPools = function() {
+    closeModal('asiyeClubGatewayPopup');
+    openModal('taxiListSheet');
+
+    const sheet = document.getElementById('taxiListSheet');
+    sheet.style.setProperty('background-color', '#1c1c1e', 'important');
+
+    // Calculate Base Price for the Club Seat (Shared by 3)
+    let dist = window.calculatedTripDistance || 5;
+    if (dist < 1) dist = 1;
+    let asiyeGoOriginal = Math.max(30, Math.round(30 + (dist * 8.00)));
+    let totalClubCarPrice = asiyeGoOriginal * 0.75; 
+    let asiyeClubSingleTripPrice = Math.max(15, Math.round(totalClubCarPrice / 3));
+
+    // Lock global variables for Asiye Club
+    window.calculatedTripPrice = asiyeClubSingleTripPrice;
+    window.selectedRideCategory = 'club';
+
+    sheet.innerHTML = `
+        <div class="sheet-handle-wrapper" style="background: transparent; padding: 10px 0;"><div class="sheet-handle-bar"></div></div>
+        <div id="taxiListContainer" style="padding: 0 15px 30px 15px; background: #1c1c1e !important; color: white; -webkit-overflow-scrolling: touch; display: flex; flex-direction: column; height: 100%;">
+            
+            <div style="display:flex; align-items:center; margin-bottom: 20px; flex-shrink: 0;">
+                <button onclick="closeModal('taxiListSheet'); openAsiyeClubGateway();" style="background: #2c2c2e; border: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h4 style="margin:0; color: #ffffff !important; font-weight: 800; font-size: 1.1rem; flex: 1; text-align: center; padding-right: 38px;">Live Club Pools</h4>
+            </div>
+
+            <!-- THE HORIZONTAL SLIDER CONTAINER -->
+            <div id="flowingTaxisSliderContainer" style="display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; margin-bottom: 15px; padding-bottom: 10px; -webkit-overflow-scrolling: touch;">
+                <div style="min-width: 100%; display: flex; align-items: center; justify-content: center; padding: 30px 20px; background: #1C1C1E; border-radius: 16px; border: 1px solid #3A3A3C;">
+                    <div class="spinner" style="border-left-color: #FF9F0A; width: 30px; height: 30px; border-width: 3px;"></div>
+                </div>
+            </div>
+
+            <!-- INFO BANNER UNDER THE SLIDER -->
+            <div style="background: #2C2C2E; border-radius: 16px; padding: 15px; border: 1px solid #FF9F0A; text-align: left;">
+                <h5 style="margin: 0 0 8px 0; color: #FF9F0A; font-size: 1.05rem;"><i class="fas fa-street-view"></i> Catch a moving taxi</h5>
+                <p style="margin: 0; color: #EBEBF5; font-size: 0.85rem; line-height: 1.45;">
+                    Swipe through active taxis flowing in your area above and request a seat instantly for <strong>R${asiyeClubSingleTripPrice}</strong>.
+                </p>
+            </div>
+        </div>
+    `;
+    
+    // Inject hide scrollbar CSS if it doesn't exist
+    if (!document.getElementById('hide-scroll-css')) {
+        const style = document.createElement('style');
+        style.id = 'hide-scroll-css';
+        style.innerHTML = `#flowingTaxisSliderContainer::-webkit-scrollbar { display: none; }`;
+        document.head.appendChild(style);
+    }
+
+    // Fetch and render the cars specifically for the slider
+    if(typeof window.fetchAndRenderFlowingTaxisSlider === 'function'){
+        window.fetchAndRenderFlowingTaxisSlider(asiyeClubSingleTripPrice);
+    }
+
+    if (!sheet.classList.contains('open')) sheet.classList.add('open');
+    if (typeof window.initTaxiSheetDrag === 'function') window.initTaxiSheetDrag();
+};
+
+// =======================================================================
+// 3. PAYMENT METHOD UPDATER (Cleaned up for Asiye Go)
+// =======================================================================
+window.selectPayment = function(method) {
+    window.selectedPaymentMethod = method;
+    const cashBtn = document.getElementById('payCashBtn');
+    const cardBtn = document.getElementById('payCardBtn');
+    const walletWarning = document.getElementById('walletBalanceWarning');
+    const findOffersBtn = document.getElementById('findOffersBtn');
+
+    if (cashBtn) { cashBtn.style.background = '#2c2c2e'; cashBtn.style.border = '1px solid #3a3a3c'; }
+    if (cardBtn) { cardBtn.style.background = '#2c2c2e'; cardBtn.style.border = '1px solid #3a3a3c'; }
+    if (walletWarning) walletWarning.style.display = 'none';
+
+    const fare = window.calculatedTripPrice || 45;
+    const availableCredit = parseFloat(window.commuterData?.credits || 0);
+    const promoRemaining = window.commuterData?.promoRemaining || 0;
+    const promoValue = window.commuterData?.promoValue || 25;
+
+    let finalPrice = fare;
+    if (promoRemaining > 0) {
+        let pDed = window.commuterData?.promoPercentage ? Math.round(fare * (window.commuterData.promoPercentage / 100)) : promoValue;
+        finalPrice = Math.max(0, fare - pDed);
+    }
+
+    if (method === 'cash') {
+        if (cashBtn) { cashBtn.style.background = '#28a745'; cashBtn.style.border = '1px solid #28a745'; }
+        if (findOffersBtn) findOffersBtn.disabled = false;
+    } 
+    else if (method === 'card') {
+        if (cardBtn) { cardBtn.style.background = '#0A84FF'; cardBtn.style.border = '1px solid #0A84FF'; }
+        
+        if (availableCredit < finalPrice) {
+            if (walletWarning) {
+                walletWarning.style.display = 'block';
+                walletWarning.innerHTML = `<i class="fas fa-info-circle"></i> Wallet balance: R${availableCredit.toFixed(2)}. Clicking request will redirect you to PayFast securely.`;
+            }
+        }
+    }
+
+    if (findOffersBtn) {
+        const methodLabel = method === 'card' ? 'CARD' : 'CASH';
+        findOffersBtn.innerHTML = `Request Asiye Go (${methodLabel} - R${finalPrice})`;
     }
 };
 // =======================================================================
@@ -32024,8 +31827,507 @@ if (!isArrived && !isOnboard && taxiId && passengerLat && passengerLng) {
 }
 */
 
+// =======================================================================
+// ASIYE CLUB REGISTRATION ENGINE (3-STEP WIZARD)
+// =======================================================================
+
+window.clubCurrentStep = 1;
+window.clubTotalSteps = 3;
+window.clubBillingTerm = 'monthly'; 
+window.clubRouteDistance = 0;
+window.calculatedClubTotalPrice = 0;
+window.calculatedClubSingleTripPrice = 0;
+
+window.openAsiyeClubRegister = function() {
+    closeModal('asiyeClubGatewayPopup');
+    openModal('asiyeClubRegisterPopup');
+    window.clubCurrentStep = 1;
+    window.navigateClubWizard(0); // Setup UI state
+};
+
+// --- STEP 1: PURPOSE & DESTINATION ---
+window.setClubPurpose = function(type) {
+    document.getElementById('clubPurpose').value = type;
+    const btnWork = document.getElementById('btnClubWork');
+    const btnSchool = document.getElementById('btnClubSchool');
+    
+    if (type === 'work') {
+        btnWork.style.background = 'rgba(10,132,255,0.15)';
+        btnWork.style.border = '2px solid #0A84FF';
+        btnSchool.style.background = '#2C2C2E';
+        btnSchool.style.border = '2px solid transparent';
+        document.getElementById('clubDestLabel').innerText = 'Company Name *';
+        document.getElementById('clubInstName').placeholder = 'e.g. Standard Bank Sandton';
+    } else {
+        btnSchool.style.background = 'rgba(191,90,242,0.15)';
+        btnSchool.style.border = '2px solid #BF5AF2';
+        btnWork.style.background = '#2C2C2E';
+        btnWork.style.border = '2px solid transparent';
+        document.getElementById('clubDestLabel').innerText = 'Institution Name *';
+        document.getElementById('clubInstName').placeholder = 'e.g. Wits University / Rosebank College';
+    }
+};
+
+window.selectClubDestination = function(lat, lng, name, address) {
+    document.getElementById('clubInstName').value = name;
+    document.getElementById('clubDropoffLat').value = lat;
+    document.getElementById('clubDropoffLng').value = lng;
+    document.getElementById('clubDropoffAddress').value = address;
+    document.getElementById('clubInstResults').innerHTML = `<div style="background: rgba(48,209,88,0.15); border: 1px solid #30D158; color: #30D158; padding: 12px; border-radius: 12px; font-weight: 700;"><i class="fas fa-check-circle"></i> Destination Set: ${name}</div>`;
+};
 
 
+window.calculateClubDistanceAndPrice = function() {
+    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
+    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
+    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
+    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
+
+    if (isNaN(pLat) || isNaN(pLng) || isNaN(dLat) || isNaN(dLng)) return;
+
+    let dist = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
+    if (dist < 1) dist = 1;
+    window.clubRouteDistance = dist;
+
+    // Asiye Club Pricing Math (Split by 3)
+    const clubGross = 15 + (dist * 6.00);
+    const singleTripPrice = Math.max(15, Math.round(clubGross / 3));
+    window.calculatedClubSingleTripPrice = singleTripPrice;
+
+    // Update Step 2 Estimate
+    const estRateEl = document.getElementById('clubEstRateDisplay');
+    if (estRateEl) estRateEl.innerText = `R${singleTripPrice}`;
+
+    // Update Step 3 Billing Costs
+    const activeTerm = window.clubBillingTerm || 'monthly';
+    const daysPerWeek = parseInt(document.getElementById('clubDaysPerWeek').value) || 5;
+    let daysToBill = daysPerWeek * 4; // Monthly default
+    let discount = 0.15;
+    let trialDeduction = 0;
+
+    if (activeTerm === 'weekly') { daysToBill = daysPerWeek; discount = 0.05; } 
+    else if (activeTerm === 'daily') { daysToBill = 1; discount = 0; }
+
+    const grossFares = (singleTripPrice * 2 * daysToBill) * (1 - discount);
+    
+    if (activeTerm === 'monthly') {
+        trialDeduction = singleTripPrice; 
+        const trialRow = document.getElementById('clubTrialPromotionRow');
+        const trialValueEl = document.getElementById('clubTrialDiscountAmount');
+        if (trialRow && trialValueEl) { 
+            trialRow.style.display = 'flex'; 
+            trialValueEl.innerText = `-R${trialDeduction.toFixed(2)}`; 
+        }
+    } else {
+        const trialRow = document.getElementById('clubTrialPromotionRow');
+        if (trialRow) trialRow.style.display = 'none';
+    }
+
+    const totalEstCost = Math.max(0, Math.round(grossFares - trialDeduction));
+    window.calculatedClubTotalPrice = totalEstCost;
+
+    const distEl = document.getElementById('clubEstDistance');
+    const costEl = document.getElementById('clubEstCost');
+    if (distEl) distEl.innerText = `${dist.toFixed(1)} km`;
+    if (costEl) costEl.innerText = `R${totalEstCost.toFixed(2)} (${activeTerm.toUpperCase()})`;
+};
+
+// --- STEP 3: TAXI MATCHES ---
+window.findMatchingClubTaxis = async function() {
+    const listContainer = document.getElementById('clubMatchedTaxisList');
+    if (!listContainer) return;
+    
+    listContainer.innerHTML = `<div style="text-align: center; padding: 20px; color: #888;"><i class="fas fa-spinner fa-spin"></i> Finding Taxis...</div>`;
+
+    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
+    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
+
+    try {
+        const snapshot = await database.ref("taxis").once("value");
+        const taxisData = snapshot.val() || {};
+        const availableTaxis = [];
+
+        for (const taxiId in taxisData) {
+            const taxi = { taxiId, ...taxisData[taxiId] };
+            // For club, we just need online/verified taxis within a reasonable radius to display as options
+            if (taxi.isOnline && taxi.verificationStatus === 'verified') {
+                const dist = calculateDistance(pLat, pLng, parseFloat(taxi.latitude), parseFloat(taxi.longitude));
+                if (dist <= 15) { 
+                    taxi.distanceToPassenger = dist;
+                    availableTaxis.push(taxi);
+                }
+            }
+        }
+
+        if (availableTaxis.length > 0) {
+            availableTaxis.sort((a, b) => a.distanceToPassenger - b.distanceToPassenger);
+            let html = '';
+            // Display top 3 closest taxis
+            availableTaxis.slice(0, 3).forEach(taxi => {
+                const driverName = (`${taxi.name || ''} ${taxi.surname || ''}`).trim() || 'Driver';
+                const profilePicUrl = taxi.profile_picture_url ? getValidImageUrl(taxi.profile_picture_url) : `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}`;
+                const vInfo = typeof getVehicleDisplayInfo === 'function' ? getVehicleDisplayInfo(taxi) : { fullString: 'Minibus Taxi', reg: '' };
+
+                html += `
+                    <div style="background: #252528; border: 1px solid #3A3A3C; border-radius: 12px; padding: 10px 15px; display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <img src="${profilePicUrl}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #0A84FF;" onerror="this.src='data/AsiyeNew.png'">
+                            <div>
+                                <div style="color: white; font-weight: 800; font-size: 0.95rem;">${escapeHtml(driverName)}</div>
+                                <div style="color: #aaa; font-size: 0.75rem;">${escapeHtml(vInfo.fullString)}</div>
+                            </div>
+                        </div>
+                        <div style="color: #30D158; font-size: 0.8rem; font-weight: 700; background: rgba(48,209,88,0.1); padding: 4px 8px; border-radius: 8px;">
+                            ${taxi.distanceToPassenger.toFixed(1)} km
+                        </div>
+                    </div>
+                `;
+            });
+            listContainer.innerHTML = html;
+        } else {
+            listContainer.innerHTML = `
+                <div style="background: rgba(255,159,10,0.1); border: 1px solid #FF9F0A; color: #FF9F0A; padding: 15px; border-radius: 12px; text-align: center; font-size: 0.9rem; font-weight: 700;">
+                    No available taxis in this immediate area right now, but we will assign one automatically before your scheduled time.
+                </div>
+            `;
+        }
+    } catch (e) {
+        listContainer.innerHTML = `<div style="color: #dc3545; text-align: center; padding: 10px;">Error loading taxis.</div>`;
+    }
+};
+
+// --- NAVIGATION CONTROLLER ---
+window.navigateClubWizard = function(stepDirection) {
+    // Validation
+    if (stepDirection === 1) {
+        if (window.clubCurrentStep === 1) {
+            if (!document.getElementById('clubDropoffLat').value || !document.getElementById('clubInstName').value) {
+                showToast("Please search and select a valid destination.", "warning");
+                return;
+            }
+        } else if (window.clubCurrentStep === 2) {
+            if (!document.getElementById('clubPickupLat').value) {
+                showToast("Please enter your exact pickup address.", "warning");
+                return;
+            }
+            window.calculateClubDistanceAndPrice(); // Ensure price is ready
+        }
+    }
+
+    // Hide current
+    for (let i = 1; i <= window.clubTotalSteps; i++) {
+        const stepElement = document.getElementById(`clubStep${i}`);
+        if (stepElement) stepElement.style.display = 'none';
+    }
+
+    window.clubCurrentStep += stepDirection;
+
+    // Boundaries
+    if (window.clubCurrentStep < 1) window.clubCurrentStep = 1;
+    if (window.clubCurrentStep > window.clubTotalSteps) window.clubCurrentStep = window.clubTotalSteps;
+
+    // Show new
+    const currentStepElement = document.getElementById(`clubStep${window.clubCurrentStep}`);
+    if (currentStepElement) currentStepElement.style.display = 'block';
+
+    // Triggers
+    if (window.clubCurrentStep === 2 && stepDirection === 1) {
+        window.runClubMatchmaking();
+    } else if (window.clubCurrentStep === 3 && stepDirection === 1) {
+        window.findMatchingClubTaxis();
+    }
+
+    // Button states
+    const prevBtn = document.getElementById('clubPrevBtn');
+    const nextBtn = document.getElementById('clubNextBtn');
+    const registerBtn = document.getElementById('clubRegisterBtn');
+
+    if (window.clubCurrentStep === 1) {
+        if(prevBtn) {
+            prevBtn.innerText = "Cancel";
+            prevBtn.onclick = () => { closeModal('asiyeClubRegisterPopup'); window.openAsiyeClubGateway(); };
+        }
+    } else {
+        if(prevBtn) {
+            prevBtn.innerText = "Back";
+            prevBtn.onclick = () => window.navigateClubWizard(-1);
+        }
+    }
+
+    if (window.clubCurrentStep === window.clubTotalSteps) {
+        if(nextBtn) nextBtn.style.display = 'none';
+        if(registerBtn) registerBtn.style.display = 'block';
+    } else {
+        if(nextBtn) nextBtn.style.display = 'block';
+        if(registerBtn) registerBtn.style.display = 'none';
+    }
+};
+
+window.submitClubSubscription = async function() {
+    if (!window.userId) return;
+
+    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
+    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
+    const pAddr = document.getElementById('clubPickupAddress').value;
+    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
+    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
+    const dAddr = document.getElementById('clubInstName').value; // Using the friendly name
+
+    const purpose = document.getElementById('clubPurpose').value;
+    const daysPerWeek = document.getElementById('clubDaysPerWeek').value;
+    const morningTime = document.getElementById('clubMorningTime').value;
+    const returnTime = document.getElementById('clubReturnTime').value;
+    const billingPref = window.clubBillingTerm || 'monthly';
+
+    const btn = document.getElementById('clubRegisterBtn');
+    if(btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...'; }
+
+    const voucherRefCode = "AS-" + Math.floor(10000 + Math.random() * 90000).toString();
+
+    const subscriptionData = {
+        commuterId: window.userId,
+        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
+        commuterPhone: window.commuterData?.phone || '',
+        pickupAddress: pAddr, pickupLat: pLat, pickupLng: pLng,
+        dropoffAddress: dAddr, dropoffLat: dLat, dropoffLng: dLng,
+        purpose: purpose, daysPerWeek: daysPerWeek,
+        morningDeparture: morningTime, afternoonReturn: returnTime,
+        paymentTerms: billingPref, estimatedCost: window.calculatedClubTotalPrice,
+        routeDistance: window.clubRouteDistance, voucherCode: voucherRefCode,
+        status: 'pending_allocation', 
+        trialApplied: billingPref === 'monthly', 
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        price: window.calculatedClubSingleTripPrice || 15
+    };
+
+    try {
+        // Save to user profile
+        await database.ref(`commuters/${window.userId}/clubSubscription`).set(subscriptionData);
+        // Save to global admin queue for pool matching
+        await database.ref(`admin_queue/club_registrations/${window.userId}`).set(subscriptionData);
+
+        closeAllPopups();
+        
+        // Show success
+        showGenericMessage(
+            "Registration Successful!", 
+            `Your route is registered. Your reference voucher is <strong>${voucherRefCode}</strong>.<br><br>We are allocating a vehicle to your schedule and will notify you shortly.`, 
+            "fa-check-circle", 
+            "icon-success"
+        );
+        showModernDashboard();
+
+    } catch (err) {
+        console.error("Subscription write failed:", err);
+        showToast("Error processing registration.", "danger");
+    } finally {
+        if(btn) { btn.disabled = false; btn.innerHTML = 'Confirm & Register'; }
+    }
+};
+// =======================================================================
+// 1. IMPROVED MAPBOX SEARCH ENGINE (Finds Companies & Schools)
+// =======================================================================
+window.searchPOIByName = function(poiName, userCoords = null) {
+    if (!poiName || poiName.trim().length < 2) {
+        return Promise.resolve([]);
+    }
+
+    const accessToken = mapboxgl.accessToken;
+    const country = 'za'; 
+    
+    // FIX: Removed strict 'types=poi' limitation. 
+    // Now it searches businesses, buildings, addresses, and neighborhoods.
+    const proximity = (userCoords && userCoords.length === 2) 
+        ? `&proximity=${userCoords[0]},${userCoords[1]}` 
+        : (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(poiName)}.json?access_token=${accessToken}&country=${country}&autocomplete=true${proximity}&limit=10`;
+
+    return fetch(url)
+        .then(response => {
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            return response.json();
+        })
+        .then(data => {
+            return data.features || [];
+        })
+        .catch(error => {
+            console.error("Mapbox POI search failed:", error);
+            return [];
+        });
+};
+
+// =======================================================================
+// 2. COMPANY/SCHOOL SEARCH HANDLER
+// =======================================================================
+window.searchClubDestination = async function() {
+    const input = document.getElementById('clubInstName').value.trim();
+    const btn = document.getElementById('btnSearchInst');
+    const resultsContainer = document.getElementById('clubInstResults');
+    const manualContainer = document.getElementById('clubManualDropoff');
+    
+    if (input.length < 3) {
+        showToast("Please enter a longer name.", "warning");
+        return;
+    }
+
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    try {
+        const features = await window.searchPOIByName(input);
+        
+        if (features && features.length > 0) {
+            manualContainer.style.display = 'none';
+            let html = '';
+            // Show top 5 best matches
+            features.slice(0, 5).forEach(f => {
+                const name = escapeHtml(f.text);
+                const address = escapeHtml(f.place_name);
+                const lng = f.geometry.coordinates[0];
+                const lat = f.geometry.coordinates[1];
+                
+                html += `
+                    <div onclick="window.selectClubDestination(${lat}, ${lng}, '${name}', '${address}')" style="background: #2C2C2E; padding: 12px 15px; border-radius: 12px; cursor: pointer; border: 1px solid #3A3A3C; transition: 0.2s;">
+                        <strong style="color: white; font-size: 1rem; display:block;">${name}</strong>
+                        <span style="color: #aaa; font-size: 0.8rem;">${address}</span>
+                    </div>
+                `;
+            });
+            html += `<button onclick="window.showClubManualDropoff()" style="background: transparent; color: #0A84FF; border: none; font-size: 0.85rem; font-weight: 700; margin-top: 10px; cursor: pointer; text-decoration: underline;">Can't find your exact building? Search by street address.</button>`;
+            resultsContainer.innerHTML = html;
+        } else {
+            // If API returns nothing, automatically open the manual address geocoder
+            resultsContainer.innerHTML = `<div style="color: #FF9F0A; font-size: 0.9rem; margin-bottom: 10px;"><i class="fas fa-exclamation-triangle"></i> We couldn't find "${input}". Please search your street address below.</div>`;
+            window.showClubManualDropoff();
+        }
+    } catch (e) {
+        window.showClubManualDropoff();
+    } finally {
+        btn.innerHTML = '<i class="fas fa-search"></i>';
+        btn.disabled = false;
+    }
+};
+
+// =======================================================================
+// 3. MANUAL ADDRESS GEOCODER (BIASED TO LOCAL AREA)
+// =======================================================================
+window.showClubManualDropoff = function() {
+    document.getElementById('clubManualDropoff').style.display = 'block';
+    
+    if (!window.clubRegisterDropoffGeocoder) {
+        window.clubRegisterDropoffGeocoder = new MapboxGeocoder({
+            accessToken: mapboxgl.accessToken,
+            mapboxgl: mapboxgl,
+            marker: false,
+            placeholder: 'e.g. 123 Main Street, Sandton...',
+            // FIX: Bias autocomplete to the user's city/coordinates and limit to SA
+            proximity: [window.commuterLng || 28.0473, window.commuterLat || -26.2041],
+            country: 'za' 
+        });
+        
+        document.getElementById('clubRegisterDropoffContainer').appendChild(window.clubRegisterDropoffGeocoder.onAdd(map));
+        
+        window.clubRegisterDropoffGeocoder.on('result', (e) => {
+            document.getElementById('clubDropoffLng').value = e.result.geometry.coordinates[0];
+            document.getElementById('clubDropoffLat').value = e.result.geometry.coordinates[1];
+            document.getElementById('clubDropoffAddress').value = e.result.place_name;
+            
+            // Auto-fill the original input box so it looks clean to the user
+            document.getElementById('clubInstName').value = e.result.place_name.split(',')[0];
+            document.getElementById('clubInstResults').innerHTML = `<div style="background: rgba(48,209,88,0.15); border: 1px solid #30D158; color: #30D158; padding: 12px; border-radius: 12px; font-weight: 700;"><i class="fas fa-check-circle"></i> Destination Set: ${e.result.place_name.split(',')[0]}</div>`;
+        });
+
+        // Ensure Dark UI compatibility
+        setTimeout(() => {
+            const inputEl = document.querySelector('#clubRegisterDropoffContainer .mapboxgl-ctrl-geocoder--input');
+            if (inputEl) inputEl.style.color = '#ffffff';
+        }, 100);
+    }
+};
+
+// =======================================================================
+// 4. AUTO-FILL GPS PICKUP LOCATION (STEP 2)
+// =======================================================================
+window.runClubMatchmaking = async function() {
+    const banner = document.getElementById('clubMatchBanner');
+    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
+    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
+    const purpose = document.getElementById('clubPurpose').value;
+
+    if (!banner) return;
+    banner.innerHTML = `<div class="spinner" style="border-left-color: #0A84FF; width: 30px; height: 30px; border-width: 3px;"></div><span style="color: white; font-weight: 700; font-size: 0.9rem;">Checking for commuters in your area...</span>`;
+
+    // Ensure pickup geocoder is ready & biased to local area
+    if (!window.clubRegisterPickupGeocoder) {
+        window.clubRegisterPickupGeocoder = new MapboxGeocoder({
+            accessToken: mapboxgl.accessToken,
+            mapboxgl: mapboxgl,
+            marker: false,
+            placeholder: 'Search home address...',
+            proximity: [window.commuterLng || 28.0473, window.commuterLat || -26.2041],
+            country: 'za'
+        });
+        document.getElementById('clubRegisterPickupContainer').appendChild(window.clubRegisterPickupGeocoder.onAdd(map));
+        
+        window.clubRegisterPickupGeocoder.on('result', (e) => {
+            document.getElementById('clubPickupLng').value = e.result.geometry.coordinates[0];
+            document.getElementById('clubPickupLat').value = e.result.geometry.coordinates[1];
+            document.getElementById('clubPickupAddress').value = e.result.place_name;
+            window.calculateClubDistanceAndPrice();
+        });
+
+        // FIX: AUTO-FILL PICKUP WITH CURRENT GPS TO SAVE TIME!
+        if (window.commuterLat && window.commuterLng) {
+            try {
+                const address = await getAddressFromCoordsPromise(window.commuterLng, window.commuterLat);
+                window.clubRegisterPickupGeocoder.setInput(address);
+                document.getElementById('clubPickupLng').value = window.commuterLng;
+                document.getElementById('clubPickupLat').value = window.commuterLat;
+                document.getElementById('clubPickupAddress').value = address;
+                
+                // Ensure text is white
+                setTimeout(() => {
+                    const inputEl = document.querySelector('#clubRegisterPickupContainer .mapboxgl-ctrl-geocoder--input');
+                    if (inputEl) inputEl.style.color = '#ffffff';
+                }, 100);
+
+                window.calculateClubDistanceAndPrice();
+            } catch(e) {}
+        }
+    }
+
+    // Matchmaking Logic
+    try {
+        const snap = await database.ref('requests').orderByChild('type').equalTo('club').once('value');
+        let matchCount = 0;
+        
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const req = child.val();
+                if (req.destination && req.poolCenterLat) {
+                    // Check if going to a similar destination (within 3km)
+                    const reqDLat = req.destinationLat || dLat; 
+                    const reqDLng = req.destinationLng || dLng;
+                    const distToDest = calculateDistance(dLat, dLng, reqDLat, reqDLng);
+                    if (distToDest <= 3) matchCount++;
+                }
+            });
+        }
+
+        if (matchCount > 0) {
+            banner.style.background = 'rgba(48,209,88,0.15)';
+            banner.style.border = '1px solid #30D158';
+            banner.innerHTML = `<i class="fas fa-users" style="color: #30D158; font-size: 1.5rem;"></i><span style="color: white; font-weight: 700; font-size: 0.9rem;">Great! We found <span style="color: #30D158;">${matchCount} other(s)</span> travelling near your destination. Let's set up your pickup to join them.</span>`;
+        } else {
+            banner.style.background = 'rgba(255,159,10,0.15)';
+            banner.style.border = '1px solid #FF9F0A';
+            banner.innerHTML = `<i class="fas fa-user-plus" style="color: #FF9F0A; font-size: 1.5rem;"></i><span style="color: white; font-weight: 700; font-size: 0.9rem;">You are the first one heading to this ${purpose === 'work' ? 'workplace' : 'school'}. Let's get you set up so others can join you!</span>`;
+        }
+    } catch (e) {
+        banner.style.display = 'none';
+    }
+};
 </script>
 </body>
-</html>                                                                                                                                                                                                                                                                                                              
+</html>                                                                                                                                                                                                                                                                                                     
