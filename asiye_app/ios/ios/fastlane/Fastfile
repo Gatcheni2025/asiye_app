@@ -1,0 +1,31 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Push a new beta build to TestFlight"
+  lane :beta do
+    # 1. Setup API Key using the environment variables from GitHub Actions
+    app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content: ENV["APP_STORE_CONNECT_PRIVATE_KEY"],
+      in_house: false
+    )
+
+    # 2. Fetch certificates from your private repo
+    match(
+      type: "appstore",
+      readonly: true # VERY IMPORTANT for CI: prevents creating new certs
+    )
+
+    # 3. Build the iOS app
+    # We step back one directory to run the flutter build command
+    sh("cd .. && flutter build ipa --release --export-method=app-store")
+
+    # 4. Upload to TestFlight
+    # Flutter outputs the IPA into the build directory
+    upload_to_testflight(
+      ipa: "../build/ios/ipa/asiye_app.ipa",
+      skip_waiting_for_build_processing: true
+    )
+  end
+end
