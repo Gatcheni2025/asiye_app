@@ -19,7 +19,6 @@ jobs:
         with:
           channel: 'stable'
 
-      # FIX 1: We tell it to look inside the nested folder for pubspec.yaml
       - name: Install Flutter Dependencies
         working-directory: ./asiye_app
         run: flutter pub get
@@ -28,12 +27,8 @@ jobs:
         run: |
           git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
 
-      # FIX 2: We tell it to look inside the nested iOS folder for Fastlane
-      - name: Install Fastlane Dependencies
-        working-directory: ./asiye_app/ios
-        run: bundle install
+      # Notice the "Install Fastlane Dependencies" step is gone now!
 
-      # FIX 3: We tell it to run the fastlane command from the nested iOS folder
       - name: Build and Upload to TestFlight
         working-directory: ./asiye_app/ios
         env:
@@ -41,4 +36,5 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: bundle exec fastlane beta
+        # FIX: Removed "bundle exec" because we are using the globally installed fastlane
+        run: fastlane beta
