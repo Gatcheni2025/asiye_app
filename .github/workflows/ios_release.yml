@@ -1,40 +1,49 @@
-name: iOS TestFlight Release
+name: Build and Release iOS
 
+# This controls when the workflow will run
 on:
   push:
     branches:
-      - main
+      - main # Triggers when you push to main
+  # Allows you to run this workflow manually from the GitHub Actions tab
   workflow_dispatch:
 
 jobs:
   build-and-release-ios:
-    runs-on: macos-latest
-    
+    name: Build and release iOS
+    runs-on: macos-latest # iOS builds MUST run on a macOS server
+
     steps:
-      - name: Checkout App Code
+      # 1. Check out your code from the repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      # 2. Set up the Flutter environment
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          # Optional: You can specify your exact Flutter version if you want
+          # flutter-version: '3.22.0'
 
-      - name: Install Flutter Dependencies
-        working-directory: ./asiye_app
+      # 3. Get Flutter packages
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Configure Git for Private Match Repo
-        run: |
-          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
-
-      # Notice the "Install Fastlane Dependencies" step is gone now!
-
-      - name: Build and Upload to TestFlight
-        working-directory: ./asiye_app/ios
-        env:
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-        # FIX: Removed "bundle exec" because we are using the globally installed fastlane
+      # 4. Build and upload using Fastlane (THE FIX IS HERE)
+      - name: Run fastlane beta
+        working-directory: ios # <--- This forces the terminal to go into the ios folder first
         run: fastlane beta
+        
+        # 5. Provide Apple Credentials securely
+        # Fastlane needs your Apple Developer credentials to upload to TestFlight.
+        # You must set these up in your GitHub Repository -> Settings -> Secrets and variables -> Actions
+        env:
+          # If you use an App Store Connect API Key (Recommended by Apple):
+          APP_STORE_CONNECT_API_KEY_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY_ID }}
+          APP_STORE_CONNECT_API_KEY_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ISSUER_ID }}
+          APP_STORE_CONNECT_API_KEY_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY_KEY }}
+          
+          # Or if you use an Apple ID and App-Specific Password:
+          # FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          # FASTLANE_USER: ${{ secrets.APPLE_ID_EMAIL }}
