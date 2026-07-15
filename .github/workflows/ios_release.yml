@@ -1,0 +1,40 @@
+name: iOS TestFlight Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build-and-release-ios:
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout App Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Install Flutter Dependencies
+        working-directory: ./asiye_app
+        run: flutter pub get
+
+      - name: Configure Git for Private Match Repo
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      # Notice the "Install Fastlane Dependencies" step is gone now!
+
+      - name: Build and Upload to TestFlight
+        working-directory: ./asiye_app/ios
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        # FIX: Removed "bundle exec" because we are using the globally installed fastlane
+        run: fastlane beta
