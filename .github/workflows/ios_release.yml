@@ -19,7 +19,7 @@ jobs:
         with:
           channel: 'stable'
 
-      # FIX 1: Removed working-directory because pubspec.yaml is in the root folder
+      # FIX 1: No working-directory needed here because pubspec.yaml is in the main folder
       - name: Install Flutter Dependencies
         run: flutter pub get
 
@@ -27,7 +27,7 @@ jobs:
         run: |
           git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
 
-      # FIX 2: Changed directory to just "ios" instead of "./asiye_app/ios"
+      # FIX 2: Fastlane must run inside the ios folder
       - name: Build and Upload to TestFlight
         working-directory: ios
         env:
