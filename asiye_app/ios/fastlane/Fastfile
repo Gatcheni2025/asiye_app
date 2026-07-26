@@ -20,8 +20,8 @@ platform :ios do
     )
 
     # 3. Build the iOS app
-    # We step back one directory to run the flutter build command
-    sh("cd .. && flutter build ipa --release --export-method=app-store")
+    # We step back two directories (out of fastlane and out of ios) to run the flutter build command from the project root
+    sh("cd ../.. && flutter build ipa --release --export-method=app-store")
 
     # 4. Upload to TestFlight
     # Flutter outputs the IPA into the build directory
