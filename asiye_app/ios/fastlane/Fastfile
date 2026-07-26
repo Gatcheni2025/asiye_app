@@ -13,9 +13,10 @@ platform :ios do
 
     # 2. Fetch certificates from your private repo
     match(
-      git_url: "https://github.com/Gatcheni2025/asiye-certs", # <-- Add this line!
+      git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
-      readonly: true # Keep this as true since certs already exist
+      app_identifier: "com.asiyeapp.asiye",  # Add your bundle ID here
+      readonly: true
     )
 
     # 3. Build the iOS app
