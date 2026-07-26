@@ -3,9 +3,14 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
+    # 1. Increase timeouts for heavy projects (Mapbox/Firebase)
+    # Default is 3 seconds; we increase it to 120 seconds.
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
+    ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
+
     setup_ci
 
-    # 1. Setup API Key (returns a key object used by upload_to_testflight)
+    # 2. Setup API Key (returns a key object used by upload_to_testflight)
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
@@ -13,7 +18,7 @@ platform :ios do
       in_house: false
     )
 
-    # 2. Fetch certificates from your private repo
+    # 3. Fetch certificates from your private repo
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -21,16 +26,17 @@ platform :ios do
       readonly: true
     )
 
-    # 3. Build the Flutter iOS project (No Signing)
-    # This prepares the files for Xcode
+    # 4. Build Flutter (No Signing)
+    # This part worked in your last run!
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 4. Build and Sign the IPA using Fastlane (Gym)
-    # Note: 'api_key' removed from here as it's not a valid option for build_app
+    # 5. Build and Sign the IPA
     build_app(
       scheme: "Runner",
       project: "Runner.xcodeproj",
       export_method: "app-store",
+      # This ensures Xcode doesn't try to download packages AGAIN if they are ready
+      xcargs: "-clonedSourcePackagesDirPath $(pwd)/../.spm_cache",
       export_options: {
         provisioningProfiles: {
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
@@ -38,7 +44,7 @@ platform :ios do
       }
     )
 
-    # 5. Upload to TestFlight
+    # 6. Upload to TestFlight
     # upload_to_testflight DOES accept the api_key parameter
     upload_to_testflight(
       api_key: api_key,
