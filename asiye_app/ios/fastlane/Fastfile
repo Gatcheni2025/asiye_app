@@ -3,14 +3,13 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # 1. Increase timeouts for heavy projects (Mapbox/Firebase)
-    # Default is 3 seconds; we increase it to 120 seconds.
+    # 1. Increase timeouts for large projects (Mapbox/Firebase)
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
     setup_ci
 
-    # 2. Setup API Key (returns a key object used by upload_to_testflight)
+    # 2. Setup API Key
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
@@ -23,20 +22,31 @@ platform :ios do
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
       app_identifier: "com.asiyeapp.asiye",
+      team_id: "AC775BUGG5", # Your specific Team ID
       readonly: true
     )
 
-    # 4. Build Flutter (No Signing)
-    # This part worked in your last run!
+    # 4. Force the project settings to use your Team ID and Manual Signing
+    # This specifically fixes the "requires a development team" error
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: "Runner.xcodeproj",
+      team_id: "AC775BUGG5",
+      bundle_identifier: "com.asiyeapp.asiye"
+    )
+
+    # 5. Build Flutter (No Signing)
+    # This prepares the Swift Packages and dependencies
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 5. Build and Sign the IPA
+    # 6. Build and Sign the IPA using Fastlane (Gym)
     build_app(
       scheme: "Runner",
       project: "Runner.xcodeproj",
       export_method: "app-store",
-      # This ensures Xcode doesn't try to download packages AGAIN if they are ready
-      xcargs: "-clonedSourcePackagesDirPath $(pwd)/../.spm_cache",
+      export_team_id: "AC775BUGG5",
+      # Override the project file settings during the build process
+      xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 -clonedSourcePackagesDirPath $(pwd)/../.spm_cache",
       export_options: {
         provisioningProfiles: {
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
@@ -44,8 +54,7 @@ platform :ios do
       }
     )
 
-    # 6. Upload to TestFlight
-    # upload_to_testflight DOES accept the api_key parameter
+    # 7. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
