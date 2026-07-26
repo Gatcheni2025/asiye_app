@@ -5,7 +5,7 @@ platform :ios do
   lane :beta do
     setup_ci
 
-    # 1. Setup API Key
+    # 1. Setup API Key (returns a key object used by upload_to_testflight)
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
@@ -13,7 +13,7 @@ platform :ios do
       in_house: false
     )
 
-    # 2. Fetch certificates
+    # 2. Fetch certificates from your private repo
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -22,16 +22,15 @@ platform :ios do
     )
 
     # 3. Build the Flutter iOS project (No Signing)
-    # This prepares the /ios folder and plugin dependencies
+    # This prepares the files for Xcode
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
     # 4. Build and Sign the IPA using Fastlane (Gym)
-    # Fastlane will automatically find the certificates from match
+    # Note: 'api_key' removed from here as it's not a valid option for build_app
     build_app(
       scheme: "Runner",
       project: "Runner.xcodeproj",
       export_method: "app-store",
-      api_key: api_key,
       export_options: {
         provisioningProfiles: {
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
@@ -40,6 +39,7 @@ platform :ios do
     )
 
     # 5. Upload to TestFlight
+    # upload_to_testflight DOES accept the api_key parameter
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
