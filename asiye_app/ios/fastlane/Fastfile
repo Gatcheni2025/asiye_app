@@ -3,12 +3,13 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
+    # 1. Keep the timeout fixes for the heavy dependencies
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
     setup_ci
 
-    # 1. Setup API Key
+    # 2. Setup API Key
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
@@ -16,7 +17,7 @@ platform :ios do
       in_house: false
     )
 
-    # 2. Fetch certificates
+    # 3. Fetch certificates
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -25,8 +26,7 @@ platform :ios do
       readonly: true
     )
 
-    # 3. Explicitly map the Profile to the Target
-    # We add 'profile_name' here to ensure Xcode knows which one has the Push/SignIn capabilities
+    # 4. Update signing settings (this still applies to the project file)
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -35,17 +35,18 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 4. Build Flutter (No Signing)
+    # 5. Build Flutter (No Signing)
+    # This prepares both SPM and CocoaPods
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 5. Build and Sign the IPA
+    # 6. Build and Sign the IPA using the WORKSPACE
     build_app(
       scheme: "Runner",
-      project: "Runner.xcodeproj",
+      workspace: "Runner.xcworkspace", # CHANGED from project to workspace
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
-      # We force the PROVISIONING_PROFILE_SPECIFIER in xcargs as a final override
-      xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye' -clonedSourcePackagesDirPath $(pwd)/../.spm_cache",
+      # Removed clonedSourcePackagesDirPath to let the workspace handle paths naturally
+      xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye'",
       export_options: {
         provisioningProfiles: {
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
@@ -53,7 +54,7 @@ platform :ios do
       }
     )
 
-    # 6. Upload to TestFlight
+    # 7. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
