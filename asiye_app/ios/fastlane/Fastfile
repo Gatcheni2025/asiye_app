@@ -24,7 +24,8 @@ platform :ios do
     # Disable automatic signing and use the profiles provided by match
     update_code_signing_settings(
       use_automatic_signing: false,
-      path: "Runner.xcodeproj"
+      path: "Runner.xcodeproj",
+      bundle_identifier: "com.asiyeapp.asiye"
     )
 
     # 3. Build the iOS app
