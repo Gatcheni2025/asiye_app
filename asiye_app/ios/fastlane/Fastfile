@@ -3,13 +3,12 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # 1. Increase timeouts for large projects (Mapbox/Firebase)
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
     setup_ci
 
-    # 2. Setup API Key
+    # 1. Setup API Key
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
@@ -17,36 +16,36 @@ platform :ios do
       in_house: false
     )
 
-    # 3. Fetch certificates from your private repo
+    # 2. Fetch certificates
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
       app_identifier: "com.asiyeapp.asiye",
-      team_id: "AC775BUGG5", # Your specific Team ID
+      team_id: "AC775BUGG5",
       readonly: true
     )
 
-    # 4. Force the project settings to use your Team ID and Manual Signing
-    # This specifically fixes the "requires a development team" error
+    # 3. Explicitly map the Profile to the Target
+    # We add 'profile_name' here to ensure Xcode knows which one has the Push/SignIn capabilities
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
       team_id: "AC775BUGG5",
-      bundle_identifier: "com.asiyeapp.asiye"
+      bundle_identifier: "com.asiyeapp.asiye",
+      profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 5. Build Flutter (No Signing)
-    # This prepares the Swift Packages and dependencies
+    # 4. Build Flutter (No Signing)
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 6. Build and Sign the IPA using Fastlane (Gym)
+    # 5. Build and Sign the IPA
     build_app(
       scheme: "Runner",
       project: "Runner.xcodeproj",
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
-      # Override the project file settings during the build process
-      xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 -clonedSourcePackagesDirPath $(pwd)/../.spm_cache",
+      # We force the PROVISIONING_PROFILE_SPECIFIER in xcargs as a final override
+      xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye' -clonedSourcePackagesDirPath $(pwd)/../.spm_cache",
       export_options: {
         provisioningProfiles: {
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
@@ -54,7 +53,7 @@ platform :ios do
       }
     )
 
-    # 7. Upload to TestFlight
+    # 6. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
