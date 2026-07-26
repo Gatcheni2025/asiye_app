@@ -19,17 +19,18 @@ jobs:
         with:
           channel: 'stable'
 
-      # FIX 1: No working-directory needed here because pubspec.yaml is in the main folder
+      # FIX 1: We DO need a working directory because the code is inside the asiye_app folder!
       - name: Install Flutter Dependencies
+        working-directory: ./asiye_app
         run: flutter pub get
 
       - name: Configure Git for Private Match Repo
         run: |
           git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
 
-      # FIX 2: Fastlane must run inside the ios folder
+      # FIX 2: Fastlane must run inside the ios folder which is inside asiye_app
       - name: Build and Upload to TestFlight 
-        working-directory: ios
+        working-directory: ./asiye_app/ios
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
