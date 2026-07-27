@@ -1,8 +1,11 @@
+require 'base64'
+
 default_platform(:ios)
 
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
+    # 1. Increase timeouts for heavy projects (Mapbox/Firebase)
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
@@ -17,7 +20,7 @@ platform :ios do
       readonly: true
     )
 
-    # 2. Update signing settings
+    # 2. Signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -29,8 +32,9 @@ platform :ios do
     # 3. Build Flutter (No Signing)
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 4. Build and Sign the IPA
-    build_app(
+    # 4. Build and Sign IPA
+    # We store the output path to pass it explicitly to the upload step
+    ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
       export_method: "app-store",
@@ -41,24 +45,26 @@ platform :ios do
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
         }
       }
-    )
+    ).path
 
-    # 5. SANITIZE AND RE-AUTHENTICATE
-    # This replaces literal "\n" strings with actual newlines to fix secret-pasting issues
-    raw_key = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].gsub("\\n", "\n")
+    # 5. RE-DECODE KEY IMMEDIATELY BEFORE UPLOAD
+    # This ensures the 'Bearer Token' is generated at the last possible second
+    # and isn't mangled by GitHub's environment handling.
+    decoded_key = Base64.decode64(ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
 
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
-      key_content: raw_key,
+      key_content: decoded_key,
       in_house: false
     )
 
-    # 6. Upload to TestFlight
+    # 6. Upload to TestFlight with EXPLICIT IPA path
     upload_to_testflight(
       api_key: api_key,
-      team_id: "AC775BUGG5", # Explicitly pass Team ID again
-      skip_waiting_for_build_processing: true
+      ipa: ipa_path, # Force use of the file we just built
+      skip_waiting_for_build_processing: true,
+      itms_transporter_type: "shell" # Force a more stable upload protocol for CI
     )
   end
 end
