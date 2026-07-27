@@ -5,7 +5,6 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # 1. Increase timeouts for heavy projects (Mapbox/Firebase)
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
@@ -20,7 +19,7 @@ platform :ios do
       readonly: true
     )
 
-    # 2. Signing settings
+    # 2. Update signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -32,8 +31,8 @@ platform :ios do
     # 3. Build Flutter (No Signing)
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 4. Build and Sign IPA
-    # We store the output path to pass it explicitly to the upload step
+    # 4. Build and Sign the IPA (Workspace)
+    # Removed '.path' because build_app returns the string path directly
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
@@ -45,11 +44,10 @@ platform :ios do
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
         }
       }
-    ).path
+    )
 
-    # 5. RE-DECODE KEY IMMEDIATELY BEFORE UPLOAD
-    # This ensures the 'Bearer Token' is generated at the last possible second
-    # and isn't mangled by GitHub's environment handling.
+    # 5. FRESH DECODED AUTHENTICATION
+    # Decoding your Base64 secret to ensure it's 100% valid for the upload tool
     decoded_key = Base64.decode64(ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
 
     api_key = app_store_connect_api_key(
@@ -59,12 +57,11 @@ platform :ios do
       in_house: false
     )
 
-    # 6. Upload to TestFlight with EXPLICIT IPA path
+    # 6. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
-      ipa: ipa_path, # Force use of the file we just built
-      skip_waiting_for_build_processing: true,
-      itms_transporter_type: "shell" # Force a more stable upload protocol for CI
+      ipa: ipa_path,
+      skip_waiting_for_build_processing: true
     )
   end
 end
