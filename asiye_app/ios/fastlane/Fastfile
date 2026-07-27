@@ -1,4 +1,4 @@
-require 'base64'
+require 'base64' # IMPORTANT: Ensure this is at the very top
 
 default_platform(:ios)
 
@@ -19,7 +19,7 @@ platform :ios do
       readonly: true
     )
 
-    # 2. Update signing settings
+    # 2. Signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -31,8 +31,8 @@ platform :ios do
     # 3. Build Flutter (No Signing)
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 4. Build and Sign the IPA (Workspace)
-    # Removed '.path' because build_app returns the string path directly
+    # 4. Build and Sign IPA (Workspace)
+    # FIX: build_app returns a string directly, so we don't call .path
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
@@ -46,8 +46,9 @@ platform :ios do
       }
     )
 
-    # 5. FRESH DECODED AUTHENTICATION
-    # Decoding your Base64 secret to ensure it's 100% valid for the upload tool
+    # 5. AUTHENTICATION
+    # We decode your Base64 secret here to guarantee the key format is perfect.
+    # Note: Ensure you followed the previous step to update your GitHub Secret to Base64!
     decoded_key = Base64.decode64(ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
 
     api_key = app_store_connect_api_key(
@@ -60,7 +61,7 @@ platform :ios do
     # 6. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
-      ipa: ipa_path,
+      ipa: ipa_path, # Explicitly use the path from the build_app step
       skip_waiting_for_build_processing: true
     )
   end
