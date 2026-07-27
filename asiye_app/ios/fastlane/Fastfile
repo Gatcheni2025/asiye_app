@@ -3,14 +3,12 @@ default_platform(:ios)
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # 1. Increase timeouts for large projects (Mapbox/Firebase)
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
     setup_ci
 
-    # 2. Fetch certificates
-    # Match uses the environment variables automatically
+    # 1. Fetch certificates
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -19,7 +17,7 @@ platform :ios do
       readonly: true
     )
 
-    # 3. Update signing settings
+    # 2. Update signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -28,12 +26,13 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 4. Build Flutter (No Signing)
+    # 3. Build Flutter (No Signing)
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 5. Build and Sign the IPA (Workspace)
+    # 4. Build and Sign the IPA
     build_app(
       scheme: "Runner",
+      project: "Runner.xcodeproj",
       workspace: "Runner.xcworkspace",
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
@@ -45,18 +44,21 @@ platform :ios do
       }
     )
 
-    # 6. FRESH AUTHENTICATION
-    # We call this here so the token is only seconds old when uploading
+    # 5. SANITIZE AND RE-AUTHENTICATE
+    # This replaces literal "\\n" strings with actual newlines to fix secret-pasting issues
+    raw_key = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].gsub("\\n", "\n")
+
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
-      key_content: ENV["APP_STORE_CONNECT_PRIVATE_KEY"],
+      key_content: raw_key,
       in_house: false
     )
 
-    # 7. Upload to TestFlight
+    # 6. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
+      team_id: "AC775BUGG5", # Explicitly pass Team ID again
       skip_waiting_for_build_processing: true
     )
   end
