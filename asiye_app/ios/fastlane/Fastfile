@@ -32,7 +32,6 @@ platform :ios do
     # 4. Build and Sign the IPA
     build_app(
       scheme: "Runner",
-      project: "Runner.xcodeproj",
       workspace: "Runner.xcworkspace",
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
@@ -45,7 +44,7 @@ platform :ios do
     )
 
     # 5. SANITIZE AND RE-AUTHENTICATE
-    # This replaces literal "\\n" strings with actual newlines to fix secret-pasting issues
+    # This replaces literal "\n" strings with actual newlines to fix secret-pasting issues
     raw_key = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].gsub("\\n", "\n")
 
     api_key = app_store_connect_api_key(
