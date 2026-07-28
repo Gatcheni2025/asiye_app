@@ -1,5 +1,4 @@
 require 'base64'
-require 'tmpdir'
 
 default_platform(:ios)
 
@@ -12,7 +11,7 @@ platform :ios do
 
     setup_ci
 
-    # 2. Fetch certificates
+    # 2. Fetch certificates (match uses the ENV variables automatically)
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -34,6 +33,7 @@ platform :ios do
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
     # 5. Build and Sign IPA (Workspace)
+    # Result is a string path, so we don't call .path
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
@@ -47,16 +47,32 @@ platform :ios do
       }
     )
 
-    # 6. FRESH AUTHENTICATION (The Fix for 38-min builds)
-    # We decode the key and create a fresh token ONLY AFTER the build is done.
-    decoded_key = Base64.decode64(ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
-    key_path = File.join(Dir.tmpdir, "auth_key.p8")
-    File.write(key_path, decoded_key)
+    # 6. SELF-HEALING AUTHENTICATION
+    # This block detects if your key is Base64 or Raw and fixes it for Apple
+    raw_key_secret = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].to_s.strip
+
+    begin
+      if !raw_key_secret.include?("BEGIN PRIVATE KEY")
+        decoded_key = Base64.decode64(raw_key_secret)
+      else
+        decoded_key = raw_key_secret
+      end
+    rescue
+      decoded_key = raw_key_secret
+    end
+
+    # Reconstruct key to strict PEM format (64 chars per line)
+    clean_key_data = decoded_key.gsub("-----BEGIN PRIVATE KEY-----", "")
+                                .gsub("-----END PRIVATE KEY-----", "")
+                                .gsub(/\s+/, "")
+    formatted_key = "-----BEGIN PRIVATE KEY-----\n" +
+                    clean_key_data.scan(/.{1,64}/).join("\n") +
+                    "\n-----END PRIVATE KEY-----"
 
     api_key = app_store_connect_api_key(
-      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
-      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
-      key_filepath: key_path,
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"].to_s.strip,
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s.strip,
+      key_content: formatted_key,
       in_house: false
     )
 
