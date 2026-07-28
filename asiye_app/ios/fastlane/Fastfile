@@ -10,7 +10,30 @@ platform :ios do
 
     setup_ci
 
-    # 1. Fetch certificates (Uses the ENV variables automatically)
+    # 1. CLEAN AND RECONSTRUCT PRIVATE KEY
+    # This logic fixes keys that were mangled by copy-pasting into GitHub Secrets
+    raw_key = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].to_s
+
+    # Remove headers, footers, and all whitespace to get the raw base64 data
+    clean_base64 = raw_key
+      .gsub("-----BEGIN PRIVATE KEY-----", "")
+      .gsub("-----END PRIVATE KEY-----", "")
+      .gsub(/\s+/, "") # Removes all newlines, spaces, and tabs
+
+    # Reconstruct the key with perfect 64-character line breaks (Apple's strict standard)
+    reconstructed_key = "-----BEGIN PRIVATE KEY-----\n"
+    reconstructed_key += clean_base64.scan(/.{1,64}/).join("\n")
+    reconstructed_key += "\n-----END PRIVATE KEY-----\n"
+
+    # 2. Setup API Key using the reconstructed string
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+      key_content: reconstructed_key,
+      in_house: false
+    )
+
+    # 3. Fetch certificates
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -19,7 +42,7 @@ platform :ios do
       readonly: true
     )
 
-    # 2. Update signing settings
+    # 4. Update signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -28,10 +51,10 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 3. Build Flutter (No Signing)
+    # 5. Build Flutter (No Signing)
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 4. Build and Sign IPA
+    # 6. Build and Sign IPA (Workspace)
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
@@ -45,23 +68,12 @@ platform :ios do
       }
     )
 
-    # 5. THE AUTHENTICATION FIX: Create a physical key file
-    # This prevents GitHub from mangling the key formatting.
-    key_path = File.join(Dir.tmpdir, "auth_key.p8")
-    File.write(key_path, ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
-
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
-      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
-      key_filepath: key_path, # Use the file we just created
-      in_house: false
-    )
-
-    # 6. Upload to TestFlight
+    # 7. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
-      skip_waiting_for_build_processing: true
+      skip_waiting_for_build_processing: true,
+      team_id: "AC775BUGG5" # Force the specific team context
     )
   end
 end
