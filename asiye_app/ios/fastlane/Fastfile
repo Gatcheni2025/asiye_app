@@ -61,8 +61,7 @@ platform :ios do
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
-      skip_waiting_for_build_processing: true,
-      itms_transporter_type: "shell" # Faster, more stable upload method
+      skip_waiting_for_build_processing: true
     )
   end
 end
