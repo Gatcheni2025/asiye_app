@@ -3699,7 +3699,54 @@ model-viewer {
         transform: translateY(0) scale(1);
     }
 }
-    </style>
+
+.tracking-page-bottom {
+    background: #ffffff;
+    /* FIX: Leave room for Android navigation bars and scrolling */
+    padding: 20px 20px calc(60px + env(safe-area-inset-bottom)) !important;
+    max-height: 65vh !important; /* Allow it to take more space if needed */
+    overflow-y: auto !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.tracking-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+    padding-bottom: 10px; /* Buffer */
+}
+  /* Ensure the dark background is lower than the popup */
+#popupOverlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: rgba(0, 0, 0, 0.7) !important;
+    z-index: 99998 !important; /* One level lower */
+    display: none;
+    pointer-events: auto; /* It should catch clicks to close, but only if not blocked */
+}
+
+/* Ensure all popups are on the very top and clickable */
+.popup {
+    z-index: 99999 !important; /* Higher than overlay */
+    pointer-events: auto !important; /* FORCE CLICKABILITY */
+    display: none;
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+}
+
+/* Fix for the Dim Screen/Frozen Map */
+body.popup-open {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+}
+  </style>
 </head>
 <body>
 
@@ -4228,12 +4275,14 @@ model-viewer {
         </li>
 
         <!-- 3. Broadcast -->
-        <!-- 3. Broadcast / Live Toggle -->
-        <li>
-            <a href="javascript:void(0)" class="nav__link" id="navLiveBtn" onclick="toggleBroadcast()">
-                <i class='bx bx-broadcast nav__icon' id="navLiveIcon" style="transition: color 0.3s;"></i>
-                <span class="nav__name" id="navLiveText" style="transition: color 0.3s; font-weight: 800;">Offline</span>
-            </a>
+      
+<li>
+    <!-- Search for navLiveBtn in taxi.html and update the onclick -->
+<a href="javascript:void(0)" class="nav__link" id="navLiveBtn" onclick="window.openPopup('taxiStatusPopup')">
+    <i class='bx bx-broadcast nav__icon' id="navLiveIcon"></i>
+    <span class="nav__name" id="navLiveText">Offline</span>
+</a>
+
         </li>
 
         <!-- 4. Parcels -->
@@ -4366,39 +4415,7 @@ model-viewer {
         </div>
         
     </div>
-</div><!--<div id="multiStepScannerPopup" class="popup" style="z-index: 80000 !important; width: 90%; max-width: 380px;">
-    <div style="text-align: center;">
-        <h3 id="scanStepTitle" style="margin-bottom: 10px; color: #111;">Security Verification</h3>
-        <p id="scanStepDesc" style="color: #666; font-size: 0.9rem; margin-bottom: 20px;"></p>
-
-        <!-- Dynamic Live Preview Box -->
-<!--<div id="scannerPreviewContainer" style="position: relative; width: 250px; height: 250px; border-radius: 12px; border: 4px dashed #007BFF; margin: 0 auto 20px; overflow: hidden; background: #f8f9fa; display: flex; align-items: center; justify-content: center;">
-    <i id="scannerPlaceholderIcon" class="fas fa-camera" style="font-size: 5rem; color: #ccc;"></i>
-   <video id="scannerVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; display: none;"></video><img id="scannerPreviewImg" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-    <canvas id="scannerCanvas" style="display: none;"></canvas>
-    <div id="scanOverlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 123, 255, 0.4); display: none; flex-direction: column; align-items: center; justify-content: center; backdrop-filter: blur(2px);">
-        <i class="fas fa-fingerprint" style="color: white; font-size: 3rem; animation: pulse 1s infinite;"></i>
-    </div>
 </div>
-
-<!--<button id="startScannerCameraBtn" class="btn btn-light" onclick="startScannerCamera()" style="width: 100%; border-radius: 12px; padding: 15px; font-weight: 800; margin-bottom: 10px; border: 2px solid #007BFF; color: #007BFF;">
-<i class="fas fa-camera"></i> Turn on Camera
-</button>
-aaaaaaa
-<button id="takeScanBtn" class="btn btn-primary" style="width: 100%; border-radius: 12px; padding: 15px; font-weight: 800; margin-bottom: 10px; display: none;" onclick="captureScan()">
-<i class="fas fa-expand"></i> Tap to Capture
-</button>
-
-<div id="postScanActions" style="display: none;">
-<button id="uploadScanBtn" class="btn btn-success" onclick="processDocumentUpload()" style="width: 100%; border-radius: 12px; padding: 15px; font-weight: 800; margin-bottom: 10px;">
-<i class="fas fa-cloud-upload-alt"></i> Save & Continue
-</button>
-<button class="btn btn-outline" onclick="launchOnboardingStep()" style="width: 100%; border-radius: 12px; padding: 12px; font-weight: 800; border: none; color: #666;">
-Retake Photo
-</button>
-</div>
-</div>
-</div>-->
 
 <div id="communicationBanner" class="communication-banner"></div>
 
@@ -5357,42 +5374,101 @@ window.openSetupTripPopup = function() {
         openPopup('setupTripPopup');
     }
 };
-// ========================================================================
-// FIXED: INITIALIZE ALL FIXES
-// ========================================================================
 
-function initAllFixes() {
-    console.log("🚀 Initializing all fixes...");
+function resetBookingButtons() {
+    const btns = [
+        { id: 'clubBookingSubmitBtn', text: '<i class="fas fa-check-circle"></i> Confirm & Book' },
+        { id: 'findOffersBtn', text: 'Confirm & Request Ride' }
+    ];
+
+    btns.forEach(btn => {
+        const el = document.getElementById(btn.id);
+        if (el) {
+            el.disabled = false;
+            el.innerHTML = btn.text;
+            el.style.opacity = '1';
+        }
+    });
+}
+
+window.openPopup = function(popupId) {
+    console.log("🚀 Attempting to open:", popupId);
     
-    // Wait for userId and taxiData
-    if (!window.userId || !window.taxiData) {
-        setTimeout(initAllFixes, 1000);
+    // 1. Close anything currently open
+    window.closeActivePopup();
+
+    const popup = document.getElementById(popupId);
+    const overlay = document.getElementById('popupOverlay');
+
+    if (!popup) {
+        console.error("❌ Popup ID not found:", popupId);
         return;
     }
-    
-    // Setup request cleanup listener
-    if (typeof window.setupRequestCleanupListener === 'function') {
-        window.setupRequestCleanupListener();
+
+    // 2. Show the Dim Background
+    if (overlay) {
+        overlay.style.setProperty('display', 'block', 'important');
+        overlay.classList.add('open');
     }
+
+    // 3. Show the Popup and ensure it is clickable
+    popup.style.setProperty('display', 'block', 'important');
+    popup.style.setProperty('visibility', 'visible', 'important');
+    popup.style.setProperty('opacity', '1', 'important');
+    popup.style.setProperty('pointer-events', 'auto', 'important'); // UNFREEZE
+    popup.classList.add('open');
     
-    // Load passengers with deduplication
+    document.body.classList.add('popup-open');
+};
+
+window.closeActivePopup = function() {
+    console.log("🧹 Closing all popups...");
+    
+    // List all IDs from your description
+    const allPopupIDs = [
+        'profilePopup', 'setupTripPopup', 'driverWalletPopup', 
+        'taxiStatusPopup', 'genericMessagePopup', 'passengersListPopup',
+        'locationCorrectionPopup', 'clubRequestDetailPopup'
+    ];
+
+    allPopupIDs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('open');
+            el.style.setProperty('display', 'none', 'important');
+            el.style.setProperty('pointer-events', 'none', 'important'); // Stop blocking clicks
+        }
+    });
+
+    const overlay = document.getElementById('popupOverlay');
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.setProperty('display', 'none', 'important');
+    }
+
+    document.body.classList.remove('popup-open');
+};
+
+window.hasInitializedFixes = false; // Guard variable
+
+function initAllFixes() {
+    // If already running or data missing, wait or stop
+    if (window.hasInitializedFixes) return; 
+    
+    if (!window.userId || !window.taxiData) {
+        console.log("⏳ Waiting for profile data before fixing...");
+        return; // Let the existing 3000ms interval handle the retry
+    }
+
+    window.hasInitializedFixes = true; // Lock it!
+    console.log("✅ Applying logic fixes once.");
+
+    // Put your specific logic here (like loading accepted passengers)
     if (typeof window.loadAcceptedPassengersAndParcels === 'function') {
         window.loadAcceptedPassengersAndParcels();
     }
-    
-    // Setup cancellation listener for active trip
-    if (window.currentRequestId) {
-        if (typeof window.setupDriverCancellationListener === 'function') {
-            window.setupDriverCancellationListener(window.currentRequestId);
-        }
-    }
-    
-    console.log("✅ All fixes initialized");
 }
 
-// Call this after Firebase is ready
-setTimeout(initAllFixes, 3000);
-// 🔥 FIX: Complete replacement for notification listener
 window.setupUnifiedNotificationListener = function() {
     if (!window.userId) {
         console.log("⏳ Waiting for userId...");
@@ -5889,31 +5965,25 @@ const originalInitializeRequestListener = window.initializeRequestListener;
 // 10. FIX: OVERRIDE closeActivePopup to restore dashboard when closed
 // ========================================================================
 
-const originalCloseActivePopup = window.closeActivePopup;
 
-window.closeActivePopup = function() {
-    // Call original first
-    if (typeof originalCloseActivePopup === 'function') {
-        originalCloseActivePopup();
+// Add this to your initializeApp function in taxi.html
+function clearDimScreenIssues() {
+    const overlay = document.getElementById('popupOverlay');
+    const blockedOverlay = document.getElementById('accountBlockedOverlay');
+    
+    // If we aren't loading and no modal has class 'open', kill the dim
+    if (overlay) {
+        overlay.style.display = 'none';
+        overlay.classList.remove('open');
     }
-
-    // If driver is online but no active trip, keep map visible
-    if (window.taxiData && window.taxiData.isOnline) {
-        const dashboard = document.getElementById('verifiedDashboardOverlay');
-        if (dashboard) {
-            dashboard.style.setProperty('display', 'none', 'important');
-            dashboard.style.setProperty('visibility', 'hidden', 'important');
-        }
-        
-        const mapElement = document.getElementById('map');
-        if (mapElement) {
-            mapElement.style.setProperty('display', 'block', 'important');
-            mapElement.style.setProperty('visibility', 'visible', 'important');
-            mapElement.style.setProperty('z-index', '1', 'important');
-        }
+    if (blockedOverlay && !window.isVerificationMode) {
+        blockedOverlay.style.display = 'none';
     }
-};
+    console.log("🛡️ Dim screen safety-cleared.");
+}
 
+// Call this 3 seconds after load
+setTimeout(clearDimScreenIssues, 3000);
 // ========================================================================
 // 11. HELPER: Show communication banner
 // ========================================================================
@@ -5942,39 +6012,6 @@ if (typeof showCommunicationBanner !== 'function') {
         }, 4000);
     };
 }
-
-// ========================================================================
-// 12. FIX: Override openPopup to ensure proper layering
-// ========================================================================
-
-const originalOpenPopup = window.openPopup;
-
-window.openPopup = function(popupId) {
-    console.log("🟢 Opening Popup:", popupId);
-    
-    // If it's a request popup and driver is online, make sure map is visible
-    if (popupId === 'commuterRequestPopup' || popupId === 'genericMessagePopup') {
-        if (window.taxiData && window.taxiData.isOnline) {
-            const dashboard = document.getElementById('verifiedDashboardOverlay');
-            if (dashboard) {
-                dashboard.style.setProperty('display', 'none', 'important');
-                dashboard.style.setProperty('visibility', 'hidden', 'important');
-            }
-            
-            const mapElement = document.getElementById('map');
-            if (mapElement) {
-                mapElement.style.setProperty('display', 'block', 'important');
-                mapElement.style.setProperty('visibility', 'visible', 'important');
-                mapElement.style.setProperty('z-index', '1', 'important');
-            }
-        }
-    }
-    
-    // Call original
-    if (typeof originalOpenPopup === 'function') {
-        originalOpenPopup(popupId);
-    }
-};
 
 // ========================================================================
 // 13. INIT: Ensure dashboard is hidden when online on load
@@ -7011,215 +7048,7 @@ function setupTaxiDataListener() {
 // FIND AND REPLACE THIS FUNCTION IN taxi.html
     
 
-  window.launchOnboardingStep = function() {
-        const steps = getActiveSteps();
-        
-        // --- COMPLETION CHECK (Fixes the 'Saving...' freeze) ---
-        if (currentOnboardingIndex >= steps.length) {
-            console.log("All scans complete! Moving to next phase...");
-            
-            // 1. FORCE HIDE THE SCANNER POPUP IMMEDIATELY
-            const scannerPopup = document.getElementById('multiStepScannerPopup');
-            if (scannerPopup) {
-                scannerPopup.style.display = 'none';
-                scannerPopup.classList.remove('open');
-            }
-            if (typeof closeActivePopup === 'function') closeActivePopup();
-
-            // 2. SHOW A CLEAN TRANSITION SCREEN
-            const overlay = document.getElementById('accountBlockedOverlay');
-            if (overlay) {
-                overlay.innerHTML = `
-                    <div style="text-align: center; margin-top: 20vh;">
-                        <i class="fas fa-check-circle" style="font-size: 4rem; color: #28a745; margin-bottom: 15px;"></i>
-                        <h3 style="color: white; margin-bottom: 10px;">Scans Complete!</h3>
-                        <p style="color: #aaa;">Finalizing your profile...</p>
-                    </div>`;
-                overlay.style.display = 'block';
-            }
-
-            // 3. TRIGGER THE WHATSAPP VERIFICATION MESSAGE
-        // 3. TRIGGER THE WHATSAPP WELCOME MESSAGE
-        if (taxiData && taxiData.phone && taxiData.phone !== 'N/A') {
-                try {
-                    var normalizedPhone = taxiData.phone.startsWith('0') ? '27' + taxiData.phone.substring(1) : taxiData.phone;
-                    var driverName = taxiData.name || 'Driver';
-                    
-                    fetch('https://app.asiye.cloud/whatsapp_bot.php', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            action: 'send_driver_verification', 
-                            phone: normalizedPhone, 
-                            name: driverName 
-                        })
-                    }).catch(e => console.error("WhatsApp trigger failed silently", e));
-                } catch(err) {
-                    console.error("WhatsApp block error", err);
-                }
-            }
-
-            // 4. MOVE TO FAST TRACK
-            setTimeout(() => {
-                if (taxiData && taxiData.phone && taxiData.phone !== 'N/A' && taxiData.phone !== 'Not provided') {
-                    if (taxiData.verificationStatus !== 'pending_review' && taxiData.verificationStatus !== 'verified') {
-                        database.ref(window.dbNode + '/' + userId).update({
-                            verificationStatus: 'pending_review',
-                            documentsSubmittedAt: firebase.database.ServerValue.TIMESTAMP
-                        }).then(() => {
-                            taxiData.verificationStatus = 'pending_review';
-                            if (typeof window.startFastTrackFlow === 'function') window.startFastTrackFlow();
-                        });
-                    } else {
-                        if (typeof window.startFastTrackFlow === 'function') window.startFastTrackFlow();
-                    }
-                } else {
-                    if (typeof window.triggerPhoneNumberCollection === 'function') {
-                        window.triggerPhoneNumberCollection();
-                    }
-                }
-            }, 1500);
-            
-            return;
-        }
-
-        // --- CONTINUE TO NEXT STEP UI ---
-        if (typeof closeActivePopup === 'function') closeActivePopup();
-        
-        const step = steps[currentOnboardingIndex];
-        console.log(`🔄 Preparing UI for step ${currentOnboardingIndex}: ${step.id}`);
-
-        const titleEl = document.getElementById('scanStepTitle');
-        const descEl = document.getElementById('scanStepDesc');
-        const iconEl = document.getElementById('scannerPlaceholderIcon');
-        
-        if(titleEl) titleEl.innerText = step.title;
-        if(descEl) descEl.innerText = step.desc;
-        if(iconEl) iconEl.className = `fas ${step.icon}`;
-
-        const container = document.getElementById('scannerPreviewContainer');
-        if (container) {
-            container.style.borderRadius = step.isCircle ? '50%' : '12px';
-            container.style.height = step.isCircle ? '250px' : '160px';
-            container.style.width = step.isCircle ? '250px' : '280px';
-        }
-
-        // Full UI Reset for the new step
-        const previewImg = document.getElementById('scannerPreviewImg');
-        const video = document.getElementById('scannerVideo');
-        const actions = document.getElementById('postScanActions');
-        
-        if(previewImg) previewImg.style.display = 'none';
-        if(video) video.style.display = 'none';
-        if(iconEl) iconEl.style.display = 'block';
-        if(actions) actions.style.display = 'none';
-
-        const startCamBtn = document.getElementById('startScannerCameraBtn');
-        if (startCamBtn) {
-            startCamBtn.style.display = 'block';
-            startCamBtn.innerHTML = '<i class="fas fa-camera"></i> Turn on Camera';
-            startCamBtn.disabled = false;
-        }
-
-        const takeScanBtn = document.getElementById('takeScanBtn');
-        if (takeScanBtn) takeScanBtn.style.display = 'none';
-
-        const uploadBtn = document.getElementById('uploadScanBtn');
-        if (uploadBtn) {
-            uploadBtn.innerHTML = '<i class="fas fa-cloud-upload-alt"></i> Save & Continue';
-            uploadBtn.disabled = false;
-        }
-
-        const existingBackBtn = document.getElementById('scannerBackBtn');
-        if (existingBackBtn) existingBackBtn.remove();
-
-        if (currentOnboardingIndex > 0) {
-            const backBtn = document.createElement('button');
-            backBtn.id = 'scannerBackBtn';
-            backBtn.className = 'btn btn-outline';
-            backBtn.style.cssText = 'width: 100%; border-radius: 12px; padding: 12px; font-weight: 800; margin-bottom: 10px; border: 1px solid #ccc; background: white; color: #666;';
-            backBtn.innerHTML = '<i class="fas fa-arrow-left"></i> Previous Step';
-            backBtn.onclick = function() {
-                if (currentOnboardingIndex > 0) {
-                    currentOnboardingIndex--;
-                    window.launchOnboardingStep();
-                }
-            };
-            const innerCont = document.getElementById('scannerInnerContainer');
-            if(innerCont) innerCont.appendChild(backBtn);
-        }
-
-        const popup = document.getElementById('multiStepScannerPopup');
-        if (popup) {
-            popup.style.display = 'block';
-            popup.classList.add('open');
-        } else if (typeof openPopup === 'function') {
-            openPopup('multiStepScannerPopup');
-        }
-
-        setTimeout(() => {
-            if (typeof window.startScannerCamera === 'function') {
-                window.startScannerCamera();
-            }
-        }, 500);
-    };    // 2. SECOND: Define the resume logic which relies on launchOnboardingStep
-    window.resumeVerification = function() {
-        if (!taxiData) return;
-
-        // Ensure the Scanner HTML exists in the DOM
-        if (typeof window.injectCleanScannerHTML === 'function') {
-            window.injectCleanScannerHTML();
-        }
-
-        // Safety re-check of account mode
-        window.isHandlerMode = (window.dbNode === 'handlers' || taxiData.type === 'handler' || taxiData.role === 'handler');
-        const steps = getActiveSteps();
-
-        for (var i = 0; i < steps.length; i++) {
-            const step = steps[i];
-            var isMissing = false;
-
-            if (step.id === 'FACE') {
-                isMissing = !taxiData.profile_picture_url;
-            } else if (step.id === 'CAR_FRONT') {
-                isMissing = !taxiData.vehiclePhoto;
-            } else if (step.id === 'CAR_BACK') {
-                isMissing = !taxiData.vehiclePhotoBack;
-            } else if (step.id === 'PROOF_OF_ADDRESS') {
-                isMissing = !taxiData.proofOfAddress && !(taxiData.documents && taxiData.documents.PROOF_OF_ADDRESS);
-            } else {
-                isMissing = (!taxiData.documents || !taxiData.documents[step.id]);
-            }
-
-            if (isMissing) {
-                console.log(`Resuming at step ${i}: ${step.id}`);
-                currentOnboardingIndex = i;
-                return window.launchOnboardingStep(); // Will no longer crash!
-            }
-        }
-
-        // If we reach here, ALL documents are uploaded.
-        if (!taxiData.phone || taxiData.phone === 'N/A' || taxiData.phone === 'Not provided') {
-            if (typeof window.triggerPhoneNumberCollection === 'function') {
-                window.triggerPhoneNumberCollection();
-            }
-            return;
-        }
-
-        // Move to pending review and launch Fast Track
-        if (taxiData.verificationStatus !== 'pending_review' && taxiData.verificationStatus !== 'verified') {
-            database.ref(window.dbNode + '/' + userId).update({
-                verificationStatus: 'pending_review',
-                documentsSubmittedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-            taxiData.verificationStatus = 'pending_review';
-        }
-
-        if (typeof window.startFastTrackFlow === 'function') {
-            window.startFastTrackFlow();
-        }
-    };              // Update service type options based on subscription
-           function updateServiceTypeOptions() {
+    function updateServiceTypeOptions() {
         const parcelRadio = document.querySelector('input[value="both"]');
         const parcelWarning = document.getElementById('parcelSubscriptionWarning');
         const parcelPriceContainer = document.getElementById('parcelPriceContainer');
@@ -7359,7 +7188,7 @@ function setupTaxiDataListener() {
 
             const popup = document.getElementById('genericMessagePopup');
             popup.innerHTML = `
-                <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+                <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
                 <div style="padding-top:10px;">
                     <i class="fas fa-broadcast-tower" style="font-size:3rem; color:${isLive ? 'var(--danger)' : 'var(--primary)'}"></i>
                     <h3 style="margin:15px 0 5px;">Broadcast Dashboard</h3>
@@ -8625,7 +8454,7 @@ if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(re
     // NEW: Check if user can accept parcels
     if (subscriptionStatus !== 'active') {
         popup.innerHTML = `
-            <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+            <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
             <h3>Parcel Delivery Request</h3>
             <p><strong>${escapeHtml(req.commuterName)}</strong> has a parcel for delivery to ${escapeHtml(req.destination ? req.destination.split(',')[0] : 'destination')}.</p>
             <div class="upgrade-prompt" onclick="openSubscriptionPopup()" style="margin: 15px 0;">
@@ -8641,7 +8470,7 @@ if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(re
         `;
     } else {
         popup.innerHTML = `
-            <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+           <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
             <h3>New Parcel Delivery!</h3>
             <p><strong>${escapeHtml(req.commuterName)}</strong> has a parcel for delivery to ${escapeHtml(req.destination ? req.destination.split(',')[0] : 'destination')}.</p>
             <div class="parcel-warning">
@@ -8691,7 +8520,65 @@ if (typeof window.isRequestAllowed === 'function' && !window.isRequestAllowed(re
 // =======================================================================
 // 🚕 ASIYE CLUB: DRIVER POOLING ROOM POPUP
 // =======================================================================
+window.closeActivePopup = function() {
+    console.log("🧹 Force-closing all popups and clearing overlays...");
 
+    // 1. List every possible popup ID
+    const popups = [
+        'profilePopup', 
+        'setupTripPopup', 
+        'driverWalletPopup', 
+        'taxiStatusPopup', 
+        'genericMessagePopup', 
+        'passengersListPopup',
+        'locationCorrectionPopup',
+        'clubRequestDetailPopup',
+        'chatPopup',
+        'supportChatPopup',
+        'commuterRequestPopup',
+        'driverAcceptedPopup'
+    ];
+
+    // 2. Loop through and kill them all
+    popups.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.classList.remove('open');
+            el.style.setProperty('display', 'none', 'important');
+            el.style.setProperty('visibility', 'hidden', 'important');
+            el.style.setProperty('opacity', '0', 'important');
+        }
+    });
+
+    // 3. KILL the dim overlay (The cause of the "freeze")
+    const overlay = document.getElementById('popupOverlay');
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.setProperty('display', 'none', 'important');
+        overlay.style.setProperty('visibility', 'hidden', 'important');
+        overlay.style.setProperty('opacity', '0', 'important');
+        overlay.style.setProperty('z-index', '-1', 'important');
+    }
+
+    // 4. Restore Map Interaction
+    const mapEl = document.getElementById('map');
+    if (mapEl) {
+        mapEl.style.pointerEvents = 'auto';
+        mapEl.style.userSelect = 'auto';
+    }
+
+    // 5. Ensure the Dashboard is visible if we aren't online
+    if (window.taxiData && !window.taxiData.isOnline) {
+        const dash = document.getElementById('verifiedDashboardOverlay');
+        if (dash) dash.style.display = 'block';
+    }
+    
+    window.isShowingRequestPopup = false;
+    window.currentShowingRequestId = null;
+};
+
+// Map the generic closeModal to the Master Closer
+window.closeModal = window.closeActivePopup;
 
 // =======================================================================
 // HELPER 1: ACCEPT THE CLUB REQUEST
@@ -8763,308 +8650,7 @@ function escapeHtml(text) {
             content.innerHTML = html;
 
         }
-    // =================================================================
-    // SEQUENTIAL DOCUMENT ONBOARDING (Face -> ID -> License -> Phone)
-    // =================================================================
-    // =================================================================
-    // 🚀 BULLETPROOF MULTI-STEP ONBOARDING (Face -> ID -> License -> Phone)
-    // =================================================================
-
-    /**
-     * Defines the sequence and properties for each verification step.
-     * The `type` property is crucial:
-     * - 'front': Uses the selfie camera (facingMode: 'user'). Ideal for face scans.
-     * - 'back': Uses the main rear camera (facingMode: 'environment'). Ideal for documents.
-     */
- const ONBOARDING_STEPS_TAXI = [
-        { id: 'FACE', title: 'Face Scan', desc: 'Position your face clearly in the circle.', icon: 'fa-user-circle', type: 'front', isCircle: true },
-        { id: 'ID_FRONT', title: 'ID Document (Front)', desc: 'Take a clear photo of the FRONT of your ID.', icon: 'fa-id-card', type: 'back', isCircle: false },
-        { id: 'ID_BACK', title: 'ID Document (Back)', desc: 'Take a photo of the barcode on the BACK of your ID.', icon: 'fa-barcode', type: 'back', isCircle: false },
-        { id: 'LICENSE_FRONT', title: 'Driver License (Front)', desc: 'Take a clear photo of your Driver License.', icon: 'fa-address-card', type: 'back', isCircle: false },
-        { id: 'LICENSE_BACK', title: 'Driver License (Back)', desc: 'Take a photo of the back of your License.', icon: 'fa-car-side', type: 'back', isCircle: false },
-        { id: 'CAR_FRONT', title: 'Vehicle Photo (Front)', desc: 'Take a photo of the FRONT of your car, clearly showing the number plate.', icon: 'fa-car', type: 'back', isCircle: false },
-        { id: 'CAR_BACK', title: 'Vehicle Photo (Back)', desc: 'Take a photo of the BACK of your car.', icon: 'fa-car', type: 'back', isCircle: false }
-    ];
-
-    const ONBOARDING_STEPS_HANDLER = [
-        { id: 'FACE', title: 'Face Scan', desc: 'Position your face clearly in the circle.', icon: 'fa-user-circle', type: 'front', isCircle: true },
-        { id: 'ID_FRONT', title: 'ID Document (Front)', desc: 'Take a clear photo of the FRONT of your ID.', icon: 'fa-id-card', type: 'back', isCircle: false },
-        { id: 'ID_BACK', title: 'ID Document (Back)', desc: 'Take a photo of the barcode on the BACK of your ID.', icon: 'fa-barcode', type: 'back', isCircle: false },
-        { id: 'PROOF_OF_ADDRESS', title: 'Proof of Address', desc: 'Upload a clear photo of your Proof of Address.', icon: 'fa-file-invoice', type: 'back', isCircle: false }
-    ];
-
-    function getActiveSteps() {
-        return window.isHandlerMode ? ONBOARDING_STEPS_HANDLER : ONBOARDING_STEPS_TAXI;
-    }
-
-    var currentOnboardingIndex = 0;
-    var scannerStream = null;
-
-    // 1. FORCE CLEAN HTML (Destroys old popups to prevent 'null' errors)
-    function injectCleanScannerHTML() {
-        const oldPopup = document.getElementById('multiStepScannerPopup');
-        if (oldPopup) oldPopup.remove();
-
-        const div = document.createElement('div');
-        div.id = 'multiStepScannerPopup';
-        div.className = 'popup';
-        div.style.cssText = 'z-index: 80000 !important; width: 90%; max-width: 380px; padding: 20px;';
-        div.innerHTML = `
-            <div style="text-align: center;">
-                <h3 id="scanStepTitle" style="margin-bottom: 10px; color: #111;">Security Verification</h3>
-                <p id="scanStepDesc" style="color: #666; font-size: 0.9rem; margin-bottom: 20px;"></p>
-
-                <div id="scannerPreviewContainer" style="position: relative; width: 250px; height: 250px; border-radius: 12px; border: 4px dashed #007BFF; margin: 0 auto 20px; overflow: hidden; background: #f8f9fa; display: flex; align-items: center; justify-content: center;">
-                    <i id="scannerPlaceholderIcon" class="fas fa-camera" style="font-size: 5rem; color: #ccc;"></i>
-                   <video id="scannerVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; display: none;"></video> <img id="scannerPreviewImg" style="width: 100%; height: 100%; object-fit: cover; display: none;">
-                    <canvas id="scannerCanvas" style="display: none;"></canvas>
-                </div>
-
-                <button id="startScannerCameraBtn" class="btn btn-light" onclick="startScannerCamera()" style="width: 100%; border-radius: 12px; padding: 15px; font-weight: 800; margin-bottom: 10px; border: 2px solid #007BFF; color: #007BFF; background: white;">
-                    <i class="fas fa-camera"></i> Turn on Camera
-                </button>
-
-                <button id="takeScanBtn" class="btn btn-primary" style="width: 100%; border-radius: 12px; padding: 15px; font-weight: 800; margin-bottom: 10px; display: none; background: #007BFF; color: white; border: none;" onclick="captureScan()">
-                    <i class="fas fa-expand"></i> Tap to Capture
-                </button>
-
-                <div id="postScanActions" style="display: none;">
-                    <button id="uploadScanBtn" class="btn btn-success" onclick="window.processDocumentUpload()" style="width: 100%; border-radius: 12px; padding: 15px; font-weight: 800; margin-bottom: 10px; background: #28a745; color: white; border: none;">
-                        <i class="fas fa-cloud-upload-alt"></i> Save & Continue
-                    </button>
-                    <button class="btn btn-outline" onclick="launchOnboardingStep()" style="width: 100%; border-radius: 12px; padding: 12px; font-weight: 800; border: 1px solid #ccc; background: white; color: #666;">
-                        Retake Photo
-                    </button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(div);
-    }
-    // 2. OVERRIDE ANY OLD FUNCTION
-
-
-    // Replace startScannerCamera to use front camera for all steps
-    /**
-     * Initializes and starts the camera stream for the current verification step.
-     * It intelligently selects between the front and back camera based on the
-     * `type` specified in the ONBOARDING_STEPS configuration.
-     */
-    window.startScannerCamera = async function() {
-        const steps = getActiveSteps();
-        const step = steps[currentOnboardingIndex];
-        const btn = document.getElementById('startScannerCameraBtn');
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accessing Camera...';
-
-        // FIX 4 & 5: Safer camera mapping based strictly on the step ID
-        const useFrontCamera = (step.id === 'FACE');
-        const facingMode = useFrontCamera ? "user" : "environment";
-        console.log(`Requesting ${useFrontCamera ? 'front (user)' : 'back (environment)'} camera for step: ${step.id}`);
-
-        try {
-            if (scannerStream) {
-                scannerStream.getTracks().forEach(track => track.stop());
-                scannerStream = null;
-            }
-
-            scannerStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: facingMode } },
-                audio: false
-            });
-
-            const video = document.getElementById('scannerVideo');
-            video.setAttribute('autoplay', '');
-            video.setAttribute('muted', '');
-            video.setAttribute('playsinline', '');
-
-            video.srcObject = scannerStream;
-            video.onloadedmetadata = () => {
-                video.play().catch(e => console.error("WebView blocked autoplay:", e));
-            };
-
-            video.style.transform = useFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
-            document.getElementById('scannerPlaceholderIcon').style.display = 'none';
-            video.style.display = 'block';
-            btn.style.display = 'none';
-            document.getElementById('takeScanBtn').style.display = 'block';
-
-        } catch (err) {
-            console.warn(`Failed to get camera:`, err.message);
-            btn.innerHTML = '<i class="fas fa-camera"></i> Turn on Camera';
-            alert("Camera access denied. Please allow camera permissions in your settings.");
-        }
-    };// Replace captureScan with more logging
-    /**
-     * Captures a still image from the live video feed and displays it for confirmation.
-     * It correctly handles the horizontal flip for front-camera images (selfies)
-     * so that the final saved image appears natural and not mirrored.
-     */
-    window.captureScan = function() {
-        const steps = getActiveSteps();
-        const step = steps[currentOnboardingIndex];
-        const video = document.getElementById('scannerVideo');
-        const canvas = document.getElementById('scannerCanvas');
-        const img = document.getElementById('scannerPreviewImg');
-
-        // FIX 4 & 5: Safer camera mapping
-        const useFrontCamera = (step.id === 'FACE');
-
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 480;
-        const ctx = canvas.getContext('2d');
-
-        if (useFrontCamera) {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-        }
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        if (scannerStream) {
-            scannerStream.getTracks().forEach(track => track.stop());
-            scannerStream = null;
-        }
-
-        img.src = canvas.toDataURL('image/jpeg', 0.8);
-        video.style.display = 'none';
-        img.style.display = 'block';
-        document.getElementById('takeScanBtn').style.display = 'none';
-        document.getElementById('postScanActions').style.display = 'block';
-    };
-    window.processDocumentUpload = processDocumentUpload;
-    // Replace processDocumentUpload with detailed logging and actual compression
-    window.processDocumentUpload = async function() {
-        const steps = getActiveSteps();
-        const step = steps[currentOnboardingIndex];
-        const btn = document.getElementById('uploadScanBtn');
-
-        if (btn.disabled) return;
-
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-        btn.disabled = true;
-
-        try {
-            const img = document.getElementById('scannerPreviewImg');
-            if (!img || !img.src || img.src.length < 100) throw new Error("No image captured");
-
-            const isDocument = (step.id !== 'FACE');
-
-            // --- ADVANCED COMPRESSION ENGINE ---
-            const compressImage = (dataUrl, maxSize, quality) => {
-                return new Promise((resolve, reject) => {
-                    const tempImg = new Image();
-                    tempImg.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        var width = tempImg.width;
-                        var height = tempImg.height;
-
-                        if (width > height) {
-                            if (width > maxSize) {
-                                height = Math.round(height * (maxSize / width));
-                                width = maxSize;
-                            }
-                        } else {
-                            if (height > maxSize) {
-                                width = Math.round(width * (maxSize / height));
-                                height = maxSize;
-                            }
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        const ctx = canvas.getContext('2d');
-                        
-                        ctx.imageSmoothingEnabled = true;
-                        ctx.imageSmoothingQuality = 'high';
-                        ctx.drawImage(tempImg, 0, 0, width, height);
-                        
-                        canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
-                    };
-                    tempImg.onerror = () => reject(new Error("Failed to process image"));
-                    tempImg.src = dataUrl;
-                });
-            };
-
-            btn.innerHTML = '<i class="fas fa-compress-alt fa-spin"></i> Compressing...';
-
-            const maxSize = isDocument ? 800 : 600;
-            const quality = isDocument ? 0.6 : 0.5; 
-            
-            const compressedBlob = await compressImage(img.src, maxSize, quality);
-
-            const fileName = `${step.id}_${userId}_${Date.now()}.jpg`;
-            const formData = new FormData();
-            formData.append('file', compressedBlob, fileName);
-
-            btn.innerHTML = '<i class="fas fa-cloud-upload-alt fa-spin"></i> Uploading...';
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-            const response = await fetch('https://app.asiye.cloud/upload_image.php', {
-                method: 'POST',
-                headers: { 'X-API-KEY': 'asiye_secure_upload_2025' },
-                body: formData,
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            const responseText = await response.text();
-            
-            var result;
-            try {
-                result = JSON.parse(responseText);
-            } catch (e) {
-                console.error("SERVER RETURNED NON-JSON:", responseText);
-                throw new Error("Server rejected the file. Try moving to better network coverage.");
-            }
-
-            if (result.status !== 'success' || !result.url) throw new Error(result.message || "Upload failed");
-
-            btn.innerHTML = '<i class="fas fa-save fa-spin"></i> Saving...';
-
-            const downloadURL = result.url.startsWith('http') ? result.url : 'https://app.asiye.cloud/' + result.url;
-
-            var updateData = {};
-            if (step.id === 'FACE') {
-                updateData.profile_picture_url = downloadURL;
-                if(taxiData) taxiData.profile_picture_url = downloadURL;
-            } else if (step.id === 'CAR_FRONT') {
-                updateData.vehiclePhoto = downloadURL;
-                if(taxiData) taxiData.vehiclePhoto = downloadURL;
-            } else if (step.id === 'CAR_BACK') {
-                updateData.vehiclePhotoBack = downloadURL;
-                if(taxiData) taxiData.vehiclePhotoBack = downloadURL;
-            } else if (step.id === 'PROOF_OF_ADDRESS') {
-                updateData.proofOfAddress = downloadURL;
-                if(taxiData) taxiData.proofOfAddress = downloadURL;
-            } else {
-                updateData[`documents/${step.id}`] = downloadURL;
-                if(taxiData) {
-                    if (!taxiData.documents) taxiData.documents = {};
-                    taxiData.documents[step.id] = downloadURL;
-                }
-            }
-
-            // Wait for database update
-            await database.ref(`${window.dbNode}/${userId}`).update(updateData);
-
-            console.log(`✅ Step ${step.id} completed. Moving to next step.`);
-            currentOnboardingIndex++;
-            window.launchOnboardingStep();
-
-        } catch (error) {
-            console.error("❌ Upload error:", error);
-            
-            btn.innerHTML = '<i class="fas fa-redo"></i> Try Again';
-            btn.disabled = false;
-            
-            if (error.name === 'AbortError') {
-                alert("Upload timed out. Your connection is too slow. Please try again.");
-            } else {
-                alert("Error: " + error.message);
-            }
-        }
-    };
+   
   window.triggerPhoneNumberCollection = function() {
         const popup = document.getElementById('genericMessagePopup');
         
@@ -9100,8 +8686,7 @@ function escapeHtml(text) {
         }
     };
 
-    const originalLaunchOnboardingStep = window.launchOnboardingStep;
-
+ 
 
     window.showServicePreferencesPopup = function() {
         const popup = document.getElementById('genericMessagePopup');
@@ -10999,7 +10584,7 @@ if (deleteEl) deleteEl.onclick = () => { if (typeof handleDeleteAccount === 'fun
         if (!popup) return;
 
         popup.innerHTML = `
-            <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+            <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
             <i class="fas fa-phone-alt" style="font-size: 3em; color: var(--primary); margin-bottom: 15px;"></i>
             <h3>Update Phone Number</h3>
             <p style="color: #666; margin-bottom: 20px;">Please enter your active mobile number:</p>
@@ -11148,7 +10733,7 @@ if (deleteEl) deleteEl.onclick = () => { if (typeof handleDeleteAccount === 'fun
 
             // Calculate display for popup
             var htmlContent = `
-                <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+                <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
                 <i class="bx bx-broadcast" style="font-size: 3em; color: var(--success);"></i>
                 <h3>Go Live?</h3>
                 <p>Passengers within 5km will see your location.</p>
@@ -11949,7 +11534,7 @@ window.openMyClientsPopup = function() {
     if (!popup) return;
 
     popup.innerHTML = `
-        <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+        <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
         <div style="text-align: center; padding: 10px;">
             <i class="fas fa-rocket" style="font-size: 3rem; color: #4cc9f0; margin-bottom: 15px;"></i>
             <h3 style="margin-bottom: 10px; color: #111;">Your Active Clients</h3>
@@ -13235,69 +12820,6 @@ function executeRemovePassenger(requestKey, subKey, index) {
     }
 }
 
-// Bind local functions to the global scope
-function openPopup(popupId) {
-    window.openPopup(popupId);
-}
-      // Ensure closeChat specifically calls the unified closer
-        function closeChat() {
-            closeActivePopup();
-        }
-        function showGenericMessage(title, message, icon, color) {
-            const popup = document.getElementById('genericMessagePopup');
-            if (!popup) return;
-            popup.innerHTML = `
-                <button class="popup-close" onclick="closeActivePopup()">&times;</button>
-                <i class="bx ${icon}" style="font-size: 3em; color: var(--${color});"></i>
-                <h3>${title}</h3>
-                <p>${message}</p>
-            `;
-            openPopup('genericMessagePopup');
-        }
-
-        function showLogoutConfirmation() {
-            openPopup('logoutConfirmationPopup');
-        }
-
-        function confirmLogout() {
-            console.log("Logging out driver...");
-
-            if (userId) {
-                database.ref('taxis/' + userId).update({
-                    isOnline: false,
-                    lastSeen: firebase.database.ServerValue.TIMESTAMP
-                }).then(() => {
-                    performLogout();
-                }).catch((error) => {
-                    console.error("Error updating driver status:", error);
-                    performLogout();
-                });
-            } else {
-                performLogout();
-            }
-        }
-
-        function performLogout() {
-            if (notificationListener) {
-                database.ref(`notifications/taxis/${userId}`).off('child_added', notificationListener);
-            }
-            database.ref('taxis/' + userId).off();
-            database.ref('requests').off();
-            localStorage.clear();
-            sessionStorage.clear();
-
-            auth.signOut().then(() => {
-                console.log("Firebase sign out successful");
-                if (window.Android && typeof window.Android.performLogout === 'function') {
-                    window.Android.performLogout();
-                } else {
-                    window.location.replace('login.html');
-                }
-            }).catch((error) => {
-                console.error("Firebase sign out error:", error);
-                window.location.replace('login.html');
-            });
-        }
 
             // ==========================================
         // 1. AUTOCOMPLETE LOGIC (Precision Address)
@@ -13935,7 +13457,7 @@ window.handleDeleteAccount = function() {
 
         const popup = document.getElementById('genericMessagePopup');
         popup.innerHTML = `
-            <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+            <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
             <div style="text-align: center;">
                 <i class="fas fa-box-open" style="font-size: 3em; color: #f8961e;"></i>
                 <h3>New Parcel Delivery!</h3>
@@ -14086,7 +13608,7 @@ window.handleDeleteAccount = function() {
         const popup = document.getElementById('parcelsListPopup');
         var content = `
             <h3><i class='bx bx-package'></i> Active Parcel Deliveries</h3>
-            <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+            <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
             <div style="max-height: 60vh; overflow-y: auto;">
         `;
 
@@ -14132,7 +13654,7 @@ window.handleDeleteAccount = function() {
         // Show PIN verification popup
         const popup = document.getElementById('genericMessagePopup');
         popup.innerHTML = `
-            <button class="popup-close" onclick="closeActivePopup()">&times;</button>
+            <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
             <div style="text-align: center;">
                 <i class="fas fa-lock" style="font-size: 3em; color: #f8961e;"></i>
                 <h3>Confirm Delivery</h3>
@@ -14281,7 +13803,7 @@ window.handleDeleteAccount = function() {
         } else {
             // If Minibus, use the standard simple list
             const popup = document.getElementById('parcelsListPopup');
-            var content = `<h3><i class='bx bx-package'></i> Parcel Deliveries</h3><button class="popup-close" onclick="closeActivePopup()">&times;</button>`;
+            var content = `<h3><i class='bx bx-package'></i> Parcel Deliveries</h3><button class="popup-close" onclick="window.closeActivePopup()">&times;</button>`;
             if (acceptedParcels.length === 0) {
                 content += '<p>You have no active parcel deliveries.</p>';
             } else {
@@ -14790,214 +14312,8 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Resuming onboarding scanner from exact saved point...");
         window.resumeVerification();
     };
-   window.startScannerCamera = async function() {
-        // FIX: Dynamically fetch steps based on account type
-        const steps = getActiveSteps();
-        const step = steps[currentOnboardingIndex];
-        const btn = document.getElementById('startScannerCameraBtn');
-
-        if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Accessing Camera...';
-
-        const useFrontCamera = (step.id === 'FACE');
-        const facingMode = useFrontCamera ? "user" : "environment";
-        console.log(`🎥 Requesting ${facingMode} camera for step: ${step.id}`);
-
-        try {
-            if (scannerStream) {
-                scannerStream.getTracks().forEach(track => track.stop());
-                scannerStream = null;
-            }
-
-            scannerStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { ideal: facingMode } },
-                audio: false
-            });
-
-            const video = document.getElementById('scannerVideo');
-            video.setAttribute('autoplay', '');
-            video.setAttribute('muted', '');
-            video.setAttribute('playsinline', '');
-
-            video.srcObject = scannerStream;
-            video.onloadedmetadata = () => {
-                video.play().catch(e => console.error("WebView autoplay blocked:", e));
-            };
-
-            video.style.transform = useFrontCamera ? 'scaleX(-1)' : 'scaleX(1)';
-
-            document.getElementById('scannerPlaceholderIcon').style.display = 'none';
-            video.style.display = 'block';
-            if (btn) btn.style.display = 'none';
-            document.getElementById('takeScanBtn').style.display = 'block';
-
-        } catch (err) {
-            console.warn(`⚠️ Failed to get camera:`, err.message);
-            if (btn) btn.innerHTML = '<i class="fas fa-camera"></i> Turn on Camera';
-            alert("Camera access denied. Please check your browser/app permissions.");
-        }
-    };
-window.captureScan = function() {
-        const steps = getActiveSteps();
-        const step = steps[currentOnboardingIndex];
-        const video = document.getElementById('scannerVideo');
-        const canvas = document.getElementById('scannerCanvas');
-        const img = document.getElementById('scannerPreviewImg');
-
-        // FAILSAFE: Ensure the camera has actually loaded its dimensions before capturing
-        if (!video || !video.videoWidth || !video.videoHeight) {
-            alert("Camera not ready yet. Please wait a second and try again.");
-            return;
-        }
-
-        const useFrontCamera = (step.id === 'FACE');
-
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-
-        // Flip image so it isn't mirrored when using the front camera
-        if (useFrontCamera) {
-            ctx.translate(canvas.width, 0);
-            ctx.scale(-1, 1);
-        }
-
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-        // Turn off the camera hardware
-        if (scannerStream) {
-            scannerStream.getTracks().forEach(track => track.stop());
-            scannerStream = null;
-        }
-
-        img.src = canvas.toDataURL('image/jpeg', 0.8);
-        video.style.display = 'none';
-        img.style.display = 'block';
-
-        document.getElementById('takeScanBtn').style.display = 'none';
-        document.getElementById('postScanActions').style.display = 'block';
-    };
-
-    window.processDocumentUpload = async function() {
-        const steps = getActiveSteps();
-        const step = steps[currentOnboardingIndex];
-        const btn = document.getElementById('uploadScanBtn');
-
-        if (btn.disabled) return;
-
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-        btn.disabled = true;
-
-        try {
-            const img = document.getElementById('scannerPreviewImg');
-            if (!img || !img.src || img.src.length < 100) throw new Error("No image captured");
-
-            const isDocument = (step.id !== 'FACE');
-
-            // Compression logic wrapped safely
-            const compressImage = (dataUrl, maxWidth, quality) => {
-                return new Promise((resolve, reject) => {
-                    const tempImg = new Image();
-                    tempImg.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        var width = tempImg.width;
-                        var height = tempImg.height;
-                        if (width > maxWidth) {
-                            height = Math.floor((height * maxWidth) / width);
-                            width = maxWidth;
-                        }
-                        canvas.width = width || 100;
-                        canvas.height = height || 100;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(tempImg, 0, 0, canvas.width, canvas.height);
-                        
-                        // Resolve directly to Blob to prevent Android WebView crashes
-                        canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
-                    };
-                    tempImg.onerror = () => reject(new Error("Failed to process image"));
-                    tempImg.src = dataUrl;
-                });
-            };
-
-            btn.innerHTML = '<i class="fas fa-compress-alt fa-spin"></i> Compressing...';
-
-            // Documents need higher res (1024px). Face can be smaller (600px).
-            const compressedBlob = await compressImage(img.src, isDocument ? 1024 : 600, isDocument ? 0.7 : 0.6);
-
-            const fileName = `${step.id}_${userId}_${Date.now()}.jpg`;
-            
-            // CRITICAL FIX: Append the Blob directly. Using 'new File()' crashes on some native apps
-            const formData = new FormData();
-            formData.append('file', compressedBlob, fileName);
-
-            btn.innerHTML = '<i class="fas fa-cloud-upload-alt fa-spin"></i> Uploading...';
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-            const response = await fetch('https://app.asiye.cloud/upload_image.php', {
-                method: 'POST',
-                headers: { 'X-API-KEY': 'asiye_secure_upload_2025' },
-                body: formData,
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            const responseText = await response.text();
-            
-            var result;
-            try {
-                result = JSON.parse(responseText);
-            } catch (e) {
-                console.error("SERVER RETURNED NON-JSON:", responseText);
-                throw new Error("Server rejected the file. Might be too large.");
-            }
-
-            if (result.status !== 'success' || !result.url) throw new Error(result.message || "Upload failed");
-
-            btn.innerHTML = '<i class="fas fa-save fa-spin"></i> Saving...';
-
-            // Absolute URL correction (Ensures images show up everywhere)
-            const downloadURL = result.url.startsWith('http') ? result.url : 'https://app.asiye.cloud/' + result.url;
-
-            // DYNAMIC ROUTING for specific document tags
-            var updateData = {};
-            if (step.id === 'FACE') {
-                updateData.profile_picture_url = downloadURL;
-                if(taxiData) taxiData.profile_picture_url = downloadURL;
-            } else if (step.id === 'CAR_FRONT') {
-                updateData.vehiclePhoto = downloadURL;
-                if(taxiData) taxiData.vehiclePhoto = downloadURL;
-            } else if (step.id === 'CAR_BACK') {
-                updateData.vehiclePhotoBack = downloadURL;
-                if(taxiData) taxiData.vehiclePhotoBack = downloadURL;
-            } else if (step.id === 'PROOF_OF_ADDRESS') {
-                updateData.proofOfAddress = downloadURL;
-                if(taxiData) taxiData.proofOfAddress = downloadURL;
-            } else {
-                updateData[`documents/${step.id}`] = downloadURL;
-                if(taxiData) {
-                    if (!taxiData.documents) taxiData.documents = {};
-                    taxiData.documents[step.id] = downloadURL;
-                }
-            }
-
-            await database.ref(`${window.dbNode}/${userId}`).update(updateData);
-
-            if (typeof window.updateUIWithTaxiData === 'function') {
-                window.updateUIWithTaxiData();
-            }
-
-            console.log(`✅ Step ${step.id} completed. Moving to next step.`);
-            currentOnboardingIndex++;
-            window.launchOnboardingStep();
-
-        } catch (error) {
-            console.error("❌ Upload error:", error);
-            alert("Error: " + error.message);
-            btn.innerHTML = '<i class="fas fa-redo"></i> Try Again';
-            btn.disabled = false;
-        }
-    };
+   
+   
     window.triggerPhoneNumberCollection = function() {
         closeActivePopup();
         const popup = document.getElementById('genericMessagePopup');
@@ -15017,101 +14333,6 @@ window.captureScan = function() {
         openPopup('genericMessagePopup');
     };
 
-    // =================================================================
-    // 🚀 2. THE HANDOFF (FROM SCANNER TO FAST-TRACK)
-    // =================================================================
-  // =================================================================
-    // 🚀 THE HANDOFF (FROM SCANNER TO FAST-TRACK & WHATSAPP)
-    // =================================================================
-    window.finalizeOnboarding = async function() {
-        const phoneInput = document.getElementById('finalPhoneNumberInput');
-        if (!phoneInput) return;
-        
-        const phone = phoneInput.value.trim();
-
-        if (!/^[0-9]{10}$/.test(phone)) {
-            showCommunicationBanner("Please enter a valid 10-digit number (e.g. 0712345678)", "warning");
-            return;
-        }
-
-        const btn = document.querySelector('#genericMessagePopup .btn-primary');
-        if(btn) { btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...'; btn.disabled = true; }
-
-        try {
-            // 1. Update Firebase Profile
-            await database.ref(window.dbNode + '/' + userId).update({
-                phone: phone,
-                phoneVerified: false,
-                verificationStatus: 'unverified',
-                documentsSubmittedAt: firebase.database.ServerValue.TIMESTAMP,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-
-            if (taxiData) {
-                taxiData.phone = phone;
-                taxiData.verificationStatus = 'unverified';
-            }
-
-            // ========================================================
-            // 2. TRIGGER WHATSAPP DRIVER WELCOME MESSAGE
-            // ========================================================
-           // ========================================================
-            // 2. TRIGGER WHATSAPP DRIVER WELCOME MESSAGE
-            // ========================================================
-            try {
-                var cleanPhone = phone.replace(/\s+/g, '');
-                var normalizedPhone = cleanPhone.startsWith('0') ? '27' + cleanPhone.substring(1) : cleanPhone;
-                normalizedPhone = normalizedPhone.replace('+', '');
-                
-                var driverName = taxiData?.name || 'Driver';
-                console.log("Sending WhatsApp Welcome to:", normalizedPhone);
-
-                fetch('https://app.asiye.cloud/whatsapp_bot.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        action: 'send_driver_verification', 
-                        phone: normalizedPhone, 
-                        name: driverName 
-                    })
-                }).catch(e => console.error("WhatsApp Request Error:", e));
-
-            } catch(err) {
-                console.error("WhatsApp trigger failed silently", err);
-            }            // ========================================================
-
-            // 3. Move to next step (Vehicle details & References)
-            closeActivePopup();
-            if (typeof window.startFastTrackFlow === 'function') {
-                window.startFastTrackFlow();
-            }
-            
-        } catch (error) {
-            console.error("Error completing setup:", error);
-            showCommunicationBanner("Failed to complete setup. Please check connection.", "danger");
-            if(btn) { btn.innerHTML = '<i class="fas fa-check-circle"></i> Complete Setup'; btn.disabled = false; }
-        }
-    };   window.startFastTrackFlow = function() {
-        if (!taxiData) return;
-
-        window.injectFastTrackHTML();
-        const overlay = document.getElementById('accountBlockedOverlay');
-        if (overlay) overlay.style.display = 'none';
-
-        const hasReg = taxiData.taxiRegistrationNumber || taxiData.registration;
-        const hasYear = taxiData.vehicleYear;
-        const vehicleDone = window.isHandlerMode ? true : (hasReg && hasYear);
-
-        const referencesDone = taxiData.referencesProvided === true || taxiData.verificationStatus === 'verified';
-
-        if (!vehicleDone) {
-            window.showVehicleDetailsPopup();
-        } else if (!referencesDone) {
-            window.showReferencesPopup();
-        } else {
-            if(typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
-        }
-    };
 window.injectFastTrackHTML = function() {
         ['vehicleDetailsPopup', 'referencesPopup'].forEach(id => {
             const el = document.getElementById(id);
@@ -15388,31 +14609,7 @@ window.injectFastTrackHTML = function() {
         }
     };
 
-   window.startFastTrackFlow = function() {
-        if (!taxiData) return;
-
-        window.injectFastTrackHTML();
-        const overlay = document.getElementById('accountBlockedOverlay');
-        if (overlay) overlay.style.display = 'none';
-
-        const hasReg = taxiData.taxiRegistrationNumber || taxiData.registration;
-        const hasYear = taxiData.vehicleYear;
-        const hasPhoto = taxiData.vehiclePhoto;
-        var vehicleDone = hasReg && hasYear && hasPhoto;
-
-        if (window.isHandlerMode) vehicleDone = true;
-
-        const referencesDone = taxiData.referencesProvided === true || taxiData.verificationStatus === 'verified';
-
-        if (!vehicleDone) {
-            window.showVehicleDetailsPopup();
-        } else if (!referencesDone) {
-            window.showReferencesPopup();
-        } else {
-            if(typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
-        }
-    };
-
+ 
 window.payCommissionDebt = function(event) {
     if (!taxiData || !taxiData.commissionDebt || taxiData.commissionDebt <= 0) return;
     const amount = taxiData.commissionDebt.toFixed(2);
@@ -24101,76 +23298,8 @@ if (typeof requestsRef === 'undefined') {
     var requestsRef = window.requestsRef;
 }
 
-// 2. FIXED: Define openPopup without recursive loop
-window.openPopup = function(popupId) {
-    console.log("🟢 Opening Popup:", popupId);
-    
-    // Close any existing popups first
-    if (typeof window.closeActivePopup === 'function') {
-        window.closeActivePopup();
-    } else {
-        // Fallback close
-        document.querySelectorAll('.popup').forEach(p => {
-            p.classList.remove('open');
-            p.style.display = 'none';
-        });
-        const overlay = document.getElementById('popupOverlay');
-        if (overlay) overlay.classList.remove('open');
-    }
 
-    const popup = document.getElementById(popupId);
-    if (!popup) {
-        console.warn("Popup element not found:", popupId);
-        return;
-    }
 
-    // Special handling for driverAcceptedPopup - preserve flexbox
-    if (popupId === 'driverAcceptedPopup') {
-        popup.style.setProperty('z-index', '2147483647', 'important');
-        popup.style.setProperty('visibility', 'visible', 'important');
-        popup.style.setProperty('opacity', '1', 'important');
-        // Don't touch display, top, left, position, or transform for this popup
-    } else {
-        var displayType = (popupId === 'chatPopup' || popupId === 'supportChatPopup') ? 'flex' : 'block';
-        
-        popup.style.setProperty('display', displayType, 'important');
-        popup.style.setProperty('visibility', 'visible', 'important');
-        popup.style.setProperty('opacity', '1', 'important');
-        popup.style.setProperty('z-index', '2147483647', 'important');
-        
-        // Center the popup
-        if (popupId !== 'homeBottomSheet') {
-            popup.style.setProperty('background-color', '#ffffff', 'important');
-            popup.style.setProperty('color', '#111111', 'important');
-            popup.style.setProperty('position', 'fixed', 'important');
-            popup.style.setProperty('top', '50%', 'important');
-            popup.style.setProperty('left', '50%', 'important');
-            popup.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
-            popup.style.setProperty('box-shadow', '0 20px 60px rgba(0,0,0,0.5)', 'important');
-        }
-    }
-    
-    popup.classList.add('open');
-    
-    // Show overlay
-    const overlay = document.getElementById('popupOverlay');
-    if (overlay) {
-        overlay.classList.add('open');
-        overlay.style.setProperty('display', 'block', 'important');
-        overlay.style.setProperty('visibility', 'visible', 'important');
-        overlay.style.setProperty('opacity', '1', 'important');
-        overlay.style.setProperty('background', 'rgba(0,0,0,0.75)', 'important');
-        overlay.style.setProperty('z-index', '2147483646', 'important');
-    }
-
-    // Hide top banners
-    const topBanners = document.getElementById('top-notifications-container');
-    if (topBanners) {
-        topBanners.style.setProperty('display', 'none', 'important');
-    }
-};
-
-// 3. FIXED: Define closeActivePopup with proper overlay handling
 
 window.acceptClubPoolEarly = function(poolId) {
     if (!poolId) {
@@ -24495,8 +23624,6 @@ function showClubRequestFallback(request) {
         if (overlay) overlay.classList.add('open');
     }
 }
-
-
 
 // ========================================================================
 // 2. JAVASCRIPT: CLUB REQUESTS MANAGER
@@ -26994,26 +26121,6 @@ function closeRequestPopupNow() {
 window.closeRequestPopupNow = closeRequestPopupNow;
 
 // 2. Do the same for closeActivePopup to prevent any stray crashes
-function closeActivePopup() {
-    console.log("🧹 [Global] Closing active popups...");
-    document.querySelectorAll('.popup, .modal-overlay').forEach(p => {
-        // DO NOT auto-close the Dashboard, Passenger List, or Chat if they shouldn't be closed!
-        if (p.id !== 'verifiedDashboardOverlay' && p.id !== 'navOverlay') {
-            p.classList.remove('open');
-            p.style.setProperty('display', 'none', 'important');
-            p.style.setProperty('opacity', '0', 'important');
-            p.style.setProperty('visibility', 'hidden', 'important');
-        }
-    });
-
-    const overlay = document.getElementById('popupOverlay');
-    if (overlay) {
-        overlay.classList.remove('open');
-        overlay.style.setProperty('display', 'none', 'important');
-        overlay.style.setProperty('opacity', '0', 'important');
-        overlay.style.setProperty('visibility', 'hidden', 'important');
-    }
-}
 
 // =======================================================================
 // 🚨 FIX 2: DRIVER NAVIGATION & ACTIONS (Prevents 'undefined' IDs)
@@ -30486,15 +29593,6 @@ window.closeAllPopups = function() {
 };
 
 // ================================================================
-// CLOSE ACTIVE POPUP - ALIAS
-// ================================================================
-
-window.closeActivePopup = function() {
-    console.log("🔒 Closing active popup...");
-    closeAllPopups();
-};
-
-// ================================================================
 // SHOW TOAST - DRIVER SIDE
 // ================================================================
 
@@ -30713,6 +29811,209 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
+
+
+window.closeModal = function(modalId) {
+    if (!modalId) {
+        window.closeActivePopup();
+        return;
+    }
+    const el = document.getElementById(modalId);
+    if (el) {
+        el.classList.remove('open');
+        el.style.setProperty('display', 'none', 'important');
+        el.style.setProperty('opacity', '0', 'important');
+        el.style.setProperty('visibility', 'hidden', 'important');
+        el.style.setProperty('z-index', '-1', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+    }
+    
+    // Ensure dim overlay is dropped if no popups are actively open
+    if (document.querySelectorAll('.popup.open, .modal-overlay.open').length === 0) {
+        const overlay = document.getElementById('popupOverlay');
+        if (overlay) {
+            overlay.classList.remove('open');
+            overlay.style.setProperty('display', 'none', 'important');
+            overlay.style.setProperty('pointer-events', 'none', 'important');
+        }
+    }
+};
+
+window.closeRequestPopupNow = function() {
+    window.closeActivePopup();
+    window.isShowingRequestPopup = false;
+    window.currentShowingRequestId = null;
+    window.activeRequest = null;
+    window._isProcessingRequest = false;
+};
+
+// 2. Prevent "Fetching location..." from getting stuck by applying Promise Timers
+const withTimeout = (promise, ms) => {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+    ]);
+};
+
+window.updateRankLocationCard = async function() {
+    const rankCard = document.getElementById('rankLocationCard');
+    const rankIcon = document.getElementById('rankIcon');
+    const rankNameDisplay = document.getElementById('rankNameDisplay');
+    const rankAddressDisplay = document.getElementById('rankAddressDisplay');
+    const rankDistanceDisplay = document.getElementById('rankDistanceDisplay');
+    const navigateBtn = document.getElementById('navigateToRankDashboardBtn');
+
+    if (!rankCard || !window.taxiData) return;
+    const assignedRank = window.taxiData.assignedRank;
+
+    if (!assignedRank || assignedRank.trim() === "") {
+        rankCard.style.display = 'none';
+        if (rankIcon) rankIcon.style.display = 'none';
+        return;
+    }
+
+    if (rankIcon) {
+        rankIcon.style.display = 'flex';
+        rankIcon.onclick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (typeof showRankInfoPopup === 'function') showRankInfoPopup();
+        };
+    }
+
+    rankCard.style.display = 'block';
+    if (rankNameDisplay) rankNameDisplay.textContent = assignedRank;
+    if (rankAddressDisplay) rankAddressDisplay.textContent = 'Fetching location...';
+    if (rankDistanceDisplay) rankDistanceDisplay.textContent = '';
+
+    try {
+        // Enforce a strict 6-second timeout so the UI never permanently freezes
+        const [rankInfo, managerDetails] = await Promise.all([
+            withTimeout(typeof fetchRankAddress === 'function' ? fetchRankAddress(assignedRank) : Promise.resolve(null), 6000).catch(() => null),
+            withTimeout(typeof fetchRankManagerDetails === 'function' ? fetchRankManagerDetails(assignedRank) : Promise.resolve(null), 6000).catch(() => null)
+        ]);
+
+        if (rankInfo && rankInfo.address) {
+            if (rankAddressDisplay) rankAddressDisplay.textContent = rankInfo.address;
+
+            if (rankInfo.distance !== undefined && window.taxiData.latitude && window.taxiData.longitude) {
+                const distanceKm = rankInfo.distance;
+                const distanceText = distanceKm < 1 ?
+                    `${(distanceKm * 1000).toFixed(0)}m away` :
+                    `${distanceKm.toFixed(1)}km away`;
+                if (rankDistanceDisplay) {
+                    rankDistanceDisplay.textContent = `📍 ${distanceText}`;
+                    if (distanceKm < 2) rankDistanceDisplay.style.color = '#28a745';
+                    else if (distanceKm < 5) rankDistanceDisplay.style.color = '#ffc107';
+                    else rankDistanceDisplay.style.color = '#dc3545';
+                }
+            } else if (rankDistanceDisplay) {
+                rankDistanceDisplay.textContent = '📍 Distance unknown';
+            }
+
+            window.currentRankCoordinates = { lat: rankInfo.lat, lng: rankInfo.lng };
+        } else {
+            if (rankAddressDisplay) rankAddressDisplay.textContent = managerDetails?.rankAddress || 'Address not available';
+            if (rankDistanceDisplay) {
+                rankDistanceDisplay.textContent = '📍 Unable to calculate distance';
+                rankDistanceDisplay.style.color = '#dc3545';
+            }
+            window.currentRankCoordinates = null;
+        }
+
+        if (managerDetails && managerDetails.managerName !== 'Contact Admin' && rankCard) {
+            rankCard.title = `Manager: ${managerDetails.managerName}\nPhone: ${managerDetails.managerPhone}`;
+        }
+
+        if (navigateBtn) {
+            const newNavigateBtn = navigateBtn.cloneNode(true);
+            navigateBtn.parentNode.replaceChild(newNavigateBtn, navigateBtn);
+            newNavigateBtn.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.currentRankCoordinates) {
+                    if (typeof showDirectionsOnMap === 'function') {
+                        showDirectionsOnMap(window.currentRankCoordinates.lat, window.currentRankCoordinates.lng, "Your Assigned Rank");
+                    }
+                } else {
+                    if (typeof showCommunicationBanner === 'function') showCommunicationBanner("Rank location not available", "warning");
+                }
+            };
+        }
+    } catch(e) {
+        console.error("Error in updateRankLocationCard:", e);
+        if (rankAddressDisplay) rankAddressDisplay.textContent = 'Location unavailable';
+    }
+};
+
+window.showRankInfoPopup = async function() {
+    if (!window.taxiData || !window.taxiData.assignedRank) {
+        if (typeof showCommunicationBanner === 'function') showCommunicationBanner("No rank assigned to your account", "warning");
+        return;
+    }
+
+    const rankName = window.taxiData.assignedRank;
+    const popup = document.getElementById('rankInfoPopup');
+    if (!popup) return;
+
+    document.getElementById('rankInfoName').textContent = rankName;
+    document.getElementById('rankInfoStatus').textContent = 'Fetching rank details...';
+    document.getElementById('rankInfoAddress').textContent = 'Loading...';
+    document.getElementById('rankInfoDistance').textContent = 'Calculating...';
+    document.getElementById('rankInfoManager').textContent = 'Loading...';
+    document.getElementById('rankInfoPhone').textContent = 'Loading...';
+
+    if (typeof openPopup === 'function') openPopup('rankInfoPopup');
+
+    try {
+        const [rankInfo, managerDetails] = await Promise.all([
+            withTimeout(typeof fetchRankAddress === 'function' ? fetchRankAddress(rankName) : Promise.resolve(null), 6000).catch(() => null),
+            withTimeout(typeof fetchRankManagerDetails === 'function' ? fetchRankManagerDetails(rankName) : Promise.resolve(null), 6000).catch(() => null)
+        ]);
+
+        if (rankInfo && rankInfo.address) {
+            document.getElementById('rankInfoAddress').textContent = rankInfo.address;
+            if (rankInfo.distance !== undefined && rankInfo.distance !== null) {
+                const distanceKm = rankInfo.distance;
+                document.getElementById('rankInfoDistance').textContent = distanceKm < 1 ?
+                    `${(distanceKm * 1000).toFixed(0)} meters away` : `${distanceKm.toFixed(1)} km away`;
+            } else {
+                document.getElementById('rankInfoDistance').textContent = 'Distance unknown';
+            }
+            window.currentRankCoordinates = { lat: rankInfo.lat, lng: rankInfo.lng };
+        } else {
+            document.getElementById('rankInfoAddress').textContent = 'Address not available';
+            document.getElementById('rankInfoDistance').textContent = 'Unable to calculate';
+            window.currentRankCoordinates = null;
+        }
+
+        if (managerDetails) {
+            document.getElementById('rankInfoManager').textContent = managerDetails.managerName || 'Not assigned';
+            document.getElementById('rankInfoPhone').textContent = managerDetails.managerPhone || 'N/A';
+            document.getElementById('rankInfoStatus').textContent = '✓ Active Rank';
+            document.getElementById('rankInfoStatus').style.color = '#28a745';
+        } else {
+            document.getElementById('rankInfoManager').textContent = 'Contact Admin';
+            document.getElementById('rankInfoPhone').textContent = '0861 274 937';
+            document.getElementById('rankInfoStatus').textContent = '⚠️ Rank Information Pending';
+            document.getElementById('rankInfoStatus').style.color = '#ffc107';
+        }
+        
+        const navigateBtn = document.getElementById('rankInfoNavigateBtn');
+        if (navigateBtn) {
+            const newBtn = navigateBtn.cloneNode(true);
+            navigateBtn.parentNode.replaceChild(newBtn, navigateBtn);
+            newBtn.onclick = () => {
+                if (window.currentRankCoordinates && typeof showDirectionsOnMap === 'function') {
+                    window.closeActivePopup();
+                    showDirectionsOnMap(window.currentRankCoordinates.lat, window.currentRankCoordinates.lng, "Your Assigned Rank");
+                }
+            };
+        }
+    } catch(e) {
+        document.getElementById('rankInfoStatus').textContent = 'Connection Error';
+    }
+};
 </script>
 </body>
 </html>
