@@ -1,5 +1,4 @@
-require 'base64'
-require 'tmpdir' # Added to handle temporary file paths
+require 'tmpdir'
 
 default_platform(:ios)
 
@@ -11,7 +10,7 @@ platform :ios do
 
     setup_ci
 
-    # 1. Fetch certificates
+    # 1. Fetch certificates (Uses the ENV variables automatically)
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -20,7 +19,7 @@ platform :ios do
       readonly: true
     )
 
-    # 2. Signing settings
+    # 2. Update signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -32,7 +31,7 @@ platform :ios do
     # 3. Build Flutter (No Signing)
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 4. Build and Sign IPA (Workspace)
+    # 4. Build and Sign IPA
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
@@ -46,26 +45,24 @@ platform :ios do
       }
     )
 
-    # 5. PREPARE AUTHENTICATION FILE
-    # We decode your Base64 secret and write it to a real file on the disk.
-    # This is the most stable way to authenticate for the upload tool.
-    key_content = Base64.decode64(ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
+    # 5. THE AUTHENTICATION FIX: Create a physical key file
+    # This prevents GitHub from mangling the key formatting.
     key_path = File.join(Dir.tmpdir, "auth_key.p8")
-    File.write(key_path, key_content)
+    File.write(key_path, ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
 
-    # 6. AUTHENTICATION (Using the file path)
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
-      key_filepath: key_path, # Changed from key_content to key_filepath
+      key_filepath: key_path, # Use the file we just created
       in_house: false
     )
 
-    # 7. Upload to TestFlight
+    # 6. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
-      skip_waiting_for_build_processing: true
+      skip_waiting_for_build_processing: true,
+      itms_transporter_type: "shell" # Faster, more stable upload method
     )
   end
 end
