@@ -1,18 +1,16 @@
 require 'base64'
-require 'tmpdir'
 
 default_platform(:ios)
 
 platform :ios do
   desc "Push a new beta build to TestFlight"
   lane :beta do
-    # 1. High timeouts for the 35-minute build
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
     setup_ci
 
-    # 2. Fetch certificates (match uses the ENV variables automatically)
+    # 1. Fetch certificates
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -21,7 +19,7 @@ platform :ios do
       readonly: true
     )
 
-    # 3. Update signing settings
+    # 2. Update signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -30,10 +28,10 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 4. Build Flutter (No Signing)
+    # 3. Build Flutter
     sh("cd ../.. && flutter build ios --release --no-codesign")
 
-    # 5. Build and Sign IPA (Workspace)
+    # 4. Build and Sign IPA
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
@@ -47,24 +45,22 @@ platform :ios do
       }
     )
 
-    # 6. THE AUTHENTICATION FIX (Creates a physical file for the uploader)
-    # This happens AFTER the build so the token doesn't expire.
+    # 5. UPLOAD TO TESTFLIGHT (Direct Handshake)
+    # We decode the key here and pass the text directly to the uploader.
+    # This bypasses the session-expiry issues of long builds.
+
     decoded_key = Base64.decode64(ENV["APP_STORE_CONNECT_PRIVATE_KEY"])
-    key_path = File.join(Dir.tmpdir, "auth_key.p8")
-    File.write(key_path, decoded_key)
 
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
-      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
-      key_filepath: key_path, # Points to the file we just created
-      in_house: false
-    )
-
-    # 7. Upload to TestFlight
     upload_to_testflight(
-      api_key: api_key,
+      api_key: {
+        key_id: ENV["APP_STORE_CONNECT_KEY_ID"],
+        issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"],
+        key_content: decoded_key,
+        is_key_content_base64: false # We already decoded it
+      },
       ipa: ipa_path,
-      skip_waiting_for_build_processing: true
+      skip_waiting_for_build_processing: true,
+      team_id: "AC775BUGG5"
     )
   end
 end
