@@ -162,43 +162,58 @@
         </button>
 
         <div id="signupOptions" class="signup-container">
-            <a href="signup_commuter.html" class="signup-link">Join as Passenger</a>
-            <a href="signup_taxi.html" class="signup-link">Join as Driver</a>
+            <a href="signup_commuter.html" class="signup-link">Join Asiye</a>
+
         </div>
     </div>
+<div id="mainGateway" class="btn-group action-btn">
+    <!-- Existing Social Buttons -->
+   
+    <!-- NEW: Dedicated Driver Portal Button -->
+    <button class="action-btn" onclick="window.location.href='driver_login.html'" style="border-color: #7b9cff; background: rgba(123, 156, 255, 0.1);">
+        <i class="fas fa-id-badge" style="color: #7b9cff;"></i>
+        Driver Login
+    </button>
 
+ 
+</div>
     <!-- Hidden Input Form -->
     <div id="loginForm">
-        <button class="back-btn" onclick="showGateway()">
-            <i class="fas fa-chevron-left"></i> Back
-        </button>
+    <button class="back-btn" onclick="showGateway()">
+        <i class="fas fa-chevron-left"></i> Back
+    </button>
 
-        <div id="emailInputGroup" class="input-wrapper">
-            <input type="email" id="emailInput" class="modern-input" placeholder="Email address" autocomplete="email">
-        </div>
-
-        <div id="phoneInputGroup" class="input-wrapper" style="display: none;">
-            <div class="phone-container">
-                <div class="country-code-box">
-                    <img src="https://flagcdn.com/w40/za.png" class="country-flag" alt="ZA"> +27
-                </div>
-                <input type="tel" id="phoneInput" class="modern-input" placeholder="Phone number" autocomplete="tel">
-            </div>
-        </div>
-
-        <div class="input-wrapper password-wrapper">
-            <input type="password" id="passwordInput" class="modern-input" placeholder="Password">
-            <div class="password-toggle" id="passwordToggle">
-                <i class="far fa-eye"></i>
-            </div>
-        </div>
-        <div class="forgot-password-container" id="forgotPasswordContainer">
-            <a href="forgot_password.html" class="forgot-password-link">Forgot password?</a>
-        </div>
-
-        <button id="loginButton" class="main-btn">Sign In</button>
-        <button class="switch-btn" id="modeSwitchText" onclick="toggleLoginMode()">Use Phone Number instead</button>
+    <div id="emailInputGroup" class="input-wrapper">
+        <input type="email" id="emailInput" class="modern-input" placeholder="Email address" autocomplete="email">
     </div>
+
+    <div id="phoneInputGroup" class="input-wrapper" style="display: none;">
+        <div class="phone-container">
+            <div class="country-code-box">
+                <img src="https://flagcdn.com/w40/za.png" class="country-flag" alt="ZA"> +27
+            </div>
+            <input type="tel" id="phoneInput" class="modern-input" placeholder="Phone number" autocomplete="tel">
+        </div>
+    </div>
+
+    <div class="input-wrapper password-wrapper" id="passwordGroup">
+        <input type="password" id="passwordInput" class="modern-input" placeholder="Password">
+        <div class="password-toggle" id="passwordToggle">
+            <i class="far fa-eye"></i>
+        </div>
+    </div>
+    
+    <div id="otpNote" style="display:none; color: #8a8a8e; font-size: 0.8rem; margin-bottom: 10px; padding: 0 10px;">
+        First time? Leave password blank to receive an SMS code. Approved Drivers must use their password.
+    </div>
+
+    <div class="forgot-password-container" id="forgotPasswordContainer">
+        <a href="forgot_password.html" class="forgot-password-link">Forgot password?</a>
+    </div>
+
+    <button id="loginButton" class="main-btn">Sign In</button>
+    <button class="switch-btn" id="modeSwitchText" onclick="toggleLoginMode()">Use Phone Number instead</button>
+</div>
 
     <div class="terms-footer">
         <input type="checkbox" id="termsCheckbox" onchange="acceptTerms()">
@@ -282,30 +297,53 @@
         icon.classList.toggle('fa-eye-slash');
     });
 
-    window.toggleLoginMode = function() {
-        if(currentMode === 'email') {
-            currentMode = 'phone';
-            emailGroup.style.display = 'none';
-            phoneGroup.style.display = 'block';
-            document.getElementById('modeSwitchText').innerText = 'Use Email instead';
-            document.getElementById('forgotPasswordContainer').style.display = 'none';
-        } else {
-            currentMode = 'email';
-            emailGroup.style.display = 'block';
-            phoneGroup.style.display = 'none';
-            document.getElementById('modeSwitchText').innerText = 'Use Phone Number instead';
-            document.getElementById('forgotPasswordContainer').style.display = 'block';
+   window.toggleLoginMode = function() {
+    const emailGroup = document.getElementById('emailInputGroup');
+    const phoneGroup = document.getElementById('phoneInputGroup');
+    const modeSwitchText = document.getElementById('modeSwitchText');
+    const forgotPassword = document.getElementById('forgotPasswordContainer');
+    const passwordInput = document.getElementById('passwordInput');
+    const loginBtn = document.getElementById('loginButton');
 
-            if(confirmationResult) {
-                confirmationResult = null;
-                passwordInput.placeholder = 'Password';
-                loginBtn.innerText = 'Sign In';
-            }
-        }
+    if (currentMode === 'email') {
+        // SWITCH TO PHONE MODE
+        currentMode = 'phone';
+        emailGroup.style.display = 'none';
+        phoneGroup.style.display = 'block';
+        
+        // Update Labels
+        modeSwitchText.innerText = 'Use Email address instead';
+        passwordInput.placeholder = 'Password (or leave blank for SMS code)';
+        
+        // Hide "Forgot Password" because phone reset is usually via SMS
+        forgotPassword.style.display = 'none';
+        
+        // Clear inputs
         passwordInput.value = '';
-        if(passwordInput.placeholder !== 'Enter 6-digit SMS Code') passwordInput.type = 'password';
-        hideStatus();
-    };
+    } else {
+        // SWITCH TO EMAIL MODE
+        currentMode = 'email';
+        emailGroup.style.display = 'block';
+        phoneGroup.style.display = 'none';
+        
+        // Reset Labels
+        modeSwitchText.innerText = 'Use Phone Number instead';
+        passwordInput.placeholder = 'Password';
+        forgotPassword.style.display = 'block';
+        
+        // Reset button text in case it was stuck on OTP mode
+        loginBtn.innerText = 'Sign In';
+        confirmationResult = null; 
+    }
+    
+    // Safety: Reset password type to password (in case it was visible)
+    passwordInput.type = 'password';
+    const icon = document.querySelector('#passwordToggle i');
+    if(icon) {
+        icon.classList.add('fa-eye');
+        icon.classList.remove('fa-eye-slash');
+    }
+};
 
     window.acceptTerms = function() {
         termsAccepted = document.getElementById('termsCheckbox').checked;
@@ -458,60 +496,61 @@
     // ==========================================
     // AUTHENTICATION LOGIC
     // ==========================================
-    loginBtn.addEventListener('click', async () => {
-        hideStatus();
-        if(!termsAccepted) { showMessage("Please agree to Terms & Privacy Policy at the bottom.", "error"); return; }
+   loginBtn.addEventListener('click', async () => {
+    hideStatus();
+    if (!termsAccepted) { showMessage("Please agree to Terms.", "error"); return; }
 
-        if(currentMode === 'email') {
-            const email = emailInput.value.trim();
-            const pwd = passwordInput.value.trim();
-            if(!email || !pwd) { showMessage("Email and password required.", "error"); return; }
+    if (currentMode === 'email') {
+        // --- Standard Email Sign In ---
+        const email = emailInput.value.trim();
+        const pwd = passwordInput.value.trim();
+        if (!email || !pwd) { showMessage("Email and password required.", "error"); return; }
+        
+        setLoading(true);
+        auth.signInWithEmailAndPassword(email, pwd)
+            .then(cred => redirectUser(cred.user))
+            .catch(e => { showMessage(e, "error"); setLoading(false); });
+    } 
+    else {
+        // --- Phone Mode Sign In ---
+        let rawNumber = phoneInput.value.replace(/\D/g, '');
+        if (rawNumber.startsWith('0')) rawNumber = rawNumber.substring(1);
+        const fullPhone = '+27' + rawNumber;
+        const pwd = passwordInput.value.trim();
 
-            setLoading(true);
+        if (!phoneInput.value.trim()) { showMessage("Enter phone number.", "error"); return; }
+
+        setLoading(true);
+
+        if (pwd) {
+            // CASE: DRIVER LOGGING IN WITH ADMIN PASSWORD
             try {
-                const cred = await auth.signInWithEmailAndPassword(email, pwd);
+                const userEmail = await findEmailByPhone(fullPhone.replace('+', ''));
+                if (!userEmail) {
+                    throw new Error("Phone number not found. Please sign up.");
+                }
+                
+                const cred = await auth.signInWithEmailAndPassword(userEmail, pwd);
                 await redirectUser(cred.user);
-            } catch(e) {
+            } catch (e) {
                 showMessage(e, "error");
                 setLoading(false);
             }
-        }
-        else {
-            let rawNumber = phoneInput.value.replace(/\D/g,'');
-            if(rawNumber.startsWith('27')) rawNumber = rawNumber.substring(2);
-            else if(rawNumber.startsWith('0')) rawNumber = rawNumber.substring(1);
-            const fullPhone = '+27' + rawNumber;
-
-            if(!phoneInput.value.trim()) { showMessage("Enter phone number.", "error"); return; }
-
-            if(!confirmationResult) {
-                try {
-                    if(!recaptchaVerifier) recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
-                    setLoading(true);
-                    confirmationResult = await auth.signInWithPhoneNumber(fullPhone, recaptchaVerifier);
-                    passwordInput.placeholder = '6-digit SMS code';
-                    passwordInput.value = '';
-                    loginBtn.innerText = 'Verify SMS Code';
-                    showMessage("Verification code sent.", "success");
-                } catch(e) {
-                    showMessage(e, "error");
-                    if(recaptchaVerifier) { recaptchaVerifier.clear(); recaptchaVerifier = null; }
-                }
-                setLoading(false);
-            } else {
-                const otp = passwordInput.value.trim();
-                if(!otp) { showMessage("Enter the code you received.", "error"); return; }
-                setLoading(true);
-                try {
-                    const result = await confirmationResult.confirm(otp);
-                    await redirectUser(result.user);
-                } catch(e) {
-                    showMessage("Invalid or expired code.", "error");
-                    setLoading(false);
-                }
+        } else {
+            // CASE: STANDARD OTP SIGN IN (No password provided)
+            try {
+                if (!recaptchaVerifier) recaptchaVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', { size: 'invisible' });
+                confirmationResult = await auth.signInWithPhoneNumber(fullPhone, recaptchaVerifier);
+                passwordInput.placeholder = 'Enter 6-digit SMS code';
+                loginBtn.innerText = 'Verify SMS Code';
+                showMessage("SMS code sent.", "success");
+            } catch (e) {
+                showMessage(e, "error");
             }
+            setLoading(false);
         }
-    });
+    }
+});
 
     document.getElementById('google-btn').addEventListener('click', async () => {
         if(!termsAccepted) { showMessage("Please agree to Terms & Privacy Policy at the bottom.", "error"); return; }
@@ -564,6 +603,50 @@
             .catch(e => showMessage(e, "error"));
     };
     window.onAppleNativeLoginError = function(error) { showMessage(error || "Apple Sign-In failed.", "error"); };
+
+document.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm.style.display === 'block') {
+            document.getElementById('loginButton').click();
+        }
+    }
+});
+
+/**
+ * Helper: Searches Taxis and Commuters nodes to find the email 
+ * associated with a specific phone number.
+ */
+async function findEmailByPhone(formattedPhone) {
+    console.log("Searching for email linked to:", formattedPhone);
+    
+    // 1. Check the Drivers (Taxis) node first
+    const driverSnap = await database.ref('taxis')
+        .orderByChild('phone')
+        .equalTo(formattedPhone)
+        .once('value');
+
+    if (driverSnap.exists()) {
+        // Get the first matching driver's data
+        const drivers = driverSnap.val();
+        const driverId = Object.keys(drivers)[0];
+        return drivers[driverId].email;
+    }
+
+    // 2. Check the Commuters node
+    const commuterSnap = await database.ref('commuters')
+        .orderByChild('phone')
+        .equalTo(formattedPhone)
+        .once('value');
+
+    if (commuterSnap.exists()) {
+        const commuters = commuterSnap.val();
+        const commuterId = Object.keys(commuters)[0];
+        return commuters[commuterId].email;
+    }
+
+    return null; // No account found
+}
 </script>
 </body>
 </html>

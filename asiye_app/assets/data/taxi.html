@@ -4026,9 +4026,7 @@ body.popup-open {
             <i class="fas fa-share-nodes"></i> Join & Invite Drivers
         </button>
     </div>
-</div>
-
-<!-- Popups -->
+</div><!-- Popups -->
 <!-- UPDATED: Driver Club Registration (GPS Based) -->
 <div id="setupTripPopup" class="popup" style="max-height: 90vh; overflow-y: auto; padding: 25px 20px;">
     <button class="popup-close" onclick="closeActivePopup()">&times;</button>
@@ -4070,35 +4068,7 @@ body.popup-open {
     <button id="saveTripButton" onclick="saveClubTripDetails()" class="btn btn-primary" style="width:100%; padding: 18px; border-radius: 16px; font-weight: 900; font-size: 1.1rem; background: linear-gradient(135deg, #28a745, #1e7e34); border: none;">
         <i class="fas fa-check-circle"></i> CONFIRM & GO ONLINE
     </button>
-</div>
-
-<!-- FIRST TIME TRAINING REQUEST POPUP -->
-<!-- FIRST TIME TRAINING REQUEST POPUP -->
-<div id="trainingRequestPopup" class="popup" style="max-width: 400px; text-align: center; padding: 25px; z-index: 100000; border-radius: 24px;">
-    <button class="popup-close" onclick="dismissTrainingPopup()">&times;</button>
-    <div style="width: 70px; height: 70px; background: #e6f2ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-        <i class="fas fa-graduation-cap" style="font-size: 2.5rem; color: #007BFF;"></i>
-    </div>
-    <h3 style="margin-bottom: 10px; color: #111; font-weight: 900;">Welcome to Asiye!</h3>
-    <p style="color: #666; font-size: 0.95rem; margin-bottom: 20px;">Book a quick training session to understand how to use the app and maximize your daily earnings.</p>
-    
-    <div style="text-align: left; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 12px; border: 1px solid #eee;">
-        <label style="display:block; font-weight: 800; font-size:0.85rem; color:#333; margin-bottom:5px;">Preferred Date (Tomorrow onwards)</label>
-        <input type="date" id="trainingDate" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ccc; margin-bottom:15px; font-family: inherit;">
-        
-        <label style="display:block; font-weight: 800; font-size:0.85rem; color:#333; margin-bottom:5px;">Preferred Time</label>
-        <input type="time" id="trainingTime" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ccc; font-family: inherit;">
-    </div>
-
-    <button id="trainingSubmitBtn" class="btn btn-primary" onclick="submitTrainingRequest()" style="width: 100%; border-radius: 12px; padding: 16px; font-weight: 800; font-size: 1.05rem; margin-bottom: 10px; box-shadow: 0 4px 15px rgba(0,123,255,0.3); background: #007BFF; color: white; border: none;">
-        <i class="fas fa-calendar-check"></i> Book Session
-    </button>
-    <button class="btn btn-outline" onclick="dismissTrainingPopup()" style="width: 100%; border-radius: 12px; padding: 14px; font-weight: 700; color: #666; border: 1px solid #ddd; background: transparent;">
-        I'll do this later
-    </button>
-</div>
-
-<!-- NEW: Subscription Popup -->
+</div><!-- NEW: Subscription Popup -->
 <div id="subscriptionManagementPopup" class="popup">
     <button class="popup-close" onclick="closeActivePopup()">&times;</button>
     <i class='bx bx-crown' style="font-size: 3em; color: gold; margin-bottom: 15px;"></i>
@@ -7688,15 +7658,9 @@ async function initializeApp(uid) {
                 if (typeof window.updateUIWithTaxiData === 'function') window.updateUIWithTaxiData();
                 
                 // 🛡️ CRITICAL FIX: Safe call to window.restoreDriverTripState
-                // 🛡️ CRITICAL FIX: Safe call to window.restoreDriverTripState
                 setTimeout(() => {
                     if (typeof window.restoreDriverTripState === 'function') {
                         window.restoreDriverTripState();
-                    }
-                    
-                    // 🎓 Show Training request for new users
-                    if (typeof window.checkAndShowTrainingPopup === 'function') {
-                        window.checkAndShowTrainingPopup();
                     }
                 }, 1500);
             }
@@ -30048,152 +30012,6 @@ window.showRankInfoPopup = async function() {
         }
     } catch(e) {
         document.getElementById('rankInfoStatus').textContent = 'Connection Error';
-    }
-};
-
-// =======================================================================
-// TRAINING REQUEST SYSTEM (Background Email + Real-Time DB)
-// =======================================================================
-window.checkAndShowTrainingPopup = function() {
-    if (!window.taxiData) return;
-    
-    // Do not interrupt the driver if they are busy
-    if (window.currentShowingRequestId || window.isShowingRequestPopup || window.activeRequest) return;
-
-    const trainingStatus = window.taxiData.trainingStatus || localStorage.getItem('trainingPromptStatus');
-    
-    if (trainingStatus !== 'completed' && trainingStatus !== 'requested' && trainingStatus !== 'dismissed') {
-        
-        // Ensure the date picker min limit is strictly set to Tomorrow
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const minDateStr = tomorrow.toISOString().split('T')[0];
-        
-        const dateInput = document.getElementById('trainingDate');
-        if (dateInput) {
-            dateInput.min = minDateStr;
-            dateInput.value = minDateStr; // Default select tomorrow
-        }
-
-        openPopup('trainingRequestPopup');
-    }
-};
-
-window.submitTrainingRequest = async function() {
-    if (!window.taxiData) return;
-    
-    const dateVal = document.getElementById('trainingDate').value;
-    const timeVal = document.getElementById('trainingTime').value;
-    
-    if (!dateVal || !timeVal) {
-        showCommunicationBanner("Please select both a date and time.", "warning");
-        return;
-    }
-    
-    const btn = document.getElementById('trainingSubmitBtn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Booking...';
-    btn.disabled = true;
-
-    const driverName = (window.taxiData.name || '') + ' ' + (window.taxiData.surname || '');
-    const driverPhone = window.taxiData.phone || 'Not provided';
-    const driverEmail = window.taxiData.email || 'Not provided';
-
-    try {
-        // 1. Send Background Email using FormSubmit
-        const response = await fetch("https://formsubmit.co/ajax/drndlovu@mail.com", {
-            method: "POST",
-            headers: {
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({
-                _subject: `Training Booking: ${driverName.trim()}`,
-                Driver_Name: driverName.trim(),
-                Driver_ID: window.userId,
-                Phone: driverPhone,
-                Email: driverEmail,
-                Requested_Date: dateVal,
-                Requested_Time: timeVal,
-                Vehicle: window.taxiData.taxiRegistrationNumber || 'N/A'
-            })
-        });
-
-        if (!response.ok) throw new Error("Email dispatch failed");
-
-        // 2. Mark as requested in Database
-        if (window.userId) {
-            await database.ref(`taxis/${window.userId}`).update({
-                trainingStatus: 'requested',
-                trainingRequestedDate: dateVal,
-                trainingRequestedTime: timeVal
-            });
-        }
-        
-        localStorage.setItem('trainingPromptStatus', 'requested');
-        
-        showCommunicationBanner("Training booked successfully! We will contact you soon.", "success");
-        closeActivePopup();
-
-    } catch (error) {
-        console.error("Training booking error:", error);
-        showCommunicationBanner("Failed to book training. Check your connection.", "danger");
-        btn.innerHTML = '<i class="fas fa-calendar-check"></i> Book Session';
-        btn.disabled = false;
-    }
-};
-
-window.dismissTrainingPopup = function() {
-    localStorage.setItem('trainingPromptStatus', 'dismissed');
-    closeActivePopup();
-};
-// =======================================================================
-// DRIVER LOGOUT SYSTEM
-// =======================================================================
-
-window.showLogoutConfirmation = function() {
-    // Close the profile popup and show the confirmation popup
-    if (typeof closeActivePopup === 'function') closeActivePopup();
-    openPopup('logoutConfirmationPopup');
-};
-
-window.confirmLogout = async function() {
-    const btn = document.querySelector('#logoutConfirmationPopup .btn-danger');
-    if (btn) {
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Logging out...';
-        btn.disabled = true;
-    }
-
-    try {
-        // 1. Gracefully take the driver OFFLINE so they disappear from the map
-        if (window.userId) {
-            await database.ref(`taxis/${window.userId}`).update({
-                isOnline: false,
-                isBroadcasting: false,
-                isFull: false, // Reset full status
-                lastSeen: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-
-        // 2. Disconnect all active Firebase listeners to prevent memory leaks
-        database.ref().off();
-
-        // 3. Sign out of Firebase Auth
-        await firebase.auth().signOut();
-
-        // 4. Wipe the device's local memory completely
-        localStorage.clear();
-        sessionStorage.clear();
-
-        // 5. Redirect back to the Driver Login portal
-        window.location.replace('driver_login.html');
-
-    } catch (error) {
-        console.error("Logout error:", error);
-        
-        // Force log them out anyway even if network fails
-        localStorage.clear();
-        sessionStorage.clear();
-        window.location.replace('driver_login.html');
     }
 };
 </script>
