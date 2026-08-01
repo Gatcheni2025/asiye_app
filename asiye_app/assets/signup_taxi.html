@@ -300,7 +300,7 @@
     display: block !important;
     min-height: 1.2em;
 }
-    </style>
+</style>
 </head>
 <body>
 
@@ -327,7 +327,7 @@
             <button class="action-btn" onclick="showStep1('email')">
                 <i class="fas fa-envelope"></i> Sign up with Email
             </button>
-
+        
 
             <div style="margin-top: 20px; font-size: 0.9rem; color: var(--text-muted);">
                 By continuing, you agree to our <a href="javascript:void(0)" onclick="showTOS('terms')" style="color: #fff; text-decoration: none; font-weight: 600;">Terms</a> & <a href="javascript:void(0)" onclick="showTOS('privacy')" style="color: #fff; text-decoration: none; font-weight: 600;">Privacy</a>.
@@ -377,7 +377,7 @@
                     <input type="password" id="confirmPasswordInput" class="modern-input" placeholder="Confirm Password" autocomplete="new-password">
                 </div>
 
-                <div class="input-wrapper">
+            <div class="input-wrapper">
                     <select id="accountTypeInput" class="modern-input" onchange="handleAccountTypeChange()">
                         <option value="" disabled selected>Select Account Type</option>
                         <option value="ehailing">Asiye Go Driver (e-Hailing)</option>
@@ -573,7 +573,7 @@
         headerSubtitle.style.color = "#8a8a8e"; // Ensure color is visible
         headerSubtitle.innerHTML = `Code sent to <b>${window.verifiedPhone}</b>`;
         document.getElementById('otpInput').focus();
-    }
+    } 
     else if(method === 'google' || method === 'apple') {
         // SOCIAL MODE
         document.getElementById('passwordWrapper').style.display = 'none';
@@ -586,7 +586,7 @@
         if (socialUser) {
             const nameInput = document.getElementById('nameInput');
             const surnameInput = document.getElementById('surnameInput');
-
+            
             // If inputs are empty, try to get from socialUser
             if (socialUser.displayName) {
                 const parts = socialUser.displayName.split(' ');
@@ -598,7 +598,7 @@
             }
         }
         document.getElementById('nameInput').focus();
-    }
+    } 
     else {
         // EMAIL MODE
         headerTitle.textContent = "Complete Profile";
@@ -707,7 +707,7 @@
 
             const name = document.getElementById('nameInput')?.value?.trim() || "";
             const surname = document.getElementById('surnameInput')?.value?.trim() || "";
-            const accountType = document.getElementById('accountTypeInput')?.value;
+            const accountType = document.getElementById('accountTypeInput')?.value; 
             const city = document.getElementById('operatingCityInput')?.value?.trim() || "";
 
             const pwd = document.getElementById('passwordInput')?.value || "";
@@ -728,23 +728,23 @@
                     uid = socialUser.uid;
                     email = socialUser.email || "";
                     phone = socialUser.phoneNumber || "";
-                }
+                } 
                 else if (currentMode === 'email') {
                     if (!pwd) throw new Error("Please enter a password.");
                     validatePassword(pwd, confirmPwd);
-
+                    
                     email = window.verifiedEmail || document.getElementById('emailInput')?.value?.trim() || "";
                     const cred = await auth.createUserWithEmailAndPassword(email, pwd);
                     uid = cred.user.uid;
                     hashedPassword = await sha256(pwd);
-                }
+                } 
                 else {
                     if(otp.length !== 6) throw new Error("Please enter the 6-digit SMS code.");
                     if (!pwd) throw new Error("Please enter a password.");
                     validatePassword(pwd, confirmPwd);
-
+                    
                     phone = window.verifiedPhone || document.getElementById('phoneInput')?.value?.trim() || "";
-
+                    
                     const phoneCred = firebase.auth.PhoneAuthProvider.credential(confirmationResult.verificationId, otp);
                     const cred = await auth.signInWithCredential(phoneCred);
                     uid = cred.user.uid;
@@ -765,7 +765,7 @@
                     timestamp: firebase.database.ServerValue.TIMESTAMP
                 };
 
-                let dbTable = "taxis";
+                let dbTable = "taxis"; 
                 if (accountType === 'ehailing' || accountType === 'minibus') {
                     payload.vehicleMake = document.getElementById('vehicleMakeInput')?.value?.trim() || "";
                     payload.vehicleModel = document.getElementById('vehicleModelInput')?.value?.trim() || "";
@@ -798,7 +798,7 @@
                         if (normalizedPhone.startsWith('0')) {
                             normalizedPhone = '27' + normalizedPhone.substring(1);
                         }
-
+                        
                         await fetch('https://app.asiye.cloud/whatsapp_bot.php', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
@@ -812,7 +812,7 @@
                 // SHOW SUCCESS AND PUSH TO TAXI APP WITH ONBOARDING FLAG
                 const overlay = document.getElementById('successOverlay');
                 if (overlay) overlay.style.display = 'flex';
-
+                
                 setTimeout(() => window.location.replace('taxi.html?onboarding=true'), 2000);
 
             } catch (error) {
@@ -835,7 +835,7 @@
         if (!navigator.onLine) return showError("No internet connection.");
         errorMessage.style.display = 'none';
         setLoading(true, `${providerName}-btn`);
-
+        
         const bridge = window.Asiye || window.Android;
         if (bridge?.postMessage) {
             bridge.postMessage(providerName === 'google' ? "triggerGoogleSignIn" : "triggerAppleSignIn");
@@ -865,7 +865,7 @@
     async function handleSocialSuccess(data, provider) {
     try {
         let user = data;
-
+        
         // If coming from native bridge with tokens
         if (data.idToken || data.identityToken) {
             const cred = provider === 'google'
@@ -884,15 +884,15 @@
         }
 
         // Save to global variable so showStep2 can access it
-        socialUser = user;
-        currentMode = provider;
-
+        socialUser = user; 
+        currentMode = provider; 
+        
         // Trigger the UI change
         showStep2(provider);
-
-    } catch (e) {
+        
+    } catch (e) { 
         console.error("Social Auth Error:", e);
-        showError("Authentication failed: " + e.message);
+        showError("Authentication failed: " + e.message); 
         setLoading(false, `${provider}-btn`);
     }
 }
@@ -923,9 +923,9 @@
         if(p1 !== p2) throw new Error("Passwords do not match.");
     }
 
-    function showError(msg) {
-        errorMessage.textContent = msg;
-        errorMessage.style.display = 'block';
+    function showError(msg) { 
+        errorMessage.textContent = msg; 
+        errorMessage.style.display = 'block'; 
         document.querySelector('.container').scrollTop = 0;
     }
 

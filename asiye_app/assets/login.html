@@ -83,17 +83,6 @@
         .forgot-password-container { width: 100%; text-align: right; margin-top: -8px; margin-bottom: 16px; }
         .forgot-password-link { color: #8a8a8e; font-size: 0.85rem; text-decoration: none; transition: color 0.2s; }
         .forgot-password-link:hover { color: #ffffff; text-decoration: underline; }
-
-        /* Account Selection Modal */
-        #accountSelectionOverlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.9); z-index: 100000; display: none;
-            flex-direction: column; align-items: center; justify-content: center; padding: 24px;
-        }
-        #accountSelectionOverlay .selection-card {
-            background: #1c1c1e; width: 100%; max-width: 350px; border-radius: 24px;
-            padding: 30px; text-align: center; border: 1px solid #333;
-        }
     </style>
 </head>
 <body>
@@ -101,20 +90,6 @@
 <div id="toastPopup" class="toast">
     <i class="fas fa-circle-exclamation toast-icon"></i>
     <div class="toast-text" id="toastText"></div>
-</div>
-
-<!-- Account Selection Overlay -->
-<div id="accountSelectionOverlay">
-    <div class="selection-card">
-        <h2 style="color: white; margin-bottom: 10px; font-weight: 700; font-size: 1.4rem;">Multiple Accounts Found</h2>
-        <p style="color: #8a8a8e; font-size: 0.95rem; margin-bottom: 24px;">How would you like to log in today?</p>
-        <div id="accountSelectionList" style="display: flex; flex-direction: column; gap: 12px;">
-            <!-- Buttons injected via JS -->
-        </div>
-        <button onclick="cancelAccountSelection()" style="background: transparent; color: #ff453a; border: none; font-weight: 600; margin-top: 20px; cursor: pointer; font-size: 0.95rem; padding: 10px;">
-            Cancel & Logout
-        </button>
-    </div>
 </div>
 
 <!-- Top Bar -->
@@ -415,74 +390,58 @@
 
         localStorage.setItem('userId', user.uid);
 
-        // Fetch all possible account types simultaneously
-        const [commuterSnap, taxiSnap, managerSnap, handlerSnap] = await Promise.all([
-            database.ref('commuters/' + user.uid).once('value'),
-            database.ref('taxis/' + user.uid).once('value'),
-            database.ref('rankManagers/' + user.uid).once('value'),
-            database.ref('handlers/' + user.uid).once('value')
-        ]);
-
-        let availableAccounts = [];
-
-        if(commuterSnap.exists()) {
-            availableAccounts.push({ type: 'commuter', url: 'index.html', label: 'Passenger / Commuter', icon: 'fa-user' });
-        }
-        if(taxiSnap.exists()) {
-            const tData = taxiSnap.val();
-            // Determine if they are e-Hailing or Minibus
-            const label = (tData.vehicleType === 'ehailing') ? 'Driver (Asiye Go)' : 'Driver (Minibus Taxi)';
-            availableAccounts.push({ type: 'driver', url: 'taxi.html', label: label, icon: 'fa-car' });
-        }
-        if(handlerSnap.exists()) {
-            availableAccounts.push({ type: 'handler', url: 'taxi.html', label: 'Handler (Courier)', icon: 'fa-box' });
-        }
-        if(managerSnap.exists()) {
-            availableAccounts.push({ type: 'rank_manager', url: 'taxiRank.html', label: 'Rank Manager', icon: 'fa-clipboard-list' });
+        // Fetch only commuter profile to avoid permission errors on other nodes
+        let commuterSnap;
+        try {
+            commuterSnap = await database.ref('commuters/' + user.uid).once('value');
+        } catch (e) {
+            console.error("Error fetching commuter profile:", e);
         }
 
-        if(availableAccounts.length === 0) {
-            document.querySelector('.container').style.opacity = '1';
-            document.querySelector('.container').style.pointerEvents = 'auto';
-            showMessage("No profile found. Please register first.", "error");
-            await auth.signOut();
-        }
-        else if (availableAccounts.length === 1) {
-            // Only 1 account -> Proceed immediately
-            executeFinalRedirect(availableAccounts[0].type, availableAccounts[0].url, user.uid);
+        if(commuterSnap && commuterSnap.exists()) {
+            executeFinalRedirect('commuter', 'index.html', user.uid);
         }
         else {
-            // Multiple Accounts -> Prompt User
-            showAccountSelectionModal(availableAccounts, user.uid);
+            // NEW: Auto-create commuter profile for social signups
+            const isSocial = user.providerData.some(p => p.providerId === 'google.com' || p.providerId === 'apple.com');
+            if (isSocial) {
+                showMessage("Creating commuter profile...", "success");
+                try {
+                    let name = 'User', surname = '';
+                    if (user.displayName) {
+                        const parts = user.displayName.split(' ');
+                        name = parts[0];
+                        if (parts.length > 1) surname = parts.slice(1).join(' ');
+                    }
+
+                    await database.ref('commuters/' + user.uid).set({
+                        name: name,
+                        surname: surname,
+                        phone: user.phoneNumber || '',
+                        email: user.email || '',
+                        password: "",
+                        type: "commuter",
+                        credits: 0,
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    executeFinalRedirect('commuter', 'index.html', user.uid);
+                } catch (e) {
+                    console.error("Auto-signup failed:", e);
+                    showMessage("Failed to create profile automatically.", "error");
+                    document.querySelector('.container').style.opacity = '1';
+                    document.querySelector('.container').style.pointerEvents = 'auto';
+                }
+            } else {
+                document.querySelector('.container').style.opacity = '1';
+                document.querySelector('.container').style.pointerEvents = 'auto';
+                showMessage("No passenger profile found. Please register first.", "error");
+                await auth.signOut();
+            }
         }
     }
 
     function showAccountSelectionModal(accounts, uid) {
-        document.querySelector('.container').style.opacity = '1';
-        document.querySelector('.container').style.pointerEvents = 'auto';
-
-        const overlay = document.getElementById('accountSelectionOverlay');
-        const list = document.getElementById('accountSelectionList');
-        list.innerHTML = '';
-
-        accounts.forEach(acc => {
-            const btn = document.createElement('button');
-            btn.className = 'action-btn';
-            btn.innerHTML = `<i class="fas ${acc.icon}" style="color:#7b9cff;"></i> Continue as ${acc.label}`;
-            btn.onclick = () => {
-                document.querySelector('.selection-card').style.opacity = '0.5';
-                executeFinalRedirect(acc.type, acc.url, uid);
-            };
-            list.appendChild(btn);
-        });
-
-        overlay.style.display = 'flex';
-    }
-
-    window.cancelAccountSelection = async function() {
-        document.getElementById('accountSelectionOverlay').style.display = 'none';
-        await auth.signOut();
-        setLoading(false);
+        // This function is now deprecated as we only redirect to index.html
     }
 
     function executeFinalRedirect(type, url, uid) {
@@ -523,7 +482,7 @@
         setLoading(true);
 
         if (pwd) {
-            // CASE: DRIVER LOGGING IN WITH ADMIN PASSWORD
+            // CASE: SIGN IN WITH PHONE & PASSWORD
             try {
                 const userEmail = await findEmailByPhone(fullPhone.replace('+', ''));
                 if (!userEmail) {
@@ -552,101 +511,42 @@
     }
 });
 
+   // Google Sign-In
     document.getElementById('google-btn').addEventListener('click', async () => {
-        if(!termsAccepted) { showMessage("Please agree to Terms & Privacy Policy at the bottom.", "error"); return; }
-        if (window.Android && window.Android.postMessage) {
-            window.Android.postMessage("triggerGoogleSignIn");
-        } else {
-            try {
-                const provider = new firebase.auth.GoogleAuthProvider();
-                const res = await auth.signInWithPopup(provider);
-                await redirectUser(res.user);
-            } catch(e) { showMessage(e, "error"); }
+        if (!termsAccepted) { showMessage("Please agree to Terms.", "error"); return; }
+        const provider = new firebase.auth.GoogleAuthProvider();
+        try {
+            const result = await auth.signInWithPopup(provider);
+            await redirectUser(result.user);
+        } catch (error) {
+            showMessage(error.message, "error");
         }
     });
 
+    // Apple Sign-In
     document.getElementById('apple-btn').addEventListener('click', async () => {
-        if(!termsAccepted) { showMessage("Please agree to Terms & Privacy Policy at the bottom.", "error"); return; }
-        if (window.Android && window.Android.postMessage) {
-            window.Android.postMessage("triggerAppleSignIn");
-        } else {
-            try {
-                const provider = new firebase.auth.OAuthProvider('apple.com');
-                const res = await auth.signInWithPopup(provider);
-                await redirectUser(res.user);
-            } catch(e) { showMessage(e, "error"); }
+        if (!termsAccepted) { showMessage("Please agree to Terms.", "error"); return; }
+        const provider = new firebase.auth.OAuthProvider('apple.com');
+        try {
+            const result = await auth.signInWithPopup(provider);
+            await redirectUser(result.user);
+        } catch (error) {
+            showMessage(error.message, "error");
         }
     });
 
-    // Native Bridge Callbacks
-    window.onGoogleNativeLoginSuccess = function(userData) {
-        let data = userData;
-        if (typeof userData === 'string') { try { data = JSON.parse(userData); } catch(e) {} }
-        const idToken = data.idToken;
-        if (!idToken) return showMessage('Google Sign-In failed.', 'error');
-        const cred = firebase.auth.GoogleAuthProvider.credential(idToken);
-        auth.signInWithCredential(cred)
-            .then(res => redirectUser(res.user))
-            .catch(e => showMessage(e, "error"));
-    };
-    window.onGoogleNativeLoginError = function(error) { showMessage(error || "Google Sign-In failed.", "error"); };
-
-    window.onAppleNativeLoginSuccess = function(userData) {
-        let data = userData;
-        if (typeof userData === 'string') { try { data = JSON.parse(userData); } catch(e) {} }
-        const idToken = data.identityToken;
-        if (!idToken) return showMessage('Apple Sign-In failed.', 'error');
-        const provider = new firebase.auth.OAuthProvider('apple.com');
-        const cred = provider.credential({ idToken: idToken });
-        auth.signInWithCredential(cred)
-            .then(res => redirectUser(res.user))
-            .catch(e => showMessage(e, "error"));
-    };
-    window.onAppleNativeLoginError = function(error) { showMessage(error || "Apple Sign-In failed.", "error"); };
-
-document.addEventListener('keypress', function (e) {
-    if (e.key === 'Enter') {
-        const loginForm = document.getElementById('loginForm');
-        if (loginForm.style.display === 'block') {
-            document.getElementById('loginButton').click();
+    // Helper to find email by phone (since Firebase Auth needs email/password)
+    async function findEmailByPhone(phone) {
+        // This looks through your database to find which email is linked to that phone number
+        const snapshot = await database.ref('commuters').orderByChild('phone').equalTo(phone).once('value');
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const key = Object.keys(data)[0];
+            return data[key].email;
         }
+        return null;
     }
-});
-
-/**
- * Helper: Searches Taxis and Commuters nodes to find the email 
- * associated with a specific phone number.
- */
-async function findEmailByPhone(formattedPhone) {
-    console.log("Searching for email linked to:", formattedPhone);
-    
-    // 1. Check the Drivers (Taxis) node first
-    const driverSnap = await database.ref('taxis')
-        .orderByChild('phone')
-        .equalTo(formattedPhone)
-        .once('value');
-
-    if (driverSnap.exists()) {
-        // Get the first matching driver's data
-        const drivers = driverSnap.val();
-        const driverId = Object.keys(drivers)[0];
-        return drivers[driverId].email;
-    }
-
-    // 2. Check the Commuters node
-    const commuterSnap = await database.ref('commuters')
-        .orderByChild('phone')
-        .equalTo(formattedPhone)
-        .once('value');
-
-    if (commuterSnap.exists()) {
-        const commuters = commuterSnap.val();
-        const commuterId = Object.keys(commuters)[0];
-        return commuters[commuterId].email;
-    }
-
-    return null; // No account found
-}
 </script>
 </body>
 </html>
+       
