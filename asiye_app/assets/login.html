@@ -388,55 +388,60 @@
     async function redirectUser(user) {
         if(!user) { showMessage("Login incomplete.", "error"); return; }
 
-        localStorage.setItem('userId', user.uid);
-
-        // Fetch only commuter profile to avoid permission errors on other nodes
-        let commuterSnap;
         try {
-            commuterSnap = await database.ref('commuters/' + user.uid).once('value');
-        } catch (e) {
-            console.error("Error fetching commuter profile:", e);
-        }
+            // 1. Check if commuter profile exists in the database
+            const snapshot = await database.ref(`commuters/${user.uid}`).once('value');
 
-        if(commuterSnap && commuterSnap.exists()) {
-            executeFinalRedirect('commuter', 'index.html', user.uid);
-        }
-        else {
-            // NEW: Auto-create commuter profile for social signups
-            const isSocial = user.providerData.some(p => p.providerId === 'google.com' || p.providerId === 'apple.com');
-            if (isSocial) {
-                showMessage("Creating commuter profile...", "success");
-                try {
-                    let name = 'User', surname = '';
-                    if (user.displayName) {
-                        const parts = user.displayName.split(' ');
-                        name = parts[0];
-                        if (parts.length > 1) surname = parts.slice(1).join(' ');
-                    }
+            if (!snapshot.exists()) {
+                console.log("Creating new commuter profile for social sign-up:", user.uid);
 
-                    await database.ref('commuters/' + user.uid).set({
-                        name: name,
-                        surname: surname,
-                        phone: user.phoneNumber || '',
-                        email: user.email || '',
-                        password: "",
-                        type: "commuter",
-                        credits: 0,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-                    executeFinalRedirect('commuter', 'index.html', user.uid);
-                } catch (e) {
-                    console.error("Auto-signup failed:", e);
-                    showMessage("Failed to create profile automatically.", "error");
-                    document.querySelector('.container').style.opacity = '1';
-                    document.querySelector('.container').style.pointerEvents = 'auto';
+                // Extract name and surname from displayName if available
+                let name = "";
+                let surname = "";
+                if (user.displayName) {
+                    const parts = user.displayName.split(' ');
+                    name = parts[0] || "User";
+                    surname = parts.slice(1).join(' ') || "";
+                } else if (user.email) {
+                    name = user.email.split('@')[0];
+                } else if (user.phoneNumber) {
+                    name = "User";
                 }
-            } else {
-                document.querySelector('.container').style.opacity = '1';
-                document.querySelector('.container').style.pointerEvents = 'auto';
-                showMessage("No passenger profile found. Please register first.", "error");
-                await auth.signOut();
+
+                const payload = {
+                    name: name,
+                    surname: surname,
+                    phone: user.phoneNumber || "",
+                    email: user.email || "",
+                    password: "", // Social login doesn't use our DB password field
+                    type: "commuter",
+                    credits: 0,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                };
+
+                // Create the profile in Realtime Database
+                await database.ref(`commuters/${user.uid}`).set(payload);
             }
+
+            // 2. Persist session locally
+            localStorage.setItem('userId', user.uid);
+            localStorage.setItem('userType', 'commuter'); // Commuter-side login forces commuter type
+
+            showMessage("Login successful! Redirecting...", "success");
+
+            // 3. Synchronize with Native Android Bridge
+            if (window.Android && window.Android.onUserLoggedIn) {
+                window.Android.onUserLoggedIn(user.uid, 'commuter');
+            }
+
+            // 4. Redirect to Dashboard
+            setTimeout(() => {
+                window.location.href = 'index.html';
+            }, 800);
+
+        } catch (e) {
+            console.error("Redirect/Profile error:", e);
+            showMessage("Error initializing profile: " + e.message, "error");
         }
     }
 
@@ -514,26 +519,74 @@
    // Google Sign-In
     document.getElementById('google-btn').addEventListener('click', async () => {
         if (!termsAccepted) { showMessage("Please agree to Terms.", "error"); return; }
+
+        const bridge = window.Asiye || window.Android;
+        if (bridge && bridge.postMessage) {
+            bridge.postMessage("triggerGoogleSignIn");
+            return;
+        }
+
         const provider = new firebase.auth.GoogleAuthProvider();
         try {
             const result = await auth.signInWithPopup(provider);
             await redirectUser(result.user);
         } catch (error) {
-            showMessage(error.message, "error");
+            if (error.code === 'auth/operation-not-supported-in-this-environment') {
+                showMessage("Social login is only available in the mobile app.", "error");
+            } else {
+                showMessage(error.message, "error");
+            }
         }
     });
 
     // Apple Sign-In
     document.getElementById('apple-btn').addEventListener('click', async () => {
         if (!termsAccepted) { showMessage("Please agree to Terms.", "error"); return; }
+
+        const bridge = window.Asiye || window.Android;
+        if (bridge && bridge.postMessage) {
+            bridge.postMessage("triggerAppleSignIn");
+            return;
+        }
+
         const provider = new firebase.auth.OAuthProvider('apple.com');
         try {
             const result = await auth.signInWithPopup(provider);
             await redirectUser(result.user);
         } catch (error) {
-            showMessage(error.message, "error");
+            if (error.code === 'auth/operation-not-supported-in-this-environment') {
+                showMessage("Social login is only available in the mobile app.", "error");
+            } else {
+                showMessage(error.message, "error");
+            }
         }
     });
+
+    // Native Bridge Handlers
+    window.onGoogleNativeLoginSuccess = async (u) => {
+        const user = typeof u === 'string' ? JSON.parse(u) : u;
+        if (user.idToken) {
+            const cred = firebase.auth.GoogleAuthProvider.credential(user.idToken);
+            try {
+                const res = await auth.signInWithCredential(cred);
+                await redirectUser(res.user);
+            } catch (e) {
+                showMessage(e.message, "error");
+            }
+        }
+    };
+    window.onAppleNativeLoginSuccess = async (u) => {
+        const user = typeof u === 'string' ? JSON.parse(u) : u;
+        if (user.identityToken) {
+            const cred = new firebase.auth.OAuthProvider('apple.com').credential({ idToken: user.identityToken });
+            try {
+                const res = await auth.signInWithCredential(cred);
+                await redirectUser(res.user);
+            } catch (e) {
+                showMessage(e.message, "error");
+            }
+        }
+    };
 
     // Helper to find email by phone (since Firebase Auth needs email/password)
     async function findEmailByPhone(phone) {

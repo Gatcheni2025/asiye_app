@@ -844,11 +844,15 @@
                 const res = await auth.signInWithPopup(googleProvider);
                 handleSocialSuccess(res.user, 'google');
             } catch (e) {
-                showError(e.message);
+                if (e.code === 'auth/operation-not-supported-in-this-environment') {
+                    showError("Social login is only available in the mobile app.");
+                } else {
+                    showError(e.message);
+                }
                 setLoading(false, 'google-btn');
             }
         } else {
-            showError("Apple Sign-In is only supported on the native app.");
+            showError("Apple Sign-In is only supported on the mobile app.");
             setLoading(false, 'apple-btn');
         }
     }

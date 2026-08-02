@@ -713,7 +713,7 @@
     }
 
     // ============================================================
-    // 🚀 FIXED: MAIN LOGIN HANDLER
+    // 🚀 FIXED: MAIN LOGIN HANDLER WITH PASSWORD SYNC
     // ============================================================
     async function handleDriverLogin() {
       const password = document.getElementById('driverPassword').value;
@@ -721,6 +721,7 @@
       let email = '';
       let driverData = null;
       let driverId = '';
+      let accountType = 'driver';
 
       hideStatus();
 
@@ -734,118 +735,88 @@
       showStatus('🔍 Looking up your account...', 'info');
 
       try {
-        // Get email
+        let lookupResult = null;
+        // Get email or phone
         if (currentMode === 'email') {
           email = document.getElementById('driverEmail').value.trim();
           if (!email) throw new Error("Please enter your email address.");
           if (!email.includes('@')) throw new Error("Please enter a valid email address.");
           
-          const result = await findDriverByIdentifier(email, 'email');
-          if (result) {
-            driverData = result.data;
-            driverId = result.id;
-            showStatus(`✅ Found driver record: ${driverData.name || 'Driver'}`, 'success');
-          } else {
-            showStatus('⚠️ Driver record not found in database. Attempting to create auth account...', 'warning');
-          }
+          lookupResult = await findDriverByIdentifier(email, 'email');
         } else {
           const phone = document.getElementById('driverPhone').value.trim();
           if (!phone) throw new Error("Please enter your phone number.");
           
-          const result = await findDriverByIdentifier(phone, 'phone');
-          if (!result) {
-            throw new Error("Phone number not found. Please contact support.");
-          }
-          driverData = result.data;
-          driverId = result.id;
-          email = driverData.email;
-          if (!email || email === 'pending_email' || !email.includes('@')) {
-            throw new Error("No valid email linked to this phone. Please use email login or contact support.");
-          }
-          showStatus(`✅ Found driver record: ${driverData.name || 'Driver'}`, 'success');
+          lookupResult = await findDriverByIdentifier(phone, 'phone');
         }
 
-        // 🔥 CRITICAL: Get the temp password from database
-        const tempPassword = driverData ? driverData.tempPassword : null;
-        
-        // Try the entered password first
+        if (lookupResult) {
+          driverData = lookupResult.data;
+          driverId = lookupResult.id;
+          accountType = lookupResult.type;
+          email = driverData.email || email;
+          showStatus(`✅ Found record: ${driverData.name || 'User'}`, 'success');
+        } else {
+          throw new Error("No driver or handler record found. Please apply first.");
+        }
+
+        const dbPath = accountType === 'driver' ? 'taxis' : 'handlers';
+        const tempPassword = driverData.tempPassword;
+
+        // 🔥 CRITICAL: SYNC LOGIC
+        // 1. Try to log in with the entered password
         let authResult = await ensureFirebaseAuthAccount(email, password);
 
-        // If entered password failed but we have a temp password, try that
+        // 2. If it failed and we have a temp password in DB, try the temp password
         if (!authResult.success && tempPassword && tempPassword !== password) {
-          console.log('🔄 Trying temp password from database...');
+          console.log('🔄 Trying temp password from database sync...');
           authResult = await ensureFirebaseAuthAccount(email, tempPassword);
           
-          // If temp password worked, update the driver's stored password
           if (authResult.success) {
-            if (password.length >= 6) {
-              await database.ref(`taxis/${driverId}`).update({
-                tempPassword: password,
-                passwordUpdated: firebase.database.ServerValue.TIMESTAMP,
-                passwordSyncedToAuth: true
-              });
-              showStatus('✅ Password updated successfully!', 'success');
+            // Logged in with temp password! Now sync Auth to the password the user actually wants to use
+            try {
+              if (password.length >= 6) {
+                await auth.currentUser.updatePassword(password);
+                await database.ref(`${dbPath}/${driverId}`).update({
+                  tempPassword: password,
+                  passwordSyncedToAuth: true,
+                  lastLogin: firebase.database.ServerValue.TIMESTAMP
+                });
+                showStatus('✅ Credentials synced to your new password!', 'success');
+              }
+            } catch (syncErr) {
+              console.warn('Sync warning (password update):', syncErr.message);
+              // We are still logged in with tempPassword, so we can continue
             }
           }
         }
 
-        // If still not successful and we have a temp password, try one more time
-        // with the special sync approach
-        if (!authResult.success && tempPassword) {
-          showStatus('Attempting to sync password with Firebase Auth...', 'info');
-          
-          try {
-            // Try to send a reset email to the driver
-            await auth.sendPasswordResetEmail(email);
-            showStatus('📧 Password reset email sent!', 'success');
-            showToast(`Password reset email sent to ${email}. Please check your inbox.`, 'success');
-            
-            // Store the temp password in the database for future attempts
-            if (driverId) {
-              await database.ref(`taxis/${driverId}`).update({
-                tempPassword: tempPassword,
-                passwordLastUpdated: firebase.database.ServerValue.TIMESTAMP,
-                pendingPasswordUpdate: true
-              });
-            }
-            
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket" style="margin-right: 8px;"></i>Sign In';
-            return;
-            
-          } catch (resetError) {
-            console.error('Reset error:', resetError);
-            // Fall through to error handling
-          }
+        // 3. If account was just created, update DB to match
+        if (authResult.success && authResult.action === 'created') {
+           await database.ref(`${dbPath}/${driverId}`).update({
+             tempPassword: password,
+             passwordSyncedToAuth: true,
+             accountCreated: firebase.database.ServerValue.TIMESTAMP
+           });
         }
 
+        // 4. Final outcome handling
         if (authResult && authResult.success) {
-          let userType = 'driver';
-          
-          if (driverId) {
-            const userSnap = await database.ref(`taxis/${driverId}`).once('value');
-            if (!userSnap.exists()) {
-              const handlerSnap = await database.ref(`handlers/${driverId}`).once('value');
-              if (handlerSnap.exists()) userType = 'handler';
-            }
-          }
-          
-          localStorage.setItem('userId', driverId || authResult.user.uid);
-          localStorage.setItem('userType', userType);
+          localStorage.setItem('userId', driverId);
+          localStorage.setItem('userType', accountType);
           
           const msg = authResult.action === 'created' 
-            ? '✅ Account created successfully! Redirecting...' 
+            ? '✅ Account initialized and synced! Redirecting...'
             : '✅ Login successful! Redirecting...';
           
           showToast(msg, 'success');
           showStatus(msg, 'success');
           
           setTimeout(() => {
-            window.location.href = userType === 'handler' ? 'handler.html' : 'taxi.html';
+            window.location.href = accountType === 'handler' ? 'handler.html' : 'taxi.html';
           }, 1000);
           
         } else if (authResult && authResult.action === 'reset_sent') {
-          // Don't show error, just show the reset message
           showToast(authResult.message, 'warning');
           showStatus(authResult.message, 'warning');
           btn.disabled = false;
@@ -859,13 +830,7 @@
         
         let errorMsg = e.message || 'Login failed. Please try again.';
         if (e.code === 'auth/too-many-requests') {
-          errorMsg = 'Too many failed attempts. Please try again later or use "Forgot your password?".';
-        }
-        if (e.code === 'auth/network-request-failed') {
-          errorMsg = 'Network error. Please check your internet connection.';
-        }
-        if (e.code === 'auth/invalid-email') {
-          errorMsg = 'Invalid email format. Please check and try again.';
+          errorMsg = 'Too many failed attempts. Please try again later.';
         }
         
         showToast(errorMsg, 'error');
