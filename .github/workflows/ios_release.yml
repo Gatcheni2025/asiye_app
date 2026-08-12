@@ -24,22 +24,6 @@ jobs:
         working-directory: ./asiye_app
         run: flutter pub get
 
-      - name: Set Fastlane Auth
-        env:
-          TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          if [ -z "$TOKEN" ]; then
-            echo "::error::GH_PAT is missing! Private certificates repo clone will fail."
-            exit 1
-          fi
-          # Encode "git:TOKEN" to Base64 for Fastlane match
-          AUTH=$(echo -n "git:${TOKEN}" | base64)
-          echo "MATCH_GIT_BASIC_AUTHORIZATION=$AUTH" >> $GITHUB_ENV
-          
-          # Also configure git to use the token for any git commands
-          git config --global url."https://${TOKEN}@github.com/".insteadOf "https://github.com/"
-
-      # FIX 2: Fastlane must run inside the ios folder which is inside asiye_app
       - name: Build and Upload to TestFlight 
         working-directory: ./asiye_app/ios
         env:
@@ -47,5 +31,6 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-          # MATCH_GIT_BASIC_AUTHORIZATION is now loaded from GITHUB_ENV
+          # Inject the token directly into the URL environment variable
+          MATCH_GIT_URL: "https://${{ secrets.GH_PAT }}@github.com/Gatcheni2025/asiye-certs.git"
         run: fastlane beta
