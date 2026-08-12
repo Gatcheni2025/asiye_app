@@ -12859,40 +12859,23 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     <div class="tracking-page-bottom">
         
         <!-- WAITING STATUS (NEW) -->
-        <div id="trackingWaitingStatus" style="display: none; background: linear-gradient(135deg, #FF9F0A, #FFB340); border-radius: 16px; padding: 20px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 20px rgba(255,159,10,0.2);">
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div style="position: relative;">
-                    <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                        <i class="fas fa-hourglass-half" style="font-size: 1.8rem; color: white;"></i>
-                    </div>
-                    <div style="position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; background: #FF6B6B; border-radius: 50%; border: 2px solid #FF9F0A; animation: pulse-dot 1.5s infinite;"></div>
+        <div id="trackingWaitingStatus" class="tracking-waiting-status" style="display: none; background: #1C1C1E; border-radius: 16px; padding: 20px; margin-bottom: 15px; border: 1px solid #FF9F0A; box-shadow: 0 4px 20px rgba(255,159,10,0.15);">
+            <div class="waiting-header" style="display: flex; align-items: center; gap: 15px;">
+                <div class="waiting-icon" style="width: 44px; height: 44px; background: rgba(255, 159, 10, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #FF9F0A; flex-shrink: 0;"><i class="fas fa-hourglass-half"></i></div>
+                <div class="waiting-info" style="flex: 1;">
+                    <div id="trackingWaitingTitle" class="waiting-title" style="font-weight: 900; font-size: 1.1rem; color: white; margin-bottom: 2px;">⏳ Driver is Waiting</div>
+                    <div id="trackingWaitingSubtitle" class="waiting-subtitle" style="font-size: 0.85rem; color: #aaa;">Waiting for more passengers...</div>
                 </div>
-                <div style="flex: 1;">
-                    <div id="trackingWaitingTitle" style="font-weight: 900; font-size: 1.1rem; color: white; margin-bottom: 4px;">
-                        ⏳ Driver is Waiting
-                    </div>
-                    <div id="trackingWaitingSubtitle" style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">
-                        Waiting for more passengers to join...
-                    </div>
-                </div>
-                <div id="trackingPassengerCount" style="background: rgba(0,0,0,0.3); padding: 6px 14px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; color: white;">
-                    0/0
-                </div>
+                <div id="trackingPassengerCount" class="waiting-count" style="background: #FF9F0A; padding: 4px 14px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; color: black;">0/0</div>
             </div>
-            
-            <!-- Passenger List -->
-            <div id="trackingWaitingPassengers" style="margin-top: 15px; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 12px; max-height: 150px; overflow-y: auto;">
-                <!-- Passengers rendered here -->
-            </div>
-            
-            <!-- Progress Bar -->
-            <div style="margin-top: 12px;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
+            <div id="trackingWaitingPassengers" class="passenger-list" style="margin-top: 15px; background: #2C2C2E; border-radius: 12px; padding: 12px; max-height: 150px; overflow-y: auto;"></div>
+            <div class="progress-container" style="margin-top: 15px;">
+                <div class="progress-labels" style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa; margin-bottom: 6px;">
                     <span>Passengers joined</span>
-                    <span id="trackingProgressText">0%</span>
+                    <span id="trackingProgressText" style="color: #fff; font-weight: 800;">0%</span>
                 </div>
-                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden;">
-                    <div id="trackingProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #FFD60A, #FF9F0A); border-radius: 3px; transition: width 0.5s ease;"></div>
+                <div class="progress-bar" style="width: 100%; height: 8px; background: #3A3A3C; border-radius: 4px; overflow: hidden;">
+                    <div id="trackingProgressBar" class="progress-fill" style="height: 100%; width: 0%; background: #007BFF; border-radius: 4px; transition: width 0.5s ease;"></div>
                 </div>
             </div>
         </div>
@@ -14142,6 +14125,22 @@ function updatePassengerEta(driverLat, driverLng, userLat, userLng) {
 // FIX: REAL-TIME DRIVER ACCEPTANCE FOR PASSENGER
 // ========================================================================
 
+function cleanupPassengerTripMap() {
+    try {
+        if (map && map.getLayer('taxi-route-line')) map.removeLayer('taxi-route-line');
+        if (map && map.getLayer('taxi-route-casing')) map.removeLayer('taxi-route-casing');
+        if (map && map.getLayer('taxi-route')) map.removeLayer('taxi-route');
+        if (map && map.getSource('taxi-route')) map.removeSource('taxi-route');
+    } catch (e) {
+        console.warn('Route cleanup skipped:', e);
+    }
+
+    if (window.confirmedTaxiMarker) {
+        try { window.confirmedTaxiMarker.remove(); } catch (e) {}
+        window.confirmedTaxiMarker = null;
+    }
+}
+
 // 1. OVERRIDE THE LISTEN FOR REQUEST STATUS FUNCTION
 // Replace the existing listenForRequestStatus function with this one
 
@@ -14335,27 +14334,26 @@ function listenForRequestStatus(requestId) {
         // 🏁 TRIP COMPLETED
         // ============================================================
         else if (status === 'completed') {
-            console.log("🏁 Trip completed!");
+            console.log("🏁 Trip completed! Cleaning map...");
             
             // Stop listening
             database.ref(`requests/${requestId}`).off('value', window.passengerStatusListener);
             window.passengerStatusListener = null;
+
+            cleanupPassengerTripMap();
             
-            // Close all popups
+            // Close all popups and show completion screen
             closeAllPopups();
-            
-            // Show the trip completion screen
             if (typeof window.showTripCompletedScreen === 'function') {
                 window.showTripCompletedScreen(requestId);
             } else {
-                // Fallback
                 window.currentRequestId = null;
                 localStorage.removeItem('currentRequestId');
                 if (typeof showModernDashboard === 'function') {
                     showModernDashboard();
                 }
                 if (typeof showToast === 'function') {
-                    showToast("🏁 Trip completed! Thank you for riding with Asiye.", "success");
+                    showToast("🀀􀐠Trip completed! Thank you for riding with Asiye.", "success");
                 }
             }
         }
@@ -14495,6 +14493,8 @@ window.setupRealTimeStatusListener = function(requestId) {
             // Stop listening
             database.ref(`requests/${requestId}`).off('value', window.realTimeStatusListener);
             window.realTimeStatusListener = null;
+
+            cleanupPassengerTripMap();
             
             // Show completion screen
             if (typeof window.showTripCompletedScreen === 'function') {
@@ -18122,13 +18122,14 @@ function closeChat() {
     function drawRouteToTaxi(geometry) {
       if (!map) return;
 
-      // --- FIX 1: Wait for style to load before adding sources ---
       if (!map.isStyleLoaded()) {
           map.once('style.load', () => drawRouteToTaxi(geometry));
           return;
       }
 
       try {
+          if (map.getLayer('taxi-route-line')) map.removeLayer('taxi-route-line');
+          if (map.getLayer('taxi-route-casing')) map.removeLayer('taxi-route-casing');
           if (map.getLayer('taxi-route')) map.removeLayer('taxi-route');
           if (map.getSource('taxi-route')) map.removeSource('taxi-route');
       } catch (e) {
@@ -18137,36 +18138,32 @@ function closeChat() {
 
       map.addSource('taxi-route', {
           type: 'geojson',
-          data: { type: 'Feature', properties: {}, geometry: geometry }
+          data: { type: 'Feature', geometry: geometry }
       });
 
       map.addLayer({
-          id: 'taxi-route',
+          id: 'taxi-route-casing',
           type: 'line',
           source: 'taxi-route',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-              'line-color': '#007BFF',
-              'line-width': 6,
-              'line-opacity': 0.8,
-              'line-dasharray': [0, 2]
+              'line-color': '#1a3a5c',
+              'line-width': 8,
+              'line-opacity': 0.3
           }
       });
 
-      const dashArraySequence = [[0, 2], [0.5, 1.5], [1, 1], [1.5, 0.5], [2, 0], [0, 0.5, 2, 1.5], [0, 1, 2, 1], [0, 1.5, 2, 0.5]];
-      var step = 0;
-
-      function animateDashArray(timestamp) {
-          if (map && map.getLayer('taxi-route')) {
-              const newStep = Math.floor((timestamp / 60) % dashArraySequence.length);
-              if (newStep !== step) {
-                  map.setPaintProperty('taxi-route', 'line-dasharray', dashArraySequence[newStep]);
-                  step = newStep;
-              }
-              requestAnimationFrame(animateDashArray);
+      map.addLayer({
+          id: 'taxi-route-line',
+          type: 'line',
+          source: 'taxi-route',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: {
+              'line-color': '#276EF1',
+              'line-width': 5,
+              'line-opacity': 1.0
           }
-      }
-      requestAnimationFrame(animateDashArray);
+      });
   }
      function updateTaxiPositionOnMap(taxiId) {
       // Note: Made the callback async
@@ -20849,8 +20846,46 @@ window.processReferralReward = function(referrerId) {
           closeAllPopups();
       }
 
+      window.openPopup = function(popupId) {
+          console.log("🟢 Centering and opening popup:", popupId);
+          
+          window.closeActivePopup(true);
+          
+          const popup = document.getElementById(popupId);
+          const overlay = document.getElementById('popupOverlay');
+          
+          if (!popup) return;
+          
+          popup.classList.add('open');
+          popup.style.setProperty('display', 'block', 'important');
+          popup.style.setProperty('visibility', 'visible', 'important');
+          popup.style.setProperty('opacity', '1', 'important');
+          popup.style.setProperty('z-index', '100000', 'important');
+          popup.style.setProperty('position', 'fixed', 'important');
+          popup.style.setProperty('top', '50%', 'important');
+          popup.style.setProperty('left', '50%', 'important');
+          popup.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+          popup.style.setProperty('margin', '0', 'important');
+          
+          if (overlay) {
+              overlay.classList.add('open');
+              overlay.style.setProperty('display', 'block', 'important');
+              overlay.style.setProperty('z-index', '99999', 'important');
+          }
+      };
+
       function closeAllPopups() {
-          document.querySelectorAll(".modal-overlay, #taxiListSheet").forEach(p => p.classList.remove("open"));
+          document.querySelectorAll(".modal-overlay, #taxiListSheet").forEach(p => {
+              p.classList.remove("open");
+              p.style.setProperty('display', 'none', 'important');
+              p.style.setProperty('opacity', '0', 'important');
+              p.style.setProperty('visibility', 'hidden', 'important');
+              if (p.id === 'commuterRequestPopup' || p.id === 'taxiStatusPopup' || p.id === 'genericMessagePopup' || p.id === 'driverClubPopup' || p.id === 'driverEHailingPopup') {
+                  p.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+                  p.style.setProperty('top', '50%', 'important');
+                  p.style.setProperty('left', '50%', 'important');
+              }
+          });
       }
           function getInitials(name = "", surname = "") {
               return ((name ? name.charAt(0) : "") + (surname ? surname.charAt(0) : "")).toUpperCase() || "C";
@@ -23334,11 +23369,29 @@ function executePassengerCancellation(reqId) {
         return;
     }
     
-    // Disable all cancel buttons to prevent double-clicks
+    // Disable all cancel buttons to prevent double-clicks and restore later.
+    const trackedCancelButtons = [];
     document.querySelectorAll('button[onclick*="cancelCurrentRequest"]').forEach(function(btn) {
+        trackedCancelButtons.push({
+            el: btn,
+            html: btn.innerHTML,
+            text: btn.textContent
+        });
         btn.disabled = true;
-        btn.textContent = 'Cancelling...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
     });
+
+    function restoreCancelButtons() {
+        trackedCancelButtons.forEach(function(entry) {
+            if (!entry || !entry.el) return;
+            entry.el.disabled = false;
+            if (entry.html && entry.html.trim().length > 0) {
+                entry.el.innerHTML = entry.html;
+            } else {
+                entry.el.textContent = entry.text || 'Cancel Trip';
+            }
+        });
+    }
     
     // Update the request status
     firebase.database().ref(`requests/${reqId}`).update({
@@ -23377,49 +23430,65 @@ function executePassengerCancellation(reqId) {
         // Complete cleanup
         completePassengerCleanup(reqId);
         window._isCancelling = false;
+        restoreCancelButtons();
         
         // Show success message
         if (typeof showCommunicationBanner === 'function') {
             showCommunicationBanner("Trip cancelled successfully.", "success");
         }
         
-        // Show dashboard
         setTimeout(function() {
             if (typeof showModernDashboard === 'function') {
                 showModernDashboard();
             }
+
+            setTimeout(function() {
+                if (typeof window.openAsiyeClubGateway === 'function') {
+                    window.openAsiyeClubGateway();
+                }
+
+                const taxiSheet = document.getElementById('taxiListSheet');
+                if (taxiSheet && taxiSheet.classList.contains('open')) {
+                    if (typeof window.fetchAndDisplayClubTaxis === 'function') {
+                        window.fetchAndDisplayClubTaxis();
+                    }
+                }
+            }, 600);
         }, 300);
     })
     .catch(function(err) {
         console.error("❌ Cancellation error:", err);
         window._isCancelling = false;
+        restoreCancelButtons();
         if (typeof showCommunicationBanner === 'function') {
             showCommunicationBanner("Failed to cancel: " + err.message, "danger");
         }
     });
 }
-// Add this to your completePassengerCleanup(reqId) or executeCancellation(reqId) functions
-function resetBookingButtonUI() {
+window.resetBookingButtonUI = function() {
+    console.log("🔓 Unlocking booking buttons...");
     const clubBtn = document.getElementById('clubBookingSubmitBtn');
     if (clubBtn) {
         clubBtn.disabled = false;
         clubBtn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm & Book Seat';
         clubBtn.style.opacity = '1';
+        clubBtn.style.pointerEvents = 'auto';
     }
+    
     const goBtn = document.getElementById('findOffersBtn');
     if (goBtn) {
         goBtn.disabled = false;
-        // This will be reset anyway by the populate function, but safe to clear here
-        goBtn.innerHTML = 'Confirm & Request Ride'; 
+        goBtn.innerHTML = 'Confirm & Request Ride';
+        goBtn.style.opacity = '1';
+        goBtn.style.pointerEvents = 'auto';
     }
-}
+};
 
-// Modify completePassengerCleanup to include the reset
-function completePassengerCleanup(reqId) {
+window.completePassengerCleanup = function(reqId) {
     console.log("🧹 Complete cleanup for:", reqId);
     
-    // RESET BUTTONS
-    resetBookingButtonUI();
+    // 🚨 FIX: RESET BUTTONS FIRST
+    window.resetBookingButtonUI();
     
     window.currentRequestId = null;
     localStorage.removeItem('currentRequestId');
@@ -23435,8 +23504,14 @@ function completePassengerCleanup(reqId) {
         window.confirmedTaxiMarker = null;
     }
     
-    // Ensure dashboard is shown instead of just a blank map
     showModernDashboard();
+    
+    // Reset cancellation flag
+    window._isCancelling = false;
+};
+
+function completePassengerCleanup(reqId) {
+    return window.completePassengerCleanup(reqId);
 }
 // ================================================================
 // FIXED: completePassengerCleanup
@@ -27177,72 +27252,45 @@ window.setupDestAutocomplete = function() {
   window.findMinibusTaxis = async function() {
       const container = document.getElementById('taxiListContainer');
       if (container) container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><p>Searching for minibus taxis near you...</p></div>`;
+      
+      // Ensure the sheet is styled correctly before opening
+      const sheet = document.getElementById('taxiListSheet');
+      if (sheet) {
+          sheet.style.setProperty('background-color', '#F4F5F7', 'important');
+      }
+      
       openModal('taxiListSheet');
 
       try {
           const snapshot = await database.ref("taxis").once("value");
           const taxisData = snapshot.val() || {};
           const minibusTaxis = [];
+          const uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat'));
+          const uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng'));
 
           for (const taxiId in taxisData) {
               const taxi = { taxiId, ...taxisData[taxiId] };
-
-              const isVerified = taxi.verificationStatus === 'verified';
+              const isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
               const isOnline = taxi.isOnline === true;
-              const isBroadcasting = taxi.isBroadcasting === true;
-              const isNotFull = taxi.isFull !== true;
 
-              // STRICT FILTER: Must be minibus
-              const isMinibus = taxi.vehicleType === 'minibus' || (!taxi.vehicleType && taxi.assignedRank);
-
-              if (isVerified && isOnline && isMinibus && isBroadcasting && isNotFull && taxi.latitude && taxi.longitude) {
-                  const dist = calculateDistance(commuterLat, commuterLng, taxi.latitude, taxi.longitude);
-                  if (dist <= 5) {
+              if (isVerified && isOnline && taxi.latitude && taxi.longitude) {
+                  const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
+                  if (dist <= 30) {
                       taxi.distance = dist;
                       minibusTaxis.push(taxi);
                   }
               }
           }
 
-          // Include Dummy Minibus Taxis
-          if (window.dummyTaxisList && window.dummyTaxisList.length > 0) {
-              window.dummyTaxisList.forEach(dummy => {
-                  if (dummy.vehicleType === 'minibus') {
-                      var currentLat = dummy.latitude;
-                      var currentLng = dummy.longitude;
-                      if (window.taxiMarkers && window.taxiMarkers[dummy.taxiId]) {
-                          const pos = window.taxiMarkers[dummy.taxiId].getLngLat();
-                          currentLat = pos.lat;
-                          currentLng = pos.lng;
-                      }
-                      const dist = calculateDistance(commuterLat, commuterLng, currentLat, currentLng);
-                      if (dist <= 5) {
-                          minibusTaxis.push({ ...dummy, latitude: currentLat, longitude: currentLng, distance: dist, isDummy: true });
-                      }
-                  }
-              });
-          }
-
           if (minibusTaxis.length > 0) {
               minibusTaxis.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-              zoomToFitTaxis(minibusTaxis);
-              populateMinibusListSheet(minibusTaxis);
+              // 🔥 FIXED: Always call the Premium Card renderer
+              displayClubTaxisCards(minibusTaxis); 
           } else {
-              if(container) container.innerHTML = `
-                  <div style="text-align:center; padding: 60px 20px;">
-                      <img src="data/quantum.png" style="width: 80px; height: auto; opacity: 0.5; margin-bottom: 20px;">
-                      <h4 style="color: #222; font-weight: 800;">No Minibus Taxis Found</h4>
-                      <p style="color: #888;">No minibus taxis are currently available within 5km.</p>
-                      <button class="gocab-book-btn" onclick="findMinibusTaxis()" style="margin-top: 20px;">
-                          <i class="fas fa-sync-alt"></i> Search Again
-                      </button>
-                      <button class="btn btn-light" onclick="openAsiyeGoTaxis();" style="margin-top: 10px;">
-                          <i class="fas fa-car-side"></i> Try Asiye Go Instead
-                      </button>
-                  </div>`;
+              if(container) container.innerHTML = `<div style="text-align:center; padding: 60px 20px;"><h4>No Taxis Found</h4><p>Try again later.</p></div>`;
           }
       } catch (error) {
-          console.error("Minibus search error:", error);
+          console.error("Search error:", error);
       }
   };
 
@@ -30463,20 +30511,14 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
             justify-content: center;
         `;
         
-        // Use a car icon or emoji as fallback
         el.innerHTML = `
-            <div style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); 
-                        background: #28a745; color: white; padding: 4px 12px; border-radius: 20px; 
-                        font-size: 10px; font-weight: 800; white-space: nowrap; border: 2px solid white;
-                        box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 100;">
-                🚗 YOUR TAXI
-            </div>
-            <div style="width: 40px; height: 40px; background: #28a745; border-radius: 50%; 
-                        display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
-                        border: 3px solid white; box-shadow: 0 4px 15px rgba(40,167,69,0.4); z-index: 2;">
-                🚗
+            <div style="width: 50px; height: 50px; position: relative;">
+                <div class="taxi-pulse" style="background: rgba(40, 167, 69, 0.4); border-radius: 50%; width: 100%; height: 100%; position: absolute; animation: pulse 2s infinite;"></div>
+                <img src="data/newtaxi3.png" class="pax-moving-car" style="width: 100%; height: 100%; object-fit: contain; transform: rotate(0deg); position: relative; z-index: 2;">
             </div>
         `;
+
+        const carImg = el.querySelector('.pax-moving-car');
         
         // 6. Create and add the marker to the map
         try {
@@ -30496,14 +30538,38 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
                 
                 const newCoords = [updatedTaxi.longitude, updatedTaxi.latitude];
                 window.confirmedTaxiMarker.setLngLat(newCoords);
-                
-                // Auto-zoom to show the taxi if the map is zoomed out
-                if (window.map && window.map.getZoom() < 15) {
+
+                const updatedHeading = Number(updatedTaxi.heading || 0);
+                if (carImg) {
+                    carImg.style.transform = `rotate(${updatedHeading}deg)`;
+                    carImg.style.transition = 'transform 0.35s ease';
+                }
+
+                if (window.map && Number.isFinite(window.commuterLat) && Number.isFinite(window.commuterLng)) {
+                    const dist = calculateDistance(window.commuterLat, window.commuterLng, updatedTaxi.latitude, updatedTaxi.longitude);
+
+                    if (dist < 0.5) {
+                        window.map.flyTo({
+                            center: newCoords,
+                            zoom: 17,
+                            pitch: 45,
+                            essential: true
+                        });
+                    } else {
+                        const bounds = new mapboxgl.LngLatBounds()
+                            .extend([window.commuterLng, window.commuterLat])
+                            .extend(newCoords);
+
+                        window.map.fitBounds(bounds, {
+                            padding: { top: 100, bottom: 350, left: 50, right: 50 },
+                            maxZoom: 16
+                        });
+                    }
+                } else if (window.map && window.map.getZoom() < 15) {
                     window.map.flyTo({
                         center: newCoords,
-                        zoom: 17,
-                        speed: 1.2,
-                        curve: 1
+                        zoom: 16,
+                        essential: true
                     });
                 }
             });
@@ -30979,6 +31045,9 @@ window.closeRequestPopupNow = function() {
     if (popup) {
         popup.classList.remove('open');
         popup.style.setProperty('display', 'none', 'important');
+        popup.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+        popup.style.setProperty('top', '50%', 'important');
+        popup.style.setProperty('left', '50%', 'important');
         if (popup.dataset.timerId) {
             clearInterval(parseInt(popup.dataset.timerId));
             delete popup.dataset.timerId;
@@ -31002,79 +31071,101 @@ window.closeRequestPopupNow = function() {
     window.isViewingClubRequest = false;
 };
 
+window.showClubRequestPopup = function(request) {
+    const popup = document.getElementById('commuterRequestPopup');
+    if (!popup) return;
 
-window.deductWalletOnCompletion = function(reqId) {
-    if (!reqId || !userId) return Promise.resolve(false);
+    window.currentShowingRequestId = request.key;
 
-    const deductionLockKey = `processed_deduction_${reqId}`;
-    if (localStorage.getItem(deductionLockKey)) {
-        console.log("Deduction already processed for this request ID.");
-        return Promise.resolve(true);
-    }
+    const passengerName = request.commuterName || 'Club Member';
+    const pickup = (request.pickupAddress || 'Pickup').split(',')[0];
+    const destination = (request.destination || 'Destination').split(',')[0];
+    const fare = request.calculatedPrice || request.originalPerPersonPrice || 25;
+    const schedule = `${request.morningDeparture || '07:00'} - ${request.afternoonReturn || '17:00'}`;
 
-    return database.ref(`requests/${reqId}`).once('value').then(snap => {
-        const req = snap.val();
-        if (!req) return false;
+    popup.innerHTML = `
+        <div class="modal-content" style="background:white !important; border-radius:28px !important; padding:0 !important; text-align:center; color:#111 !important; box-shadow: 0 15px 50px rgba(0,0,0,0.5) !important; width: 100%; max-width: 400px; overflow: hidden;">
+            <div style="background: linear-gradient(135deg, #FF9F0A, #f8961e); padding: 20px; color: white;">
+                <h3 style="margin: 0; font-weight: 900; font-size: 1.3rem;"><i class="fas fa-users"></i> Asiye Club Request</h3>
+            </div>
+            <div style="padding: 25px;">
+                <p style="margin: 0; color: #666; font-weight: 700;">Passenger: ${passengerName}</p>
+                <div style="background:#f8f9fa; padding:15px; border-radius:16px; margin:15px 0; text-align:left; border: 1px solid #eee;">
+                    <p style="margin-bottom: 8px; color: #111 !important;">📍 <b>From:</b> ${pickup}</p>
+                    <p style="margin-bottom: 8px; color: #111 !important;">🏁 <b>To:</b> ${destination}</p>
+                    <p style="margin:0; color: #FF9F0A !important; font-weight: 800;">⏰ <b>Schedule:</b> ${schedule}</p>
+                </div>
+                <div style="font-size: 2.5rem; font-weight: 900; color: #28a745 !important; margin-bottom: 20px;">R${fare}</div>
+                <div style="display:flex; gap:12px;">
+                    <button class="btn" onclick="window.rejectRequest()" style="flex:1; background: #f1f3f5; color: #666; border-radius: 14px; padding: 16px; font-weight: 800; border: none;">Decline</button>
+                    <button class="btn" onclick="window.acceptRequest()" style="flex:2; background: #28a745; color: white; border-radius: 14px; padding: 16px; font-weight: 900; border: none;">Accept Pool</button>
+                </div>
+            </div>
+        </div>
+    `;
 
-        // Isolate passenger profile values if dealing with pooling
-        let myTripData = req;
-        if (req.type === 'club' && req.passengers && req.passengers[userId]) {
-            myTripData = req.passengers[userId];
-        }
+    window.openPopup('commuterRequestPopup');
+};
 
-        const appliedCredit = parseFloat(myTripData.appliedCredit || 0);
-        if (appliedCredit <= 0) {
-            localStorage.setItem(deductionLockKey, "true");
-            return true; 
-        }
 
-        const commuterRef = database.ref(`commuters/${userId}`);
-        
-        return commuterRef.transaction(currentProfile => {
-            if (!currentProfile) return currentProfile;
+window.deductWalletOnCompletion = function(reqId, amount) {
+    if (!userId || !reqId) return;
 
-            // Initialize properties safely if not defined
-            const promoRemaining = currentProfile.promoRemaining || 0;
-            const credits = parseFloat(currentProfile.credits || 0);
+    // Use a 'lock' in the database to ensure we only deduct once
+    const lockRef = database.ref(`requests/${reqId}/wallet_processed`);
 
-            // Deduct promo count if applicable
-            if (promoRemaining > 0 && myTripData.paymentMethod === 'cash') {
-                currentProfile.promoRemaining = promoRemaining - 1;
-            }
-
-            // Deduct numeric wallet credits
-            currentProfile.credits = Math.max(0, credits - appliedCredit);
-
-            return currentProfile;
-        }, (error, committed, snapshot) => {
-            if (error) {
-                console.error("Deduction transaction error:", error);
-            } else if (committed) {
-                localStorage.setItem(deductionLockKey, "true");
-                const freshData = snapshot.val();
-                if (window.commuterData && freshData) {
-                    window.commuterData.credits = freshData.credits;
-                    window.commuterData.promoRemaining = freshData.promoRemaining;
+    lockRef.transaction((currentValue) => {
+        if (currentValue === true) return; // Already processed, abort
+        return true; // Set as processed
+    }, (error, committed) => {
+        if (committed) {
+            // Now perform the actual money deduction from the user's wallet
+            database.ref(`commuters/${userId}`).transaction(userData => {
+                if (userData) {
+                    const currentBalance = parseFloat(userData.credits || 0);
+                    userData.credits = Math.max(0, currentBalance - parseFloat(amount));
                 }
-                
-                // Add ledger transaction to earnings list
-                database.ref(`commuters/${userId}/earnings`).push({
-                    id: 'deduct_' + Date.now(),
-                    type: 'withdrawal',
-                    amount: appliedCredit,
-                    description: 'Trip Fare Payment',
-                    timestamp: firebase.database.ServerValue.TIMESTAMP,
-                    status: 'completed'
-                });
-
-                if (typeof updatePromoWalletDisplay === 'function') updatePromoWalletDisplay();
-                if (typeof updateSideMenuData === 'function') updateSideMenuData();
-                console.log("Transaction successfully debited upon completion.");
-            }
-        });
+                return userData;
+            }).then(() => {
+                console.log("Wallet successfully deducted for trip:", reqId);
+                updateSideMenuData(); // Refresh UI
+                showGenericMessage("Trip Paid", `R${amount} was deducted from your wallet.`, "fa-wallet", "success");
+            });
+        }
     });
 };
 
+window.deductWalletOnCompletion = function(requestId, amount) {
+    if (!userId) return;
+
+    const userRef = database.ref(`commuters/${userId}`);
+    
+    // Prevent double deduction using a simple 'processed' flag on the request
+    database.ref(`requests/${requestId}/payment_processed`).transaction((currentValue) => {
+        if (currentValue === true) return; // Already deducted!
+        return true; 
+    }, (error, committed) => {
+        if (committed) {
+            // Deduct the money from the user's credits
+            userRef.transaction(userData => {
+                if (userData) {
+                    const currentBal = parseFloat(userData.credits || 0);
+                    userData.credits = Math.max(0, currentBal - parseFloat(amount));
+                }
+                return userData;
+            }).then(() => {
+                console.log("Wallet payment successful.");
+                if(typeof updateSideMenuData === 'function') updateSideMenuData();
+                showGenericMessage("Payment Complete", `R${amount} has been deducted from your wallet.`, "fa-check-circle", "success");
+            });
+        }
+    });
+};
+
+// Add to your setupNotificationListeners in index.html:
+// if (notification.type === 'ride_completed') {
+//     window.deductWalletOnCompletion(notification.requestId, notification.amount);
+// }
 window.startLiveTripMonitor = function(reqKey) {
     if (window.activeTripMonitor) {
         database.ref('requests/' + reqKey).off('value', window.activeTripMonitor);
@@ -31098,6 +31189,8 @@ window.startLiveTripMonitor = function(reqKey) {
         if (currentStatus === 'completed') {
             database.ref('requests/' + reqKey).off('value', window.activeTripMonitor);
             window.activeTripMonitor = null;
+
+            cleanupPassengerTripMap();
 
             if (typeof window.showTripCompletedScreen === 'function') {
                 window.showTripCompletedScreen(reqKey);
@@ -33299,7 +33392,6 @@ window.verifyVoucherAndSummon = function() {
         }
     });
 };
-
 window.summonPreAllocatedVehicle = async function(sub) {
     openModal('pendingRequestPopup');
     const msgEl = document.getElementById('requestingMessage');
@@ -33312,53 +33404,20 @@ window.summonPreAllocatedVehicle = async function(sub) {
             <p style="color:#aaa; font-size:0.9rem;">Connecting to your assigned 30-day driver.</p>
         `;
     }
-
-    const requestNode = database.ref("requests").push();
-    window.currentRequestId = requestNode.key;
-
-    const requestData = {
-        requestId: window.currentRequestId,
-        taxiId: sub.allocatedTaxiId || null, 
-        carCategory: 'club',
-        commuterId: window.userId,
-        commuterName: sub.commuterName,
-        commuterPhone: sub.commuterPhone,
-        calculatedPrice: sub.estimatedCost,
-        paymentMethod: sub.paymentTerms || 'cash',
-        requirePin: true,
-        pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
-        pickupAddress: sub.pickupAddress || 'Home',
-        commuterLocation: { latitude: window.commuterLat, longitude: window.commuterLng },
-        destination: sub.dropoffAddress || 'As Directed',
-        status: 'pending',
-        type: 'club',
-        voucherCode: sub.voucherCode,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
-
-    await requestNode.set(requestData);
-    
-    await database.ref(`commuters/${window.userId}`).update({ currentRequest: window.currentRequestId });
-    if (window.commuterData) window.commuterData.currentRequest = window.currentRequestId;
-    localStorage.setItem('currentRequestId', window.currentRequestId);
-
-    if (sub.allocatedTaxiId) {
-        database.ref(`notifications/taxis/${sub.allocatedTaxiId}`).push({
-            type: 'passenger',
-            title: 'Asiye Club Summon!',
-            message: `Club subscriber ${sub.commuterName} has summoned you.`,
-            requestId: window.currentRequestId,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
+    // Added missing logic and closing braces below
+    try {
+        const requestId = sub.requestId || window.currentRequestId;
+        if (requestId) {
+            await database.ref(`requests/${requestId}`).update({
+                status: 'pending',
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+            window.listenForRequestStatus(requestId);
+        }
+    } catch (e) {
+        console.error("Summon error:", e);
     }
-
-    if (typeof listenForRequestStatus === 'function') listenForRequestStatus(window.currentRequestId);
-    if (typeof startTaxiSearchTimer === 'function') window.startTaxiSearchTimer(window.currentRequestId);
-};
-
-// Turn off any generic child_added listeners that might be running
-database.ref('requests').off('child_added');
-
+}; // This closing brace was missing and caused the syntax error
 
 // =================================================================
 // 🔍 SMART AUTOCOMPLETE ENGINE (FIXES NEXT BUTTON LOCKING)
@@ -34204,6 +34263,7 @@ var passengerEtaDisplay = null;
 
 function showDriverPopupDirect(taxiId, notification, requestData) {
     console.log("🚗 showDriverPopupDirect - FORCING VISIBILITY for:", taxiId);
+    window.activeTaxiId = taxiId;
     
     // Remove any existing popup first
     const existingPopup = document.getElementById('driverAcceptedPopup');
@@ -34256,6 +34316,27 @@ function showDriverPopupDirect(taxiId, notification, requestData) {
         statusSubtitle = 'Arriving soon';
         statusColor = '#007BFF';
         statusIcon = 'fa-car-side';
+    }
+
+    let rideNowButton = '';
+    if ((status === 'driver_waiting' || status === 'pooling') && requestId) {
+        const remaining = Math.max(0, maxCapacity - passengerCount);
+        const pricePerSeat = requestData?.originalPerPersonPrice || 25;
+        const skipWaitPrice = pricePerSeat + (remaining * 15);
+
+        if (remaining > 0) {
+            rideNowButton = `
+                <div style="background: #FFF4E5; border: 1px solid #FF9F0A; border-radius: 16px; padding: 15px; margin: 15px 0;">
+                    <p style="color: #856404; font-size: 0.85rem; margin: 0 0 10px 0; font-weight: 700;">
+                        Don't want to wait for ${remaining} more people?
+                    </p>
+                    <button onclick="window.negotiateRideNow('${requestId}', ${skipWaitPrice}, '${taxiId}')"
+                            style="width: 100%; background: #FF9F0A; color: black; border: none; padding: 12px; border-radius: 12px; font-weight: 900; cursor: pointer;">
+                        Ride Now for R${skipWaitPrice}
+                    </button>
+                </div>
+            `;
+        }
     }
     
     // Build the popup HTML with FORCED visibility
@@ -34346,6 +34427,7 @@ function showDriverPopupDirect(taxiId, notification, requestData) {
                         </div>
                     </div>
                 </div>
+                ${rideNowButton}
                 
                 <!-- Driver Info -->
                 <div style="background: #ffffff !important; border: 1px solid #eeeeee !important; border-radius: 16px !important; padding: 12px 16px !important; margin-bottom: 15px !important; display: flex !important; align-items: center !important; justify-content: space-between !important; box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;">
@@ -34545,6 +34627,70 @@ function showDriverPopupDirect(taxiId, notification, requestData) {
         }, 500);
     }
 }
+
+window.negotiateRideNow = function(reqId, newPrice, taxiId = null) {
+    if (!reqId || !newPrice) return;
+
+    showConfirmPopup(
+        "Ride Now (Private)",
+        `Are you sure you want to go private and leave immediately? You will now be paying R${newPrice}.`,
+        function() {
+            const driverId = taxiId || window.activeTaxiId;
+
+            const updates = {};
+            updates[`requests/${reqId}/status`] = 'accepted';
+            updates[`requests/${reqId}/forceDispatch`] = true;
+            updates[`requests/${reqId}/waitingForMore`] = false;
+            updates[`requests/${reqId}/calculatedPrice`] = newPrice;
+            updates[`requests/${reqId}/passengers/${window.userId}/price`] = newPrice;
+            updates[`requests/${reqId}/passengers/${window.userId}/finalAmount`] = newPrice;
+
+            database.ref().update(updates).then(() => {
+                if (driverId) {
+                    return database.ref(`notifications/taxis/${driverId}`).push({
+                        type: 'ride_now_negotiated',
+                        requestId: reqId,
+                        newPrice: newPrice,
+                        commuterName: (window.commuterData && window.commuterData.name) ? window.commuterData.name : 'Passenger',
+                        timestamp: firebase.database.ServerValue.TIMESTAMP
+                    });
+                }
+                return Promise.resolve();
+            }).then(() => {
+                showCommunicationBanner(`You have selected 'Ride now' option, you will now be paying R${newPrice}`, 'success');
+
+                const titleEl = document.getElementById('commuterTrackingTitle');
+                const subtitleEl = document.getElementById('commuterTrackingSubtitle');
+                if (titleEl) {
+                    titleEl.innerHTML = '<i class="fas fa-bolt" style="color: #28a745;"></i> Private Ride Confirmed';
+                    titleEl.style.color = '#28a745';
+                }
+                if (subtitleEl) {
+                    subtitleEl.textContent = `You have selected 'Ride now' option, you will now be paying R${newPrice}. Driver is on the way...`;
+                }
+
+                const bypassCard = document.getElementById('bypassWaitCard');
+                if (bypassCard) {
+                    bypassCard.innerHTML = `
+                        <div style="background: rgba(48,209,88,0.15); border: 1px solid rgba(48,209,88,0.45); border-radius: 12px; padding: 12px; color: #30D158; font-weight: 700; font-size: 0.85rem; text-align: center;">
+                            <i class="fas fa-check-circle"></i> You have selected 'Ride now' option, you will now be paying R${newPrice}. Driver is on the way...
+                        </div>
+                    `;
+                }
+
+                if (driverId && typeof window.showDriverAcceptedPopup === 'function') {
+                    window.showDriverAcceptedPopup(driverId, { requestKey: reqId });
+                }
+            }).catch((error) => {
+                console.error('ride_now negotiation failed:', error);
+                showToast('Could not send Ride Now request. Please try again.', 'danger');
+            });
+        },
+        "Yes, Ride Now",
+        "Cancel",
+        "success"
+    );
+};
 
 // ================================================================
 // FALLBACK: SHOW DRIVER POPUP
@@ -35266,10 +35412,15 @@ window.submitInstantClubBooking = async function() {
         }
 
         // 9. CREATE RIDE REQUEST
+       // 9. CREATE RIDE REQUEST
         const requestId = database.ref("requests").push().key;
+        
+        // FIX: Removed 'const' because taxiId is already declared in this scope
+        const finalTaxiId = window.selectedClubTaxiId || null; 
+
         const requestData = {
             requestId: requestId,
-            taxiId: taxiId || null, 
+            taxiId: finalTaxiId, 
             carCategory: 'club',
             commuterId: window.userId,
             commuterName: subscriptionData.commuterName,
@@ -35471,218 +35622,186 @@ window.cancelPendingClubSubscription = function() {
     }
 };
 
-
 window.requestAsiyeGoRide = async function(taxiId) {
-    closeModal('taxiListSheet');
-
-    var fare = window.calculatedTripPrice || 25;
-    const promoRemaining = window.commuterData?.promoRemaining || 0;
-    const promoValue = window.commuterData?.promoValue || 25;
-    const availableCredit = parseFloat(window.commuterData?.credits || 0);
-
-    let promoDeduction = 0;
-    let walletDeduction = 0;
-
-    if (promoRemaining > 0) {
-        if (window.commuterData?.promoPercentage) {
-            promoDeduction = Math.round(fare * (window.commuterData.promoPercentage / 100));
-        } else {
-            promoDeduction = Math.min(promoValue, fare);
-        }
-    }
-
-    let remainingFare = Math.max(0, fare - promoDeduction);
-
-    if (window.selectedPaymentMethod === 'card' && remainingFare > 0) {
-        if (availableCredit < remainingFare) {
-            showGenericMessage("Insufficient Funds", "Your card balance is too low. Please select Cash or Top Up.", "fa-wallet", "icon-warning");
-            openModal('taxiListSheet'); 
-            return;
-        }
-        walletDeduction = remainingFare;
-    }
-
-    let totalAppliedCredit = promoDeduction + walletDeduction;
-
-    const cancelBtn = document.getElementById('cancelRequestBtn');
-    if (cancelBtn) cancelBtn.style.display = 'block';
-
-    openModal('pendingRequestPopup');
-
-    // DETERMINE RIDE TYPE BASED ON SELECTION
-    const isPooling = (window.selectedRideCategory === 'club');
-    
-    // THE FIX: Set the correct type based on user selection
-    const rideType = isPooling ? 'club' : 'ehailing';
-    const rideStatus = isPooling ? 'pooling' : 'pending';
-
-    const msgEl = document.getElementById('requestingMessage');
-    if (msgEl) {
-        msgEl.innerHTML = `
-            <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.2);">
-                <div class="logo-circle" style="box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);">
-                    <i class="${isPooling ? 'fas fa-users' : 'fas fa-car-side'}" style="color: #007BFF; font-size: 24px;"></i>
-                </div>
-            </div>
-            <div style="font-weight:900; color:#fff; font-size:1.4rem; margin-bottom:5px;">
-                ${isPooling ? 'Creating your Club pool...' : 'Finding Asiye Go Drivers...'}
-            </div>
-            <p style="color:#aaa; font-size:0.9rem;">
-                ${isPooling ? 'Waiting for drivers to join your shared ride.' : 'Pinging Asiye Go partners near you.'}
-            </p>
-        `;
-    }
-
-    var preciseAddress = "Unknown Location";
     try {
-        const fullAddr = await getAddressFromCoordsPromise(commuterLng, commuterLat);
-        preciseAddress = fullAddr.split(',')[0].trim();
-    } catch (e) {}
+        closeModal('taxiListSheet');
 
-    var finalDest = window.userDropOffDestination || "As Directed";
-    let joinedExistingPoolId = null;
+        // 1. Pricing & Promo Logic
+        var fare = window.calculatedTripPrice || 25;
+        const promoRemaining = window.commuterData?.promoRemaining || 0;
+        const promoValue = window.commuterData?.promoValue || 25;
+        const availableCredit = parseFloat(window.commuterData?.credits || 0);
 
-    // ONLY check for existing pools if this is a Club ride
-    if (isPooling) {
-        const snap = await database.ref('requests').once('value');
-        if (snap.exists()) {
-            snap.forEach(child => {
-                const req = child.val();
-                // Only look for open club pools
-                if (req.type === 'club' && ['pooling', 'waiting_pool'].includes(req.status) && !req.taxiId) {
-                    const currentPassCount = req.passengers ? Object.keys(req.passengers).length : 0;
-                    if (currentPassCount < 4) {
-                        const dist = calculateDistance(commuterLat, commuterLng, req.poolCenterLat, req.poolCenterLng);
-                        if (dist <= 10) { 
-                            joinedExistingPoolId = child.key;
-                            return true;
+        let promoDeduction = 0;
+        let walletDeduction = 0;
+
+        if (promoRemaining > 0) {
+            // Apply 20% or flat discount logic
+            promoDeduction = window.commuterData?.promoPercentage ? 
+                Math.round(fare * (window.commuterData.promoPercentage / 100)) : 
+                Math.min(promoValue, fare);
+        }
+
+        let remainingFare = Math.max(0, fare - promoDeduction);
+
+        // 2. Card/Wallet Payment Check
+        if (window.selectedPaymentMethod === 'card' && remainingFare > 0) {
+            if (availableCredit < remainingFare) {
+                showGenericMessage("Insufficient Funds", "Your wallet balance is too low. Please select Cash or Top Up.", "fa-wallet", "icon-warning");
+                openModal('taxiListSheet'); 
+                return;
+            }
+            walletDeduction = remainingFare;
+        }
+
+        let totalAppliedCredit = promoDeduction + walletDeduction;
+
+        // 3. UI Transition
+        const cancelBtn = document.getElementById('cancelRequestBtn');
+        if (cancelBtn) cancelBtn.style.display = 'block';
+        openModal('pendingRequestPopup');
+
+        const isPooling = (window.selectedRideCategory === 'club');
+        const rideType = isPooling ? 'club' : 'ehailing';
+        const rideStatus = isPooling ? 'pooling' : 'pending';
+
+        // Update the Loading Spinner Text
+        const msgEl = document.getElementById('requestingMessage');
+        if (msgEl) {
+            msgEl.innerHTML = `
+                <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.2);">
+                    <div class="logo-circle" style="box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);">
+                        <i class="${isPooling ? 'fas fa-users' : 'fas fa-car-side'}" style="color: #007BFF; font-size: 24px;"></i>
+                    </div>
+                </div>
+                <div style="font-weight:900; color:#fff; font-size:1.4rem; margin-bottom:5px;">
+                    ${isPooling ? 'Creating Club Pool...' : 'Finding Drivers...'}
+                </div>
+                <p style="color:#aaa; font-size:0.9rem;">
+                    ${isPooling ? 'Waiting for others to join.' : 'Pinging nearby drivers.'}
+                </p>
+            `;
+        }
+
+        // 4. Address Resolution Fallback
+        var preciseAddress = document.getElementById('uberPickupInput')?.value || "Current Location";
+        try {
+            const fullAddr = await getAddressFromCoordsPromise(commuterLng, commuterLat);
+            if (fullAddr) preciseAddress = fullAddr.split(',')[0].trim();
+        } catch (e) {}
+
+        var finalDest = window.userDropOffDestination || "As Directed";
+        let joinedExistingPoolId = null;
+
+        // 5. Existing Pool Check (For Shared Rides)
+        if (isPooling) {
+            const snap = await database.ref('requests').once('value');
+            if (snap.exists()) {
+                snap.forEach(child => {
+                    const req = child.val();
+                    if (req.type === 'club' && ['pooling', 'waiting_pool'].includes(req.status) && !req.taxiId) {
+                        const currentPassCount = req.passengers ? Object.keys(req.passengers).length : 0;
+                        if (currentPassCount < 4) {
+                            const dist = calculateDistance(commuterLat, commuterLng, req.poolCenterLat, req.poolCenterLng);
+                            if (dist <= 10) { 
+                                joinedExistingPoolId = child.key;
+                                return true;
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         }
-    }
 
-    const passengerData = {
-        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
-        commuterPhone: window.commuterData?.phone || "",
-        location: { latitude: commuterLat, longitude: commuterLng },
-        pickupAddress: preciseAddress,
-        destination: finalDest,
-        price: fare,
-        appliedCredit: totalAppliedCredit,
-        finalAmount: Math.max(0, fare - totalAppliedCredit),
-        paymentMethod: window.selectedPaymentMethod || 'cash',
-        requirePin: true,
-        pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
-        status: 'pending'
-    };
+        const passengerData = {
+            commuterId: userId,
+            commuterName: (commuterData.name + " " + (commuterData.surname || "")).trim(),
+            commuterPhone: window.commuterData?.phone || "",
+            location: { latitude: commuterLat, longitude: commuterLng },
+            pickupAddress: preciseAddress,
+            destination: finalDest,
+            price: fare,
+            appliedCredit: totalAppliedCredit,
+            finalAmount: Math.max(0, fare - totalAppliedCredit),
+            paymentMethod: window.selectedPaymentMethod || 'cash',
+            requirePin: true,
+            pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
+            status: 'pending'
+        };
 
-    try {
+        let requestId;
+
         if (joinedExistingPoolId) {
-            // Join an existing club pool
-            console.log("Joining existing Club pool:", joinedExistingPoolId);
-            window.currentRequestId = joinedExistingPoolId;
-            await database.ref(`requests/${joinedExistingPoolId}/passengers/${userId}`).set(passengerData);
+            // CASE 1: JOINING AN EXISTING CLUB POOL
+            requestId = joinedExistingPoolId;
+            await database.ref(`requests/${requestId}/passengers/${userId}`).set(passengerData);
             
-            // Notify drivers about the pool update
-            const poolRef = database.ref(`requests/${joinedExistingPoolId}`);
-            const poolSnap = await poolRef.once('value');
+            const poolSnap = await database.ref(`requests/${requestId}`).once('value');
             const poolData = poolSnap.val();
-            const passCount = poolData.passengers ? Object.keys(poolData.passengers).length : 1;
             
-            if (passCount >= 2) {
-                await notifyDriversAboutClubPool(joinedExistingPoolId, poolData);
+            if (poolData && Object.keys(poolData.passengers).length >= 2) {
+                await notifyDriversAboutClubPool(requestId, poolData);
             }
             
             closeModal('pendingRequestPopup');
-            showGenericMessage(
-                "Joined Club Pool!",
-                `You joined an existing Club pool with ${passCount} passenger(s). Waiting for a driver.`,
-                "fa-users",
-                "icon-success"
-            );
+            showGenericMessage("Joined Club Pool!", "Matching successful! Waiting for a driver to accept the group.", "fa-users", "icon-success");
             
         } else {
-            // Create a new request
-            console.log("Creating new request. Type:", rideType, "Status:", rideStatus);
+            // CASE 2: CREATING A NEW REQUEST
             const requestNode = database.ref("requests").push();
-            window.currentRequestId = requestNode.key;
+            requestId = requestNode.key;
 
-            // Build the base request data
             const requestData = {
-                requestId: window.currentRequestId,
-                carCategory: isPooling ? 'club' : 'standard',
-                commuterId: window.userId,
+                requestId: requestId,
+                commuterId: userId,
                 commuterName: passengerData.commuterName,
                 commuterPhone: passengerData.commuterPhone,
-                calculatedPrice: passengerData.price,
-                paymentMethod: passengerData.paymentMethod,
-                requirePin: passengerData.requirePin,
-                pickupPin: passengerData.pickupPin,
                 pickupAddress: passengerData.pickupAddress,
-                commuterLocation: passengerData.location,
                 destination: passengerData.destination,
-                status: rideStatus,  // 'pending' for e-hailing, 'pooling' for club
-                type: rideType,       // 'ehailing' for private, 'club' for shared
+                commuterLocation: passengerData.location,
+                calculatedPrice: fare,
+                appliedCredit: totalAppliedCredit, // Added this for driver-side visibility
+                paymentMethod: passengerData.paymentMethod,
+                status: rideStatus,
+                type: rideType,
+                taxiId: taxiId || null, // Lock to taxi if one was clicked
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             };
 
-            // Add club-specific fields ONLY if this is a club ride
             if (isPooling) {
-                requestData.expiresAt = Date.now() + (10 * 60000);
-                requestData.minCapacity = 2;
-                requestData.maxCapacity = 4;
-                requestData.originalPerPersonPrice = passengerData.price;
                 requestData.poolCenterLat = commuterLat;
                 requestData.poolCenterLng = commuterLng;
-                requestData.passengers = {};
-                requestData.passengers[userId] = passengerData;
-                requestData.passengerCount = 1;
+                requestData.passengers = { [userId]: passengerData };
+                requestData.maxCapacity = 4;
             }
 
             await requestNode.set(requestData);
 
-            // Notify drivers based on ride type
-            if (isPooling) {
-                // Club ride - notify drivers about the pool
-                await notifyDriversAboutClubPool(window.currentRequestId, requestData);
-                closeModal('pendingRequestPopup');
-                showGenericMessage(
-                    "Club Pool Created!",
-                    `Your Club pool is open! Waiting for more passengers.`,
-                    "fa-users",
-                    "icon-success"
-                );
-            } else {
-                // Asiye Go (e-hailing) - notify nearby drivers directly
-                await notifyDriversAboutEHailing(window.currentRequestId, requestData);
-                // The pendingRequestPopup will stay open until a driver accepts
+            // 6. Notify Driver Directly
+            if (taxiId) {
+                database.ref(`notifications/taxis/${taxiId}`).push({
+                    type: isPooling ? 'club' : 'passenger',
+                    requestId: requestId,
+                    commuterName: requestData.commuterName,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
             }
         }
 
-        await database.ref(`commuters/${userId}`).update({ currentRequest: window.currentRequestId });
-        if (window.commuterData) window.commuterData.currentRequest = window.currentRequestId;
-        localStorage.setItem('currentRequestId', window.currentRequestId);
-
-        // Start listening for request status updates
-        listenForRequestStatus(window.currentRequestId);
+        // 7. Session/State Management
+        window.currentRequestId = requestId;
+        localStorage.setItem('currentRequestId', requestId);
+        await database.ref(`commuters/${userId}`).update({ currentRequest: requestId });
         
-        // Start pool monitor only for club rides
-        if (isPooling) {
-            startPoolMonitor(window.currentRequestId);
-        } else {
-            // For e-hailing, start the search timer
-            window.startTaxiSearchTimer(window.currentRequestId);
-        }
+        // Start live listeners
+        listenForRequestStatus(requestId);
 
     } catch (error) {
-        console.error("Database save failed:", error);
+        console.error("Booking error:", error);
         closeModal('pendingRequestPopup');
-        showGenericMessage("Request Failed", "Could not send booking details. Please try again.", "fa-times-circle", "icon-danger");
+        showGenericMessage("Error", "Something went wrong. Please try again.", "fa-exclamation-triangle", "icon-danger");
     }
 };
-
 // =======================================================================
 // NOTIFY DRIVERS ABOUT E-HAILING (ASIYE GO) RIDE
 // =======================================================================
@@ -36307,7 +36426,7 @@ function startPassengerClubPoolMonitor(requestId) {
             
             // Check if full
             if (passengerCount >= maxCapacity) {
-                console.log("🎉 Pool is FULL! Dispatching...");
+                console.log("🀀𐎉𘁐ool is FULL! Dispatching...");
                 clearInterval(window.passengerPoolMonitor);
                 database.ref(`requests/${requestId}`).update({
                     status: 'pending',
@@ -37403,6 +37522,8 @@ window.listenForPassengerRequestStatus = function(requestId) {
         else if (status === 'completed') {
             database.ref(`requests/${requestId}`).off('value', window.passengerStatusListener);
             window.passengerStatusListener = null;
+
+            cleanupPassengerTripMap();
             
             closeAllPopups();
             if (typeof window.showTripCompletedScreen === 'function') {
@@ -37685,6 +37806,7 @@ function showPassengerDriverAcceptedPopup(taxiId, requestId, requestData) {
                     updatePopupToEnRoute(updatedRequest);
                 } else if (newStatus === 'completed') {
                     // Trip completed - close popup and show completion screen
+                    cleanupPassengerTripMap();
                     if (typeof window.showTripCompletedScreen === 'function') {
                         closeModal('driverAcceptedPopup');
                         window.showTripCompletedScreen(requestId);
@@ -38908,9 +39030,12 @@ window.showEnhancedBookingStatus = function(requestId, type, requestData) {
 
 window.openClubBooking = function(taxiId, driverName, driverPic, driverRating, vehicleInfo, regNumber) {
     console.log("🚗 Opening Club Booking for:", taxiId);
-window._clubBookingSource = 'club_taxis_list';
+    window._clubBookingSource = 'club_taxis_list';
     console.log("👤 Driver:", driverName);
     console.log("📍 Vehicle:", vehicleInfo, regNumber);
+    
+    // 🚨 FIX: Ensure the button starts in a clickable state
+    window.resetBookingButtonUI();
     
     // Close any open popups
     if (typeof closeAllPopups === 'function') {
@@ -39297,136 +39422,7 @@ function createClubGatewayPopup() {
 // OPEN LIVE CLUB POOLS (Show available cars)
 // ================================================================
 
-window.openLiveClubPools = function() {
-    console.log("👥 Opening Live Club Pools...");
-    
-    // Close the gateway popup
-    const gatewayPopup = document.getElementById('asiyeClubGatewayPopup');
-    if (gatewayPopup) {
-        gatewayPopup.classList.remove('open');
-        gatewayPopup.style.display = 'none';
-    }
-    
-    // Make sure we have location
-    if (!window.commuterLat || !window.commuterLng) {
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    window.commuterLat = position.coords.latitude;
-                    window.commuterLng = position.coords.longitude;
-                    localStorage.setItem('lastLat', window.commuterLat);
-                    localStorage.setItem('lastLng', window.commuterLng);
-                    fetchAndDisplayClubTaxis();
-                },
-                (error) => {
-                    console.warn("GPS error, using fallback:", error);
-                    fetchAndDisplayClubTaxis();
-                },
-                { enableHighAccuracy: true, timeout: 5000 }
-            );
-        } else {
-            fetchAndDisplayClubTaxis();
-        }
-    } else {
-        fetchAndDisplayClubTaxis();
-    }
-};
-
-// ================================================================
-// FETCH AND DISPLAY CLUB TAXIS
-// ================================================================
-
-async function fetchAndDisplayClubTaxis() {
-    let uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
-    let uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
-    
-    console.log(`📍 Fetching club taxis near: ${uLat}, ${uLng}`);
-    
-    // Open the taxi list sheet
-    const sheet = document.getElementById('taxiListSheet');
-    if (sheet) {
-        sheet.classList.add('open');
-        sheet.style.display = 'flex';
-        sheet.style.setProperty('background-color', '#1C1C1E', 'important');
-    }
-    
-    const container = document.getElementById('taxiListContainer');
-    if (container) {
-        container.innerHTML = `
-            <div style="padding: 40px 20px; text-align: center;">
-                <div class="spinner" style="width: 40px; height: 40px; border-width: 4px; margin: 0 auto 20px; border-left-color: #FF9F0A;"></div>
-                <h4 style="color: white; font-weight: 800;">Searching for Club Cars...</h4>
-                <p style="color: #888; font-size: 0.9rem;">Looking for active taxis in your area</p>
-            </div>
-        `;
-    }
-    
-    try {
-        const snapshot = await firebase.database().ref('taxis').once('value');
-        let taxis = [];
-        
-        if (snapshot.exists()) {
-            snapshot.forEach(function(child) {
-                const taxi = child.val();
-                const taxiId = child.key;
-                
-                const isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
-                const isOnline = taxi.isOnline === true;
-                const isAvailable = isVerified && isOnline;
-                
-                if (isAvailable && taxi.latitude && taxi.longitude) {
-                    const dist = calculateDistance(uLat, uLng, taxi.latitude || 0, taxi.longitude || 0);
-                    if (dist <= 30) {
-                        taxi.taxiId = taxiId;
-                        taxi.distance = dist;
-                        taxis.push(taxi);
-                    }
-                }
-            });
-        }
-        
-        taxis.sort((a, b) => (a.distance || 999) - (b.distance || 999));
-        
-        console.log(`📊 Found ${taxis.length} active club taxis`);
-        
-        if (container) {
-            if (taxis.length === 0) {
-                container.innerHTML = `
-                    <div style="padding: 60px 20px; text-align: center; color: #888;">
-                        <div style="width: 80px; height: 80px; background: rgba(255, 159, 10, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-                            <i class="fas fa-car-side" style="font-size: 3rem; color: #FF9F0A;"></i>
-                        </div>
-                        <h4 style="color: #111; font-weight: 900; font-size: 1.2rem;">No Club Cars Active</h4>
-                        <p style="font-size: 0.9rem; margin-top: 5px;">There are no active club cars in your area right now.</p>
-                        <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #FF9F0A; color: black; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer;">
-                            <i class="fas fa-sync-alt"></i> Refresh Search
-                        </button>
-                        <button onclick="closeModal('taxiListSheet'); showModernDashboard();" style="margin-top: 10px; background: transparent; color: #666; border: 1px solid #ddd; padding: 14px 30px; border-radius: 30px; font-weight: 700; cursor: pointer;">
-                            Go Back
-                        </button>
-                    </div>
-                `;
-            } else {
-                displayClubTaxisInSlider(taxis);
-            }
-        }
-        
-    } catch (error) {
-        console.error("Error fetching club taxis:", error);
-        if (container) {
-            container.innerHTML = `
-                <div style="padding: 40px 20px; text-align: center; color: #dc3545;">
-                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 15px;"></i>
-                    <h4 style="font-weight: 800;">Error Loading Cars</h4>
-                    <p style="font-size: 0.9rem;">Please check your connection and try again.</p>
-                    <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #007BFF; color: white; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer;">
-                        <i class="fas fa-sync-alt"></i> Retry
-                    </button>
-                </div>
-            `;
-        }
-    }
-}
+// The live-club implementation is defined later in this block to avoid duplicate function definitions.
 
 // ================================================================
 // DISPLAY CLUB TAXIS IN SLIDER
@@ -39736,33 +39732,46 @@ function showClubTaxisList() {
 }
 
 // ================================================================
-// FETCH AND DISPLAY CLUB TAXIS - COMPLETE
+// FIXED: FETCH AND DISPLAY CLUB TAXIS (SINGLE DECLARATION)
 // ================================================================
-
 async function fetchAndDisplayClubTaxis() {
     console.log("🔄 Fetching club taxis...");
     
     const container = document.getElementById('taxiListContainer');
     if (!container) return;
     
+    // 1. Get User Location (Coordinates)
     let uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
     let uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
     
+    // 2. Show Loading Spinner
+    container.innerHTML = `
+        <div style="padding: 40px 20px; text-align: center;">
+            <div class="spinner" style="width: 40px; height: 40px; border-width: 4px; margin: 0 auto 20px; border-left-color: #FF9F0A;"></div>
+            <h4 style="color: #111; font-weight: 800;">Searching for Club Cars...</h4>
+            <p style="color: #888; font-size: 0.9rem;">Looking for active taxis in your area</p>
+        </div>
+    `;
+    
     try {
-        const snapshot = await firebase.database().ref('taxis').once('value');
+        const [taxiSnapshot, requestSnapshot] = await Promise.all([
+            firebase.database().ref('taxis').once('value'),
+            firebase.database().ref('requests').once('value')
+        ]);
+
         let taxis = [];
+        let clubPools = {};
         
-        if (snapshot.exists()) {
-            snapshot.forEach(function(child) {
+        if (taxiSnapshot.exists()) {
+            taxiSnapshot.forEach(function(child) {
                 const taxi = child.val();
                 const taxiId = child.key;
                 
                 const isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
                 const isOnline = taxi.isOnline === true;
-                const isAvailable = isVerified && isOnline;
                 
-                if (isAvailable && taxi.latitude && taxi.longitude) {
-                    const dist = calculateDistance(uLat, uLng, taxi.latitude || 0, taxi.longitude || 0);
+                if (isVerified && isOnline && taxi.latitude && taxi.longitude) {
+                    const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
                     if (dist <= 30) {
                         taxi.taxiId = taxiId;
                         taxi.distance = dist;
@@ -39771,266 +39780,93 @@ async function fetchAndDisplayClubTaxis() {
                 }
             });
         }
+
+        if (requestSnapshot.exists()) {
+            requestSnapshot.forEach(function(child) {
+                const req = child.val();
+                const reqId = child.key;
+                if (!req || req.type !== 'club') return;
+                if (!['pooling', 'waiting_pool', 'accepted'].includes(req.status)) return;
+                if (req.taxiId) {
+                    clubPools[req.taxiId] = { requestId: reqId, ...req };
+                }
+            });
+        }
         
         taxis.sort((a, b) => (a.distance || 999) - (b.distance || 999));
-        
-        console.log(`📊 Found ${taxis.length} active club taxis`);
         
         if (taxis.length === 0) {
             container.innerHTML = `
                 <div style="padding: 60px 20px; text-align: center; color: #888;">
-                    <div style="width: 80px; height: 80px; background: rgba(255, 159, 10, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-                        <i class="fas fa-car-side" style="font-size: 3rem; color: #FF9F0A;"></i>
-                    </div>
-                    <h4 style="color: #111; font-weight: 900; font-size: 1.2rem;">No Club Cars Active</h4>
-                    <p style="font-size: 0.9rem; margin-top: 5px;">There are no active club cars in your area right now.</p>
-                    <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #FF9F0A; color: black; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(255,159,10,0.3);">
-                        <i class="fas fa-sync-alt"></i> Refresh Search
+                    <i class="fas fa-car-side" style="font-size: 3rem; color: #ccc; margin-bottom: 20px;"></i>
+                    <h4 style="color: #111; font-weight: 900;">No Club Cars Active</h4>
+                    <p>There are no active club cars in your area right now.</p>
+                    <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #FF9F0A; color: black; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer;">
+                        Retry Search
                     </button>
-                    <button onclick="closeClubTaxisList()" style="margin-top: 10px; background: transparent; color: #666; border: 1px solid #ddd; padding: 14px 30px; border-radius: 30px; font-weight: 700; cursor: pointer;">
-                        <i class="fas fa-arrow-left"></i> Go Back
-                    </button>
-                </div>
-            `;
-            return;
+                </div>`;
+        } else {
+            if (typeof displayClubTaxisCards === 'function') {
+                displayClubTaxisCards(taxis, clubPools);
+            } else {
+                console.error("displayClubTaxisCards function missing!");
+            }
         }
-        
-        // Display the taxis in a nice grid/cards
-        displayClubTaxisCards(taxis);
         
     } catch (error) {
         console.error("Error fetching club taxis:", error);
-        container.innerHTML = `
-            <div style="padding: 40px 20px; text-align: center; color: #dc3545;">
-                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 15px;"></i>
-                <h4 style="font-weight: 800;">Error Loading Cars</h4>
-                <p style="font-size: 0.9rem;">Please check your connection and try again.</p>
-                <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #007BFF; color: white; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
-                    <i class="fas fa-sync-alt"></i> Retry
-                </button>
-            </div>
-        `;
+        container.innerHTML = `<p style="text-align:center; color:red; padding:20px;">Error loading taxis. Check connection.</p>`;
     }
 }
-
 // ================================================================
 // DISPLAY CLUB TAXIS AS CARDS
 // ================================================================
 
-function displayClubTaxisCards(taxis) {
+window.displayClubTaxisCards = function(taxis, clubPools = {}) {
     const container = document.getElementById('taxiListContainer');
     if (!container) return;
-    
-    // Add CSS styles if not already present
-    if (!document.getElementById('club-card-styles')) {
+
+    if (!document.getElementById('premium-club-css')) {
         const style = document.createElement('style');
-        style.id = 'club-card-styles';
+        style.id = 'premium-club-css';
         style.innerHTML = `
-            .club-taxi-card {
+            .premium-club-card {
                 background: #ffffff;
                 border-radius: 20px;
-                padding: 18px 18px 20px 18px;
-                margin-bottom: 16px;
-                border: 1px solid #eeeeee;
-                box-shadow: 0 4px 20px rgba(0,0,0,0.04);
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                padding: 15px;
+                margin-bottom: 15px;
+                border: 1px solid #eee;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.05);
                 position: relative;
-                overflow: hidden;
             }
-            .club-taxi-card:active {
-                transform: scale(0.98);
-            }
-            .club-taxi-card .book-btn {
-                background: linear-gradient(135deg, #FF9F0A, #FFB340);
-                color: #000000;
-                border: none;
-                padding: 14px 20px;
-                border-radius: 14px;
-                font-weight: 900;
-                font-size: 1rem;
-                cursor: pointer;
-                transition: all 0.2s ease;
-                width: 100%;
-                box-shadow: 0 4px 15px rgba(255, 159, 10, 0.25);
-                text-align: center;
-            }
-            .club-taxi-card .book-btn:active {
-                transform: scale(0.95);
-            }
-            .club-taxi-card .book-btn:disabled {
-                background: #dc3545;
-                color: white;
-                opacity: 0.7;
-                cursor: not-allowed;
-                box-shadow: none;
-            }
-            .club-taxi-card .status-badge {
-                padding: 4px 12px;
-                border-radius: 12px;
-                font-weight: 800;
-                font-size: 0.7rem;
-                display: inline-block;
-            }
-            .club-taxi-card .status-badge.available {
-                background: #e8f5e9;
-                color: #28a745;
-            }
-            .club-taxi-card .status-badge.full {
-                background: #fbe9e7;
-                color: #dc3545;
-            }
-            .club-taxi-card .status-badge.waiting {
-                background: #fff3e0;
-                color: #FF9F0A;
-            }
-            .club-taxi-card .driver-avatar {
-                width: 48px;
-                height: 48px;
+            .club-driver-img {
+                width: 50px;
+                height: 50px;
                 border-radius: 50%;
                 object-fit: cover;
                 border: 2px solid #FF9F0A;
-                flex-shrink: 0;
             }
-            .club-taxi-card .car-image {
-                max-width: 100%;
-                max-height: 80px;
-                object-fit: contain;
-                filter: drop-shadow(0 4px 10px rgba(0,0,0,0.08));
-                transition: transform 0.3s ease;
-            }
-            .club-taxi-card:hover .car-image {
-                transform: scale(1.03);
-            }
-            .club-taxi-card .price-tag {
-                background: #111111;
-                padding: 8px 14px;
-                border-radius: 12px;
-                text-align: center;
-                min-width: 75px;
-            }
-            .club-taxi-card .price-tag .amount {
-                color: #30D158;
-                font-weight: 900;
-                font-size: 1.2rem;
-            }
-            .club-taxi-card .price-tag .label {
-                color: #888888;
-                font-size: 0.6rem;
-                text-transform: uppercase;
-                font-weight: 700;
-            }
-            .club-taxi-card .header-bar {
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-            }
-            .club-taxi-card .header-bar.available {
-                background: linear-gradient(90deg, #FF9F0A, #FFD60A);
-            }
-            .club-taxi-card .header-bar.full {
-                background: linear-gradient(90deg, #dc3545, #f72585);
-            }
-            .club-taxi-card .header-bar.waiting {
-                background: linear-gradient(90deg, #FF9F0A, #FFB340);
-            }
-            .club-taxi-card .info-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-                gap: 8px;
-                margin: 12px 0;
-            }
-            .club-taxi-card .info-grid .info-item {
-                background: #f8f9fa;
-                border-radius: 12px;
-                padding: 10px 8px;
-                text-align: center;
-            }
-            .club-taxi-card .info-grid .info-item .value {
-                font-weight: 900;
-                color: #111111;
-                font-size: 0.95rem;
-            }
-            .club-taxi-card .info-grid .info-item .label {
-                font-size: 0.6rem;
-                color: #888888;
-                text-transform: uppercase;
-                font-weight: 700;
-            }
-            .club-taxi-card .route-info {
-                background: #f8f9fa;
-                border-radius: 12px;
-                padding: 10px 14px;
-                margin: 12px 0;
-                border: 1px solid #eeeeee;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                font-size: 0.85rem;
-            }
-            .club-taxi-card .route-info .dest {
-                font-weight: 700;
-                color: #111111;
-            }
-            .club-taxi-card .route-info .vehicle {
-                color: #666666;
-                font-weight: 600;
-            }
-            .club-taxi-card .route-info .reg {
-                background: #111111;
-                color: white;
-                padding: 2px 8px;
+            .club-tag {
+                font-size: 0.65rem;
+                font-weight: 800;
+                padding: 3px 8px;
                 border-radius: 6px;
+                text-transform: uppercase;
+            }
+            .area-badge {
+                background: #eef4ff;
+                color: #007BFF;
                 font-size: 0.7rem;
-                font-weight: 800;
-                font-family: monospace;
-            }
-            .club-taxi-card .driver-row {
-                display: flex;
-                align-items: center;
-                gap: 14px;
-                margin-bottom: 12px;
-            }
-            .club-taxi-card .driver-row .driver-info {
-                flex: 1;
-            }
-            .club-taxi-card .driver-row .driver-name {
-                font-weight: 900;
-                color: #111111;
-                font-size: 1.05rem;
-            }
-            .club-taxi-card .driver-row .driver-rating {
-                color: #FFC107;
-                font-weight: 800;
-                font-size: 0.85rem;
-            }
-            .club-taxi-card .driver-row .driver-meta {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                font-size: 0.8rem;
-                color: #666666;
-            }
-            .club-taxi-card .action-row {
-                display: flex;
-                gap: 12px;
-                align-items: center;
-                margin-top: 4px;
-            }
-            .club-taxi-card .action-row .price-container {
-                flex-shrink: 0;
-            }
-            .club-taxi-card .action-row .book-btn {
-                flex: 1;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-weight: 700;
             }
         `;
         document.head.appendChild(style);
     }
-    
-    // Build the header
+
     let html = `
-        <div style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; padding: 0 2px;">
+        <div style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; padding: 0 5px;">
             <div>
                 <h4 style="color: #111111; margin: 0; font-weight: 900; font-size: 1.3rem;">
                     <i class="fas fa-users" style="color: #FF9F0A; margin-right: 8px;"></i>
@@ -40040,167 +39876,85 @@ function displayClubTaxisCards(taxis) {
                     ${taxis.length} active driver${taxis.length > 1 ? 's' : ''} nearby
                 </p>
             </div>
-            <button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
+            <button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                 <i class="fas fa-times"></i>
             </button>
         </div>
+        <div style="display: flex; flex-direction: column; gap: 15px; padding-bottom: 20px;">
     `;
-    
-    // Sort taxis: available first, then by distance
-    const sortedTaxis = [...taxis].sort((a, b) => {
-        const aFull = a.isFull === true || (a.passengerCount || 0) >= (a.maxCapacity || 4);
-        const bFull = b.isFull === true || (b.passengerCount || 0) >= (b.maxCapacity || 4);
-        if (aFull && !bFull) return 1;
-        if (!aFull && bFull) return -1;
-        return (a.distance || 999) - (b.distance || 999);
-    });
-    
-    // Generate cards
-    sortedTaxis.forEach((taxi, index) => {
-        const driverName = ((taxi.name || '') + ' ' + (taxi.surname || '')).trim() || 'Driver';
-        const vInfo = typeof getVehicleDisplayInfo === 'function' ? getVehicleDisplayInfo(taxi) : { 
-            reg: taxi.taxiRegistrationNumber || 'N/A', 
-            fullString: 'Vehicle',
-            typeLabel: 'Minibus'
-        };
-        
-        const distanceStr = (taxi.distance || 0.5).toFixed(1);
-        const etaMins = Math.ceil((taxi.distance || 0.5) * 2.5);
-        const passCount = taxi.passengerCount || taxi.currentPassengers || 0;
-        const maxCap = taxi.vehicleType === 'ehailing' ? 4 : 15;
-        const isFull = taxi.isFull === true || passCount >= maxCap;
-        const isWaiting = taxi.waitingForMore === true;
+
+    taxis.forEach(taxi => {
+        const driverName = ((taxi.name || '') + ' ' + (taxi.surname || '')).trim() || 'Asiye Driver';
+        const area = taxi.loadingArea || taxi.assignedRank || 'Local Area';
+        const price = taxi.rate && taxi.rate !== 'Dynamic' && taxi.rate !== 'RDynamic' ? taxi.rate : '25';
+        const startTime = taxi.morningTime || '07:00';
         const rating = taxi.rating ? parseFloat(taxi.rating).toFixed(1) : '5.0';
-        
-        // Profile picture
-        const picUrl = taxi.profile_picture_url ? getValidImageUrl(taxi.profile_picture_url) : 
-                       `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=111&color=fff&size=48`;
-        
-        // Destination
-        let destinationText = taxi.destination || taxi.dropoffAddress || taxi.dest || 'Destination';
-        if (destinationText === 'Destination' || !destinationText || destinationText.trim() === '') {
-            destinationText = 'Various stops';
-        }
-        const displayDestination = destinationText.split(',')[0].trim();
-        
-        // Price
-        let price = 25;
-        if (taxi.rate && taxi.rate !== "Dynamic" && !isNaN(parseFloat(taxi.rate))) {
-            price = parseFloat(taxi.rate);
-        }
-        
-        // Car image
-        let carImage = taxi.vehiclePhoto || taxi.carImage || 'data/quantum.png';
-        if (carImage && !carImage.startsWith('http') && !carImage.startsWith('data/')) {
-            carImage = 'data/quantum.png';
-        }
-        
-        // Determine status
-        let statusClass = 'available';
-        let statusText = 'AVAILABLE';
-        let headerClass = 'available';
-        
-        if (isFull) {
-            statusClass = 'full';
-            statusText = 'FULL';
-            headerClass = 'full';
-        } else if (isWaiting) {
-            statusClass = 'waiting';
-            statusText = 'WAITING';
-            headerClass = 'waiting';
-        }
-        
-        // Seats available
-        const seatsAvailable = Math.max(0, maxCap - passCount);
-        
-        // Book button state
-        const isDisabled = isFull;
-        const buttonText = isFull ? '🚫 Car Full' : 'Book Driver';
-        
-        // Build onclick handler safely
-        const onclickHandler = isDisabled ? '' : 
-            `openClubBooking('${taxi.taxiId}', '${escapeHtml(driverName)}', '${picUrl}', '${rating}', '${escapeHtml(vInfo.fullString)}', '${escapeHtml(vInfo.reg)}')`;
-        
+        const vInfo = typeof getVehicleDisplayInfo === 'function' ? getVehicleDisplayInfo(taxi) : { fullString: 'Vehicle', reg: 'N/A' };
+        const picUrl = taxi.profile_picture_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=FF9F0A&color=fff`;
+        const poolInfo = clubPools[taxi.taxiId] || null;
+        const poolPassengers = poolInfo ? Object.keys(poolInfo.passengers || {}).length : 0;
+        const poolCapacity = poolInfo ? (poolInfo.maxCapacity || 3) : 0;
+        const isPoolActive = !!poolInfo && (poolInfo.status === 'pooling' || poolInfo.status === 'waiting_pool' || poolInfo.status === 'accepted');
+        const poolBadgeText = isPoolActive ? (poolInfo.waitingForMore ? 'Waiting for more' : 'Shared Lift Pool') : '';
+        const poolButtonText = isPoolActive && poolPassengers < poolCapacity ? `Join Pool (Be #${poolPassengers + 1})` : 'Book Driver';
+        const poolButtonColor = isPoolActive ? '#FF9F0A' : '#111';
+        const poolButtonTextColor = isPoolActive ? '#000' : '#fff';
+
         html += `
-            <div class="club-taxi-card" style="animation: fadeInUp 0.3s ease ${index * 0.05}s both;">
-                <div class="header-bar ${headerClass}"></div>
-                
-                <!-- Driver Row -->
-                <div class="driver-row">
-                    <img src="${picUrl}" class="driver-avatar" onerror="this.src='data/AsiyeNew.png'" alt="${escapeHtml(driverName)}">
-                    <div class="driver-info">
-                        <div class="driver-name">${escapeHtml(driverName)}</div>
-                        <div class="driver-meta">
-                            <span class="driver-rating"><i class="fas fa-star"></i> ${rating}</span>
-                            <span>•</span>
-                            <span>${distanceStr} km away</span>
-                            <span>•</span>
-                            <span class="status-badge ${statusClass}">${statusText}</span>
+            <div class="premium-club-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; gap: 10px;">
+                    <div style="display: flex; gap: 12px; align-items: center; min-width: 0; flex: 1;">
+                        <img src="${picUrl}" class="club-driver-img" onerror="this.src='data/AsiyeNew.png'">
+                        <div style="min-width: 0;">
+                            <div style="font-weight: 800; color: #111; font-size: 1rem;">${escapeHtml(driverName)}</div>
+                            <div style="color: #FF9F0A; font-size: 0.8rem; font-weight: 700;"><i class="fas fa-star"></i> ${rating}</div>
                         </div>
                     </div>
-                </div>
-                
-                <!-- Info Grid -->
-                <div class="info-grid">
-                    <div class="info-item">
-                        <div class="value">${seatsAvailable}</div>
-                        <div class="label">Seats</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="value">~${etaMins} min</div>
-                        <div class="label">ETA</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="value">${passCount}/${maxCap}</div>
-                        <div class="label">Passengers</div>
+                    <div style="text-align: right; flex-shrink: 0;">
+                        <span class="club-tag" style="background: #e8f5e9; color: #28a745;">Available</span>
+                        <div style="margin-top: 5px; font-weight: 900; color: #28a745; font-size: 1.2rem;">R${price}</div>
                     </div>
                 </div>
-                
-                <!-- Route Info -->
-                <div class="route-info">
-                    <span class="dest"><i class="fas fa-flag-checkered" style="color: #007BFF; margin-right: 6px;"></i>${escapeHtml(displayDestination)}</span>
-                    <span class="vehicle">${escapeHtml(vInfo.fullString)}</span>
-                    <span class="reg">${escapeHtml(vInfo.reg)}</span>
-                </div>
-                
-                <!-- Action Row -->
-                <div class="action-row">
-                    <div class="price-container">
-                        <div class="price-tag">
-                            <div class="label">From</div>
-                            <div class="amount">R${price}</div>
-                        </div>
+
+                <div style="background: #f8f9fa; border-radius: 12px; padding: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                    <div style="min-width: 0;">
+                        <div style="font-size: 0.6rem; color: #888; font-weight: 800; text-transform: uppercase;">Area of Work</div>
+                        <div style="font-weight: 700; color: #333; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(area)}</div>
                     </div>
-                    <button class="book-btn" ${isDisabled ? 'disabled' : ''} onclick="${onclickHandler}">
-                        ${isFull ? '🚫 FULL' : '<i class="fas fa-user-plus" style="margin-right: 6px;"></i> Book Driver'}
-                    </button>
+                    <div>
+                        <div style="font-size: 0.6rem; color: #888; font-weight: 800; text-transform: uppercase;">Daily Start</div>
+                        <div style="font-weight: 700; color: #333; font-size: 0.85rem;">${startTime} AM</div>
+                    </div>
+                    <div style="grid-column: span 2; border-top: 1px solid #eee; padding-top: 8px;">
+                        <div style="font-size: 0.6rem; color: #888; font-weight: 800; text-transform: uppercase;">Vehicle</div>
+                        <div style="font-weight: 700; color: #111; font-size: 0.85rem;">${escapeHtml(vInfo.fullString)} (${escapeHtml(vInfo.reg)})</div>
+                    </div>
                 </div>
+
+                ${isPoolActive ? `
+                    <div style="background: #fff4e5; border: 1px solid #ffd9a8; border-radius: 12px; padding: 10px 12px; margin-bottom: 12px;">
+                        <div style="font-size: 0.68rem; color: #b96b00; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px;">Shared Lift Club</div>
+                        <div style="font-weight: 800; color: #111; font-size: 0.9rem; margin-top: 3px;">${poolPassengers}/${poolCapacity} joined • ${poolBadgeText}</div>
+                    </div>
+                ` : ''}
+
+                <button class="btn btn-primary" onclick="openClubBooking('${taxi.taxiId}', '${escapeHtml(driverName)}', '${picUrl}', '${rating}', '${escapeHtml(vInfo.fullString)}', '${escapeHtml(vInfo.reg)}')"
+                    style="width: 100%; background: ${poolButtonColor} !important; color: ${poolButtonTextColor} !important; border-radius: 12px; font-weight: 800; padding: 14px;">
+                    ${isPoolActive ? poolButtonText : 'Book Driver'}
+                </button>
             </div>
         `;
     });
-    
-    // Add close button at bottom
+
     html += `
-        <button onclick="closeClubTaxisList()" style="
-            width: 100%; 
-            background: #ffffff; 
-            border: 2px solid #eeeeee; 
-            color: #666666; 
-            padding: 16px; 
-            border-radius: 16px; 
-            font-weight: 800; 
-            cursor: pointer; 
-            margin-top: 10px;
-            transition: all 0.2s ease;
-            font-size: 1rem;
-        ">
-            <i class="fas fa-arrow-left" style="margin-right: 8px;"></i> Close & Go Back
+        </div>
+        <button onclick="closeClubTaxisList()" style="width: 100%; background: #ffffff; border: 2px solid #eeeeee; color: #666666; padding: 16px; border-radius: 16px; font-weight: 800; cursor: pointer; margin-top: 10px; font-size: 1rem;">
+            <i class="fas fa-arrow-left"></i> Close & Go Back
         </button>
     `;
-    
+
     container.innerHTML = html;
-    console.log("✅ Club taxis displayed professionally with", taxis.length, "cars");
-}
+};
 
 // ================================================================
 // CLOSE CLUB TAXIS LIST
@@ -41022,52 +40776,138 @@ function showClubPickupSuggestions(features) {
 }
 
 // ================================================================
+// FIND A JOINABLE CLUB POOL FOR THIS ROUTE
+// ================================================================
+
+window.findJoinableClubPool = async function(pLat, pLng, dLat, dLng) {
+    if (!pLat || !pLng || !dLat || !dLng) return null;
+
+    try {
+        const snap = await firebase.database().ref('requests').once('value');
+        if (!snap.exists()) return null;
+
+        let bestPool = null;
+        let bestDistance = Infinity;
+
+        snap.forEach(child => {
+            const req = child.val();
+            const reqId = child.key;
+
+            if (!req || req.type !== 'club') return;
+            if (!['pending', 'pooling', 'waiting_pool'].includes(req.status)) return;
+            if (req.taxiId && window.selectedClubTaxiId && req.taxiId !== window.selectedClubTaxiId) return;
+
+            const currentPassengers = req.passengers ? Object.keys(req.passengers).length : 0;
+            const maxCapacity = req.maxCapacity || 3;
+            if (currentPassengers >= maxCapacity) return;
+
+            const poolLat = req.poolCenterLat || req.commuterLocation?.latitude || (req.passengers ? Object.values(req.passengers)[0]?.location?.latitude : null);
+            const poolLng = req.poolCenterLng || req.commuterLocation?.longitude || (req.passengers ? Object.values(req.passengers)[0]?.location?.longitude : null);
+            if (!poolLat || !poolLng) return;
+
+            const dist = calculateDistance(pLat, pLng, poolLat, poolLng);
+            if (dist <= 10 && dist < bestDistance) {
+                bestDistance = dist;
+                bestPool = { requestId: reqId, request: req };
+            }
+        });
+
+        return bestPool;
+    } catch (err) {
+        console.error("Error finding joinable club pool:", err);
+        return null;
+    }
+};
+
+// ================================================================
 // SUBMIT CLUB BOOKING
 // ================================================================
 
 window.submitClubBooking = function() {
-    console.log("📤 Submitting club booking...");
+    console.log("📤 Initializing club booking check...");
     
-    const pickupText = document.getElementById('clubBookingPickup')?.value?.trim();
-    const destText = document.getElementById('clubBookingDestination')?.value?.trim();
-    const dateVal = document.getElementById('clubBookingDate')?.value;
-    const timeVal = document.getElementById('clubBookingTime')?.value;
+    // 1. Reset payment method for each new attempt to force a fresh check
+    if (typeof window._firstCheck === 'undefined') {
+        window.selectedPaymentMethod = null;
+        window._firstCheck = true;
+    }
+
+    const price = window.clubBookingCalculatedPrice || 25;
+    const balance = (window.commuterData && window.commuterData.credits) ? window.commuterData.credits : 0;
+
+    // 2. STRICT CHECK: If wallet is low AND they haven't explicitly clicked "Pay Cash" yet
+    if (balance < price && window.selectedPaymentMethod !== 'cash') {
+        console.log("🚨 Wallet empty (R" + balance + "). Intercepting to show payment options.");
+        window.showWalletRequiredPopup();
+        return; // STOP: Do not call executeFinalClubBooking
+    }
+
+    // 3. If they have balance or chose cash, proceed
+    console.log("✅ Check passed. Proceeding with booking...");
+    window._firstCheck = undefined; // Reset for next time
+    window.executeFinalClubBooking();
+};
+
+window.showWalletRequiredPopup = function() {
+    const popup = document.getElementById('genericMessagePopup');
+    if (!popup) return;
+
+    if (popup.parentNode) {
+        popup.parentNode.appendChild(popup);
+    }
+
+    popup.style.cssText = `display: flex !important; z-index: 2147483647 !important; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; position: fixed !important; inset: 0;`;
+    popup.style.setProperty('z-index', '2147483647', 'important');
+    popup.style.setProperty('position', 'fixed', 'important');
+
+    popup.innerHTML = `
+        <div class="modal-content" style="text-align: center; padding: 30px; background: white !important; border-radius:24px; width: 90%; max-width: 380px;">
+            <div style="width: 70px; height: 70px; background: #FFF4E5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                <i class="fas fa-wallet" style="font-size: 2rem; color: #FF9F0A;"></i>
+            </div>
+            <h3 style="color:#111 !important; font-weight:800;">Empty Wallet</h3>
+            <p style="color:#666 !important; font-size:0.95rem;">You don't have credits in your wallet. How would you like to pay for this Club booking?</p>
+            
+            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
+                <button onclick="window.confirmPayCash()" style="width: 100%; background: #111; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: 800; cursor: pointer;">
+                    Pay Cash to Driver
+                </button>
+                <button onclick="closeModal('genericMessagePopup'); openEarningsDashboard();" style="width: 100%; background: #007BFF; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: 800; cursor: pointer;">
+                    Top up Wallet
+                </button>
+            </div>
+        </div>
+    `;
+    popup.classList.add('open');
+};
+
+window.confirmPayCash = function() {
+    console.log("💰 User chose Cash. Resuming booking...");
+    window.selectedPaymentMethod = 'cash';
     
-    if (!pickupText) {
-        showToast("Please enter your pickup location.", "warning");
-        return;
-    }
-    if (!destText) {
-        showToast("Please enter your destination.", "warning");
-        return;
-    }
-    if (!dateVal) {
-        showToast("Please select a date.", "warning");
-        return;
-    }
-    if (!timeVal) {
-        showToast("Please select a pickup time.", "warning");
-        return;
-    }
+    // Close the warning
+    closeModal('genericMessagePopup');
     
-    const today = new Date();
-    const selectedDate = new Date(dateVal);
-    if (selectedDate < today) {
-        showToast("Please select a date in the future.", "warning");
-        return;
-    }
-    
+    // Re-call the submit function - this time it will pass the check above
+    window.submitClubBooking();
+};
+
+window.executeFinalClubBooking = function() {
     const btn = document.getElementById('clubBookingSubmitBtn');
     if (btn) {
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Booking...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Booking Seat...';
         btn.disabled = true;
     }
-    
-    let pLat = window.clubBookingPickupLat || window.commuterLat;
-    let pLng = window.clubBookingPickupLng || window.commuterLng;
+
+    const pickupText = document.getElementById('clubBookingPickup').value;
+    const destText = document.getElementById('clubBookingDestination').value;
+    const dateVal = document.getElementById('clubBookingDate').value;
+    const timeVal = document.getElementById('clubBookingTime').value;
+    const pLat = window.clubBookingPickupLat || window.commuterLat;
+    const pLng = window.clubBookingPickupLng || window.commuterLng;
     let dLat = window.clubBookingDestLat;
     let dLng = window.clubBookingDestLng;
-    
+
     if (!dLat || !dLng) {
         fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(destText)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=1`)
             .then(res => res.json())
@@ -41092,17 +40932,19 @@ window.submitClubBooking = function() {
             });
         return;
     }
-    
+
     completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng, dLat, dLng);
 };
 
 // Update the completeClubBooking function
-function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng, dLat, dLng) {
+async function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng, dLat, dLng) {
     console.log("✅ Completing club booking...");
     
     const taxiId = window.selectedClubTaxiId;
     const price = window.clubBookingCalculatedPrice || 25;
     const btn = document.getElementById('clubBookingSubmitBtn');
+    const balance = (window.commuterData && window.commuterData.credits) ? window.commuterData.credits : 0;
+    const paymentMethod = (window.selectedPaymentMethod === 'cash' || balance < price) ? 'cash' : 'wallet';
     
     const dateObj = new Date(dateVal);
     const formattedDate = dateObj.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -41110,39 +40952,8 @@ function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng,
     
     const passengerName = (window.commuterData?.name || '') + ' ' + (window.commuterData?.surname || '');
     const passengerPhone = window.commuterData?.phone || '';
-    
-    const requestData = {
-        type: 'club',
-        status: 'pending',
-        taxiId: taxiId,
-        commuterId: window.userId,
-        commuterName: passengerName.trim() || 'Passenger',
-        commuterPhone: passengerPhone,
-        pickupAddress: pickupText,
-        destination: destText,
-        commuterLocation: { 
-            latitude: pLat, 
-            longitude: pLng 
-        },
-        destinationCoords: { 
-            latitude: dLat, 
-            longitude: dLng 
-        },
-        calculatedPrice: price,
-        originalPerPersonPrice: price,
-        paymentMethod: 'cash',
-        requirePin: true,
-        pickupPin: pickupPin,
-        bookingDate: dateVal,
-        bookingTime: timeVal,
-        formattedDate: formattedDate,
-        maxCapacity: 3,
-        passengers: {},
-        passengerCount: 1,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
-    
-    requestData.passengers[window.userId] = {
+
+    const passengerEntry = {
         commuterName: passengerName.trim() || 'Passenger',
         commuterPhone: passengerPhone,
         location: { latitude: pLat, longitude: pLng },
@@ -41155,60 +40966,123 @@ function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng,
         bookingDate: dateVal,
         bookingTime: timeVal
     };
-    
-    const requestRef = firebase.database().ref('requests').push();
-    const requestId = requestRef.key;
-    requestData.requestId = requestId;
-    
-    requestRef.set(requestData).then(() => {
-        console.log("✅ Request saved to Firebase:", requestId);
-        return firebase.database().ref(`commuters/${window.userId}`).update({
-            currentRequest: requestId
-        });
-    }).then(() => {
-        window.currentRequestId = requestId;
-        localStorage.setItem('currentRequestId', requestId);
-        
-        // 🔥 FIX: Close booking popup and return to club taxis list
-        closeClubBookingAndReturn();
-        
-        // Send notification to driver
-        return firebase.database().ref(`notifications/taxis/${taxiId}`).push({
+
+    try {
+        const joinablePool = await window.findJoinableClubPool(pLat, pLng, dLat, dLng);
+
+        if (joinablePool && joinablePool.requestId) {
+            const poolRef = firebase.database().ref(`requests/${joinablePool.requestId}`);
+            const currentPassengerCount = joinablePool.request?.passengers ? Object.keys(joinablePool.request.passengers).length : 0;
+            const updateData = {
+                [`passengers/${window.userId}`]: passengerEntry,
+                passengerCount: currentPassengerCount + 1,
+                status: joinablePool.request?.status === 'pending' ? 'pooling' : joinablePool.request?.status || 'pooling',
+                waitingForMore: joinablePool.request?.waitingForMore === true,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            };
+            await poolRef.update(updateData);
+
+            if (joinablePool.request?.taxiId) {
+                await firebase.database().ref(`notifications/taxis/${joinablePool.request.taxiId}`).push({
+                    type: 'club',
+                    title: '👤 New Passenger Joined Club Pool',
+                    message: `${passengerName.trim() || 'Passenger'} joined your waiting club pool.`,
+                    requestId: joinablePool.requestId,
+                    commuterName: passengerName.trim() || 'Passenger',
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+            }
+
+            const requestId = joinablePool.requestId;
+            window.currentRequestId = requestId;
+            localStorage.setItem('currentRequestId', requestId);
+            await firebase.database().ref(`commuters/${window.userId}`).update({ currentRequest: requestId });
+            closeClubBookingAndReturn();
+            showEnhancedBookingStatus(requestId, 'club', { ...joinablePool.request, passengerCount: currentPassengerCount + 1, passengers: { ...(joinablePool.request?.passengers || {}), [window.userId]: passengerEntry } });
+            listenForDriverAcceptance(requestId);
+            if (typeof showToast === 'function') {
+                showToast("Joined an existing club pool!", "success");
+            }
+            return;
+        }
+
+        const requestData = {
             type: 'club',
-            title: '👤 New Club Request!',
-            message: `${passengerName} wants to join your car to ${destText.split(',')[0]}`,
-            requestId: requestId,
-            commuterName: passengerName,
+            status: 'pooling',
+            waitingForMore: false,
+            taxiId: taxiId,
+            commuterId: window.userId,
+            commuterName: passengerName.trim() || 'Passenger',
             commuterPhone: passengerPhone,
             pickupAddress: pickupText,
             destination: destText,
-            pickupLat: pLat,
-            pickupLng: pLng,
-            destLat: dLat,
-            destLng: dLng,
-            pickupPin: pickupPin,
+            commuterLocation: { 
+                latitude: pLat, 
+                longitude: pLng 
+            },
+            destinationCoords: { 
+                latitude: dLat, 
+                longitude: dLng 
+            },
+            calculatedPrice: price,
+            originalPerPersonPrice: price,
+            paymentMethod: paymentMethod,
             requirePin: true,
+            pickupPin: pickupPin,
             bookingDate: dateVal,
             bookingTime: timeVal,
-            price: price,
+            formattedDate: formattedDate,
+            maxCapacity: 3,
+            passengers: {},
             passengerCount: 1,
             timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-    }).then(() => {
+        };
+        
+        requestData.passengers[window.userId] = passengerEntry;
+        
+        const requestRef = firebase.database().ref('requests').push();
+        const requestId = requestRef.key;
+        requestData.requestId = requestId;
+        
+        await requestRef.set(requestData);
+        console.log("✅ Request saved to Firebase:", requestId);
+        await firebase.database().ref(`commuters/${window.userId}`).update({ currentRequest: requestId });
+        window.currentRequestId = requestId;
+        localStorage.setItem('currentRequestId', requestId);
+        
+        closeClubBookingAndReturn();
+        
+        if (taxiId) {
+            await firebase.database().ref(`notifications/taxis/${taxiId}`).push({
+                type: 'club',
+                title: '👤 New Club Request!',
+                message: `${passengerName.trim() || 'Passenger'} wants to join your car to ${destText.split(',')[0]}`,
+                requestId: requestId,
+                commuterName: passengerName.trim() || 'Passenger',
+                commuterPhone: passengerPhone,
+                pickupAddress: pickupText,
+                destination: destText,
+                pickupLat: pLat,
+                pickupLng: pLng,
+                destLat: dLat,
+                destLng: dLng,
+                pickupPin: pickupPin,
+                requirePin: true,
+                bookingDate: dateVal,
+                bookingTime: timeVal,
+                price: price,
+                passengerCount: 1,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+
         console.log("✅ Driver notification sent");
-        
-        // Show enhanced booking status
         showEnhancedBookingStatus(requestId, 'club', requestData);
-        
-        // Listen for driver acceptance
         listenForDriverAcceptance(requestId);
-        
-        // Show toast
         if (typeof showToast === 'function') {
             showToast("Club booking sent to driver!", "success");
         }
-        
-    }).catch(err => {
+    } catch (err) {
         console.error("❌ Booking error:", err);
         if (typeof showToast === 'function') {
             showToast("Failed to book. Please try again.", "danger");
@@ -41217,7 +41091,7 @@ function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng,
             btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm & Book Seat';
             btn.disabled = false;
         }
-    });
+    }
 }
 // ================================================================
 // SHOW TOAST NOTIFICATION
@@ -43659,15 +43533,43 @@ function startFullScreenTracking(taxiId, passengerLat, passengerLng) {
             }
         }
         
-        // Update map center to follow driver smoothly
+        // Smart zoom keeps the taxi visible without losing passenger context.
         if (trackingMap) {
-            trackingMap.easeTo({
-                center: [driverLng, driverLat],
-                bearing: heading,
-                pitch: 45,
-                duration: 1000,
-                essential: true
-            });
+            const targetPassengerLat = Number.isFinite(window.commuterLat) ? window.commuterLat : passengerLat;
+            const targetPassengerLng = Number.isFinite(window.commuterLng) ? window.commuterLng : passengerLng;
+
+            if (Number.isFinite(targetPassengerLat) && Number.isFinite(targetPassengerLng)) {
+                const dist = calculateDistance(targetPassengerLat, targetPassengerLng, driverLat, driverLng);
+
+                if (dist < 0.8) {
+                    trackingMap.easeTo({
+                        center: [driverLng, driverLat],
+                        zoom: 17,
+                        pitch: 45,
+                        bearing: heading,
+                        duration: 1000,
+                        essential: true
+                    });
+                } else {
+                    const bounds = new mapboxgl.LngLatBounds()
+                        .extend([targetPassengerLng, targetPassengerLat])
+                        .extend([driverLng, driverLat]);
+
+                    trackingMap.fitBounds(bounds, {
+                        padding: { top: 50, bottom: 250, left: 50, right: 50 },
+                        maxZoom: 16
+                    });
+                }
+            } else {
+                trackingMap.easeTo({
+                    center: [driverLng, driverLat],
+                    zoom: 16,
+                    pitch: 45,
+                    bearing: heading,
+                    duration: 1000,
+                    essential: true
+                });
+            }
         }
         
         // Throttle route updates - only update every 5 seconds
@@ -44533,15 +44435,15 @@ function updateWaitingStatus(request) {
                 const initial = (p.commuterName || 'P').charAt(0).toUpperCase();
                 
                 html += `
-                    <div class="waiting-passenger-item" style="animation: slideInItem 0.3s ease forwards; display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: ${index < passKeys.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none'};">
-                        <div class="waiting-passenger-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: ${color}; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: white; flex-shrink: 0;">
+                    <div class="waiting-passenger-item" style="animation: slideInItem 0.3s ease forwards; display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: ${index < passKeys.length - 1 ? '1px solid #3A3A3C' : 'none'};">
+                        <div class="waiting-passenger-avatar" style="width: 35px; height: 35px; border-radius: 50%; background: ${color}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; color: white; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
                             ${initial}
                         </div>
-                        <div class="waiting-passenger-name" style="flex: 1; margin-left: 10px; font-weight: 600; color: white; font-size: 0.9rem;">
+                        <div class="waiting-passenger-name" style="flex: 1; margin-left: 12px; font-weight: 700; color: white; font-size: 1rem;">
                             ${isMe ? 'You' : escapeHtml(p.commuterName || 'Passenger')}
-                            ${isMe ? ' <span style="font-size: 0.65rem; color: #FF9F0A;">(You)</span>' : ''}
+                            ${isMe ? ' <span style="font-size: 0.75rem; color: #FFC107; font-weight: 800; margin-left: 4px;">(You)</span>' : ''}
                         </div>
-                        <div class="waiting-passenger-status ${statusClass}" style="font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 12px; ${isJoined || isOnboard ? 'background: rgba(48, 209, 88, 0.3); color: #30D158;' : 'background: rgba(255, 159, 10, 0.3); color: #FF9F0A;'}">
+                        <div class="waiting-passenger-status ${statusClass}" style="font-size: 0.75rem; font-weight: 800; padding: 4px 12px; border-radius: 12px; ${isJoined || isOnboard ? 'background: #28a745; color: white;' : 'background: white; color: black; border: 1px solid #ddd;'}">
                             ${statusText}
                         </div>
                     </div>
@@ -44553,6 +44455,49 @@ function updateWaitingStatus(request) {
     
     const progressBar = document.getElementById('trackingProgressBar');
     const progressText = document.getElementById('trackingProgressText');
+
+    // Bypass wait option for passengers who want to depart immediately.
+    const requestId = request.key || request.requestId || window.currentRequestId || localStorage.getItem('currentRequestId');
+    const pricePerSeat = request.originalPerPersonPrice || 25;
+    const rideNowPrice = pricePerSeat * maxCapacity;
+
+    let bypassCard = document.getElementById('bypassWaitCard');
+    if (!isFull && !bypassCard) {
+        bypassCard = document.createElement('div');
+        bypassCard.id = 'bypassWaitCard';
+        bypassCard.style.cssText = [
+            'margin-top: 15px',
+            'padding: 15px',
+            'background: rgba(255,255,255,0.1)',
+            'border-radius: 12px',
+            'border: 1px dashed rgba(255,255,255,0.3)',
+            'text-align: center'
+        ].join(';');
+        waitingEl.appendChild(bypassCard);
+    }
+
+    if (bypassCard) {
+        if (isFull || !requestId) {
+            bypassCard.style.display = 'none';
+        } else {
+            bypassCard.style.display = 'block';
+            bypassCard.style.background = 'transparent';
+            bypassCard.style.border = 'none';
+            bypassCard.style.padding = '0';
+            bypassCard.style.marginTop = '15px';
+            bypassCard.innerHTML = `
+                <div style="background: #FF9F0A; border-radius: 16px; padding: 20px; border: 1px solid #FFB340; box-shadow: 0 4px 15px rgba(255, 159, 10, 0.2);">
+                    <p style="color: black; font-size: 0.95rem; margin-bottom: 15px; font-weight: 800;">
+                        <i class="fas fa-bolt"></i> In a hurry? Pay for the full car to leave now.
+                    </p>
+                    <button onclick="window.negotiateRideNow('${requestId}', ${rideNowPrice})"
+                            style="width: 100%; background: #000; color: #FF9F0A; border: none; padding: 16px; border-radius: 30px; font-weight: 900; font-size: 1.05rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.3); text-transform: uppercase;">
+                        Ride Now for R${rideNowPrice}
+                    </button>
+                </div>
+            `;
+        }
+    }
     
     if (progressBar && progressText) {
         const percentage = Math.min(100, (passCount / maxCapacity) * 100);
@@ -44561,10 +44506,8 @@ function updateWaitingStatus(request) {
         
         if (percentage >= 100) {
             progressBar.style.background = 'linear-gradient(90deg, #30D158, #28a745)';
-        } else if (percentage >= 50) {
-            progressBar.style.background = 'linear-gradient(90deg, #FFD60A, #FF9F0A)';
         } else {
-            progressBar.style.background = 'linear-gradient(90deg, #FF6B6B, #FF9F0A)';
+            progressBar.style.background = '#007BFF';
         }
     }
     
