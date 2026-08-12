@@ -20,6 +20,7 @@ jobs:
           channel: 'stable'
 
       # FIX 1: We DO need a working directory because the code is inside the asiye_app folder!
+      # Using new GH_PAT for authentication
       - name: Install Flutter Dependencies
         working-directory: ./asiye_app
         run: flutter pub get
