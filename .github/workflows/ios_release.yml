@@ -20,7 +20,6 @@ jobs:
           channel: 'stable'
 
       # FIX 1: We DO need a working directory because the code is inside the asiye_app folder!
-      # Using new GH_PAT for authentication
       - name: Install Flutter Dependencies
         working-directory: ./asiye_app
         run: flutter pub get
@@ -32,6 +31,11 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-          # Inject the token directly into the URL environment variable
-          MATCH_GIT_URL: "https://${{ secrets.GH_PAT }}@github.com/Gatcheni2025/asiye-certs.git"
-        run: fastlane beta
+          # Using x-access-token prefix for GitHub PAT
+          MATCH_GIT_URL: "https://x-access-token:${{ secrets.GH_PAT }}@github.com/Gatcheni2025/asiye-certs.git"
+        run: |
+          if [ -z "${{ secrets.GH_PAT }}" ]; then
+            echo "::error::GH_PAT secret is empty. Please check your repository secrets."
+            exit 1
+          fi
+          fastlane beta
