@@ -10,9 +10,10 @@ platform :ios do
 
     setup_ci
 
-    # 1. Fetch certificates
+    # 1. Fetch certificates (Using the app repo's 'certificates' branch)
     match(
-      git_url: "https://github.com/Gatcheni2025/asiye-certs",
+      git_url: "https://github.com/Gatcheni2025/asiye_app",
+      git_branch: "certificates",
       type: "appstore",
       app_identifier: "com.asiyeapp.asiye",
       team_id: "AC775BUGG5",

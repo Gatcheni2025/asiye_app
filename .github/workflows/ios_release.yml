@@ -25,8 +25,10 @@ jobs:
         run: flutter pub get
 
       - name: Configure Git for Private Match Repo
+        env:
+          TOKEN: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: |
-          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+          git config --global url."https://${TOKEN}@github.com/".insteadOf "https://github.com/"
 
       # FIX 2: Fastlane must run inside the ios folder which is inside asiye_app
       - name: Build and Upload to TestFlight 
@@ -36,4 +38,6 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          # Providing authorization directly to fastlane as well
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
         run: fastlane beta
