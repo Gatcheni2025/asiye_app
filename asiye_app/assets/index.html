@@ -11079,70 +11079,6 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     border-radius: 3px;
     transition: width 0.5s ease;
 }
-/* --- COMMUTE SETUP GEOCODER FIX (Black Text on White Bg & Visible Dropdown) --- */
-#setupCommuteModal .mapboxgl-ctrl-geocoder {
-    background-color: #ffffff !important;
-    border: none !important;
-    border-radius: 12px !important;
-    box-shadow: none !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    position: relative !important;
-    overflow: visible !important; /* CRITICAL: Allows dropdown to spill out */
-}
-#setupCommuteModal .mapboxgl-ctrl-geocoder--input {
-    color: #111111 !important;
-    background-color: transparent !important;
-    padding-left: 35px !important;
-    font-weight: 800 !important;
-}
-#setupCommuteModal .mapboxgl-ctrl-geocoder--input::placeholder {
-    color: #888888 !important;
-}
-#setupCommuteModal .mapboxgl-ctrl-geocoder--icon {
-    fill: #666666 !important;
-}
-/* 🔥 CRITICAL FIX: Force the suggestions dropdown to appear and be clickable */
-#setupCommuteModal .mapboxgl-ctrl-geocoder--suggestions {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    background-color: #ffffff !important;
-    border: 1px solid #eee !important;
-    border-radius: 12px !important;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;
-    z-index: 999999 !important;
-    position: absolute !important;
-    top: 100% !important;
-    left: 0 !important;
-    width: 100% !important;
-    max-height: 250px !important;
-    overflow-y: auto !important;
-    margin-top: 5px !important;
-}
-#setupCommuteModal .mapboxgl-ctrl-geocoder--suggestion {
-    color: #111111 !important;
-    background-color: transparent !important;
-    border-bottom: 1px solid #f0f0f0 !important;
-    padding: 12px 15px !important;
-    cursor: pointer !important;
-    display: block !important;
-}
-#setupCommuteModal .mapboxgl-ctrl-geocoder--suggestion:hover {
-    background-color: #f8f9fa !important;
-}
-#setupCommuteModal .mapboxgl-ctrl-geocoder--suggestion-title {
-    color: #111111 !important;
-    font-weight: 800 !important;
-    display: block !important;
-    margin-bottom: 2px !important;
-}
-#setupCommuteModal .mapboxgl-ctrl-geocoder--suggestion-address {
-    color: #888888 !important;
-    font-size: 0.85rem !important;
-    display: block !important;
-}
 </style>
 </head>
 <body>
@@ -11168,6 +11104,7 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 
 <!-- === START: MODERN HOME DASHBOARD OVERLAY === -->
 
+<!-- === END: MODERN HOME DASHBOARD OVERLAY === -->
 
 <div id="promosModal" class="modal-overlay">
     <div class="modal-content" style="background: #ffffff !important; max-width: 400px; border-radius: 24px; padding: 25px;">
@@ -11189,6 +11126,12 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     </div>
 </div>
 
+
+<!-- FLOATING "WHERE FROM" BUBBLE -->
+<div id="homePickupBubble" style="position: fixed; top: 120px; left: 50%; transform: translateX(-50%); background: #222222; color: white; padding: 12px 24px; border-radius: 20px; z-index: 10000; box-shadow: 0 4px 15px rgba(0,0,0,0.3); display: flex; flex-direction: column; align-items: center; cursor: pointer; border: 1px solid #444;" onclick="openModal('changeLocationPopup')">
+    <span style="font-size: 0.7rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px;">Where from</span>
+    <span id="homeCurrentAddress" style="font-weight: 700; font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">Fetching...</span>
+</div>
 
 
 <!-- BEAUTIFIED DRAGGABLE DASHBOARD (IMAGE 1 STYLE) -->
@@ -11353,80 +11296,6 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 
     </div>
 </div><!-- CRITICAL: Closes Modal Overlay -->
-<!-- MODERN "SET UP COMMUTE" MODAL WITH AUTOCOMPLETE -->
-<div id="setupCommuteModal" class="modal-overlay" style="z-index: 100005 !important;">
-    <div class="modal-content" style="background: #1C1C1E !important; color: white !important; height: 100vh !important; max-height: 100vh !important; border-radius: 0 !important; padding: 0 !important; display: flex; flex-direction: column;">
-
-        <!-- Header -->
-        <div style="padding: 20px; background: #000; display: flex; align-items: center; border-bottom: 1px solid #333;">
-            <button onclick="closeModal('setupCommuteModal'); showModernDashboard();" style="background: transparent; border: none; color: #FF9F0A; font-size: 1.2rem; cursor: pointer;">
-                <i class="fas fa-arrow-left"></i>
-            </button>
-            <h3 style="margin: 0; color: white; flex: 1; text-align: center; font-weight: 800;">Set Up Commute</h3>
-            <div style="width: 20px;"></div>
-        </div>
-
-        <div style="padding: 20px; flex: 1; overflow-y: auto;">
-            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 20px;">To match you with drivers going your way, please confirm your home and work locations.</p>
-
-            <!-- HOME ADDRESS (WITH AUTOCOMPLETE) -->
-            <div style="background: #2C2C2E; padding: 20px; border-radius: 16px; border: 1px solid #3A3A3C; margin-bottom: 20px;">
-                <label style="color: #FF9F0A; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 8px; display: block;">
-                    <i class="fas fa-home"></i> 1. Home Address
-                </label>
-                <div id="home-address-wrapper" style="position: relative;">
-                    <!-- FIX: White Background, Black Text, Thicker Padding -->
-                    <input type="text" id="homeAddressInput" placeholder="Search your home address..." 
-                           style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid #eee; background: #ffffff !important; color: #111111 !important; font-size: 1rem; font-weight: 800; outline: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                    
-                    <!-- FIX: Suggestions Box matched to White theme -->
-                    <div id="home-suggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #eee; border-radius: 12px; max-height: 200px; overflow-y: auto; display: none; z-index: 1000; margin-top: 5px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);"></div>
-                </div>
-                <input type="hidden" id="homeLat"><input type="hidden" id="homeLng"><input type="hidden" id="homeText">
-            </div>
-
-            <!-- WORK PLACE (WITH AUTOCOMPLETE) -->
-            <div style="background: #2C2C2E; padding: 20px; border-radius: 16px; border: 1px solid #3A3A3C;">
-                <label style="color: #0A84FF; font-weight: 800; font-size: 0.8rem; text-transform: uppercase; margin-bottom: 8px; display: block;">
-                    <i class="fas fa-briefcase"></i> 2. Work Place
-                </label>
-                <div id="work-address-wrapper" style="position: relative;">
-                    <!-- FIX: White Background, Black Text, Thicker Padding -->
-                    <input type="text" id="workAddressInput" placeholder="Search your workplace..." 
-                           style="width: 100%; padding: 14px 16px; border-radius: 12px; border: 1px solid #eee; background: #ffffff !important; color: #111111 !important; font-size: 1rem; font-weight: 800; outline: none; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                    
-                    <!-- FIX: Suggestions Box matched to White theme -->
-                    <div id="work-suggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; border: 1px solid #eee; border-radius: 12px; max-height: 200px; overflow-y: auto; display: none; z-index: 1000; margin-top: 5px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);"></div>
-                </div>
-                <input type="hidden" id="workLat"><input type="hidden" id="workLng"><input type="hidden" id="workText">
-            </div>
-
-            <!-- Auto-Calculated Pricing Box -->
-            <div id="commutePricingBox" style="display: none; background: #000; border-radius: 16px; padding: 20px; border: 1px solid #333; margin-top: 20px;">
-                <h5 style="color: #8e8e93; font-size: 0.75rem; text-transform: uppercase; margin: 0 0 12px 0; font-weight: 800;">Estimated Fares</h5>
-                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #ccc;">
-                    <span>Single Trip:</span>
-                    <span id="commuteSinglePrice" style="font-weight: bold; color: white;">R0.00</span>
-                </div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #ccc;">
-                    <span>Daily (To & From):</span>
-                    <span id="commuteDailyPrice" style="font-weight: bold; color: white;">R0.00</span>
-                </div>
-                <div style="border-top: 1px dashed #444; margin: 10px 0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-                    <span style="font-size: 1rem; font-weight: 800; color:white;">Monthly Estimate:</span>
-                    <span id="commuteMonthlyPrice" style="font-size: 1.4rem; font-weight: 900; color: #30D158;">R0.00</span>
-                </div>
-                <div style="font-size: 0.75rem; color: #FF9F0A; margin-top: 10px; text-align: center; background: rgba(255, 159, 10, 0.1); padding: 8px; border-radius: 8px;">
-                    <i class="fas fa-info-circle"></i> You are only charged the Single Trip fare per ride.
-                </div>
-            </div>
-
-            <button id="saveCommuteBtn" onclick="window.saveCommuteAndSearch()" style="display: none; width: 100%; padding: 18px; background: #FF9F0A; color: black; border-radius: 16px; font-weight: 900; font-size: 1.1rem; border: none; margin-top: 20px; box-shadow: 0 4px 15px rgba(255,159,10,0.3); cursor: pointer;">
-                Save & Find Cars
-            </button>
-        </div>
-    </div>
-</div>
 
 <div id="map"></div>
 
@@ -12724,24 +12593,20 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
                 </div>
 
                 <div style="background: #000; border-radius: 16px; padding: 20px; border: 1px solid #333;">
-    <h5 style="color: #8e8e93; font-size: 0.75rem; text-transform: uppercase; margin: 0 0 12px 0; font-weight: 800;">Estimated Fares</h5>
-    <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #ccc;">
-        <span>Single Trip:</span>
-        <span id="clubSingleTrip" style="font-weight: bold; color: white;">R0.00</span>
-    </div>
-    <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #ccc;">
-        <span>Daily (To & From):</span>
-        <span id="clubDailyTrip" style="font-weight: bold; color: white;">R0.00</span>
-    </div>
-    
-    <div style="border-top: 1px dashed #444; margin: 10px 0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
-        <span style="font-size: 1rem; font-weight: 800; color:white;">Monthly Estimate:</span>
-        <span id="clubEstCost" style="font-size: 1.4rem; font-weight: 900; color: #30D158;">R0.00</span>
-    </div>
-    <div style="font-size: 0.75rem; color: #FF9F0A; margin-top: 10px; text-align: center; background: rgba(255, 159, 10, 0.1); padding: 8px; border-radius: 8px;">
-        <i class="fas fa-info-circle"></i> You will only be charged the Single Trip fare (<strong><span id="clubNoticeSinglePrice">R0.00</span></strong>) at the end of each ride.
-    </div>
-</div>
+                    <h5 style="color: #8e8e93; font-size: 0.75rem; text-transform: uppercase; margin: 0 0 12px 0; font-weight: 800;">Estimated Fares</h5>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #ccc;">
+                        <span>Route Distance:</span>
+                        <span id="clubEstDistance" style="font-weight: bold; color: white;">-- km</span>
+                    </div>
+                    <div id="clubTrialPromotionRow" style="display: none; justify-content: space-between; font-size: 0.9rem; margin-bottom: 8px; color: #FF9F0A;">
+                        <span>First Trip Free Trial:</span>
+                        <span id="clubTrialDiscountAmount" style="font-weight: bold;">-R0.00</span>
+                    </div>
+                    <div style="border-top: 1px solid #222; margin: 10px 0; padding-top: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 1rem; font-weight: 800; color:white;">Total Estimated Cost:</span>
+                        <span id="clubEstCost" style="font-size: 1.4rem; font-weight: 900; color: #30D158;">R0.00</span>
+                    </div>
+                </div>
             </div>
         </div>
         
@@ -12994,23 +12859,40 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     <div class="tracking-page-bottom">
         
         <!-- WAITING STATUS (NEW) -->
-        <div id="trackingWaitingStatus" class="tracking-waiting-status" style="display: none; background: #1C1C1E; border-radius: 16px; padding: 20px; margin-bottom: 15px; border: 1px solid #FF9F0A; box-shadow: 0 4px 20px rgba(255,159,10,0.15);">
-            <div class="waiting-header" style="display: flex; align-items: center; gap: 15px;">
-                <div class="waiting-icon" style="width: 44px; height: 44px; background: rgba(255, 159, 10, 0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #FF9F0A; flex-shrink: 0;"><i class="fas fa-hourglass-half"></i></div>
-                <div class="waiting-info" style="flex: 1;">
-                    <div id="trackingWaitingTitle" class="waiting-title" style="font-weight: 900; font-size: 1.1rem; color: white; margin-bottom: 2px;">⏳ Driver is Waiting</div>
-                    <div id="trackingWaitingSubtitle" class="waiting-subtitle" style="font-size: 0.85rem; color: #aaa;">Waiting for more passengers...</div>
+        <div id="trackingWaitingStatus" style="display: none; background: linear-gradient(135deg, #FF9F0A, #FFB340); border-radius: 16px; padding: 20px; margin-bottom: 15px; border: 1px solid rgba(255,255,255,0.1); box-shadow: 0 4px 20px rgba(255,159,10,0.2);">
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="position: relative;">
+                    <div style="width: 50px; height: 50px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                        <i class="fas fa-hourglass-half" style="font-size: 1.8rem; color: white;"></i>
+                    </div>
+                    <div style="position: absolute; top: -4px; right: -4px; width: 14px; height: 14px; background: #FF6B6B; border-radius: 50%; border: 2px solid #FF9F0A; animation: pulse-dot 1.5s infinite;"></div>
                 </div>
-                <div id="trackingPassengerCount" class="waiting-count" style="background: #FF9F0A; padding: 4px 14px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; color: black;">0/0</div>
+                <div style="flex: 1;">
+                    <div id="trackingWaitingTitle" style="font-weight: 900; font-size: 1.1rem; color: white; margin-bottom: 4px;">
+                        ⏳ Driver is Waiting
+                    </div>
+                    <div id="trackingWaitingSubtitle" style="font-size: 0.85rem; color: rgba(255,255,255,0.9);">
+                        Waiting for more passengers to join...
+                    </div>
+                </div>
+                <div id="trackingPassengerCount" style="background: rgba(0,0,0,0.3); padding: 6px 14px; border-radius: 20px; font-weight: 800; font-size: 0.85rem; color: white;">
+                    0/0
+                </div>
             </div>
-            <div id="trackingWaitingPassengers" class="passenger-list" style="margin-top: 15px; background: #2C2C2E; border-radius: 12px; padding: 12px; max-height: 150px; overflow-y: auto;"></div>
-            <div class="progress-container" style="margin-top: 15px;">
-                <div class="progress-labels" style="display: flex; justify-content: space-between; font-size: 0.75rem; color: #aaa; margin-bottom: 6px;">
+            
+            <!-- Passenger List -->
+            <div id="trackingWaitingPassengers" style="margin-top: 15px; background: rgba(0,0,0,0.2); border-radius: 12px; padding: 12px; max-height: 150px; overflow-y: auto;">
+                <!-- Passengers rendered here -->
+            </div>
+            
+            <!-- Progress Bar -->
+            <div style="margin-top: 12px;">
+                <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: rgba(255,255,255,0.7); margin-bottom: 4px;">
                     <span>Passengers joined</span>
-                    <span id="trackingProgressText" style="color: #fff; font-weight: 800;">0%</span>
+                    <span id="trackingProgressText">0%</span>
                 </div>
-                <div class="progress-bar" style="width: 100%; height: 8px; background: #3A3A3C; border-radius: 4px; overflow: hidden;">
-                    <div id="trackingProgressBar" class="progress-fill" style="height: 100%; width: 0%; background: #007BFF; border-radius: 4px; transition: width 0.5s ease;"></div>
+                <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.2); border-radius: 3px; overflow: hidden;">
+                    <div id="trackingProgressBar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #FFD60A, #FF9F0A); border-radius: 3px; transition: width 0.5s ease;"></div>
                 </div>
             </div>
         </div>
@@ -13096,13 +12978,6 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
             </button>
         </div>
     </div>
-</div>
-
-<!-- NEW: "You are here" Location Indicator -->
-<div id="youAreHereBubble" style="display: none; position: fixed; top: max(15px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); color: #111; padding: 10px 20px; border-radius: 30px; z-index: 9000; box-shadow: 0 4px 15px rgba(0,0,0,0.1); align-items: center; gap: 8px; pointer-events: none; border: 1px solid #eee;">
-    <div style="width: 8px; height: 8px; background: #28a745; border-radius: 50%; box-shadow: 0 0 8px #28a745; animation: blink 1.5s infinite;"></div>
-    <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #888;">You are here:</span>
-    <span id="homeCurrentAddress" style="font-weight: 800; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">Fetching...</span>
 </div>
 <script>
     function launchNativeNav(lat, lng) {
@@ -14267,22 +14142,6 @@ function updatePassengerEta(driverLat, driverLng, userLat, userLng) {
 // FIX: REAL-TIME DRIVER ACCEPTANCE FOR PASSENGER
 // ========================================================================
 
-function cleanupPassengerTripMap() {
-    try {
-        if (map && map.getLayer('taxi-route-line')) map.removeLayer('taxi-route-line');
-        if (map && map.getLayer('taxi-route-casing')) map.removeLayer('taxi-route-casing');
-        if (map && map.getLayer('taxi-route')) map.removeLayer('taxi-route');
-        if (map && map.getSource('taxi-route')) map.removeSource('taxi-route');
-    } catch (e) {
-        console.warn('Route cleanup skipped:', e);
-    }
-
-    if (window.confirmedTaxiMarker) {
-        try { window.confirmedTaxiMarker.remove(); } catch (e) {}
-        window.confirmedTaxiMarker = null;
-    }
-}
-
 // 1. OVERRIDE THE LISTEN FOR REQUEST STATUS FUNCTION
 // Replace the existing listenForRequestStatus function with this one
 
@@ -14476,26 +14335,27 @@ function listenForRequestStatus(requestId) {
         // 🏁 TRIP COMPLETED
         // ============================================================
         else if (status === 'completed') {
-            console.log("🏁 Trip completed! Cleaning map...");
+            console.log("🏁 Trip completed!");
             
             // Stop listening
             database.ref(`requests/${requestId}`).off('value', window.passengerStatusListener);
             window.passengerStatusListener = null;
-
-            cleanupPassengerTripMap();
             
-            // Close all popups and show completion screen
+            // Close all popups
             closeAllPopups();
+            
+            // Show the trip completion screen
             if (typeof window.showTripCompletedScreen === 'function') {
                 window.showTripCompletedScreen(requestId);
             } else {
+                // Fallback
                 window.currentRequestId = null;
                 localStorage.removeItem('currentRequestId');
                 if (typeof showModernDashboard === 'function') {
                     showModernDashboard();
                 }
                 if (typeof showToast === 'function') {
-                    showToast("🀀􀐠Trip completed! Thank you for riding with Asiye.", "success");
+                    showToast("🏁 Trip completed! Thank you for riding with Asiye.", "success");
                 }
             }
         }
@@ -14635,8 +14495,6 @@ window.setupRealTimeStatusListener = function(requestId) {
             // Stop listening
             database.ref(`requests/${requestId}`).off('value', window.realTimeStatusListener);
             window.realTimeStatusListener = null;
-
-            cleanupPassengerTripMap();
             
             // Show completion screen
             if (typeof window.showTripCompletedScreen === 'function') {
@@ -15737,6 +15595,26 @@ geolocateControl.on('geolocate', function(e) {
     window.refreshLocationDisplay();
 });
 
+// Also update refreshLocationDisplay to be more aggressive
+window.refreshLocationDisplay = async function() {
+    const bubbleEl = document.getElementById("homeCurrentAddress");
+    const addrEl = document.getElementById('passengerLocationAddress');
+
+    let lat = window.commuterLat || parseFloat(localStorage.getItem('lastLat'));
+    let lng = window.commuterLng || parseFloat(localStorage.getItem('lastLng'));
+
+    if (lat && lng) {
+        try {
+            const address = await window.getAddressFromCoordsPromise(lng, lat);
+            const shortAddr = address.split(',')[0].trim();
+            
+            if (bubbleEl) bubbleEl.textContent = shortAddr;
+            if (addrEl) addrEl.textContent = address;
+        } catch (e) {
+            if (bubbleEl) bubbleEl.textContent = "Current Location";
+        }
+    }
+};
 
 // CRITICAL: This event fires only when the map is fully rendered and ready
 // CRITICAL: This event fires only when the map is fully rendered and ready
@@ -18244,14 +18122,13 @@ function closeChat() {
     function drawRouteToTaxi(geometry) {
       if (!map) return;
 
+      // --- FIX 1: Wait for style to load before adding sources ---
       if (!map.isStyleLoaded()) {
           map.once('style.load', () => drawRouteToTaxi(geometry));
           return;
       }
 
       try {
-          if (map.getLayer('taxi-route-line')) map.removeLayer('taxi-route-line');
-          if (map.getLayer('taxi-route-casing')) map.removeLayer('taxi-route-casing');
           if (map.getLayer('taxi-route')) map.removeLayer('taxi-route');
           if (map.getSource('taxi-route')) map.removeSource('taxi-route');
       } catch (e) {
@@ -18260,32 +18137,36 @@ function closeChat() {
 
       map.addSource('taxi-route', {
           type: 'geojson',
-          data: { type: 'Feature', geometry: geometry }
+          data: { type: 'Feature', properties: {}, geometry: geometry }
       });
 
       map.addLayer({
-          id: 'taxi-route-casing',
+          id: 'taxi-route',
           type: 'line',
           source: 'taxi-route',
           layout: { 'line-join': 'round', 'line-cap': 'round' },
           paint: {
-              'line-color': '#1a3a5c',
-              'line-width': 8,
-              'line-opacity': 0.3
+              'line-color': '#007BFF',
+              'line-width': 6,
+              'line-opacity': 0.8,
+              'line-dasharray': [0, 2]
           }
       });
 
-      map.addLayer({
-          id: 'taxi-route-line',
-          type: 'line',
-          source: 'taxi-route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-              'line-color': '#276EF1',
-              'line-width': 5,
-              'line-opacity': 1.0
+      const dashArraySequence = [[0, 2], [0.5, 1.5], [1, 1], [1.5, 0.5], [2, 0], [0, 0.5, 2, 1.5], [0, 1, 2, 1], [0, 1.5, 2, 0.5]];
+      var step = 0;
+
+      function animateDashArray(timestamp) {
+          if (map && map.getLayer('taxi-route')) {
+              const newStep = Math.floor((timestamp / 60) % dashArraySequence.length);
+              if (newStep !== step) {
+                  map.setPaintProperty('taxi-route', 'line-dasharray', dashArraySequence[newStep]);
+                  step = newStep;
+              }
+              requestAnimationFrame(animateDashArray);
           }
-      });
+      }
+      requestAnimationFrame(animateDashArray);
   }
      function updateTaxiPositionOnMap(taxiId) {
       // Note: Made the callback async
@@ -19259,6 +19140,77 @@ window.showSearchingIndicator = function() {
     `;
 };
 
+
+// =======================================================================
+// RENDER COMPREHENSIVE CATEGORIES & ICONS (MAPBOX VERSION)
+// =======================================================================
+window.renderUberSuggestions = function(features, type) {
+    const listDiv = document.getElementById('uber-suggestions-list');
+    if (!listDiv) return;
+
+    let html = '';
+
+    features.forEach(f => {
+        const name = f.text || f.place_name.split(',')[0];
+        const fullAddress = f.place_name;
+        
+        // Clean up the subtitle so it doesn't repeat the name
+        let addressSubtitle = fullAddress.replace(name + ", ", "").replace(name, "");
+        if (!addressSubtitle || addressSubtitle.trim() === "") addressSubtitle = "Nearby Area";
+
+        // --- ENHANCED ICON DETECTOR ---
+        let icon = "fa-map-marker-alt";
+        let color = "#fff";
+        let category = (f.properties?.category || "").toLowerCase();
+        let maki = (f.properties?.maki || "").toLowerCase(); // Mapbox icon tags
+        let nameLower = name.toLowerCase();
+
+        // Schools / Universities
+        if (nameLower.includes("school") || nameLower.includes("university") || nameLower.includes("college") || category.includes("education")) {
+            icon = "fa-graduation-cap";
+            color = "#007BFF";
+        }
+        // Hospitals / Clinics
+        else if (nameLower.includes("hospital") || nameLower.includes("clinic") || nameLower.includes("mediclinic") || category.includes("medical") || maki.includes("hospital")) {
+            icon = "fa-hospital";
+            color = "#FF3B30";
+        }
+        // Malls / Shopping
+        else if (nameLower.includes("mall") || nameLower.includes("shopping") || nameLower.includes("plaza") || nameLower.includes("centre") || category.includes("retail") || maki.includes("shop")) {
+            icon = "fa-shopping-bag";
+            color = "#34C759";
+        }
+        // Churches / Religious
+        else if (nameLower.includes("church") || nameLower.includes("mosque") || nameLower.includes("temple") || category.includes("religion") || maki.includes("religious")) {
+            icon = "fa-church";
+            color = "#AF52DE";
+        }
+        // Banks
+        else if (nameLower.includes("bank") || nameLower.includes("atm") || category.includes("finance")) {
+            icon = "fa-university";
+            color = "#FFD60A";
+        }
+
+        const safeAddress = fullAddress.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+
+        html += `
+        <div style="display: flex; align-items: center; padding: 15px 0; border-bottom: 1px solid #262626; cursor: pointer;"
+             onclick="window.selectUberSuggestion('${type}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${safeAddress}')">
+            <div style="width: 50px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <div style="width: 36px; height: 36px; background: #262626; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid #333;">
+                    <i class="fas ${icon}" style="font-size: 1rem; color: ${color} !important;"></i>
+                </div>
+            </div>
+            <div style="flex: 1; margin-left: 12px; overflow: hidden; text-align: left;">
+                <div style="color: #ffffff; font-size: 1.05rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
+                <div style="color: #8e8e93; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${addressSubtitle}</div>
+            </div>
+        </div>`;
+    });
+
+    listDiv.innerHTML = html;
+};
+
 function restoreDefaultSuggestions() {
     const listDiv = document.getElementById('uber-suggestions-list');
     if (!listDiv) return;
@@ -19293,60 +19245,7 @@ function restoreDefaultSuggestions() {
 }
 window.restoreDefaultSuggestions = restoreDefaultSuggestions;
 
-// Inside your search logic, ensure the URL includes these types:
-// const url = `...&types=poi,place,address,locality...`
 
-window.renderUberSuggestions = function(features, type) {
-    const listDiv = document.getElementById('uber-suggestions-list');
-    if (!listDiv) return;
-
-    let html = '';
-    features.forEach(f => {
-        const name = f.text || f.place_name.split(',')[0];
-        const fullAddress = f.place_name;
-        
-        let icon = "fa-map-marker-alt";
-        let color = "#888";
-        
-        const category = (f.properties?.category || "").toLowerCase();
-        const maki = (f.properties?.maki || "").toLowerCase();
-        const nameLower = name.toLowerCase();
-
-        // 🛍️ MALLS & SHOPPING CENTERS
-        if (category.includes("mall") || category.includes("shop") || maki.includes("shop") || nameLower.includes("mall") || nameLower.includes("center")) {
-            icon = "fa-shopping-bag";
-            color = "#f72585"; // Pink icon for Malls
-        }
-        // 🏙️ TOWNS, CITIES & LOCALITIES
-        else if (f.place_type.includes("place") || f.place_type.includes("locality")) {
-            icon = "fa-city";
-            color = "#4cc9f0"; // Blue icon for Towns
-        }
-        // 🏫 SCHOOLS & UNIVERSITIES
-        else if (category.includes("school") || category.includes("education") || nameLower.includes("university")) {
-            icon = "fa-graduation-cap";
-            color = "#FF9F0A";
-        }
-
-        const safeAddress = fullAddress.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-
-        html += `
-        <div style="display: flex; align-items: center; padding: 15px 0; border-bottom: 1px solid #262626; cursor: pointer;"
-             onclick="window.selectUberSuggestion('${type}', ${f.geometry.coordinates[0]}, ${f.geometry.coordinates[1]}, '${safeAddress}')">
-            <div style="width: 50px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-                <div style="width: 40px; height: 40px; background: #262626; border-radius: 12px; display: flex; align-items: center; justify-content: center; border: 1px solid #333;">
-                    <i class="fas ${icon}" style="font-size: 1.1rem; color: ${color} !important;"></i>
-                </div>
-            </div>
-            <div style="flex: 1; margin-left: 12px; overflow: hidden; text-align: left;">
-                <div style="color: #ffffff; font-size: 1.05rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</div>
-                <div style="color: #8e8e93; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${fullAddress.replace(name + ", ", "")}</div>
-            </div>
-        </div>`;
-    });
-
-    listDiv.innerHTML = html;
-};
 
 // =======================================================================
 // MAPBOX POI-OVERDRIVE SEARCH ENGINE & INPUT LISTENER
@@ -20950,46 +20849,8 @@ window.processReferralReward = function(referrerId) {
           closeAllPopups();
       }
 
-      window.openPopup = function(popupId) {
-          console.log("🟢 Centering and opening popup:", popupId);
-          
-          window.closeActivePopup(true);
-          
-          const popup = document.getElementById(popupId);
-          const overlay = document.getElementById('popupOverlay');
-          
-          if (!popup) return;
-          
-          popup.classList.add('open');
-          popup.style.setProperty('display', 'block', 'important');
-          popup.style.setProperty('visibility', 'visible', 'important');
-          popup.style.setProperty('opacity', '1', 'important');
-          popup.style.setProperty('z-index', '100000', 'important');
-          popup.style.setProperty('position', 'fixed', 'important');
-          popup.style.setProperty('top', '50%', 'important');
-          popup.style.setProperty('left', '50%', 'important');
-          popup.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
-          popup.style.setProperty('margin', '0', 'important');
-          
-          if (overlay) {
-              overlay.classList.add('open');
-              overlay.style.setProperty('display', 'block', 'important');
-              overlay.style.setProperty('z-index', '99999', 'important');
-          }
-      };
-
       function closeAllPopups() {
-          document.querySelectorAll(".modal-overlay, #taxiListSheet").forEach(p => {
-              p.classList.remove("open");
-              p.style.setProperty('display', 'none', 'important');
-              p.style.setProperty('opacity', '0', 'important');
-              p.style.setProperty('visibility', 'hidden', 'important');
-              if (p.id === 'commuterRequestPopup' || p.id === 'taxiStatusPopup' || p.id === 'genericMessagePopup' || p.id === 'driverClubPopup' || p.id === 'driverEHailingPopup') {
-                  p.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
-                  p.style.setProperty('top', '50%', 'important');
-                  p.style.setProperty('left', '50%', 'important');
-              }
-          });
+          document.querySelectorAll(".modal-overlay, #taxiListSheet").forEach(p => p.classList.remove("open"));
       }
           function getInitials(name = "", surname = "") {
               return ((name ? name.charAt(0) : "") + (surname ? surname.charAt(0) : "")).toUpperCase() || "C";
@@ -23473,29 +23334,11 @@ function executePassengerCancellation(reqId) {
         return;
     }
     
-    // Disable all cancel buttons to prevent double-clicks and restore later.
-    const trackedCancelButtons = [];
+    // Disable all cancel buttons to prevent double-clicks
     document.querySelectorAll('button[onclick*="cancelCurrentRequest"]').forEach(function(btn) {
-        trackedCancelButtons.push({
-            el: btn,
-            html: btn.innerHTML,
-            text: btn.textContent
-        });
         btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+        btn.textContent = 'Cancelling...';
     });
-
-    function restoreCancelButtons() {
-        trackedCancelButtons.forEach(function(entry) {
-            if (!entry || !entry.el) return;
-            entry.el.disabled = false;
-            if (entry.html && entry.html.trim().length > 0) {
-                entry.el.innerHTML = entry.html;
-            } else {
-                entry.el.textContent = entry.text || 'Cancel Trip';
-            }
-        });
-    }
     
     // Update the request status
     firebase.database().ref(`requests/${reqId}`).update({
@@ -23534,65 +23377,49 @@ function executePassengerCancellation(reqId) {
         // Complete cleanup
         completePassengerCleanup(reqId);
         window._isCancelling = false;
-        restoreCancelButtons();
         
         // Show success message
         if (typeof showCommunicationBanner === 'function') {
             showCommunicationBanner("Trip cancelled successfully.", "success");
         }
         
+        // Show dashboard
         setTimeout(function() {
             if (typeof showModernDashboard === 'function') {
                 showModernDashboard();
             }
-
-            setTimeout(function() {
-                if (typeof window.openAsiyeClubGateway === 'function') {
-                    window.openAsiyeClubGateway();
-                }
-
-                const taxiSheet = document.getElementById('taxiListSheet');
-                if (taxiSheet && taxiSheet.classList.contains('open')) {
-                    if (typeof window.fetchAndDisplayClubTaxis === 'function') {
-                        window.fetchAndDisplayClubTaxis();
-                    }
-                }
-            }, 600);
         }, 300);
     })
     .catch(function(err) {
         console.error("❌ Cancellation error:", err);
         window._isCancelling = false;
-        restoreCancelButtons();
         if (typeof showCommunicationBanner === 'function') {
             showCommunicationBanner("Failed to cancel: " + err.message, "danger");
         }
     });
 }
-window.resetBookingButtonUI = function() {
-    console.log("🔓 Unlocking booking buttons...");
+// Add this to your completePassengerCleanup(reqId) or executeCancellation(reqId) functions
+function resetBookingButtonUI() {
     const clubBtn = document.getElementById('clubBookingSubmitBtn');
     if (clubBtn) {
         clubBtn.disabled = false;
         clubBtn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm & Book Seat';
         clubBtn.style.opacity = '1';
-        clubBtn.style.pointerEvents = 'auto';
     }
-    
     const goBtn = document.getElementById('findOffersBtn');
     if (goBtn) {
         goBtn.disabled = false;
-        goBtn.innerHTML = 'Confirm & Request Ride';
-        goBtn.style.opacity = '1';
-        goBtn.style.pointerEvents = 'auto';
+        // This will be reset anyway by the populate function, but safe to clear here
+        goBtn.innerHTML = 'Confirm & Request Ride'; 
     }
-};
+}
 
-window.completePassengerCleanup = function(reqId) {
+// Modify completePassengerCleanup to include the reset
+function completePassengerCleanup(reqId) {
     console.log("🧹 Complete cleanup for:", reqId);
     
-    // 🚨 FIX: RESET BUTTONS FIRST
-    window.resetBookingButtonUI();
+    // RESET BUTTONS
+    resetBookingButtonUI();
     
     window.currentRequestId = null;
     localStorage.removeItem('currentRequestId');
@@ -23608,14 +23435,8 @@ window.completePassengerCleanup = function(reqId) {
         window.confirmedTaxiMarker = null;
     }
     
+    // Ensure dashboard is shown instead of just a blank map
     showModernDashboard();
-    
-    // Reset cancellation flag
-    window._isCancelling = false;
-};
-
-function completePassengerCleanup(reqId) {
-    return window.completePassengerCleanup(reqId);
 }
 // ================================================================
 // FIXED: completePassengerCleanup
@@ -26719,7 +26540,6 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
         }
     }
 };
-
 // =======================================================================
 // 4. MAPBOX POI-OVERDRIVE SEARCH ENGINE & INPUT LISTENER
 // =======================================================================
@@ -26769,7 +26589,10 @@ window.setupDestAutocomplete = function() {
         // Proper proximity formatting
         const proximity = (window.commuterLng && window.commuterLat) ? `&proximity=${window.commuterLng},${window.commuterLat}` : '';
         
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=poi,place,address,locality,neighborhood&limit=12&proximity=${window.commuterLng},${window.commuterLat}`;    fetch(url)
+        // types=poi covers Malls, Schools, Clinics, Churches, and Businesses
+        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(cleanQuery)}.json?access_token=${mapboxgl.accessToken}&country=za&types=poi,address${proximity}&limit=12`;
+
+        fetch(url)
             .then(res => {
                 if (!res.ok) throw new Error('API Error');
                 return res.json();
@@ -27354,45 +27177,72 @@ window.setupDestAutocomplete = function() {
   window.findMinibusTaxis = async function() {
       const container = document.getElementById('taxiListContainer');
       if (container) container.innerHTML = `<div style="padding:40px; text-align:center;"><div class="spinner"></div><p>Searching for minibus taxis near you...</p></div>`;
-      
-      // Ensure the sheet is styled correctly before opening
-      const sheet = document.getElementById('taxiListSheet');
-      if (sheet) {
-          sheet.style.setProperty('background-color', '#F4F5F7', 'important');
-      }
-      
       openModal('taxiListSheet');
 
       try {
           const snapshot = await database.ref("taxis").once("value");
           const taxisData = snapshot.val() || {};
           const minibusTaxis = [];
-          const uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat'));
-          const uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng'));
 
           for (const taxiId in taxisData) {
               const taxi = { taxiId, ...taxisData[taxiId] };
-              const isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
-              const isOnline = taxi.isOnline === true;
 
-              if (isVerified && isOnline && taxi.latitude && taxi.longitude) {
-                  const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
-                  if (dist <= 30) {
+              const isVerified = taxi.verificationStatus === 'verified';
+              const isOnline = taxi.isOnline === true;
+              const isBroadcasting = taxi.isBroadcasting === true;
+              const isNotFull = taxi.isFull !== true;
+
+              // STRICT FILTER: Must be minibus
+              const isMinibus = taxi.vehicleType === 'minibus' || (!taxi.vehicleType && taxi.assignedRank);
+
+              if (isVerified && isOnline && isMinibus && isBroadcasting && isNotFull && taxi.latitude && taxi.longitude) {
+                  const dist = calculateDistance(commuterLat, commuterLng, taxi.latitude, taxi.longitude);
+                  if (dist <= 5) {
                       taxi.distance = dist;
                       minibusTaxis.push(taxi);
                   }
               }
           }
 
+          // Include Dummy Minibus Taxis
+          if (window.dummyTaxisList && window.dummyTaxisList.length > 0) {
+              window.dummyTaxisList.forEach(dummy => {
+                  if (dummy.vehicleType === 'minibus') {
+                      var currentLat = dummy.latitude;
+                      var currentLng = dummy.longitude;
+                      if (window.taxiMarkers && window.taxiMarkers[dummy.taxiId]) {
+                          const pos = window.taxiMarkers[dummy.taxiId].getLngLat();
+                          currentLat = pos.lat;
+                          currentLng = pos.lng;
+                      }
+                      const dist = calculateDistance(commuterLat, commuterLng, currentLat, currentLng);
+                      if (dist <= 5) {
+                          minibusTaxis.push({ ...dummy, latitude: currentLat, longitude: currentLng, distance: dist, isDummy: true });
+                      }
+                  }
+              });
+          }
+
           if (minibusTaxis.length > 0) {
               minibusTaxis.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-              // 🔥 FIXED: Always call the Premium Card renderer
-              displayClubTaxisCards(minibusTaxis); 
+              zoomToFitTaxis(minibusTaxis);
+              populateMinibusListSheet(minibusTaxis);
           } else {
-              if(container) container.innerHTML = `<div style="text-align:center; padding: 60px 20px;"><h4>No Taxis Found</h4><p>Try again later.</p></div>`;
+              if(container) container.innerHTML = `
+                  <div style="text-align:center; padding: 60px 20px;">
+                      <img src="data/quantum.png" style="width: 80px; height: auto; opacity: 0.5; margin-bottom: 20px;">
+                      <h4 style="color: #222; font-weight: 800;">No Minibus Taxis Found</h4>
+                      <p style="color: #888;">No minibus taxis are currently available within 5km.</p>
+                      <button class="gocab-book-btn" onclick="findMinibusTaxis()" style="margin-top: 20px;">
+                          <i class="fas fa-sync-alt"></i> Search Again
+                      </button>
+                      <button class="btn btn-light" onclick="openAsiyeGoTaxis();" style="margin-top: 10px;">
+                          <i class="fas fa-car-side"></i> Try Asiye Go Instead
+                      </button>
+                  </div>`;
           }
       } catch (error) {
-          console.error("Search error:", error);
+          console.error("Minibus search error:", error);
       }
   };
 
@@ -27602,7 +27452,6 @@ window.setupDestAutocomplete = function() {
       });
       return html;
   }
-
   // Helper to update the "From" field
   async function refreshLocationDisplayForUberUI() {
       const el = document.getElementById('displayCurrentLocation');
@@ -27633,49 +27482,8 @@ window.setupDestAutocomplete = function() {
       });
   };
 
-  window.refreshLocationDisplay = async function() {
-    let lat = window.commuterLat || parseFloat(localStorage.getItem('lastLat'));
-    let lng = window.commuterLng || parseFloat(localStorage.getItem('lastLng'));
 
-    if (lat && lng) {
-        try {
-            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=address,poi,neighborhood,locality,place&limit=1&country=za`;
-            const response = await fetch(url);
-            const data = await response.json();
-            
-            if (data.features && data.features.length > 0) {
-                const feature = data.features[0];
-                const parts = feature.place_name.split(',');
-                
-                // 1. Get Street Name
-                window.currentStreetName = (feature.address ? feature.address + " " + feature.text : parts[0]).trim();
-                
-                // 2. Dig into Mapbox Context to find the exact Suburb/Area
-                let suburb = "";
-                if (feature.context) {
-                    const neighborhood = feature.context.find(c => c.id.startsWith('neighborhood'));
-                    const locality = feature.context.find(c => c.id.startsWith('locality'));
-                    
-                    if (neighborhood) suburb = neighborhood.text;
-                    else if (locality) suburb = locality.text;
-                }
-                
-                // Fallback if context fails
-                if (!suburb) suburb = parts.length > 1 ? parts[1].trim() : window.currentStreetName;
 
-                // Clean numbers
-                window.currentSuburbName = suburb.replace(/[0-9]/g, '').trim();
-
-                console.log("📍 Location Set | Street:", window.currentStreetName, "| Suburb:", window.currentSuburbName);
-                
-                const bubbleEl = document.getElementById("homeCurrentAddress");
-                if (bubbleEl) bubbleEl.textContent = window.currentSuburbName;
-            }
-        } catch (e) {
-            console.error("Geocoding failed", e);
-        }
-    }
-};
  window.centerMapOnUserLocation = function() {
     if (!map) return;
 
@@ -27948,7 +27756,84 @@ function initializeMapAndLocation() {
       return [];
   }
   
-  
+  window.getVehicleDisplayInfo = function(taxi) {
+      if (!taxi) return { makeModel: 'Vehicle', color: '', reg: 'N/A', isEhailing: false, typeLabel: 'Minibus Taxi', fullString: 'Minibus Taxi' };
+
+      const isEhailing = taxi.vehicleType === 'ehailing' || (!taxi.vehicleType && taxi.assignedRank === '' && taxi.name === 'Asiye Go');
+      const typeLabel = isEhailing ? 'Asiye Go' : 'Minibus Taxi';
+
+      // 1. CAR REGISTRATION (LICENSE PLATE)
+      // Primary check: licenseNumber as requested
+      var reg = taxi.licenseNumber || taxi.taxiRegistrationNumber || 'N/A';
+
+      // 2. VEHICLE MAKE & MODEL
+      // Primary check: registration as requested
+      var makeModel = taxi.registration || '';
+
+      // If 'registration' is empty, try the standard structured fields
+      if (!makeModel || makeModel.trim() === '') {
+          var make = taxi.vehicleMake || '';
+          var model = taxi.vehicleModel || '';
+          makeModel = `${make} ${model}`.trim();
+      }
+
+      // 3. CLEAN UP DATABASE INCONSISTENCIES
+      const saPlateRegex = /^[A-Z]{2,4}\s?\d{2,4}\s?[A-Z]{0,2}(\s|-)?(ZN|GP|WP|EC|FS|MP|NW|NC|L|LP)$/i;
+
+      if (taxi.taxiRegistrationNumber) {
+          // Case A: Driver typed "Model - Plate" into taxiRegistrationNumber (e.g. "Hyundai i10 - FR99JM-GP")
+          if (taxi.taxiRegistrationNumber.includes(' - ')) {
+              const parts = taxi.taxiRegistrationNumber.split(' - ');
+              if (reg === taxi.licenseNumber) reg = parts[1].trim();
+              if (!makeModel) makeModel = parts[0].trim();
+          }
+          // Case B: Driver typed "Toyota etios plate"
+          else if (taxi.taxiRegistrationNumber.toLowerCase().includes('toyota etios ')) {
+              if (reg === taxi.licenseNumber) reg = taxi.taxiRegistrationNumber.replace(/toyota etios /i, '').trim();
+              if (!makeModel) makeModel = "Toyota Etios";
+          }
+          // Case C: They put their PRDP/ID in licenseNumber, and the real plate is in taxiRegistrationNumber
+          else if (reg === taxi.licenseNumber && saPlateRegex.test(taxi.taxiRegistrationNumber)) {
+              reg = taxi.taxiRegistrationNumber;
+          }
+      }
+
+      // If STILL empty, use a generic fallback for the car model
+      if (!makeModel || makeModel.trim() === '') {
+          // Check if taxiRegistrationNumber was purely just a car name (like "Toyota Corolla")
+          if (taxi.taxiRegistrationNumber && !saPlateRegex.test(taxi.taxiRegistrationNumber) && !taxi.taxiRegistrationNumber.match(/^[0-9]+$/)) {
+              makeModel = taxi.taxiRegistrationNumber;
+          } else {
+              makeModel = isEhailing ? 'Private Sedan' : 'Toyota Quantum';
+          }
+      }
+
+      if (typeof reg === 'string') {
+          reg = reg.trim().toUpperCase();
+      }
+
+      if (!reg || reg === '') reg = 'N/A';
+
+      // 4. EXTRACT COLOR
+      var color = taxi.vehicleColor || '';
+      if (color) {
+          color = color.charAt(0).toUpperCase() + color.slice(1).toLowerCase();
+      }
+
+      const fullString = color ? `${color} ${makeModel}` : makeModel;
+
+      return {
+          makeModel: makeModel,
+          color: color,
+          reg: reg,
+          isEhailing: isEhailing,
+          typeLabel: typeLabel,
+          fullString: fullString
+      };
+  };
+
+
+
 window.activeTaxiMarker = null;
 
 window.startRealTimeTracking = function(taxiId) {
@@ -29977,7 +29862,39 @@ function updatePopupForEnRoute() {
     }
 }
 
+// =================================================================
+// 1. FIX: PRIVATE RIDE BLANK POPUP
+// =================================================================
 
+// =================================================================
+// 2. FIX: "FETCHING..." LOCATION STUCK
+// =================================================================
+window.refreshLocationDisplay = async function() {
+    const bubbleEl = document.getElementById("homeCurrentAddress");
+    const addrEl = document.getElementById('passengerLocationAddress');
+
+    // Attempt to get from variables, then localStorage
+    let lat = window.commuterLat || parseFloat(localStorage.getItem('lastLat'));
+    let lng = window.commuterLng || parseFloat(localStorage.getItem('lastLng'));
+
+    if (lat && lng) {
+        try {
+            const address = await window.getAddressFromCoordsPromise(lng, lat);
+            const shortAddr = address.split(',')[0].trim();
+            
+            if (bubbleEl) bubbleEl.textContent = shortAddr;
+            if (addrEl) addrEl.textContent = address;
+            
+            // Sync the search inputs too
+            const pickupInput = document.getElementById('uberPickupInput');
+            if (pickupInput && pickupInput.value === "Fetching location...") {
+                pickupInput.value = shortAddr;
+            }
+        } catch (e) {
+            console.error("Geocoding failed", e);
+        }
+    }
+};
 
 // =================================================================
 // 3. ADD: CLUB PAYMENT OPTIONS (Like Asiye Go)
@@ -30546,14 +30463,20 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
             justify-content: center;
         `;
         
+        // Use a car icon or emoji as fallback
         el.innerHTML = `
-            <div style="width: 50px; height: 50px; position: relative;">
-                <div class="taxi-pulse" style="background: rgba(40, 167, 69, 0.4); border-radius: 50%; width: 100%; height: 100%; position: absolute; animation: pulse 2s infinite;"></div>
-                <img src="data/newtaxi3.png" class="pax-moving-car" style="width: 100%; height: 100%; object-fit: contain; transform: rotate(0deg); position: relative; z-index: 2;">
+            <div style="position: absolute; top: -35px; left: 50%; transform: translateX(-50%); 
+                        background: #28a745; color: white; padding: 4px 12px; border-radius: 20px; 
+                        font-size: 10px; font-weight: 800; white-space: nowrap; border: 2px solid white;
+                        box-shadow: 0 4px 10px rgba(0,0,0,0.3); z-index: 100;">
+                🚗 YOUR TAXI
+            </div>
+            <div style="width: 40px; height: 40px; background: #28a745; border-radius: 50%; 
+                        display: flex; align-items: center; justify-content: center; font-size: 1.5rem;
+                        border: 3px solid white; box-shadow: 0 4px 15px rgba(40,167,69,0.4); z-index: 2;">
+                🚗
             </div>
         `;
-
-        const carImg = el.querySelector('.pax-moving-car');
         
         // 6. Create and add the marker to the map
         try {
@@ -30573,38 +30496,14 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
                 
                 const newCoords = [updatedTaxi.longitude, updatedTaxi.latitude];
                 window.confirmedTaxiMarker.setLngLat(newCoords);
-
-                const updatedHeading = Number(updatedTaxi.heading || 0);
-                if (carImg) {
-                    carImg.style.transform = `rotate(${updatedHeading}deg)`;
-                    carImg.style.transition = 'transform 0.35s ease';
-                }
-
-                if (window.map && Number.isFinite(window.commuterLat) && Number.isFinite(window.commuterLng)) {
-                    const dist = calculateDistance(window.commuterLat, window.commuterLng, updatedTaxi.latitude, updatedTaxi.longitude);
-
-                    if (dist < 0.5) {
-                        window.map.flyTo({
-                            center: newCoords,
-                            zoom: 17,
-                            pitch: 45,
-                            essential: true
-                        });
-                    } else {
-                        const bounds = new mapboxgl.LngLatBounds()
-                            .extend([window.commuterLng, window.commuterLat])
-                            .extend(newCoords);
-
-                        window.map.fitBounds(bounds, {
-                            padding: { top: 100, bottom: 350, left: 50, right: 50 },
-                            maxZoom: 16
-                        });
-                    }
-                } else if (window.map && window.map.getZoom() < 15) {
+                
+                // Auto-zoom to show the taxi if the map is zoomed out
+                if (window.map && window.map.getZoom() < 15) {
                     window.map.flyTo({
                         center: newCoords,
-                        zoom: 16,
-                        essential: true
+                        zoom: 17,
+                        speed: 1.2,
+                        curve: 1
                     });
                 }
             });
@@ -31080,9 +30979,6 @@ window.closeRequestPopupNow = function() {
     if (popup) {
         popup.classList.remove('open');
         popup.style.setProperty('display', 'none', 'important');
-        popup.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
-        popup.style.setProperty('top', '50%', 'important');
-        popup.style.setProperty('left', '50%', 'important');
         if (popup.dataset.timerId) {
             clearInterval(parseInt(popup.dataset.timerId));
             delete popup.dataset.timerId;
@@ -31106,101 +31002,79 @@ window.closeRequestPopupNow = function() {
     window.isViewingClubRequest = false;
 };
 
-window.showClubRequestPopup = function(request) {
-    const popup = document.getElementById('commuterRequestPopup');
-    if (!popup) return;
 
-    window.currentShowingRequestId = request.key;
+window.deductWalletOnCompletion = function(reqId) {
+    if (!reqId || !userId) return Promise.resolve(false);
 
-    const passengerName = request.commuterName || 'Club Member';
-    const pickup = (request.pickupAddress || 'Pickup').split(',')[0];
-    const destination = (request.destination || 'Destination').split(',')[0];
-    const fare = request.calculatedPrice || request.originalPerPersonPrice || 25;
-    const schedule = `${request.morningDeparture || '07:00'} - ${request.afternoonReturn || '17:00'}`;
+    const deductionLockKey = `processed_deduction_${reqId}`;
+    if (localStorage.getItem(deductionLockKey)) {
+        console.log("Deduction already processed for this request ID.");
+        return Promise.resolve(true);
+    }
 
-    popup.innerHTML = `
-        <div class="modal-content" style="background:white !important; border-radius:28px !important; padding:0 !important; text-align:center; color:#111 !important; box-shadow: 0 15px 50px rgba(0,0,0,0.5) !important; width: 100%; max-width: 400px; overflow: hidden;">
-            <div style="background: linear-gradient(135deg, #FF9F0A, #f8961e); padding: 20px; color: white;">
-                <h3 style="margin: 0; font-weight: 900; font-size: 1.3rem;"><i class="fas fa-users"></i> Asiye Club Request</h3>
-            </div>
-            <div style="padding: 25px;">
-                <p style="margin: 0; color: #666; font-weight: 700;">Passenger: ${passengerName}</p>
-                <div style="background:#f8f9fa; padding:15px; border-radius:16px; margin:15px 0; text-align:left; border: 1px solid #eee;">
-                    <p style="margin-bottom: 8px; color: #111 !important;">📍 <b>From:</b> ${pickup}</p>
-                    <p style="margin-bottom: 8px; color: #111 !important;">🏁 <b>To:</b> ${destination}</p>
-                    <p style="margin:0; color: #FF9F0A !important; font-weight: 800;">⏰ <b>Schedule:</b> ${schedule}</p>
-                </div>
-                <div style="font-size: 2.5rem; font-weight: 900; color: #28a745 !important; margin-bottom: 20px;">R${fare}</div>
-                <div style="display:flex; gap:12px;">
-                    <button class="btn" onclick="window.rejectRequest()" style="flex:1; background: #f1f3f5; color: #666; border-radius: 14px; padding: 16px; font-weight: 800; border: none;">Decline</button>
-                    <button class="btn" onclick="window.acceptRequest()" style="flex:2; background: #28a745; color: white; border-radius: 14px; padding: 16px; font-weight: 900; border: none;">Accept Pool</button>
-                </div>
-            </div>
-        </div>
-    `;
+    return database.ref(`requests/${reqId}`).once('value').then(snap => {
+        const req = snap.val();
+        if (!req) return false;
 
-    window.openPopup('commuterRequestPopup');
-};
-
-
-window.deductWalletOnCompletion = function(reqId, amount) {
-    if (!userId || !reqId) return;
-
-    // Use a 'lock' in the database to ensure we only deduct once
-    const lockRef = database.ref(`requests/${reqId}/wallet_processed`);
-
-    lockRef.transaction((currentValue) => {
-        if (currentValue === true) return; // Already processed, abort
-        return true; // Set as processed
-    }, (error, committed) => {
-        if (committed) {
-            // Now perform the actual money deduction from the user's wallet
-            database.ref(`commuters/${userId}`).transaction(userData => {
-                if (userData) {
-                    const currentBalance = parseFloat(userData.credits || 0);
-                    userData.credits = Math.max(0, currentBalance - parseFloat(amount));
-                }
-                return userData;
-            }).then(() => {
-                console.log("Wallet successfully deducted for trip:", reqId);
-                updateSideMenuData(); // Refresh UI
-                showGenericMessage("Trip Paid", `R${amount} was deducted from your wallet.`, "fa-wallet", "success");
-            });
+        // Isolate passenger profile values if dealing with pooling
+        let myTripData = req;
+        if (req.type === 'club' && req.passengers && req.passengers[userId]) {
+            myTripData = req.passengers[userId];
         }
+
+        const appliedCredit = parseFloat(myTripData.appliedCredit || 0);
+        if (appliedCredit <= 0) {
+            localStorage.setItem(deductionLockKey, "true");
+            return true; 
+        }
+
+        const commuterRef = database.ref(`commuters/${userId}`);
+        
+        return commuterRef.transaction(currentProfile => {
+            if (!currentProfile) return currentProfile;
+
+            // Initialize properties safely if not defined
+            const promoRemaining = currentProfile.promoRemaining || 0;
+            const credits = parseFloat(currentProfile.credits || 0);
+
+            // Deduct promo count if applicable
+            if (promoRemaining > 0 && myTripData.paymentMethod === 'cash') {
+                currentProfile.promoRemaining = promoRemaining - 1;
+            }
+
+            // Deduct numeric wallet credits
+            currentProfile.credits = Math.max(0, credits - appliedCredit);
+
+            return currentProfile;
+        }, (error, committed, snapshot) => {
+            if (error) {
+                console.error("Deduction transaction error:", error);
+            } else if (committed) {
+                localStorage.setItem(deductionLockKey, "true");
+                const freshData = snapshot.val();
+                if (window.commuterData && freshData) {
+                    window.commuterData.credits = freshData.credits;
+                    window.commuterData.promoRemaining = freshData.promoRemaining;
+                }
+                
+                // Add ledger transaction to earnings list
+                database.ref(`commuters/${userId}/earnings`).push({
+                    id: 'deduct_' + Date.now(),
+                    type: 'withdrawal',
+                    amount: appliedCredit,
+                    description: 'Trip Fare Payment',
+                    timestamp: firebase.database.ServerValue.TIMESTAMP,
+                    status: 'completed'
+                });
+
+                if (typeof updatePromoWalletDisplay === 'function') updatePromoWalletDisplay();
+                if (typeof updateSideMenuData === 'function') updateSideMenuData();
+                console.log("Transaction successfully debited upon completion.");
+            }
+        });
     });
 };
 
-window.deductWalletOnCompletion = function(requestId, amount) {
-    if (!userId) return;
-
-    const userRef = database.ref(`commuters/${userId}`);
-    
-    // Prevent double deduction using a simple 'processed' flag on the request
-    database.ref(`requests/${requestId}/payment_processed`).transaction((currentValue) => {
-        if (currentValue === true) return; // Already deducted!
-        return true; 
-    }, (error, committed) => {
-        if (committed) {
-            // Deduct the money from the user's credits
-            userRef.transaction(userData => {
-                if (userData) {
-                    const currentBal = parseFloat(userData.credits || 0);
-                    userData.credits = Math.max(0, currentBal - parseFloat(amount));
-                }
-                return userData;
-            }).then(() => {
-                console.log("Wallet payment successful.");
-                if(typeof updateSideMenuData === 'function') updateSideMenuData();
-                showGenericMessage("Payment Complete", `R${amount} has been deducted from your wallet.`, "fa-check-circle", "success");
-            });
-        }
-    });
-};
-
-// Add to your setupNotificationListeners in index.html:
-// if (notification.type === 'ride_completed') {
-//     window.deductWalletOnCompletion(notification.requestId, notification.amount);
-// }
 window.startLiveTripMonitor = function(reqKey) {
     if (window.activeTripMonitor) {
         database.ref('requests/' + reqKey).off('value', window.activeTripMonitor);
@@ -31224,8 +31098,6 @@ window.startLiveTripMonitor = function(reqKey) {
         if (currentStatus === 'completed') {
             database.ref('requests/' + reqKey).off('value', window.activeTripMonitor);
             window.activeTripMonitor = null;
-
-            cleanupPassengerTripMap();
 
             if (typeof window.showTripCompletedScreen === 'function') {
                 window.showTripCompletedScreen(reqKey);
@@ -31872,6 +31744,37 @@ window.getRealTimeCommuterAddress = async function() {
     return "Current Location";
 };
 
+window.showModernDashboard = function() {
+    // Hide the floating header if returning home
+    const floatingHeader = document.getElementById('floatingRouteHeader');
+    if(floatingHeader) floatingHeader.style.display = 'none';
+    
+    // Show the "Where from" bubble
+    const pickupBubble = document.getElementById('homePickupBubble');
+    if(pickupBubble) pickupBubble.style.display = 'flex'; 
+    
+    const dashboard = document.getElementById('homeBottomSheet');
+    const sheetContent = document.getElementById('homeSheetContent');
+    
+    if (dashboard) {
+        // CRITICAL FIX: Add the open class and force opacity to 1 so it becomes visible again
+        dashboard.classList.add('open');
+        dashboard.style.setProperty('display', 'flex', 'important');
+        dashboard.style.setProperty('opacity', '1', 'important');
+        dashboard.style.setProperty('visibility', 'visible', 'important');
+        dashboard.style.setProperty('z-index', '10000', 'important');
+    }
+    
+    // INCREASED HEIGHT to 65vh to prevent cutoff
+    if (sheetContent) {
+        sheetContent.style.height = '65vh'; 
+    }
+    
+    if (typeof window.refreshLocationDisplay === 'function') window.refreshLocationDisplay();
+    if (typeof window.initHomeSheetDrag === 'function') window.initHomeSheetDrag();
+};
+
+
 
 window.initHomeSheetDrag = function() {
     const sheetContent = document.getElementById('homeSheetContent');
@@ -32483,6 +32386,13 @@ window.initDualGeocoders = async function() {
     }
 };
 
+window.hideModernDashboard = function() {
+    const d = document.getElementById('homeBottomSheet');
+    if (d) { d.classList.remove('open'); d.style.display = 'none'; }
+    const b = document.getElementById('homePickupBubble');
+    if (b) b.style.display = 'none';
+};
+
 // Handle incoming notifications (override pattern)
 const originalHandleIncomingNotification = window.handleIncomingNotification;
 
@@ -33040,6 +32950,56 @@ window.fetchAndRenderNearby = async function(lat, lon) {
 };
 
 
+window.renderSuggestions = function(locations) {
+    const listContainer = document.getElementById('suggested-locations-list');
+    const wrapper = document.getElementById('suggested-nearby-wrapper');
+    if (!listContainer) return;
+
+    listContainer.innerHTML = ''; 
+
+    // 🚨 If API returned an empty array, hide the whole section
+    if (!locations || locations.length === 0) {
+        if (wrapper) wrapper.style.display = 'none';
+        return;
+    }
+
+    // Otherwise, ensure it's visible and map out the locations
+    if (wrapper) wrapper.style.display = 'block';
+
+    locations.forEach(loc => {
+        let iconClass = 'fa-map-marker-alt';
+        let typeLabel = 'Location';
+        
+        if (loc.type === 'mall') { iconClass = 'fa-shopping-bag'; typeLabel = 'Shopping'; }
+        else if (loc.type === 'school') { iconClass = 'fa-graduation-cap'; typeLabel = 'Education'; }
+        else if (loc.type === 'clinic') { iconClass = 'fa-hospital'; typeLabel = 'Medical'; }
+
+        // Format distance nicely
+        let distStr = "";
+        if (loc.distance !== undefined) {
+            distStr = loc.distance < 1 ? Math.round(loc.distance * 1000) + " m" : loc.distance.toFixed(1) + " km";
+        }
+
+        const itemHtml = `
+            <div class="suggestion-item" onclick="quickSelectDest('${escapeHtml(loc.name)}')" style="display: flex; align-items: center; justify-content: space-between; padding: 14px 10px; border-bottom: 1px solid #2C2C2E; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 14px; flex: 1; overflow: hidden;">
+                    <div style="background: #2C2C2E; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; border: 1px solid #3A3A3C;">
+                        <i class="fas ${iconClass}" style="color: #0A84FF; font-size: 1rem;"></i>
+                    </div>
+                    <div style="display: flex; flex-direction: column; overflow: hidden;">
+                        <span style="font-weight: 700; color: #EBEBF5; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(loc.name)}</span>
+                        <span style="font-size: 0.75rem; color: #8E8E93;">${typeLabel}</span>
+                    </div>
+                </div>
+                <div style="color: #30D158; font-size: 0.85rem; font-weight: 800; flex-shrink: 0; background: rgba(48, 209, 88, 0.1); padding: 4px 8px; border-radius: 8px;">
+                    ${distStr}
+                </div>
+            </div>
+        `;
+        listContainer.insertAdjacentHTML('beforeend', itemHtml);
+    });
+};
+
 // 🚨 FALLBACK: HIDES THE WHOLE SECTION INSTEAD OF SHOWING RANDOM FAKE DATA 🚨
 window.showFallbackSuggestions = function() {
     console.log("No valid nearby places found. Hiding 'Suggested Nearby' section.");
@@ -33339,6 +33299,7 @@ window.verifyVoucherAndSummon = function() {
         }
     });
 };
+
 window.summonPreAllocatedVehicle = async function(sub) {
     openModal('pendingRequestPopup');
     const msgEl = document.getElementById('requestingMessage');
@@ -33351,20 +33312,53 @@ window.summonPreAllocatedVehicle = async function(sub) {
             <p style="color:#aaa; font-size:0.9rem;">Connecting to your assigned 30-day driver.</p>
         `;
     }
-    // Added missing logic and closing braces below
-    try {
-        const requestId = sub.requestId || window.currentRequestId;
-        if (requestId) {
-            await database.ref(`requests/${requestId}`).update({
-                status: 'pending',
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
-            window.listenForRequestStatus(requestId);
-        }
-    } catch (e) {
-        console.error("Summon error:", e);
+
+    const requestNode = database.ref("requests").push();
+    window.currentRequestId = requestNode.key;
+
+    const requestData = {
+        requestId: window.currentRequestId,
+        taxiId: sub.allocatedTaxiId || null, 
+        carCategory: 'club',
+        commuterId: window.userId,
+        commuterName: sub.commuterName,
+        commuterPhone: sub.commuterPhone,
+        calculatedPrice: sub.estimatedCost,
+        paymentMethod: sub.paymentTerms || 'cash',
+        requirePin: true,
+        pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
+        pickupAddress: sub.pickupAddress || 'Home',
+        commuterLocation: { latitude: window.commuterLat, longitude: window.commuterLng },
+        destination: sub.dropoffAddress || 'As Directed',
+        status: 'pending',
+        type: 'club',
+        voucherCode: sub.voucherCode,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+
+    await requestNode.set(requestData);
+    
+    await database.ref(`commuters/${window.userId}`).update({ currentRequest: window.currentRequestId });
+    if (window.commuterData) window.commuterData.currentRequest = window.currentRequestId;
+    localStorage.setItem('currentRequestId', window.currentRequestId);
+
+    if (sub.allocatedTaxiId) {
+        database.ref(`notifications/taxis/${sub.allocatedTaxiId}`).push({
+            type: 'passenger',
+            title: 'Asiye Club Summon!',
+            message: `Club subscriber ${sub.commuterName} has summoned you.`,
+            requestId: window.currentRequestId,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
     }
-}; // This closing brace was missing and caused the syntax error
+
+    if (typeof listenForRequestStatus === 'function') listenForRequestStatus(window.currentRequestId);
+    if (typeof startTaxiSearchTimer === 'function') window.startTaxiSearchTimer(window.currentRequestId);
+};
+
+// Turn off any generic child_added listeners that might be running
+database.ref('requests').off('child_added');
+
 
 // =================================================================
 // 🔍 SMART AUTOCOMPLETE ENGINE (FIXES NEXT BUTTON LOCKING)
@@ -34210,7 +34204,6 @@ var passengerEtaDisplay = null;
 
 function showDriverPopupDirect(taxiId, notification, requestData) {
     console.log("🚗 showDriverPopupDirect - FORCING VISIBILITY for:", taxiId);
-    window.activeTaxiId = taxiId;
     
     // Remove any existing popup first
     const existingPopup = document.getElementById('driverAcceptedPopup');
@@ -34263,27 +34256,6 @@ function showDriverPopupDirect(taxiId, notification, requestData) {
         statusSubtitle = 'Arriving soon';
         statusColor = '#007BFF';
         statusIcon = 'fa-car-side';
-    }
-
-    let rideNowButton = '';
-    if ((status === 'driver_waiting' || status === 'pooling') && requestId) {
-        const remaining = Math.max(0, maxCapacity - passengerCount);
-        const pricePerSeat = requestData?.originalPerPersonPrice || 25;
-        const skipWaitPrice = pricePerSeat + (remaining * 15);
-
-        if (remaining > 0) {
-            rideNowButton = `
-                <div style="background: #FFF4E5; border: 1px solid #FF9F0A; border-radius: 16px; padding: 15px; margin: 15px 0;">
-                    <p style="color: #856404; font-size: 0.85rem; margin: 0 0 10px 0; font-weight: 700;">
-                        Don't want to wait for ${remaining} more people?
-                    </p>
-                    <button onclick="window.negotiateRideNow('${requestId}', ${skipWaitPrice}, '${taxiId}')"
-                            style="width: 100%; background: #FF9F0A; color: black; border: none; padding: 12px; border-radius: 12px; font-weight: 900; cursor: pointer;">
-                        Ride Now for R${skipWaitPrice}
-                    </button>
-                </div>
-            `;
-        }
     }
     
     // Build the popup HTML with FORCED visibility
@@ -34374,7 +34346,6 @@ function showDriverPopupDirect(taxiId, notification, requestData) {
                         </div>
                     </div>
                 </div>
-                ${rideNowButton}
                 
                 <!-- Driver Info -->
                 <div style="background: #ffffff !important; border: 1px solid #eeeeee !important; border-radius: 16px !important; padding: 12px 16px !important; margin-bottom: 15px !important; display: flex !important; align-items: center !important; justify-content: space-between !important; box-shadow: 0 4px 10px rgba(0,0,0,0.05) !important;">
@@ -34574,70 +34545,6 @@ function showDriverPopupDirect(taxiId, notification, requestData) {
         }, 500);
     }
 }
-
-window.negotiateRideNow = function(reqId, newPrice, taxiId = null) {
-    if (!reqId || !newPrice) return;
-
-    showConfirmPopup(
-        "Ride Now (Private)",
-        `Are you sure you want to go private and leave immediately? You will now be paying R${newPrice}.`,
-        function() {
-            const driverId = taxiId || window.activeTaxiId;
-
-            const updates = {};
-            updates[`requests/${reqId}/status`] = 'accepted';
-            updates[`requests/${reqId}/forceDispatch`] = true;
-            updates[`requests/${reqId}/waitingForMore`] = false;
-            updates[`requests/${reqId}/calculatedPrice`] = newPrice;
-            updates[`requests/${reqId}/passengers/${window.userId}/price`] = newPrice;
-            updates[`requests/${reqId}/passengers/${window.userId}/finalAmount`] = newPrice;
-
-            database.ref().update(updates).then(() => {
-                if (driverId) {
-                    return database.ref(`notifications/taxis/${driverId}`).push({
-                        type: 'ride_now_negotiated',
-                        requestId: reqId,
-                        newPrice: newPrice,
-                        commuterName: (window.commuterData && window.commuterData.name) ? window.commuterData.name : 'Passenger',
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-                }
-                return Promise.resolve();
-            }).then(() => {
-                showCommunicationBanner(`You have selected 'Ride now' option, you will now be paying R${newPrice}`, 'success');
-
-                const titleEl = document.getElementById('commuterTrackingTitle');
-                const subtitleEl = document.getElementById('commuterTrackingSubtitle');
-                if (titleEl) {
-                    titleEl.innerHTML = '<i class="fas fa-bolt" style="color: #28a745;"></i> Private Ride Confirmed';
-                    titleEl.style.color = '#28a745';
-                }
-                if (subtitleEl) {
-                    subtitleEl.textContent = `You have selected 'Ride now' option, you will now be paying R${newPrice}. Driver is on the way...`;
-                }
-
-                const bypassCard = document.getElementById('bypassWaitCard');
-                if (bypassCard) {
-                    bypassCard.innerHTML = `
-                        <div style="background: rgba(48,209,88,0.15); border: 1px solid rgba(48,209,88,0.45); border-radius: 12px; padding: 12px; color: #30D158; font-weight: 700; font-size: 0.85rem; text-align: center;">
-                            <i class="fas fa-check-circle"></i> You have selected 'Ride now' option, you will now be paying R${newPrice}. Driver is on the way...
-                        </div>
-                    `;
-                }
-
-                if (driverId && typeof window.showDriverAcceptedPopup === 'function') {
-                    window.showDriverAcceptedPopup(driverId, { requestKey: reqId });
-                }
-            }).catch((error) => {
-                console.error('ride_now negotiation failed:', error);
-                showToast('Could not send Ride Now request. Please try again.', 'danger');
-            });
-        },
-        "Yes, Ride Now",
-        "Cancel",
-        "success"
-    );
-};
 
 // ================================================================
 // FALLBACK: SHOW DRIVER POPUP
@@ -35359,15 +35266,10 @@ window.submitInstantClubBooking = async function() {
         }
 
         // 9. CREATE RIDE REQUEST
-       // 9. CREATE RIDE REQUEST
         const requestId = database.ref("requests").push().key;
-        
-        // FIX: Removed 'const' because taxiId is already declared in this scope
-        const finalTaxiId = window.selectedClubTaxiId || null; 
-
         const requestData = {
             requestId: requestId,
-            taxiId: finalTaxiId, 
+            taxiId: taxiId || null, 
             carCategory: 'club',
             commuterId: window.userId,
             commuterName: subscriptionData.commuterName,
@@ -35543,51 +35445,7 @@ window.runClubMatchmaking = async function() {
     }
 };
 
-window.calculateClubDistanceAndPrice = function() {
-    const pLat = parseFloat(document.getElementById('clubPickupLat').value);
-    const pLng = parseFloat(document.getElementById('clubPickupLng').value);
-    const dLat = parseFloat(document.getElementById('clubDropoffLat').value);
-    const dLng = parseFloat(document.getElementById('clubDropoffLng').value);
-    const daysPerWeek = parseInt(document.getElementById('clubDaysPerWeek')?.value || 5);
 
-    if (pLat && pLng && dLat && dLng) {
-        // Calculate raw distance and add 30% for road curves
-        let distance = calculateDistance(pLat, pLng, dLat, dLng) * 1.3;
-        if (distance < 1) distance = 1;
-
-        // Base Math: R15 minimum, + R6.00 per km (Shared Ride is cheaper than Asiye Go)
-        const singleTripGross = 15 + (distance * 6.00);
-        
-        // Single Trip Price (Rounded)
-        const singleTripPrice = Math.max(15, Math.round(singleTripGross));
-        
-        // Daily Price (To work and back)
-        const dailyPrice = singleTripPrice * 2;
-        
-        // Monthly Price Estimate (4 weeks * days per week)
-        const monthlyEstimate = dailyPrice * daysPerWeek * 4;
-
-        // Save globally for submission
-        window.clubBookingCalculatedPrice = singleTripPrice;
-
-        // Update UI Elements safely
-        const singleEl = document.getElementById('clubSingleTrip');
-        const dailyEl = document.getElementById('clubDailyTrip');
-        const monthEl = document.getElementById('clubEstCost');
-        const noticeEl = document.getElementById('clubNoticeSinglePrice');
-        const estRateDisplay = document.getElementById('clubEstRateDisplay'); // In Step 2
-
-        if (singleEl) singleEl.innerText = `R${singleTripPrice}`;
-        if (dailyEl) dailyEl.innerText = `R${dailyPrice}`;
-        if (monthEl) monthEl.innerText = `R${monthlyEstimate}`;
-        if (noticeEl) noticeEl.innerText = `R${singleTripPrice}`;
-        if (estRateDisplay) estRateDisplay.innerText = `R${singleTripPrice}`;
-
-        // Also update distance display
-        const distEl = document.getElementById('clubEstDistance');
-        if (distEl) distEl.innerText = `${distance.toFixed(1)} km`;
-    }
-};
 
 // =======================================================================
 // 3. ALLOW USER TO CANCEL THEIR PENDING SUBSCRIPTION AND RE-BOOK
@@ -35613,186 +35471,218 @@ window.cancelPendingClubSubscription = function() {
     }
 };
 
+
 window.requestAsiyeGoRide = async function(taxiId) {
+    closeModal('taxiListSheet');
+
+    var fare = window.calculatedTripPrice || 25;
+    const promoRemaining = window.commuterData?.promoRemaining || 0;
+    const promoValue = window.commuterData?.promoValue || 25;
+    const availableCredit = parseFloat(window.commuterData?.credits || 0);
+
+    let promoDeduction = 0;
+    let walletDeduction = 0;
+
+    if (promoRemaining > 0) {
+        if (window.commuterData?.promoPercentage) {
+            promoDeduction = Math.round(fare * (window.commuterData.promoPercentage / 100));
+        } else {
+            promoDeduction = Math.min(promoValue, fare);
+        }
+    }
+
+    let remainingFare = Math.max(0, fare - promoDeduction);
+
+    if (window.selectedPaymentMethod === 'card' && remainingFare > 0) {
+        if (availableCredit < remainingFare) {
+            showGenericMessage("Insufficient Funds", "Your card balance is too low. Please select Cash or Top Up.", "fa-wallet", "icon-warning");
+            openModal('taxiListSheet'); 
+            return;
+        }
+        walletDeduction = remainingFare;
+    }
+
+    let totalAppliedCredit = promoDeduction + walletDeduction;
+
+    const cancelBtn = document.getElementById('cancelRequestBtn');
+    if (cancelBtn) cancelBtn.style.display = 'block';
+
+    openModal('pendingRequestPopup');
+
+    // DETERMINE RIDE TYPE BASED ON SELECTION
+    const isPooling = (window.selectedRideCategory === 'club');
+    
+    // THE FIX: Set the correct type based on user selection
+    const rideType = isPooling ? 'club' : 'ehailing';
+    const rideStatus = isPooling ? 'pooling' : 'pending';
+
+    const msgEl = document.getElementById('requestingMessage');
+    if (msgEl) {
+        msgEl.innerHTML = `
+            <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.2);">
+                <div class="logo-circle" style="box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);">
+                    <i class="${isPooling ? 'fas fa-users' : 'fas fa-car-side'}" style="color: #007BFF; font-size: 24px;"></i>
+                </div>
+            </div>
+            <div style="font-weight:900; color:#fff; font-size:1.4rem; margin-bottom:5px;">
+                ${isPooling ? 'Creating your Club pool...' : 'Finding Asiye Go Drivers...'}
+            </div>
+            <p style="color:#aaa; font-size:0.9rem;">
+                ${isPooling ? 'Waiting for drivers to join your shared ride.' : 'Pinging Asiye Go partners near you.'}
+            </p>
+        `;
+    }
+
+    var preciseAddress = "Unknown Location";
     try {
-        closeModal('taxiListSheet');
+        const fullAddr = await getAddressFromCoordsPromise(commuterLng, commuterLat);
+        preciseAddress = fullAddr.split(',')[0].trim();
+    } catch (e) {}
 
-        // 1. Pricing & Promo Logic
-        var fare = window.calculatedTripPrice || 25;
-        const promoRemaining = window.commuterData?.promoRemaining || 0;
-        const promoValue = window.commuterData?.promoValue || 25;
-        const availableCredit = parseFloat(window.commuterData?.credits || 0);
+    var finalDest = window.userDropOffDestination || "As Directed";
+    let joinedExistingPoolId = null;
 
-        let promoDeduction = 0;
-        let walletDeduction = 0;
-
-        if (promoRemaining > 0) {
-            // Apply 20% or flat discount logic
-            promoDeduction = window.commuterData?.promoPercentage ? 
-                Math.round(fare * (window.commuterData.promoPercentage / 100)) : 
-                Math.min(promoValue, fare);
-        }
-
-        let remainingFare = Math.max(0, fare - promoDeduction);
-
-        // 2. Card/Wallet Payment Check
-        if (window.selectedPaymentMethod === 'card' && remainingFare > 0) {
-            if (availableCredit < remainingFare) {
-                showGenericMessage("Insufficient Funds", "Your wallet balance is too low. Please select Cash or Top Up.", "fa-wallet", "icon-warning");
-                openModal('taxiListSheet'); 
-                return;
-            }
-            walletDeduction = remainingFare;
-        }
-
-        let totalAppliedCredit = promoDeduction + walletDeduction;
-
-        // 3. UI Transition
-        const cancelBtn = document.getElementById('cancelRequestBtn');
-        if (cancelBtn) cancelBtn.style.display = 'block';
-        openModal('pendingRequestPopup');
-
-        const isPooling = (window.selectedRideCategory === 'club');
-        const rideType = isPooling ? 'club' : 'ehailing';
-        const rideStatus = isPooling ? 'pooling' : 'pending';
-
-        // Update the Loading Spinner Text
-        const msgEl = document.getElementById('requestingMessage');
-        if (msgEl) {
-            msgEl.innerHTML = `
-                <div class="brand-pulse" style="margin: 0 auto 20px auto; transform: scale(1.2);">
-                    <div class="logo-circle" style="box-shadow: 0 0 20px rgba(0, 123, 255, 0.4);">
-                        <i class="${isPooling ? 'fas fa-users' : 'fas fa-car-side'}" style="color: #007BFF; font-size: 24px;"></i>
-                    </div>
-                </div>
-                <div style="font-weight:900; color:#fff; font-size:1.4rem; margin-bottom:5px;">
-                    ${isPooling ? 'Creating Club Pool...' : 'Finding Drivers...'}
-                </div>
-                <p style="color:#aaa; font-size:0.9rem;">
-                    ${isPooling ? 'Waiting for others to join.' : 'Pinging nearby drivers.'}
-                </p>
-            `;
-        }
-
-        // 4. Address Resolution Fallback
-        var preciseAddress = document.getElementById('uberPickupInput')?.value || "Current Location";
-        try {
-            const fullAddr = await getAddressFromCoordsPromise(commuterLng, commuterLat);
-            if (fullAddr) preciseAddress = fullAddr.split(',')[0].trim();
-        } catch (e) {}
-
-        var finalDest = window.userDropOffDestination || "As Directed";
-        let joinedExistingPoolId = null;
-
-        // 5. Existing Pool Check (For Shared Rides)
-        if (isPooling) {
-            const snap = await database.ref('requests').once('value');
-            if (snap.exists()) {
-                snap.forEach(child => {
-                    const req = child.val();
-                    if (req.type === 'club' && ['pooling', 'waiting_pool'].includes(req.status) && !req.taxiId) {
-                        const currentPassCount = req.passengers ? Object.keys(req.passengers).length : 0;
-                        if (currentPassCount < 4) {
-                            const dist = calculateDistance(commuterLat, commuterLng, req.poolCenterLat, req.poolCenterLng);
-                            if (dist <= 10) { 
-                                joinedExistingPoolId = child.key;
-                                return true;
-                            }
+    // ONLY check for existing pools if this is a Club ride
+    if (isPooling) {
+        const snap = await database.ref('requests').once('value');
+        if (snap.exists()) {
+            snap.forEach(child => {
+                const req = child.val();
+                // Only look for open club pools
+                if (req.type === 'club' && ['pooling', 'waiting_pool'].includes(req.status) && !req.taxiId) {
+                    const currentPassCount = req.passengers ? Object.keys(req.passengers).length : 0;
+                    if (currentPassCount < 4) {
+                        const dist = calculateDistance(commuterLat, commuterLng, req.poolCenterLat, req.poolCenterLng);
+                        if (dist <= 10) { 
+                            joinedExistingPoolId = child.key;
+                            return true;
                         }
                     }
-                });
-            }
+                }
+            });
         }
+    }
 
-        const passengerData = {
-            commuterId: userId,
-            commuterName: (commuterData.name + " " + (commuterData.surname || "")).trim(),
-            commuterPhone: window.commuterData?.phone || "",
-            location: { latitude: commuterLat, longitude: commuterLng },
-            pickupAddress: preciseAddress,
-            destination: finalDest,
-            price: fare,
-            appliedCredit: totalAppliedCredit,
-            finalAmount: Math.max(0, fare - totalAppliedCredit),
-            paymentMethod: window.selectedPaymentMethod || 'cash',
-            requirePin: true,
-            pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
-            status: 'pending'
-        };
+    const passengerData = {
+        commuterName: `${window.commuterData?.name || 'Passenger'} ${window.commuterData?.surname || ''}`.trim(),
+        commuterPhone: window.commuterData?.phone || "",
+        location: { latitude: commuterLat, longitude: commuterLng },
+        pickupAddress: preciseAddress,
+        destination: finalDest,
+        price: fare,
+        appliedCredit: totalAppliedCredit,
+        finalAmount: Math.max(0, fare - totalAppliedCredit),
+        paymentMethod: window.selectedPaymentMethod || 'cash',
+        requirePin: true,
+        pickupPin: Math.floor(1000 + Math.random() * 9000).toString(),
+        status: 'pending'
+    };
 
-        let requestId;
-
+    try {
         if (joinedExistingPoolId) {
-            // CASE 1: JOINING AN EXISTING CLUB POOL
-            requestId = joinedExistingPoolId;
-            await database.ref(`requests/${requestId}/passengers/${userId}`).set(passengerData);
+            // Join an existing club pool
+            console.log("Joining existing Club pool:", joinedExistingPoolId);
+            window.currentRequestId = joinedExistingPoolId;
+            await database.ref(`requests/${joinedExistingPoolId}/passengers/${userId}`).set(passengerData);
             
-            const poolSnap = await database.ref(`requests/${requestId}`).once('value');
+            // Notify drivers about the pool update
+            const poolRef = database.ref(`requests/${joinedExistingPoolId}`);
+            const poolSnap = await poolRef.once('value');
             const poolData = poolSnap.val();
+            const passCount = poolData.passengers ? Object.keys(poolData.passengers).length : 1;
             
-            if (poolData && Object.keys(poolData.passengers).length >= 2) {
-                await notifyDriversAboutClubPool(requestId, poolData);
+            if (passCount >= 2) {
+                await notifyDriversAboutClubPool(joinedExistingPoolId, poolData);
             }
             
             closeModal('pendingRequestPopup');
-            showGenericMessage("Joined Club Pool!", "Matching successful! Waiting for a driver to accept the group.", "fa-users", "icon-success");
+            showGenericMessage(
+                "Joined Club Pool!",
+                `You joined an existing Club pool with ${passCount} passenger(s). Waiting for a driver.`,
+                "fa-users",
+                "icon-success"
+            );
             
         } else {
-            // CASE 2: CREATING A NEW REQUEST
+            // Create a new request
+            console.log("Creating new request. Type:", rideType, "Status:", rideStatus);
             const requestNode = database.ref("requests").push();
-            requestId = requestNode.key;
+            window.currentRequestId = requestNode.key;
 
+            // Build the base request data
             const requestData = {
-                requestId: requestId,
-                commuterId: userId,
+                requestId: window.currentRequestId,
+                carCategory: isPooling ? 'club' : 'standard',
+                commuterId: window.userId,
                 commuterName: passengerData.commuterName,
                 commuterPhone: passengerData.commuterPhone,
-                pickupAddress: passengerData.pickupAddress,
-                destination: passengerData.destination,
-                commuterLocation: passengerData.location,
-                calculatedPrice: fare,
-                appliedCredit: totalAppliedCredit, // Added this for driver-side visibility
+                calculatedPrice: passengerData.price,
                 paymentMethod: passengerData.paymentMethod,
-                status: rideStatus,
-                type: rideType,
-                taxiId: taxiId || null, // Lock to taxi if one was clicked
+                requirePin: passengerData.requirePin,
+                pickupPin: passengerData.pickupPin,
+                pickupAddress: passengerData.pickupAddress,
+                commuterLocation: passengerData.location,
+                destination: passengerData.destination,
+                status: rideStatus,  // 'pending' for e-hailing, 'pooling' for club
+                type: rideType,       // 'ehailing' for private, 'club' for shared
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             };
 
+            // Add club-specific fields ONLY if this is a club ride
             if (isPooling) {
+                requestData.expiresAt = Date.now() + (10 * 60000);
+                requestData.minCapacity = 2;
+                requestData.maxCapacity = 4;
+                requestData.originalPerPersonPrice = passengerData.price;
                 requestData.poolCenterLat = commuterLat;
                 requestData.poolCenterLng = commuterLng;
-                requestData.passengers = { [userId]: passengerData };
-                requestData.maxCapacity = 4;
+                requestData.passengers = {};
+                requestData.passengers[userId] = passengerData;
+                requestData.passengerCount = 1;
             }
 
             await requestNode.set(requestData);
 
-            // 6. Notify Driver Directly
-            if (taxiId) {
-                database.ref(`notifications/taxis/${taxiId}`).push({
-                    type: isPooling ? 'club' : 'passenger',
-                    requestId: requestId,
-                    commuterName: requestData.commuterName,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                });
+            // Notify drivers based on ride type
+            if (isPooling) {
+                // Club ride - notify drivers about the pool
+                await notifyDriversAboutClubPool(window.currentRequestId, requestData);
+                closeModal('pendingRequestPopup');
+                showGenericMessage(
+                    "Club Pool Created!",
+                    `Your Club pool is open! Waiting for more passengers.`,
+                    "fa-users",
+                    "icon-success"
+                );
+            } else {
+                // Asiye Go (e-hailing) - notify nearby drivers directly
+                await notifyDriversAboutEHailing(window.currentRequestId, requestData);
+                // The pendingRequestPopup will stay open until a driver accepts
             }
         }
 
-        // 7. Session/State Management
-        window.currentRequestId = requestId;
-        localStorage.setItem('currentRequestId', requestId);
-        await database.ref(`commuters/${userId}`).update({ currentRequest: requestId });
+        await database.ref(`commuters/${userId}`).update({ currentRequest: window.currentRequestId });
+        if (window.commuterData) window.commuterData.currentRequest = window.currentRequestId;
+        localStorage.setItem('currentRequestId', window.currentRequestId);
+
+        // Start listening for request status updates
+        listenForRequestStatus(window.currentRequestId);
         
-        // Start live listeners
-        listenForRequestStatus(requestId);
+        // Start pool monitor only for club rides
+        if (isPooling) {
+            startPoolMonitor(window.currentRequestId);
+        } else {
+            // For e-hailing, start the search timer
+            window.startTaxiSearchTimer(window.currentRequestId);
+        }
 
     } catch (error) {
-        console.error("Booking error:", error);
+        console.error("Database save failed:", error);
         closeModal('pendingRequestPopup');
-        showGenericMessage("Error", "Something went wrong. Please try again.", "fa-exclamation-triangle", "icon-danger");
+        showGenericMessage("Request Failed", "Could not send booking details. Please try again.", "fa-times-circle", "icon-danger");
     }
 };
+
 // =======================================================================
 // NOTIFY DRIVERS ABOUT E-HAILING (ASIYE GO) RIDE
 // =======================================================================
@@ -36417,7 +36307,7 @@ function startPassengerClubPoolMonitor(requestId) {
             
             // Check if full
             if (passengerCount >= maxCapacity) {
-                console.log("🀀𐎉𘁐ool is FULL! Dispatching...");
+                console.log("🎉 Pool is FULL! Dispatching...");
                 clearInterval(window.passengerPoolMonitor);
                 database.ref(`requests/${requestId}`).update({
                     status: 'pending',
@@ -37513,8 +37403,6 @@ window.listenForPassengerRequestStatus = function(requestId) {
         else if (status === 'completed') {
             database.ref(`requests/${requestId}`).off('value', window.passengerStatusListener);
             window.passengerStatusListener = null;
-
-            cleanupPassengerTripMap();
             
             closeAllPopups();
             if (typeof window.showTripCompletedScreen === 'function') {
@@ -37797,7 +37685,6 @@ function showPassengerDriverAcceptedPopup(taxiId, requestId, requestData) {
                     updatePopupToEnRoute(updatedRequest);
                 } else if (newStatus === 'completed') {
                     // Trip completed - close popup and show completion screen
-                    cleanupPassengerTripMap();
                     if (typeof window.showTripCompletedScreen === 'function') {
                         closeModal('driverAcceptedPopup');
                         window.showTripCompletedScreen(requestId);
@@ -39021,12 +38908,9 @@ window.showEnhancedBookingStatus = function(requestId, type, requestData) {
 
 window.openClubBooking = function(taxiId, driverName, driverPic, driverRating, vehicleInfo, regNumber) {
     console.log("🚗 Opening Club Booking for:", taxiId);
-    window._clubBookingSource = 'club_taxis_list';
+window._clubBookingSource = 'club_taxis_list';
     console.log("👤 Driver:", driverName);
     console.log("📍 Vehicle:", vehicleInfo, regNumber);
-    
-    // 🚨 FIX: Ensure the button starts in a clickable state
-    window.resetBookingButtonUI();
     
     // Close any open popups
     if (typeof closeAllPopups === 'function') {
@@ -39413,7 +39297,136 @@ function createClubGatewayPopup() {
 // OPEN LIVE CLUB POOLS (Show available cars)
 // ================================================================
 
-// The live-club implementation is defined later in this block to avoid duplicate function definitions.
+window.openLiveClubPools = function() {
+    console.log("👥 Opening Live Club Pools...");
+    
+    // Close the gateway popup
+    const gatewayPopup = document.getElementById('asiyeClubGatewayPopup');
+    if (gatewayPopup) {
+        gatewayPopup.classList.remove('open');
+        gatewayPopup.style.display = 'none';
+    }
+    
+    // Make sure we have location
+    if (!window.commuterLat || !window.commuterLng) {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    window.commuterLat = position.coords.latitude;
+                    window.commuterLng = position.coords.longitude;
+                    localStorage.setItem('lastLat', window.commuterLat);
+                    localStorage.setItem('lastLng', window.commuterLng);
+                    fetchAndDisplayClubTaxis();
+                },
+                (error) => {
+                    console.warn("GPS error, using fallback:", error);
+                    fetchAndDisplayClubTaxis();
+                },
+                { enableHighAccuracy: true, timeout: 5000 }
+            );
+        } else {
+            fetchAndDisplayClubTaxis();
+        }
+    } else {
+        fetchAndDisplayClubTaxis();
+    }
+};
+
+// ================================================================
+// FETCH AND DISPLAY CLUB TAXIS
+// ================================================================
+
+async function fetchAndDisplayClubTaxis() {
+    let uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
+    let uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
+    
+    console.log(`📍 Fetching club taxis near: ${uLat}, ${uLng}`);
+    
+    // Open the taxi list sheet
+    const sheet = document.getElementById('taxiListSheet');
+    if (sheet) {
+        sheet.classList.add('open');
+        sheet.style.display = 'flex';
+        sheet.style.setProperty('background-color', '#1C1C1E', 'important');
+    }
+    
+    const container = document.getElementById('taxiListContainer');
+    if (container) {
+        container.innerHTML = `
+            <div style="padding: 40px 20px; text-align: center;">
+                <div class="spinner" style="width: 40px; height: 40px; border-width: 4px; margin: 0 auto 20px; border-left-color: #FF9F0A;"></div>
+                <h4 style="color: white; font-weight: 800;">Searching for Club Cars...</h4>
+                <p style="color: #888; font-size: 0.9rem;">Looking for active taxis in your area</p>
+            </div>
+        `;
+    }
+    
+    try {
+        const snapshot = await firebase.database().ref('taxis').once('value');
+        let taxis = [];
+        
+        if (snapshot.exists()) {
+            snapshot.forEach(function(child) {
+                const taxi = child.val();
+                const taxiId = child.key;
+                
+                const isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
+                const isOnline = taxi.isOnline === true;
+                const isAvailable = isVerified && isOnline;
+                
+                if (isAvailable && taxi.latitude && taxi.longitude) {
+                    const dist = calculateDistance(uLat, uLng, taxi.latitude || 0, taxi.longitude || 0);
+                    if (dist <= 30) {
+                        taxi.taxiId = taxiId;
+                        taxi.distance = dist;
+                        taxis.push(taxi);
+                    }
+                }
+            });
+        }
+        
+        taxis.sort((a, b) => (a.distance || 999) - (b.distance || 999));
+        
+        console.log(`📊 Found ${taxis.length} active club taxis`);
+        
+        if (container) {
+            if (taxis.length === 0) {
+                container.innerHTML = `
+                    <div style="padding: 60px 20px; text-align: center; color: #888;">
+                        <div style="width: 80px; height: 80px; background: rgba(255, 159, 10, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                            <i class="fas fa-car-side" style="font-size: 3rem; color: #FF9F0A;"></i>
+                        </div>
+                        <h4 style="color: #111; font-weight: 900; font-size: 1.2rem;">No Club Cars Active</h4>
+                        <p style="font-size: 0.9rem; margin-top: 5px;">There are no active club cars in your area right now.</p>
+                        <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #FF9F0A; color: black; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer;">
+                            <i class="fas fa-sync-alt"></i> Refresh Search
+                        </button>
+                        <button onclick="closeModal('taxiListSheet'); showModernDashboard();" style="margin-top: 10px; background: transparent; color: #666; border: 1px solid #ddd; padding: 14px 30px; border-radius: 30px; font-weight: 700; cursor: pointer;">
+                            Go Back
+                        </button>
+                    </div>
+                `;
+            } else {
+                displayClubTaxisInSlider(taxis);
+            }
+        }
+        
+    } catch (error) {
+        console.error("Error fetching club taxis:", error);
+        if (container) {
+            container.innerHTML = `
+                <div style="padding: 40px 20px; text-align: center; color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 15px;"></i>
+                    <h4 style="font-weight: 800;">Error Loading Cars</h4>
+                    <p style="font-size: 0.9rem;">Please check your connection and try again.</p>
+                    <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #007BFF; color: white; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer;">
+                        <i class="fas fa-sync-alt"></i> Retry
+                    </button>
+                </div>
+            `;
+        }
+    }
+}
 
 // ================================================================
 // DISPLAY CLUB TAXIS IN SLIDER
@@ -39723,46 +39736,33 @@ function showClubTaxisList() {
 }
 
 // ================================================================
-// FIXED: FETCH AND DISPLAY CLUB TAXIS (SINGLE DECLARATION)
+// FETCH AND DISPLAY CLUB TAXIS - COMPLETE
 // ================================================================
+
 async function fetchAndDisplayClubTaxis() {
     console.log("🔄 Fetching club taxis...");
     
     const container = document.getElementById('taxiListContainer');
     if (!container) return;
     
-    // 1. Get User Location (Coordinates)
     let uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
     let uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
     
-    // 2. Show Loading Spinner
-    container.innerHTML = `
-        <div style="padding: 40px 20px; text-align: center;">
-            <div class="spinner" style="width: 40px; height: 40px; border-width: 4px; margin: 0 auto 20px; border-left-color: #FF9F0A;"></div>
-            <h4 style="color: #111; font-weight: 800;">Searching for Club Cars...</h4>
-            <p style="color: #888; font-size: 0.9rem;">Looking for active taxis in your area</p>
-        </div>
-    `;
-    
     try {
-        const [taxiSnapshot, requestSnapshot] = await Promise.all([
-            firebase.database().ref('taxis').once('value'),
-            firebase.database().ref('requests').once('value')
-        ]);
-
+        const snapshot = await firebase.database().ref('taxis').once('value');
         let taxis = [];
-        let clubPools = {};
         
-        if (taxiSnapshot.exists()) {
-            taxiSnapshot.forEach(function(child) {
+        if (snapshot.exists()) {
+            snapshot.forEach(function(child) {
                 const taxi = child.val();
                 const taxiId = child.key;
                 
                 const isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
                 const isOnline = taxi.isOnline === true;
+                const isAvailable = isVerified && isOnline;
                 
-                if (isVerified && isOnline && taxi.latitude && taxi.longitude) {
-                    const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
+                if (isAvailable && taxi.latitude && taxi.longitude) {
+                    const dist = calculateDistance(uLat, uLng, taxi.latitude || 0, taxi.longitude || 0);
                     if (dist <= 30) {
                         taxi.taxiId = taxiId;
                         taxi.distance = dist;
@@ -39771,334 +39771,436 @@ async function fetchAndDisplayClubTaxis() {
                 }
             });
         }
-
-        if (requestSnapshot.exists()) {
-            requestSnapshot.forEach(function(child) {
-                const req = child.val();
-                const reqId = child.key;
-                if (!req || req.type !== 'club') return;
-                if (!['pooling', 'waiting_pool', 'accepted'].includes(req.status)) return;
-                if (req.taxiId) {
-                    clubPools[req.taxiId] = { requestId: reqId, ...req };
-                }
-            });
-        }
         
         taxis.sort((a, b) => (a.distance || 999) - (b.distance || 999));
         
-     if (taxis.length === 0) {
-            // Call our new Empty State / Waitlist function
-            if (typeof window.showEmptyClubState === 'function') {
-                window.showEmptyClubState();
-            }
-        } else {
-            if (typeof displayClubTaxisCards === 'function') {
-                displayClubTaxisCards(taxis, clubPools);
-            }
+        console.log(`📊 Found ${taxis.length} active club taxis`);
+        
+        if (taxis.length === 0) {
+            container.innerHTML = `
+                <div style="padding: 60px 20px; text-align: center; color: #888;">
+                    <div style="width: 80px; height: 80px; background: rgba(255, 159, 10, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
+                        <i class="fas fa-car-side" style="font-size: 3rem; color: #FF9F0A;"></i>
+                    </div>
+                    <h4 style="color: #111; font-weight: 900; font-size: 1.2rem;">No Club Cars Active</h4>
+                    <p style="font-size: 0.9rem; margin-top: 5px;">There are no active club cars in your area right now.</p>
+                    <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #FF9F0A; color: black; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(255,159,10,0.3);">
+                        <i class="fas fa-sync-alt"></i> Refresh Search
+                    </button>
+                    <button onclick="closeClubTaxisList()" style="margin-top: 10px; background: transparent; color: #666; border: 1px solid #ddd; padding: 14px 30px; border-radius: 30px; font-weight: 700; cursor: pointer;">
+                        <i class="fas fa-arrow-left"></i> Go Back
+                    </button>
+                </div>
+            `;
+            return;
         }
+        
+        // Display the taxis in a nice grid/cards
+        displayClubTaxisCards(taxis);
         
     } catch (error) {
         console.error("Error fetching club taxis:", error);
-        container.innerHTML = `<p style="text-align:center; color:red; padding:20px;">Error loading taxis. Check connection.</p>`;
+        container.innerHTML = `
+            <div style="padding: 40px 20px; text-align: center; color: #dc3545;">
+                <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 15px;"></i>
+                <h4 style="font-weight: 800;">Error Loading Cars</h4>
+                <p style="font-size: 0.9rem;">Please check your connection and try again.</p>
+                <button onclick="fetchAndDisplayClubTaxis()" style="margin-top: 20px; background: #007BFF; color: white; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; cursor: pointer; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
+                    <i class="fas fa-sync-alt"></i> Retry
+                </button>
+            </div>
+        `;
     }
 }
+
 // ================================================================
 // DISPLAY CLUB TAXIS AS CARDS
 // ================================================================
-window.showEmptyClubState = function(from, to) {
-    const container = document.getElementById('taxiListContainer');
-    
-    // --- DESTINATION LOGIC ---
-    // Safely check passed parameter, global variable, or user's saved work profile
-    let destStr = (to && to !== "destination") ? to : (window.userDropOffDestination || (window.commuterData && window.commuterData.workAddress) || "your destination");
-    const cleanTo = destStr.split(',')[0].trim();
-    
-    // --- STREET & SUBURB LOGIC ---
-    let street = window.currentStreetName;
-    let suburb = window.currentSuburbName;
 
-    // Fallback if GPS hasn't finished loading yet
-    if ((!street || street === "") && window.commuterData && window.commuterData.homeAddress) {
-        const profileParts = window.commuterData.homeAddress.split(',');
-        street = profileParts[0].trim();
-        suburb = profileParts.length > 1 ? profileParts[1].trim().replace(/[0-9]/g, '') : street;
-    }
-
-    const displayStreet = street || "your street";
-    const displaySuburb = suburb || "your suburb";
-
-    container.innerHTML = `
-        <div style="padding: 40px 20px; text-align: center;">
-            <div style="width: 80px; height: 80px; background: rgba(255, 159, 10, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-                <i class="fas fa-route" style="font-size: 3rem; color: #FF9F0A;"></i>
-            </div>
-            <h4 style="color: #111; font-weight: 900; font-size: 1.3rem;">No cars on this route yet</h4>
-            
-            <p style="color: #666; font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">
-                We don't have drivers going from <b>${displayStreet}</b> to <b>${cleanTo}</b> right now.
-            </p>
-            
-            <div style="background: #f8f9fa; border: 1px solid #eee; padding: 15px; border-radius: 16px; margin: 25px 0; text-align: left;">
-                <p style="margin: 0; color: #333; font-weight: bold; font-size: 0.9rem;"><i class="fas fa-clipboard-list" style="color: #007BFF;"></i> Join the Waiting List</p>
-                <p style="margin: 5px 0 0 0; color: #888; font-size: 0.8rem;">We will broadcast this request to all drivers in <b>${displaySuburb}</b>. You will be notified as soon as a driver accepts your daily commute.</p>
-            </div>
-
-            <button id="waitlistBtn" onclick="window.joinCommuteWaitlist()" style="width: 100%; padding: 16px; background: #FF9F0A; color: black; border-radius: 16px; font-weight: 900; font-size: 1.05rem; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 159, 10, 0.3);">
-                Request Route Allocation
-            </button>
-            
-            <button onclick="window.showAllNearbyTaxis()" style="width: 100%; background: transparent; border: none; color: #007BFF; font-weight: 700; margin-top: 15px; cursor: pointer;">
-                See drivers in ${displaySuburb}
-            </button>
-        </div>
-    `;
-};
-
-// 2. Update showAllNearbyTaxis to use the force flag
-window.showAllNearbyTaxis = function() {
-    const suburbName = window.currentSuburbName || "your area";
-    const container = document.getElementById('taxiListContainer');
-    
-    container.innerHTML = `
-        <div style="padding: 40px 20px; text-align: center;">
-            <div class="spinner" style="border-left-color: #007BFF; margin: 0 auto 15px auto;"></div>
-            <p style="color: #666; font-weight:bold;">Finding drivers in ${suburbName}...</p>
-        </div>
-    `;
-
-    firebase.database().ref('taxis').once('value').then(snapshot => {
-        const taxis = [];
-        const uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat'));
-        const uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng'));
-
-        snapshot.forEach(child => {
-            const taxi = child.val();
-            if (taxi.isOnline && taxi.latitude && taxi.longitude) {
-                const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
-                if (dist <= 10.0) { 
-                    taxi.taxiId = child.key;
-                    taxi.distance = dist;
-                    taxis.push(taxi);
-                }
-            }
-        });
-
-        if (taxis.length > 0) {
-            // Sort by nearest
-            taxis.sort((a,b) => a.distance - b.distance);
-            
-            // Pass 'true' as the third parameter to FORCE the list to render and skip empty state
-            window.displayClubTaxisCards(taxis, {}, true); 
-            if (typeof zoomToFitTaxis === 'function') zoomToFitTaxis(taxis);
-        } else {
-            container.innerHTML = `
-                <div style="text-align: center; padding: 40px 20px;">
-                    <i class="fas fa-search" style="font-size: 2rem; color: #ccc; margin-bottom: 10px;"></i>
-                    <h4 style="color: #333;">No drivers nearby</h4>
-                    <p style="color: #888; font-size: 0.9rem;">There are no active drivers close to you right now.</p>
-                    <button class="btn btn-outline" onclick="window.openAsiyeClubGateway()" style="margin-top: 15px; border: 1px solid #ccc;">Back</button>
-                </div>
-            `;
-        }
-    });
-};
-
-// 1. BULLETPROOF WAITLIST SUCCESS MESSAGE (Fixes "your area" issue)
-window.joinCommuteWaitlist = function() {
-    const btn = document.getElementById('waitlistBtn');
-    if (btn) {
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding to List...';
-        btn.disabled = true;
-    }
-
-    // Extract exact suburb safely
-    let safeSuburb = window.currentSuburbName;
-    if (!safeSuburb || safeSuburb === "your suburb" || safeSuburb.trim() === "") {
-        if (window.commuterData && window.commuterData.homeAddress) {
-            const parts = window.commuterData.homeAddress.split(',');
-            safeSuburb = parts.length > 1 ? parts[1].replace(/[0-9]/g, '').trim() : parts[0].trim();
-        } else {
-            safeSuburb = "your area"; // Absolute final fallback
-        }
-    }
-
-    const safeStreet = window.currentStreetName || "your street";
-    const safeDest = window.userDropOffDestination || (window.commuterData && window.commuterData.workAddress ? window.commuterData.workAddress : "Destination");
-
-    const data = {
-        commuterId: window.userId,
-        commuterName: window.commuterData.name || 'Passenger',
-        pickupAddress: safeStreet, 
-        pickupSuburb: safeSuburb,
-        destination: safeDest,
-        status: 'pending_allocation',
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
-
-    firebase.database().ref('club_pools/waiting_list/' + window.userId).set(data).then(() => {
-        const popup = document.getElementById('genericMessagePopup');
-        popup.innerHTML = `
-            <div class="modal-content" style="text-align: center; padding: 30px; background: white !important; border-radius:24px;">
-                <i class="fas fa-check-circle" style="font-size: 3rem; color: #28a745; margin-bottom: 15px;"></i>
-                <h3 style="color:#111 !important;">Added to Waitlist!</h3>
-                <p style="color:#666 !important;">We have broadcasted your route from <b>${safeSuburb}</b>. You will be notified via SMS once a driver accepts.</p>
-                <button class="btn btn-primary" onclick="closeModal('genericMessagePopup'); window.showAllNearbyTaxis();" style="width: 100%; margin-top: 20px; background:#111 !important; border:none;">
-                    OK (Show drivers in ${safeSuburb})
-                </button>
-            </div>
-        `;
-        openModal('genericMessagePopup');
-    }).catch(err => {
-        console.error("Firebase Error:", err);
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = 'Request Route Allocation';
-        }
-        showToast("Error connecting to server. Try again.", "danger");
-    });
-};
-
-// 2. FIX MISSING CAR DETAILS (Color, Make, Model, Reg)
-window.getVehicleDisplayInfo = function(taxi) {
-    if (!taxi) return { makeModel: 'Vehicle', color: '', reg: 'N/A', isEhailing: false, typeLabel: 'Taxi', fullString: 'Vehicle' };
-
-    const isEhailing = taxi.vehicleType === 'ehailing';
-    const typeLabel = isEhailing ? 'Asiye Go' : 'Minibus Taxi';
-
-    // 1. CAR REGISTRATION
-    let reg = taxi.taxiRegistrationNumber || taxi.registration || taxi.licenseNumber || 'NO REG';
-
-    // 2. VEHICLE MAKE & MODEL
-    let makeModel = taxi.registration || ''; // Sometimes saved here in older versions
-    let make = taxi.vehicleMake || '';
-    let model = taxi.vehicleModel || '';
-    
-    if (make || model) {
-        makeModel = `${make} ${model}`.trim();
-    }
-
-    if (!makeModel || makeModel.trim() === '' || makeModel === 'NO REG') {
-        makeModel = isEhailing ? 'Private Sedan' : 'Toyota Quantum';
-    }
-
-    // Clean Registration
-    if (typeof reg === 'string') reg = reg.trim().toUpperCase();
-
-    // 3. EXTRACT COLOR
-    let color = taxi.vehicleColor || taxi.color || '';
-    if (color) {
-        color = color.charAt(0).toUpperCase() + color.slice(1).toLowerCase();
-    }
-
-    const fullString = color ? `${color} ${makeModel}` : makeModel;
-
-    return {
-        makeModel: makeModel,
-        color: color,
-        reg: reg,
-        isEhailing: isEhailing,
-        typeLabel: typeLabel,
-        fullString: fullString
-    };
-};
-
-// 3. FIX TAXI LIST CARDS (Shows Driver Pic, Details, and handles "Local" routing)
-window.displayClubTaxisCards = function(taxis, clubPools = {}, forceShowAll = false) {
+function displayClubTaxisCards(taxis) {
     const container = document.getElementById('taxiListContainer');
     if (!container) return;
-
-    const targetDest = (window.userDropOffDestination || window.commuterData?.workAddress || "").toLowerCase().trim();
-    const shortTarget = targetDest.split(',')[0].trim();
-
-    const matchedTaxis = [];
-    const otherTaxis = [];
-
-    taxis.forEach(taxi => {
-        const taxiDest = (taxi.destination || taxi.scheduledDestination || "").toLowerCase();
-        if (shortTarget && taxiDest.includes(shortTarget)) {
-            matchedTaxis.push(taxi);
-        } else {
-            otherTaxis.push(taxi);
-        }
-    });
-
-    if (matchedTaxis.length === 0 && !forceShowAll) {
-        window.showEmptyClubState(window.currentStreetName, shortTarget);
-        return;
+    
+    // Add CSS styles if not already present
+    if (!document.getElementById('club-card-styles')) {
+        const style = document.createElement('style');
+        style.id = 'club-card-styles';
+        style.innerHTML = `
+            .club-taxi-card {
+                background: #ffffff;
+                border-radius: 20px;
+                padding: 18px 18px 20px 18px;
+                margin-bottom: 16px;
+                border: 1px solid #eeeeee;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.04);
+                transition: transform 0.2s ease, box-shadow 0.2s ease;
+                position: relative;
+                overflow: hidden;
+            }
+            .club-taxi-card:active {
+                transform: scale(0.98);
+            }
+            .club-taxi-card .book-btn {
+                background: linear-gradient(135deg, #FF9F0A, #FFB340);
+                color: #000000;
+                border: none;
+                padding: 14px 20px;
+                border-radius: 14px;
+                font-weight: 900;
+                font-size: 1rem;
+                cursor: pointer;
+                transition: all 0.2s ease;
+                width: 100%;
+                box-shadow: 0 4px 15px rgba(255, 159, 10, 0.25);
+                text-align: center;
+            }
+            .club-taxi-card .book-btn:active {
+                transform: scale(0.95);
+            }
+            .club-taxi-card .book-btn:disabled {
+                background: #dc3545;
+                color: white;
+                opacity: 0.7;
+                cursor: not-allowed;
+                box-shadow: none;
+            }
+            .club-taxi-card .status-badge {
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-weight: 800;
+                font-size: 0.7rem;
+                display: inline-block;
+            }
+            .club-taxi-card .status-badge.available {
+                background: #e8f5e9;
+                color: #28a745;
+            }
+            .club-taxi-card .status-badge.full {
+                background: #fbe9e7;
+                color: #dc3545;
+            }
+            .club-taxi-card .status-badge.waiting {
+                background: #fff3e0;
+                color: #FF9F0A;
+            }
+            .club-taxi-card .driver-avatar {
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                object-fit: cover;
+                border: 2px solid #FF9F0A;
+                flex-shrink: 0;
+            }
+            .club-taxi-card .car-image {
+                max-width: 100%;
+                max-height: 80px;
+                object-fit: contain;
+                filter: drop-shadow(0 4px 10px rgba(0,0,0,0.08));
+                transition: transform 0.3s ease;
+            }
+            .club-taxi-card:hover .car-image {
+                transform: scale(1.03);
+            }
+            .club-taxi-card .price-tag {
+                background: #111111;
+                padding: 8px 14px;
+                border-radius: 12px;
+                text-align: center;
+                min-width: 75px;
+            }
+            .club-taxi-card .price-tag .amount {
+                color: #30D158;
+                font-weight: 900;
+                font-size: 1.2rem;
+            }
+            .club-taxi-card .price-tag .label {
+                color: #888888;
+                font-size: 0.6rem;
+                text-transform: uppercase;
+                font-weight: 700;
+            }
+            .club-taxi-card .header-bar {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+            }
+            .club-taxi-card .header-bar.available {
+                background: linear-gradient(90deg, #FF9F0A, #FFD60A);
+            }
+            .club-taxi-card .header-bar.full {
+                background: linear-gradient(90deg, #dc3545, #f72585);
+            }
+            .club-taxi-card .header-bar.waiting {
+                background: linear-gradient(90deg, #FF9F0A, #FFB340);
+            }
+            .club-taxi-card .info-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 8px;
+                margin: 12px 0;
+            }
+            .club-taxi-card .info-grid .info-item {
+                background: #f8f9fa;
+                border-radius: 12px;
+                padding: 10px 8px;
+                text-align: center;
+            }
+            .club-taxi-card .info-grid .info-item .value {
+                font-weight: 900;
+                color: #111111;
+                font-size: 0.95rem;
+            }
+            .club-taxi-card .info-grid .info-item .label {
+                font-size: 0.6rem;
+                color: #888888;
+                text-transform: uppercase;
+                font-weight: 700;
+            }
+            .club-taxi-card .route-info {
+                background: #f8f9fa;
+                border-radius: 12px;
+                padding: 10px 14px;
+                margin: 12px 0;
+                border: 1px solid #eeeeee;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                font-size: 0.85rem;
+            }
+            .club-taxi-card .route-info .dest {
+                font-weight: 700;
+                color: #111111;
+            }
+            .club-taxi-card .route-info .vehicle {
+                color: #666666;
+                font-weight: 600;
+            }
+            .club-taxi-card .route-info .reg {
+                background: #111111;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 6px;
+                font-size: 0.7rem;
+                font-weight: 800;
+                font-family: monospace;
+            }
+            .club-taxi-card .driver-row {
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                margin-bottom: 12px;
+            }
+            .club-taxi-card .driver-row .driver-info {
+                flex: 1;
+            }
+            .club-taxi-card .driver-row .driver-name {
+                font-weight: 900;
+                color: #111111;
+                font-size: 1.05rem;
+            }
+            .club-taxi-card .driver-row .driver-rating {
+                color: #FFC107;
+                font-weight: 800;
+                font-size: 0.85rem;
+            }
+            .club-taxi-card .driver-row .driver-meta {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                font-size: 0.8rem;
+                color: #666666;
+            }
+            .club-taxi-card .action-row {
+                display: flex;
+                gap: 12px;
+                align-items: center;
+                margin-top: 4px;
+            }
+            .club-taxi-card .action-row .price-container {
+                flex-shrink: 0;
+            }
+            .club-taxi-card .action-row .book-btn {
+                flex: 1;
+            }
+        `;
+        document.head.appendChild(style);
     }
-
+    
+    // Build the header
     let html = `
-        <div style="margin-bottom: 18px; padding: 0 5px; display: flex; justify-content: space-between; align-items: center;">
+        <div style="margin-bottom: 18px; display: flex; justify-content: space-between; align-items: center; padding: 0 2px;">
             <div>
-                <h4 style="color: #111; margin: 0; font-weight: 900; font-size: 1.2rem;">${forceShowAll ? 'All Nearby Drivers' : 'Matches for your route'}</h4>
+                <h4 style="color: #111111; margin: 0; font-weight: 900; font-size: 1.3rem;">
+                    <i class="fas fa-users" style="color: #FF9F0A; margin-right: 8px;"></i>
+                    Available Club Cars
+                </h4>
+                <p style="color: #888888; font-size: 0.85rem; margin: 2px 0 0 0; font-weight: 600;">
+                    ${taxis.length} active driver${taxis.length > 1 ? 's' : ''} nearby
+                </p>
             </div>
-            <button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer;">&times;</button>
+            <button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;">
+                <i class="fas fa-times"></i>
+            </button>
         </div>
-        <div style="display: flex; flex-direction: column; gap: 15px; padding-bottom: 20px;">
     `;
-
-    const renderCard = (taxi) => {
-        const driverName = `${taxi.name || ''} ${taxi.surname || ''}`.trim() || 'Asiye Driver';
-        const rating = taxi.averageRating ? parseFloat(taxi.averageRating).toFixed(1) : (taxi.rating ? parseFloat(taxi.rating).toFixed(1) : '5.0');
-        const vInfo = getVehicleDisplayInfo(taxi);
+    
+    // Sort taxis: available first, then by distance
+    const sortedTaxis = [...taxis].sort((a, b) => {
+        const aFull = a.isFull === true || (a.passengerCount || 0) >= (a.maxCapacity || 4);
+        const bFull = b.isFull === true || (b.passengerCount || 0) >= (b.maxCapacity || 4);
+        if (aFull && !bFull) return 1;
+        if (!aFull && bFull) return -1;
+        return (a.distance || 999) - (b.distance || 999);
+    });
+    
+    // Generate cards
+    sortedTaxis.forEach((taxi, index) => {
+        const driverName = ((taxi.name || '') + ' ' + (taxi.surname || '')).trim() || 'Driver';
+        const vInfo = typeof getVehicleDisplayInfo === 'function' ? getVehicleDisplayInfo(taxi) : { 
+            reg: taxi.taxiRegistrationNumber || 'N/A', 
+            fullString: 'Vehicle',
+            typeLabel: 'Minibus'
+        };
         
-        // Ensure image works (fallback to avatar if missing)
-        const picUrl = taxi.profile_picture_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=FF9F0A&color=fff`;
-        const isFull = taxi.isFull === true;
-
-        // 🔥 FIX DESTINATION: If driver hasn't set it, show "No club allocation, request it" instead of "Local Route"
-        let rawDest = (taxi.destination || taxi.scheduledDestination || "").trim();
-        let displayDestination = "";
+        const distanceStr = (taxi.distance || 0.5).toFixed(1);
+        const etaMins = Math.ceil((taxi.distance || 0.5) * 2.5);
+        const passCount = taxi.passengerCount || taxi.currentPassengers || 0;
+        const maxCap = taxi.vehicleType === 'ehailing' ? 4 : 15;
+        const isFull = taxi.isFull === true || passCount >= maxCap;
+        const isWaiting = taxi.waitingForMore === true;
+        const rating = taxi.rating ? parseFloat(taxi.rating).toFixed(1) : '5.0';
         
-        if (!rawDest || rawDest.toLowerCase() === "local route" || rawDest.toLowerCase() === "as directed") {
-            displayDestination = `<span style="color:#dc3545; font-size:0.75rem;">No club allocation, request it</span>`;
-        } else {
-            displayDestination = `<span style="color:#007BFF;">${escapeHtml(rawDest.split(',')[0])}</span>`;
+        // Profile picture
+        const picUrl = taxi.profile_picture_url ? getValidImageUrl(taxi.profile_picture_url) : 
+                       `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=111&color=fff&size=48`;
+        
+        // Destination
+        let destinationText = taxi.destination || taxi.dropoffAddress || taxi.dest || 'Destination';
+        if (destinationText === 'Destination' || !destinationText || destinationText.trim() === '') {
+            destinationText = 'Various stops';
         }
-
-        return `
-            <div class="premium-club-card" style="background: #fff; border-radius: 20px; padding: 15px; border: 1px solid #eee; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <img src="${picUrl}" style="width: 50px; height: 50px; border-radius: 50%; object-fit: cover; border: 2px solid #FF9F0A;" onerror="this.src='data/AsiyeNew.png'">
-                        <div>
-                            <div style="font-weight: 800; color: #111;">${escapeHtml(driverName)}</div>
-                            <div style="color: #FF9F0A; font-size: 0.8rem;"><i class="fas fa-star"></i> ${rating}</div>
+        const displayDestination = destinationText.split(',')[0].trim();
+        
+        // Price
+        let price = 25;
+        if (taxi.rate && taxi.rate !== "Dynamic" && !isNaN(parseFloat(taxi.rate))) {
+            price = parseFloat(taxi.rate);
+        }
+        
+        // Car image
+        let carImage = taxi.vehiclePhoto || taxi.carImage || 'data/quantum.png';
+        if (carImage && !carImage.startsWith('http') && !carImage.startsWith('data/')) {
+            carImage = 'data/quantum.png';
+        }
+        
+        // Determine status
+        let statusClass = 'available';
+        let statusText = 'AVAILABLE';
+        let headerClass = 'available';
+        
+        if (isFull) {
+            statusClass = 'full';
+            statusText = 'FULL';
+            headerClass = 'full';
+        } else if (isWaiting) {
+            statusClass = 'waiting';
+            statusText = 'WAITING';
+            headerClass = 'waiting';
+        }
+        
+        // Seats available
+        const seatsAvailable = Math.max(0, maxCap - passCount);
+        
+        // Book button state
+        const isDisabled = isFull;
+        const buttonText = isFull ? '🚫 Car Full' : 'Book Driver';
+        
+        // Build onclick handler safely
+        const onclickHandler = isDisabled ? '' : 
+            `openClubBooking('${taxi.taxiId}', '${escapeHtml(driverName)}', '${picUrl}', '${rating}', '${escapeHtml(vInfo.fullString)}', '${escapeHtml(vInfo.reg)}')`;
+        
+        html += `
+            <div class="club-taxi-card" style="animation: fadeInUp 0.3s ease ${index * 0.05}s both;">
+                <div class="header-bar ${headerClass}"></div>
+                
+                <!-- Driver Row -->
+                <div class="driver-row">
+                    <img src="${picUrl}" class="driver-avatar" onerror="this.src='data/AsiyeNew.png'" alt="${escapeHtml(driverName)}">
+                    <div class="driver-info">
+                        <div class="driver-name">${escapeHtml(driverName)}</div>
+                        <div class="driver-meta">
+                            <span class="driver-rating"><i class="fas fa-star"></i> ${rating}</span>
+                            <span>•</span>
+                            <span>${distanceStr} km away</span>
+                            <span>•</span>
+                            <span class="status-badge ${statusClass}">${statusText}</span>
                         </div>
                     </div>
-                    <div style="text-align: right;">
-                        <div style="font-weight: 900; color: #28a745; font-size: 1.2rem;">R${taxi.rate || '25'}</div>
-                        <div style="font-size: 0.7rem; color: #888;">${(taxi.distance || 0.5).toFixed(1)} km away</div>
+                </div>
+                
+                <!-- Info Grid -->
+                <div class="info-grid">
+                    <div class="info-item">
+                        <div class="value">${seatsAvailable}</div>
+                        <div class="label">Seats</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="value">~${etaMins} min</div>
+                        <div class="label">ETA</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="value">${passCount}/${maxCap}</div>
+                        <div class="label">Passengers</div>
                     </div>
                 </div>
                 
-                <div style="background: #f8f9fa; border-radius: 12px; padding: 10px; font-size: 0.85rem; margin-bottom: 12px;">
-                    <div style="font-weight: 800; margin-bottom: 4px;"><i class="fas fa-flag-checkered" style="color:#007BFF;"></i> Heading to: ${displayDestination}</div>
-                    <div style="color: #666; margin-top: 4px;">
-                        <i class="fas fa-car" style="color:#888;"></i> ${escapeHtml(vInfo.fullString)} • <b style="font-family:monospace; background:#e9ecef; padding:2px 6px; border-radius:4px;">${escapeHtml(vInfo.reg)}</b>
-                    </div>
+                <!-- Route Info -->
+                <div class="route-info">
+                    <span class="dest"><i class="fas fa-flag-checkered" style="color: #007BFF; margin-right: 6px;"></i>${escapeHtml(displayDestination)}</span>
+                    <span class="vehicle">${escapeHtml(vInfo.fullString)}</span>
+                    <span class="reg">${escapeHtml(vInfo.reg)}</span>
                 </div>
                 
-                <button onclick="openClubBooking('${taxi.taxiId}', '${escapeHtml(driverName)}', '${picUrl}', '${rating}', '${escapeHtml(vInfo.fullString)}', '${escapeHtml(vInfo.reg)}')" 
-                        style="width: 100%; padding: 14px; border-radius: 12px; border: none; background: #111; color: white; font-weight: 800; cursor: pointer;"
-                        ${isFull ? 'disabled' : ''}>
-                    ${isFull ? '🚫 Car Full' : 'Book Seat'}
-                </button>
+                <!-- Action Row -->
+                <div class="action-row">
+                    <div class="price-container">
+                        <div class="price-tag">
+                            <div class="label">From</div>
+                            <div class="amount">R${price}</div>
+                        </div>
+                    </div>
+                    <button class="book-btn" ${isDisabled ? 'disabled' : ''} onclick="${onclickHandler}">
+                        ${isFull ? '🚫 FULL' : '<i class="fas fa-user-plus" style="margin-right: 6px;"></i> Book Driver'}
+                    </button>
+                </div>
             </div>
         `;
-    };
-
-    matchedTaxis.forEach(t => html += renderCard(t));
-
-    if (otherTaxis.length > 0) {
-        if (!forceShowAll) html += `<h5 style="color: #888; text-transform: uppercase; font-size: 0.75rem; margin: 10px 0;">Other routes nearby</h5>`;
-        otherTaxis.forEach(t => html += renderCard(t));
-    }
-
-    html += `</div>`;
+    });
+    
+    // Add close button at bottom
+    html += `
+        <button onclick="closeClubTaxisList()" style="
+            width: 100%; 
+            background: #ffffff; 
+            border: 2px solid #eeeeee; 
+            color: #666666; 
+            padding: 16px; 
+            border-radius: 16px; 
+            font-weight: 800; 
+            cursor: pointer; 
+            margin-top: 10px;
+            transition: all 0.2s ease;
+            font-size: 1rem;
+        ">
+            <i class="fas fa-arrow-left" style="margin-right: 8px;"></i> Close & Go Back
+        </button>
+    `;
+    
     container.innerHTML = html;
-};
-
+    console.log("✅ Club taxis displayed professionally with", taxis.length, "cars");
+}
 
 // ================================================================
 // CLOSE CLUB TAXIS LIST
@@ -40346,6 +40448,40 @@ window.setupClubBookingGeocoders = function() {
     
     console.log("✅ Premium geocoders setup complete");
 };
+
+// ================================================================
+// PERFORM SEARCH - Mapbox Geocoding
+// ================================================================
+
+function performSearch(query, type) {
+    if (!query || query.length < 2) return;
+    
+    const proximity = (window.commuterLng && window.commuterLat) ? 
+        `&proximity=${window.commuterLng},${window.commuterLat}` : '';
+    
+    const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=8&types=address,poi,place,neighborhood${proximity}`;
+    
+    fetch(url)
+        .then(res => res.json())
+        .then(data => {
+            if (data.features && data.features.length > 0) {
+                const suggestionsId = type === 'pickup' ? 'clubPickupSuggestions' : 'clubDestSuggestions';
+                const input = type === 'pickup' ? 
+                    document.getElementById('clubBookingPickup') : 
+                    document.getElementById('clubBookingDestination');
+                renderPremiumSuggestions(data.features, suggestionsId, input, type);
+            } else {
+                // Show no results message
+                const suggestionsId = type === 'pickup' ? 'clubPickupSuggestions' : 'clubDestSuggestions';
+                showNoResultsSuggestions(suggestionsId);
+            }
+        })
+        .catch(err => {
+            console.error("Geocoding error:", err);
+            const suggestionsId = type === 'pickup' ? 'clubPickupSuggestions' : 'clubDestSuggestions';
+            showErrorSuggestions(suggestionsId);
+        });
+}
 
 // ================================================================
 // SHOW NEARBY SUGGESTIONS
@@ -40886,138 +41022,52 @@ function showClubPickupSuggestions(features) {
 }
 
 // ================================================================
-// FIND A JOINABLE CLUB POOL FOR THIS ROUTE
-// ================================================================
-
-window.findJoinableClubPool = async function(pLat, pLng, dLat, dLng) {
-    if (!pLat || !pLng || !dLat || !dLng) return null;
-
-    try {
-        const snap = await firebase.database().ref('requests').once('value');
-        if (!snap.exists()) return null;
-
-        let bestPool = null;
-        let bestDistance = Infinity;
-
-        snap.forEach(child => {
-            const req = child.val();
-            const reqId = child.key;
-
-            if (!req || req.type !== 'club') return;
-            if (!['pending', 'pooling', 'waiting_pool'].includes(req.status)) return;
-            if (req.taxiId && window.selectedClubTaxiId && req.taxiId !== window.selectedClubTaxiId) return;
-
-            const currentPassengers = req.passengers ? Object.keys(req.passengers).length : 0;
-            const maxCapacity = req.maxCapacity || 3;
-            if (currentPassengers >= maxCapacity) return;
-
-            const poolLat = req.poolCenterLat || req.commuterLocation?.latitude || (req.passengers ? Object.values(req.passengers)[0]?.location?.latitude : null);
-            const poolLng = req.poolCenterLng || req.commuterLocation?.longitude || (req.passengers ? Object.values(req.passengers)[0]?.location?.longitude : null);
-            if (!poolLat || !poolLng) return;
-
-            const dist = calculateDistance(pLat, pLng, poolLat, poolLng);
-            if (dist <= 10 && dist < bestDistance) {
-                bestDistance = dist;
-                bestPool = { requestId: reqId, request: req };
-            }
-        });
-
-        return bestPool;
-    } catch (err) {
-        console.error("Error finding joinable club pool:", err);
-        return null;
-    }
-};
-
-// ================================================================
 // SUBMIT CLUB BOOKING
 // ================================================================
 
 window.submitClubBooking = function() {
-    console.log("📤 Initializing club booking check...");
+    console.log("📤 Submitting club booking...");
     
-    // 1. Reset payment method for each new attempt to force a fresh check
-    if (typeof window._firstCheck === 'undefined') {
-        window.selectedPaymentMethod = null;
-        window._firstCheck = true;
-    }
-
-    const price = window.clubBookingCalculatedPrice || 25;
-    const balance = (window.commuterData && window.commuterData.credits) ? window.commuterData.credits : 0;
-
-    // 2. STRICT CHECK: If wallet is low AND they haven't explicitly clicked "Pay Cash" yet
-    if (balance < price && window.selectedPaymentMethod !== 'cash') {
-        console.log("🚨 Wallet empty (R" + balance + "). Intercepting to show payment options.");
-        window.showWalletRequiredPopup();
-        return; // STOP: Do not call executeFinalClubBooking
-    }
-
-    // 3. If they have balance or chose cash, proceed
-    console.log("✅ Check passed. Proceeding with booking...");
-    window._firstCheck = undefined; // Reset for next time
-    window.executeFinalClubBooking();
-};
-
-window.showWalletRequiredPopup = function() {
-    const popup = document.getElementById('genericMessagePopup');
-    if (!popup) return;
-
-    if (popup.parentNode) {
-        popup.parentNode.appendChild(popup);
-    }
-
-    popup.style.cssText = `display: flex !important; z-index: 2147483647 !important; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; position: fixed !important; inset: 0;`;
-    popup.style.setProperty('z-index', '2147483647', 'important');
-    popup.style.setProperty('position', 'fixed', 'important');
-
-    popup.innerHTML = `
-        <div class="modal-content" style="text-align: center; padding: 30px; background: white !important; border-radius:24px; width: 90%; max-width: 380px;">
-            <div style="width: 70px; height: 70px; background: #FFF4E5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-                <i class="fas fa-wallet" style="font-size: 2rem; color: #FF9F0A;"></i>
-            </div>
-            <h3 style="color:#111 !important; font-weight:800;">Empty Wallet</h3>
-            <p style="color:#666 !important; font-size:0.95rem;">You don't have credits in your wallet. How would you like to pay for this Club booking?</p>
-            
-            <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 20px;">
-                <button onclick="window.confirmPayCash()" style="width: 100%; background: #111; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: 800; cursor: pointer;">
-                    Pay Cash to Driver
-                </button>
-                <button onclick="closeModal('genericMessagePopup'); openEarningsDashboard();" style="width: 100%; background: #007BFF; color: white; border: none; padding: 16px; border-radius: 12px; font-weight: 800; cursor: pointer;">
-                    Top up Wallet
-                </button>
-            </div>
-        </div>
-    `;
-    popup.classList.add('open');
-};
-
-window.confirmPayCash = function() {
-    console.log("💰 User chose Cash. Resuming booking...");
-    window.selectedPaymentMethod = 'cash';
+    const pickupText = document.getElementById('clubBookingPickup')?.value?.trim();
+    const destText = document.getElementById('clubBookingDestination')?.value?.trim();
+    const dateVal = document.getElementById('clubBookingDate')?.value;
+    const timeVal = document.getElementById('clubBookingTime')?.value;
     
-    // Close the warning
-    closeModal('genericMessagePopup');
+    if (!pickupText) {
+        showToast("Please enter your pickup location.", "warning");
+        return;
+    }
+    if (!destText) {
+        showToast("Please enter your destination.", "warning");
+        return;
+    }
+    if (!dateVal) {
+        showToast("Please select a date.", "warning");
+        return;
+    }
+    if (!timeVal) {
+        showToast("Please select a pickup time.", "warning");
+        return;
+    }
     
-    // Re-call the submit function - this time it will pass the check above
-    window.submitClubBooking();
-};
-
-window.executeFinalClubBooking = function() {
+    const today = new Date();
+    const selectedDate = new Date(dateVal);
+    if (selectedDate < today) {
+        showToast("Please select a date in the future.", "warning");
+        return;
+    }
+    
     const btn = document.getElementById('clubBookingSubmitBtn');
     if (btn) {
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Booking Seat...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Booking...';
         btn.disabled = true;
     }
-
-    const pickupText = document.getElementById('clubBookingPickup').value;
-    const destText = document.getElementById('clubBookingDestination').value;
-    const dateVal = document.getElementById('clubBookingDate').value;
-    const timeVal = document.getElementById('clubBookingTime').value;
-    const pLat = window.clubBookingPickupLat || window.commuterLat;
-    const pLng = window.clubBookingPickupLng || window.commuterLng;
+    
+    let pLat = window.clubBookingPickupLat || window.commuterLat;
+    let pLng = window.clubBookingPickupLng || window.commuterLng;
     let dLat = window.clubBookingDestLat;
     let dLng = window.clubBookingDestLng;
-
+    
     if (!dLat || !dLng) {
         fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(destText)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=1`)
             .then(res => res.json())
@@ -41042,19 +41092,17 @@ window.executeFinalClubBooking = function() {
             });
         return;
     }
-
+    
     completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng, dLat, dLng);
 };
 
 // Update the completeClubBooking function
-async function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng, dLat, dLng) {
+function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat, pLng, dLat, dLng) {
     console.log("✅ Completing club booking...");
     
     const taxiId = window.selectedClubTaxiId;
     const price = window.clubBookingCalculatedPrice || 25;
     const btn = document.getElementById('clubBookingSubmitBtn');
-    const balance = (window.commuterData && window.commuterData.credits) ? window.commuterData.credits : 0;
-    const paymentMethod = (window.selectedPaymentMethod === 'cash' || balance < price) ? 'cash' : 'wallet';
     
     const dateObj = new Date(dateVal);
     const formattedDate = dateObj.toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
@@ -41062,8 +41110,39 @@ async function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat,
     
     const passengerName = (window.commuterData?.name || '') + ' ' + (window.commuterData?.surname || '');
     const passengerPhone = window.commuterData?.phone || '';
-
-    const passengerEntry = {
+    
+    const requestData = {
+        type: 'club',
+        status: 'pending',
+        taxiId: taxiId,
+        commuterId: window.userId,
+        commuterName: passengerName.trim() || 'Passenger',
+        commuterPhone: passengerPhone,
+        pickupAddress: pickupText,
+        destination: destText,
+        commuterLocation: { 
+            latitude: pLat, 
+            longitude: pLng 
+        },
+        destinationCoords: { 
+            latitude: dLat, 
+            longitude: dLng 
+        },
+        calculatedPrice: price,
+        originalPerPersonPrice: price,
+        paymentMethod: 'cash',
+        requirePin: true,
+        pickupPin: pickupPin,
+        bookingDate: dateVal,
+        bookingTime: timeVal,
+        formattedDate: formattedDate,
+        maxCapacity: 3,
+        passengers: {},
+        passengerCount: 1,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    };
+    
+    requestData.passengers[window.userId] = {
         commuterName: passengerName.trim() || 'Passenger',
         commuterPhone: passengerPhone,
         location: { latitude: pLat, longitude: pLng },
@@ -41076,123 +41155,60 @@ async function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat,
         bookingDate: dateVal,
         bookingTime: timeVal
     };
-
-    try {
-        const joinablePool = await window.findJoinableClubPool(pLat, pLng, dLat, dLng);
-
-        if (joinablePool && joinablePool.requestId) {
-            const poolRef = firebase.database().ref(`requests/${joinablePool.requestId}`);
-            const currentPassengerCount = joinablePool.request?.passengers ? Object.keys(joinablePool.request.passengers).length : 0;
-            const updateData = {
-                [`passengers/${window.userId}`]: passengerEntry,
-                passengerCount: currentPassengerCount + 1,
-                status: joinablePool.request?.status === 'pending' ? 'pooling' : joinablePool.request?.status || 'pooling',
-                waitingForMore: joinablePool.request?.waitingForMore === true,
-                updatedAt: firebase.database.ServerValue.TIMESTAMP
-            };
-            await poolRef.update(updateData);
-
-            if (joinablePool.request?.taxiId) {
-                await firebase.database().ref(`notifications/taxis/${joinablePool.request.taxiId}`).push({
-                    type: 'club',
-                    title: '👤 New Passenger Joined Club Pool',
-                    message: `${passengerName.trim() || 'Passenger'} joined your waiting club pool.`,
-                    requestId: joinablePool.requestId,
-                    commuterName: passengerName.trim() || 'Passenger',
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                });
-            }
-
-            const requestId = joinablePool.requestId;
-            window.currentRequestId = requestId;
-            localStorage.setItem('currentRequestId', requestId);
-            await firebase.database().ref(`commuters/${window.userId}`).update({ currentRequest: requestId });
-            closeClubBookingAndReturn();
-            showEnhancedBookingStatus(requestId, 'club', { ...joinablePool.request, passengerCount: currentPassengerCount + 1, passengers: { ...(joinablePool.request?.passengers || {}), [window.userId]: passengerEntry } });
-            listenForDriverAcceptance(requestId);
-            if (typeof showToast === 'function') {
-                showToast("Joined an existing club pool!", "success");
-            }
-            return;
-        }
-
-        const requestData = {
-            type: 'club',
-            status: 'pooling',
-            waitingForMore: false,
-            taxiId: taxiId,
-            commuterId: window.userId,
-            commuterName: passengerName.trim() || 'Passenger',
-            commuterPhone: passengerPhone,
-            pickupAddress: pickupText,
-            destination: destText,
-            commuterLocation: { 
-                latitude: pLat, 
-                longitude: pLng 
-            },
-            destinationCoords: { 
-                latitude: dLat, 
-                longitude: dLng 
-            },
-            calculatedPrice: price,
-            originalPerPersonPrice: price,
-            paymentMethod: paymentMethod,
-            requirePin: true,
-            pickupPin: pickupPin,
-            bookingDate: dateVal,
-            bookingTime: timeVal,
-            formattedDate: formattedDate,
-            maxCapacity: 3,
-            passengers: {},
-            passengerCount: 1,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        };
-        
-        requestData.passengers[window.userId] = passengerEntry;
-        
-        const requestRef = firebase.database().ref('requests').push();
-        const requestId = requestRef.key;
-        requestData.requestId = requestId;
-        
-        await requestRef.set(requestData);
+    
+    const requestRef = firebase.database().ref('requests').push();
+    const requestId = requestRef.key;
+    requestData.requestId = requestId;
+    
+    requestRef.set(requestData).then(() => {
         console.log("✅ Request saved to Firebase:", requestId);
-        await firebase.database().ref(`commuters/${window.userId}`).update({ currentRequest: requestId });
+        return firebase.database().ref(`commuters/${window.userId}`).update({
+            currentRequest: requestId
+        });
+    }).then(() => {
         window.currentRequestId = requestId;
         localStorage.setItem('currentRequestId', requestId);
         
+        // 🔥 FIX: Close booking popup and return to club taxis list
         closeClubBookingAndReturn();
         
-        if (taxiId) {
-            await firebase.database().ref(`notifications/taxis/${taxiId}`).push({
-                type: 'club',
-                title: '👤 New Club Request!',
-                message: `${passengerName.trim() || 'Passenger'} wants to join your car to ${destText.split(',')[0]}`,
-                requestId: requestId,
-                commuterName: passengerName.trim() || 'Passenger',
-                commuterPhone: passengerPhone,
-                pickupAddress: pickupText,
-                destination: destText,
-                pickupLat: pLat,
-                pickupLng: pLng,
-                destLat: dLat,
-                destLng: dLng,
-                pickupPin: pickupPin,
-                requirePin: true,
-                bookingDate: dateVal,
-                bookingTime: timeVal,
-                price: price,
-                passengerCount: 1,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
-            });
-        }
-
+        // Send notification to driver
+        return firebase.database().ref(`notifications/taxis/${taxiId}`).push({
+            type: 'club',
+            title: '👤 New Club Request!',
+            message: `${passengerName} wants to join your car to ${destText.split(',')[0]}`,
+            requestId: requestId,
+            commuterName: passengerName,
+            commuterPhone: passengerPhone,
+            pickupAddress: pickupText,
+            destination: destText,
+            pickupLat: pLat,
+            pickupLng: pLng,
+            destLat: dLat,
+            destLng: dLng,
+            pickupPin: pickupPin,
+            requirePin: true,
+            bookingDate: dateVal,
+            bookingTime: timeVal,
+            price: price,
+            passengerCount: 1,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
+    }).then(() => {
         console.log("✅ Driver notification sent");
+        
+        // Show enhanced booking status
         showEnhancedBookingStatus(requestId, 'club', requestData);
+        
+        // Listen for driver acceptance
         listenForDriverAcceptance(requestId);
+        
+        // Show toast
         if (typeof showToast === 'function') {
             showToast("Club booking sent to driver!", "success");
         }
-    } catch (err) {
+        
+    }).catch(err => {
         console.error("❌ Booking error:", err);
         if (typeof showToast === 'function') {
             showToast("Failed to book. Please try again.", "danger");
@@ -41201,7 +41217,7 @@ async function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat,
             btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm & Book Seat';
             btn.disabled = false;
         }
-    }
+    });
 }
 // ================================================================
 // SHOW TOAST NOTIFICATION
@@ -43643,43 +43659,15 @@ function startFullScreenTracking(taxiId, passengerLat, passengerLng) {
             }
         }
         
-        // Smart zoom keeps the taxi visible without losing passenger context.
+        // Update map center to follow driver smoothly
         if (trackingMap) {
-            const targetPassengerLat = Number.isFinite(window.commuterLat) ? window.commuterLat : passengerLat;
-            const targetPassengerLng = Number.isFinite(window.commuterLng) ? window.commuterLng : passengerLng;
-
-            if (Number.isFinite(targetPassengerLat) && Number.isFinite(targetPassengerLng)) {
-                const dist = calculateDistance(targetPassengerLat, targetPassengerLng, driverLat, driverLng);
-
-                if (dist < 0.8) {
-                    trackingMap.easeTo({
-                        center: [driverLng, driverLat],
-                        zoom: 17,
-                        pitch: 45,
-                        bearing: heading,
-                        duration: 1000,
-                        essential: true
-                    });
-                } else {
-                    const bounds = new mapboxgl.LngLatBounds()
-                        .extend([targetPassengerLng, targetPassengerLat])
-                        .extend([driverLng, driverLat]);
-
-                    trackingMap.fitBounds(bounds, {
-                        padding: { top: 50, bottom: 250, left: 50, right: 50 },
-                        maxZoom: 16
-                    });
-                }
-            } else {
-                trackingMap.easeTo({
-                    center: [driverLng, driverLat],
-                    zoom: 16,
-                    pitch: 45,
-                    bearing: heading,
-                    duration: 1000,
-                    essential: true
-                });
-            }
+            trackingMap.easeTo({
+                center: [driverLng, driverLat],
+                bearing: heading,
+                pitch: 45,
+                duration: 1000,
+                essential: true
+            });
         }
         
         // Throttle route updates - only update every 5 seconds
@@ -44545,15 +44533,15 @@ function updateWaitingStatus(request) {
                 const initial = (p.commuterName || 'P').charAt(0).toUpperCase();
                 
                 html += `
-                    <div class="waiting-passenger-item" style="animation: slideInItem 0.3s ease forwards; display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: ${index < passKeys.length - 1 ? '1px solid #3A3A3C' : 'none'};">
-                        <div class="waiting-passenger-avatar" style="width: 35px; height: 35px; border-radius: 50%; background: ${color}; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.9rem; color: white; flex-shrink: 0; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">
+                    <div class="waiting-passenger-item" style="animation: slideInItem 0.3s ease forwards; display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: ${index < passKeys.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none'};">
+                        <div class="waiting-passenger-avatar" style="width: 32px; height: 32px; border-radius: 50%; background: ${color}; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.75rem; color: white; flex-shrink: 0;">
                             ${initial}
                         </div>
-                        <div class="waiting-passenger-name" style="flex: 1; margin-left: 12px; font-weight: 700; color: white; font-size: 1rem;">
+                        <div class="waiting-passenger-name" style="flex: 1; margin-left: 10px; font-weight: 600; color: white; font-size: 0.9rem;">
                             ${isMe ? 'You' : escapeHtml(p.commuterName || 'Passenger')}
-                            ${isMe ? ' <span style="font-size: 0.75rem; color: #FFC107; font-weight: 800; margin-left: 4px;">(You)</span>' : ''}
+                            ${isMe ? ' <span style="font-size: 0.65rem; color: #FF9F0A;">(You)</span>' : ''}
                         </div>
-                        <div class="waiting-passenger-status ${statusClass}" style="font-size: 0.75rem; font-weight: 800; padding: 4px 12px; border-radius: 12px; ${isJoined || isOnboard ? 'background: #28a745; color: white;' : 'background: white; color: black; border: 1px solid #ddd;'}">
+                        <div class="waiting-passenger-status ${statusClass}" style="font-size: 0.7rem; font-weight: 700; padding: 2px 10px; border-radius: 12px; ${isJoined || isOnboard ? 'background: rgba(48, 209, 88, 0.3); color: #30D158;' : 'background: rgba(255, 159, 10, 0.3); color: #FF9F0A;'}">
                             ${statusText}
                         </div>
                     </div>
@@ -44565,49 +44553,6 @@ function updateWaitingStatus(request) {
     
     const progressBar = document.getElementById('trackingProgressBar');
     const progressText = document.getElementById('trackingProgressText');
-
-    // Bypass wait option for passengers who want to depart immediately.
-    const requestId = request.key || request.requestId || window.currentRequestId || localStorage.getItem('currentRequestId');
-    const pricePerSeat = request.originalPerPersonPrice || 25;
-    const rideNowPrice = pricePerSeat * maxCapacity;
-
-    let bypassCard = document.getElementById('bypassWaitCard');
-    if (!isFull && !bypassCard) {
-        bypassCard = document.createElement('div');
-        bypassCard.id = 'bypassWaitCard';
-        bypassCard.style.cssText = [
-            'margin-top: 15px',
-            'padding: 15px',
-            'background: rgba(255,255,255,0.1)',
-            'border-radius: 12px',
-            'border: 1px dashed rgba(255,255,255,0.3)',
-            'text-align: center'
-        ].join(';');
-        waitingEl.appendChild(bypassCard);
-    }
-
-    if (bypassCard) {
-        if (isFull || !requestId) {
-            bypassCard.style.display = 'none';
-        } else {
-            bypassCard.style.display = 'block';
-            bypassCard.style.background = 'transparent';
-            bypassCard.style.border = 'none';
-            bypassCard.style.padding = '0';
-            bypassCard.style.marginTop = '15px';
-            bypassCard.innerHTML = `
-                <div style="background: #FF9F0A; border-radius: 16px; padding: 20px; border: 1px solid #FFB340; box-shadow: 0 4px 15px rgba(255, 159, 10, 0.2);">
-                    <p style="color: black; font-size: 0.95rem; margin-bottom: 15px; font-weight: 800;">
-                        <i class="fas fa-bolt"></i> In a hurry? Pay for the full car to leave now.
-                    </p>
-                    <button onclick="window.negotiateRideNow('${requestId}', ${rideNowPrice})"
-                            style="width: 100%; background: #000; color: #FF9F0A; border: none; padding: 16px; border-radius: 30px; font-weight: 900; font-size: 1.05rem; cursor: pointer; box-shadow: 0 6px 15px rgba(0,0,0,0.3); text-transform: uppercase;">
-                        Ride Now for R${rideNowPrice}
-                    </button>
-                </div>
-            `;
-        }
-    }
     
     if (progressBar && progressText) {
         const percentage = Math.min(100, (passCount / maxCapacity) * 100);
@@ -44616,8 +44561,10 @@ function updateWaitingStatus(request) {
         
         if (percentage >= 100) {
             progressBar.style.background = 'linear-gradient(90deg, #30D158, #28a745)';
+        } else if (percentage >= 50) {
+            progressBar.style.background = 'linear-gradient(90deg, #FFD60A, #FF9F0A)';
         } else {
-            progressBar.style.background = '#007BFF';
+            progressBar.style.background = 'linear-gradient(90deg, #FF6B6B, #FF9F0A)';
         }
     }
     
@@ -45665,327 +45612,6 @@ window.resetGeocoderState = function() {
         suggestionsList.innerHTML = '';
     }
 };
-
-// =======================================================================
-// 1. SMART CLUB GATEWAY (CHECKS FOR WORKPLACE FIRST)
-// =======================================================================
-window.openAsiyeClubGateway = function() {
-    console.log("👥 Opening Asiye Club Gateway...");
-    closeAllPopups();
-    hideModernDashboard();
-
-    // Check if the user has already saved their Home and Workplace
-    if (!window.commuterData || !window.commuterData.workAddress || !window.commuterData.homeAddress) {
-        console.log("📍 Commute not set. Opening Setup Modal.");
-        window.openCommuteSetupModal();
-    } else {
-        console.log("✅ Commute found. Searching for cars to: " + window.commuterData.workAddress);
-        // Pre-fill global search variables
-        window.userDropOffDestination = window.commuterData.workAddress;
-        window.ehailingDestLat = window.commuterData.workLat;
-        window.ehailingDestLng = window.commuterData.workLng;
-        window.commuterLat = window.commuterData.homeLat;
-        window.commuterLng = window.commuterData.homeLng;
-        
-        // Execute Search
-        window.openLiveClubPools();
-    }
-};
-
-
-// =================================================================
-// DASHBOARD OVERLAY & LOCATION CAPTURE
-// =================================================================
-window.showModernDashboard = function() {
-    const floatingHeader = document.getElementById('floatingRouteHeader');
-    if(floatingHeader) floatingHeader.style.display = 'none';
-    
-    // 📍 SHOW the new "You are here" bubble
-    const youAreHere = document.getElementById('youAreHereBubble');
-    if(youAreHere) youAreHere.style.display = 'flex'; 
-    
-    const dashboard = document.getElementById('homeBottomSheet');
-    const sheetContent = document.getElementById('homeSheetContent');
-    
-    if (dashboard) {
-        dashboard.classList.add('open');
-        dashboard.style.setProperty('display', 'flex', 'important');
-        dashboard.style.setProperty('opacity', '1', 'important');
-        dashboard.style.setProperty('visibility', 'visible', 'important');
-        dashboard.style.setProperty('z-index', '10000', 'important');
-    }
-    
-    if (sheetContent) {
-        sheetContent.style.height = '65vh'; 
-    }
-    
-    if (typeof window.refreshLocationDisplay === 'function') window.refreshLocationDisplay();
-    if (typeof window.initHomeSheetDrag === 'function') window.initHomeSheetDrag();
-};
-
-window.hideModernDashboard = function() {
-    const d = document.getElementById('homeBottomSheet');
-    if (d) { d.classList.remove('open'); d.style.display = 'none'; }
-    
-    // 📍 HIDE the "You are here" bubble when map interaction starts
-    const youAreHere = document.getElementById('youAreHereBubble');
-    if (youAreHere) youAreHere.style.display = 'none';
-};
-
- // =======================================================================
-// CUSTOM AUTOCOMPLETE & COMMUTE SETUP LOGIC (FIXED)
-// =======================================================================
-
-document.addEventListener('DOMContentLoaded', function() {
-    const homeInput = document.getElementById('homeAddressInput');
-    const workInput = document.getElementById('workAddressInput');
-    const homeSuggestions = document.getElementById('home-suggestions');
-    const workSuggestions = document.getElementById('work-suggestions');
-
-    if (!homeInput || !workInput) return;
-
-    function getProximity() {
-        const lat = window.commuterLat || -26.2041;
-        const lng = window.commuterLng || 28.0473;
-        return `&proximity=${lng},${lat}`;
-    }
-
-    // 🔥 FIX: Now properly uses 'prefix' to find the hidden inputs by ID
-    function renderSuggestions(features, container, input, prefix) {
-        container.innerHTML = '';
-        if (!features || features.length === 0) {
-            container.style.display = 'none';
-            return;
-        }
-
-        features.forEach(f => {
-            const div = document.createElement('div');
-            const name = f.text || f.place_name.split(',')[0];
-            const fullAddress = f.place_name;
-            
-            // Styling set for Dark Text on White Background
-            div.style.cssText = 'padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #eee; color: #111; font-family: Manrope, sans-serif;';
-            div.innerHTML = `<strong style="font-size:1rem; color:#111;">${name}</strong><br><span style="color:#666; font-size:0.85rem;">${fullAddress}</span>`;
-            
-            // Highlight effect on hover
-            div.onmouseover = () => div.style.background = '#f8f9fa';
-            div.onmouseout = () => div.style.background = 'transparent';
-
-            // Prevent input blur when clicking a suggestion
-            div.onmousedown = (e) => e.preventDefault(); 
-            
-            div.onclick = () => {
-                input.value = name;
-                // 🔥 FIX: Fetching the hidden inputs correctly
-                document.getElementById(prefix + 'Lat').value = f.geometry.coordinates[1];
-                document.getElementById(prefix + 'Lng').value = f.geometry.coordinates[0];
-                document.getElementById(prefix + 'Text').value = fullAddress;
-                
-                container.style.display = 'none';
-                window.calculateCommutePrice(); // Update pricing
-            };
-            container.appendChild(div);
-        });
-        container.style.display = 'block';
-    }
-
-    function performSearch(query, container, input, prefix) {
-        if (query.length < 2) {
-            container.style.display = 'none';
-            return;
-        }
-
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=6&types=address,poi,place,neighborhood${getProximity()}`;
-
-        fetch(url)
-            .then(res => res.json())
-            .then(data => {
-                if (data.features) {
-                    renderSuggestions(data.features, container, input, prefix);
-                } else {
-                    container.style.display = 'none';
-                }
-            })
-            .catch(() => container.style.display = 'none');
-    }
-
-    function setupAutocomplete(input, container, prefix) {
-        let timeout = null;
-
-        input.addEventListener('input', function() {
-            const query = this.value.trim();
-            clearTimeout(timeout);
-            
-            // Clear coordinates if user starts typing a new address
-            document.getElementById(prefix + 'Lat').value = "";
-            document.getElementById(prefix + 'Lng').value = "";
-            window.calculateCommutePrice(); 
-
-            if (query.length < 2) {
-                container.style.display = 'none';
-                return;
-            }
-            timeout = setTimeout(() => {
-                performSearch(query, container, this, prefix);
-            }, 350);
-        });
-
-        document.addEventListener('click', function(e) {
-            if (!container.contains(e.target) && e.target !== input) {
-                container.style.display = 'none';
-            }
-        });
-
-        input.addEventListener('focus', function() {
-            if (this.value.trim().length >= 2 && !document.getElementById(prefix + 'Lat').value) {
-                performSearch(this.value.trim(), container, this, prefix);
-            }
-        });
-    }
-
-    setupAutocomplete(homeInput, homeSuggestions, 'home');
-    setupAutocomplete(workInput, workSuggestions, 'work');
-});   
-// =======================================================================
-// MODAL CONTROLLERS & PRICING
-// =======================================================================
-window.openCommuteSetupModal = function() {
-    openModal('setupCommuteModal');
-
-    document.getElementById('commutePricingBox').style.display = 'none';
-    document.getElementById('saveCommuteBtn').style.display = 'none';
-
-    // Pre-fill Data if it exists in Firebase
-    if (window.commuterData && window.commuterData.workAddress) {
-        document.getElementById('workAddressInput').value = window.commuterData.workAddress.split(',')[0];
-        document.getElementById('workLat').value = window.commuterData.workLat || '';
-        document.getElementById('workLng').value = window.commuterData.workLng || '';
-        document.getElementById('workText').value = window.commuterData.workAddress || '';
-    }
-    
-    if (window.commuterData && window.commuterData.homeAddress) {
-        document.getElementById('homeAddressInput').value = window.commuterData.homeAddress.split(',')[0];
-        document.getElementById('homeLat').value = window.commuterData.homeLat || '';
-        document.getElementById('homeLng').value = window.commuterData.homeLng || '';
-        document.getElementById('homeText').value = window.commuterData.homeAddress || '';
-    } else if (window.commuterLat && window.commuterLng) {
-        // Auto-fill Home with GPS if it's not saved yet
-        getAddressFromCoordsPromise(window.commuterLng, window.commuterLat).then(addr => {
-            if (addr && addr !== "Unknown Location") {
-                document.getElementById('homeAddressInput').value = addr.split(',')[0];
-                document.getElementById('homeLat').value = window.commuterLat;
-                document.getElementById('homeLng').value = window.commuterLng;
-                document.getElementById('homeText').value = addr;
-                window.calculateCommutePrice();
-            }
-        }).catch(()=>{});
-    }
-
-    // Try to calculate immediately if data exists
-    setTimeout(window.calculateCommutePrice, 400);
-};
-
-window.calculateCommutePrice = function() {
-    const hLat = parseFloat(document.getElementById('homeLat').value);
-    const hLng = parseFloat(document.getElementById('homeLng').value);
-    const wLat = parseFloat(document.getElementById('workLat').value);
-    const wLng = parseFloat(document.getElementById('workLng').value);
-
-    // Only calculate if both sets of coordinates are valid
-    if (hLat && hLng && wLat && wLng && !isNaN(hLat) && !isNaN(wLat)) {
-        let distance = calculateDistance(hLat, hLng, wLat, wLng) * 1.3; // 1.3 curve buffer for real roads
-        if (distance < 1) distance = 1;
-
-        // Base Math: R30 minimum + R8.00 per km
-        const asiyeGoPrice = Math.max(30, 30 + (distance * 8.00));
-        
-        // Club Fare is Asiye Go divided by 4 (Minimum R15)
-        const singleTripPrice = Math.max(15, Math.round(asiyeGoPrice / 4));
-        const dailyPrice = singleTripPrice * 2;
-        const monthlyEstimate = dailyPrice * 20;
-
-        document.getElementById('commuteSinglePrice').innerText = `R${singleTripPrice}`;
-        document.getElementById('commuteDailyPrice').innerText = `R${dailyPrice}`;
-        document.getElementById('commuteMonthlyPrice').innerText = `R${monthlyEstimate}`;
-        
-        document.getElementById('commutePricingBox').style.display = 'block';
-        document.getElementById('saveCommuteBtn').style.display = 'block';
-        
-        window.tempCommutePrice = singleTripPrice;
-    } else {
-        document.getElementById('commutePricingBox').style.display = 'none';
-        document.getElementById('saveCommuteBtn').style.display = 'none';
-    }
-};
-
-window.saveCommuteAndSearch = async function() {
-    const btn = document.getElementById('saveCommuteBtn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-    btn.disabled = true;
-
-    const hLat = parseFloat(document.getElementById('homeLat').value);
-    const hLng = parseFloat(document.getElementById('homeLng').value);
-    const hText = document.getElementById('homeText').value;
-    
-    const wLat = parseFloat(document.getElementById('workLat').value);
-    const wLng = parseFloat(document.getElementById('workLng').value);
-    const wText = document.getElementById('workText').value;
-
-    const updates = {
-        homeAddress: hText, homeLat: hLat, homeLng: hLng,
-        workAddress: wText, workLat: wLat, workLng: wLng,
-        commutePrice: window.tempCommutePrice
-    };
-
-    try {
-        // Save to Firebase
-        await firebase.database().ref(`commuters/${window.userId}`).update(updates);
-        if (window.commuterData) Object.assign(window.commuterData, updates);
-        
-        // Update Globals for searching
-        window.userDropOffDestination = wText;
-        window.ehailingDestLat = wLat;
-        window.ehailingDestLng = wLng;
-        window.commuterLat = hLat;
-        window.commuterLng = hLng;
-
-        closeModal('setupCommuteModal');
-        
-        // Launch the search
-        window.openLiveClubPools();
-
-    } catch (err) {
-        console.error("Save Error:", err);
-        showToast("Error saving commute. Please try again.", "danger");
-        btn.innerHTML = 'Save & Find Cars';
-        btn.disabled = false;
-    }
-};
-
-window.requestRouteAllocation = function(from, to) {
-    const btn = document.getElementById('requestAllocBtn');
-    btn.disabled = true;
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-
-    const allocationData = {
-        commuterId: window.userId,
-        commuterName: window.commuterData.name,
-        pickupAddress: window.commuterData.homeAddress,
-        destination: window.commuterData.workAddress,
-        pickupLat: window.commuterLat,
-        pickupLng: window.commuterLng,
-        status: 'pending_allocation',
-        type: 'allocation_request',
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    };
-
-    // Save to a global queue for drivers
-    database.ref('club_allocations').push(allocationData).then(() => {
-        showGenericMessage("Request Sent", "Drivers in your area have been notified. You will receive an SMS when a driver claims your route.", "fa-paper-plane", "success");
-        closeModal('taxiListSheet');
-    });
-};
-
 </script>
 
 </body>

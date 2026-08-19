@@ -4047,19 +4047,7 @@ body.popup-open {
 </button>
     </div> 
 
-<!-- Driver Route Setter -->
-<div style="background: #2C2C2E; color: white; padding: 20px; border-radius: 20px; margin-bottom: 20px; border: 1px solid #FF9F0A; box-shadow: 0 10px 20px rgba(0,0,0,0.2);">
-    <div style="color: #aaa; font-size: 0.85rem; font-weight: 600; margin-bottom: 5px; text-transform: uppercase;">Current Drop-off Area</div>
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-        <div id="dashDriverDestination" style="font-size: 1.2rem; font-weight: 800; color: #FF9F0A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%;">
-            Not Set
-        </div>
-        <button onclick="openSetDestinationPopup()" style="background: rgba(255, 159, 10, 0.2); color: #FF9F0A; border: 1px solid #FF9F0A; padding: 8px 12px; border-radius: 12px; font-weight: 800; cursor: pointer; transition: 0.2s;">
-            <i class="fas fa-edit"></i> Set Route
-        </button>
-    </div>
-    <p style="font-size: 0.75rem; color: #888; margin-top: 10px; line-height: 1.4;">Set where you are heading so passengers on that route can request a ride from you.</p>
-</div>
+
    
 </div>
 
@@ -4221,11 +4209,10 @@ body.popup-open {
 
 <!-- Popups -->
 <!-- UPDATED: Driver Club Registration (GPS Based) -->
-<!-- UPDATED: Driver Club Registration (GPS Based) -->
 <div id="setupTripPopup" class="popup" style="max-height: 90vh; overflow-y: auto; padding: 25px 20px;">
     <button class="popup-close" onclick="window.closeActivePopup()">&times;</button>
     <h3 style="margin-bottom: 5px; color: #111; font-weight: 800;">Club Registration</h3>
-    <p style="color: #666; margin-bottom: 20px; font-size: 0.9rem;">Confirm your work area and vehicle type to start receiving passengers.</p>
+    <p style="color: #666; margin-bottom: 20px; font-size: 0.9rem;">Confirm your work area and times to start receiving passengers.</p>
 
     <!-- DETECTED AREA SECTION -->
     <div style="text-align: left; background: #eef4ff; padding: 20px; border-radius: 16px; border: 1px solid #007BFF; margin-bottom: 20px;">
@@ -4233,8 +4220,21 @@ body.popup-open {
             <h4 style="margin: 0; color: #007BFF; font-size: 0.85rem; font-weight: 800; text-transform: uppercase;">Detected Work Area</h4>
             <i class="fas fa-location-crosshairs" style="color: #007BFF;"></i>
         </div>
+        <!-- This field is auto-populated by GPS -->
         <div id="detectedWorkAreaDisplay" style="font-size: 1.4rem; font-weight: 900; color: #111; line-height: 1.2;">Detecting...</div>
         <p style="margin-top: 5px; font-size: 0.75rem; color: #666;">This is your primary pickup region based on your current GPS position.</p>
+    </div>
+
+    <!-- TIME SECTION -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; text-align: left;">
+        <div>
+            <label style="font-weight: 700; font-size: 0.8rem; color: #555;">Morning Start</label>
+            <input type="time" id="morningTimeInput" style="border-radius: 10px; font-weight: 600;">
+        </div>
+        <div>
+            <label style="font-weight: 700; font-size: 0.8rem; color: #555;">Return Start</label>
+            <input type="time" id="returnTimeInput" style="border-radius: 10px; font-weight: 600;">
+        </div>
     </div>
 
     <!-- CAPACITY SECTION -->
@@ -5611,6 +5611,73 @@ function setupTaxiDataListener() {
         }
     });
 }
+
+window.updateUIWithTaxiData = function() {
+    if (!window.taxiData) return;
+
+    const isOnline = window.taxiData.isOnline === true;
+    const dash = document.getElementById('verifiedDashboardOverlay');
+    const nav = document.getElementById('nav-menu');
+    const side = document.getElementById('side-controls-container');
+    const indicator = document.getElementById('ehailingOnlineIndicator');
+
+    console.log("🔄 Syncing UI. Driver is:", isOnline ? "ONLINE" : "OFFLINE");
+
+    // ==========================================
+    // 1. UPDATE DASHBOARD TEXT (Numbers & Stats)
+    // ==========================================
+    const updateText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+
+    updateText('dashBalance', (window.taxiData.walletBalance || 0).toFixed(2));
+    updateText('dashRating', parseFloat(window.taxiData.averageRating || 5.0).toFixed(1));
+    updateText('dashTrips', window.taxiData.tripsToday || 0);
+    updateText('dashIncome', (window.taxiData.dailyIncome || 0));
+
+    // Update Car Info
+    const carInfo = document.getElementById('dashCarInfo');
+    if (carInfo) {
+        carInfo.textContent = `${window.taxiData.vehicleMake || ''} ${window.taxiData.vehicleModel || ''}`.trim() || "Loading Car...";
+    }
+
+    // ==========================================
+    // 2. TOGGLE VISIBILITY (Dashboard vs Map)
+    // ==========================================
+    if (isOnline) {
+        // --- DRIVER IS LIVE ---
+        if (dash) {
+            dash.style.setProperty('display', 'none', 'important');
+            dash.style.setProperty('visibility', 'hidden', 'important');
+            dash.style.setProperty('pointer-events', 'none', 'important');
+        }
+        if (nav) nav.style.setProperty('display', 'flex', 'important');
+        if (side) side.style.setProperty('display', 'flex', 'important');
+        if (indicator) indicator.style.display = 'flex';
+
+        // Update the car marker on the map if map is ready
+        if (window.map && window.taxiLngLat) {
+            window.setupDriverMarker(window.taxiLngLat);
+        }
+    } else {
+        // --- DRIVER IS OFFLINE (Dashboard Mode) ---
+        if (dash) {
+            dash.style.setProperty('display', 'block', 'important');
+            dash.style.setProperty('visibility', 'visible', 'important');
+            dash.style.setProperty('pointer-events', 'auto', 'important');
+            dash.style.setProperty('z-index', '80000', 'important');
+        }
+        if (nav) nav.style.setProperty('display', 'none', 'important');
+        if (side) side.style.setProperty('display', 'none', 'important');
+        if (indicator) indicator.style.display = 'none';
+    }
+
+    // Refresh the "Go Online" Button text and color
+    if (typeof updateBroadcastUI === 'function') {
+        updateBroadcastUI(isOnline);
+    }
+};
  function executeLocationUpdate() {
         const input = document.getElementById('correctionInput');
         const addressQuery = input.value;
@@ -7189,7 +7256,60 @@ window.showBroadcastDashboard = function() {
 };
 
 
-
+window.toggleBroadcast = function() {
+    if (!window.userId || !window.taxiData) {
+        console.warn("Cannot toggle broadcast: missing userId or taxiData");
+        return;
+    }
+    
+    const isCurrentlyOnline = window.taxiData.isOnline === true;
+    const isCurrentlyBroadcasting = window.taxiData.isBroadcasting === true;
+    const isFull = window.taxiData.isFull === true;
+    
+    // If already online and broadcasting, confirm going offline
+    if (isCurrentlyOnline && isCurrentlyBroadcasting) {
+        // Show confirmation dialog
+        showConfirmPopup(
+            "Go Offline?",
+            "Are you sure you want to go offline? You will stop receiving ride requests from passengers.",
+            function() {
+                // User confirmed - go offline
+                executeGoOffline();
+            },
+            "Yes, Go Offline",
+            "Stay Online",
+            "warning"
+        );
+        return;
+    }
+    
+    // If offline, go online
+    if (!isCurrentlyOnline) {
+        // Check if setup is complete
+        if (window.taxiData.morningTime && window.taxiData.returnTime) {
+            executeGoOnline();
+        } else {
+            window.openSetupTripPopup();
+        }
+        return;
+    }
+    
+    // If online but not broadcasting (e.g., full), ask if they want to broadcast
+    if (isCurrentlyOnline && !isCurrentlyBroadcasting) {
+        showConfirmPopup(
+            "Go Live?",
+            isFull ? 
+                "Your taxi is currently full. Going live will make you visible to passengers again." :
+                "You are currently hidden. Do you want to become visible to passengers?",
+            function() {
+                executeGoOnline();
+            },
+            "Yes, Go Live",
+            "Stay Hidden",
+            "success"
+        );
+    }
+};
 
 // Helper function to execute going online
 function executeGoOnline() {
@@ -9575,17 +9695,19 @@ function escapeHtml(text) {
         `;
     }
 window.saveClubTripDetails = function() {
+    const morning = document.getElementById('morningTimeInput').value;
+    const returnT = document.getElementById('returnTimeInput').value;
     const seats = document.getElementById('vehicleSeatsInput').value;
 
-    if (!seats) {
-        showCommunicationBanner("Please select your vehicle type.", "warning");
+    if (!morning || !returnT) {
+        showCommunicationBanner("Please set your work times", "warning");
         return;
     }
 
-    // Save settings (defaults morning/return times to "anytime" to satisfy legacy database checks)
+    // Save settings and then trigger the Online execution
     database.ref('taxis/' + window.userId).update({
-        morningTime: "anytime",
-        returnTime: "anytime",
+        morningTime: morning,
+        returnTime: returnT,
         vehicleSeats: seats
     }).then(() => {
         window.closeActivePopup(); // Close the setup popup
@@ -14910,262 +15032,6 @@ window.loadTaxiDataAndSetupListeners = function() {
             preloader.style.opacity = '0';
             setTimeout(() => { preloader.style.display = 'none'; }, 500);
         }
-    });
-};
-
-window.updateUIWithTaxiData = function() {
-    if (!window.taxiData) return;
-
-    const isOnline = window.taxiData.isOnline === true;
-    const isVerified = (window.taxiData.verificationStatus === 'verified' || window.taxiData.provisionalActivation === true);
-    const isTrainingDone = (window.taxiData.trainingStatus === 'completed');
-
-    // ==========================================
-    // 1. MAP OVERLAYS & VISIBILITY
-    // ==========================================
-    const dashOverlay = document.getElementById('verifiedDashboardOverlay');
-    const navMenu = document.getElementById('nav-menu');
-    const sideControls = document.getElementById('side-controls-container');
-    const indicator = document.getElementById('ehailingOnlineIndicator');
-
-    if (isOnline) {
-        if (dashOverlay) dashOverlay.style.setProperty('display', 'none', 'important');
-        if (navMenu) navMenu.style.setProperty('display', 'flex', 'important');
-        if (sideControls) sideControls.style.setProperty('display', 'flex', 'important');
-        if (indicator) indicator.style.display = 'flex';
-    } else {
-        if (dashOverlay) {
-            dashOverlay.style.setProperty('display', 'block', 'important');
-            dashOverlay.style.setProperty('z-index', '80000', 'important');
-        }
-        if (navMenu) navMenu.style.setProperty('display', 'none', 'important');
-        if (sideControls) sideControls.style.setProperty('display', 'none', 'important');
-        if (indicator) indicator.style.display = 'none';
-    }
-
-    // ==========================================
-    // 2. DRIVER IDENTITY (AVATARS)
-    // ==========================================
-    const driverName = taxiData.name || 'Asiye Driver';
-    const profilePic = taxiData.profile_picture_url || `https://ui-avatars.com/api/?name=${encodeURIComponent(driverName)}&background=111&color=fff`;
-    
-    const dashPic = document.getElementById('dashProfilePic'); // Avatar on Dashboard
-    const sidePic = document.getElementById('sideProfileImg'); // Avatar in Side Controls
-    const statusPic = document.getElementById('statusDriverPic'); // Avatar in Status Popup
-
-    // Update names
-    const nameEl = document.getElementById('dashDriverName');
-    if (nameEl) nameEl.textContent = driverName + '!';
-
-    // Update images
-    if (dashPic) {
-        dashPic.style.opacity = '0.3';
-        dashPic.onload = () => { dashPic.style.opacity = '1'; };
-        dashPic.src = profilePic;
-    }
-    if (statusPic) statusPic.src = profilePic;
-    if (sidePic) {
-        sidePic.src = profilePic;
-        sidePic.style.display = 'block';
-        const sideIcon = document.getElementById('sideProfileIcon');
-        if (sideIcon) sideIcon.style.display = 'none';
-    }
-
-    // ==========================================
-    // 3. VEHICLE DETAILS & IMAGE
-    // ==========================================
-    const makeModel = `${taxiData.vehicleMake || ''} ${taxiData.vehicleModel || ''}`.trim() || (taxiData.vehicleType === 'ehailing' ? 'Private Vehicle' : 'Minibus');
-    const reg = taxiData.taxiRegistrationNumber || taxiData.registration || 'NO REG';
-    
-    const dashCarText = document.getElementById('dashCarInfo');
-    const statusCarText = document.getElementById('statusCarType');
-    const statusRegText = document.getElementById('statusRegNumber');
-    const statusCarImg = document.getElementById('statusCarPhoto');
-
-    if (dashCarText) dashCarText.textContent = makeModel;
-    if (statusCarText) statusCarText.textContent = makeModel;
-    if (statusRegText) statusRegText.textContent = reg.toUpperCase();
-    if (statusCarImg) {
-        statusCarImg.src = taxiData.vehiclePhoto || 'data/quantum.png';
-    }
-
-    // ==========================================
-    // 4. FINANCIALS, RATING & TRIPS
-    // ==========================================
-    const balEl = document.getElementById('dashBalance');
-    const debtEl = document.getElementById('dashDebt');
-    const incomeEl = document.getElementById('dashIncome');
-    const ratingEl = document.getElementById('dashRating');
-    const tripsEl = document.getElementById('dashTrips');
-    
-    if (balEl) balEl.textContent = (taxiData.walletBalance || 0).toFixed(2);
-    if (debtEl) debtEl.textContent = (taxiData.commissionDebt || 0).toFixed(2);
-    if (incomeEl) incomeEl.innerHTML = `<span style="font-size:1.2rem">R</span>${(taxiData.dailyIncome || 0).toFixed(0)}`;
-    if (ratingEl) ratingEl.textContent = parseFloat(taxiData.averageRating || 5.0).toFixed(1);
-    
-    // Accurate Daily Trips Tracker
-    const todayStr = new Date().toLocaleDateString('en-ZA');
-    const displayTripsToday = (taxiData.lastTripDateString === todayStr) ? (taxiData.tripsToday || 0) : 0;
-    if (tripsEl) tripsEl.textContent = displayTripsToday;
-
-    // ==========================================
-    // 5. 🌟 DRIVER DESTINATION / ROUTE BOX 🌟
-    // ==========================================
-    const destEl = document.getElementById('dashDriverDestination');
-    if (destEl) {
-        if (window.taxiData.destination && window.taxiData.destination !== "Local Route" && window.taxiData.destination !== "As Directed") {
-            // Only show the first part of the address string to keep it neat
-            destEl.textContent = window.taxiData.destination.split(',')[0];
-        } else {
-            destEl.textContent = "Not Set";
-        }
-    }
-
-    // ==========================================
-    // 6. "GO ONLINE" BUTTON STATE LOGIC
-    // ==========================================
-    const liveBtn = document.getElementById('dashMainGoOnlineBtn');
-    if (liveBtn) {
-        if (!isVerified) {
-            liveBtn.innerHTML = '<i class="fas fa-lock"></i> Pending Verification';
-            liveBtn.style.background = '#6c757d';
-            liveBtn.style.boxShadow = 'none';
-            liveBtn.style.color = 'white';
-        } else if (!isTrainingDone) {
-            liveBtn.innerHTML = '<i class="fas fa-graduation-cap"></i> Approved, pending training';
-            liveBtn.style.background = 'linear-gradient(135deg, #FF9F0A, #e68a00)';
-            liveBtn.style.boxShadow = '0 10px 25px rgba(255,159,10,0.3)';
-            liveBtn.style.color = 'black';
-        } else if (isOnline) {
-            liveBtn.innerHTML = '<i class="fas fa-power-off"></i> Go Offline';
-            liveBtn.style.background = 'linear-gradient(135deg, #dc3545, #c82333)';
-            liveBtn.style.boxShadow = '0 10px 25px rgba(220,53,69,0.3)';
-            liveBtn.style.color = 'white';
-        } else {
-            liveBtn.innerHTML = '<i class="fas fa-power-off"></i> Go Online';
-            liveBtn.style.background = 'linear-gradient(135deg, #28a745, #1e7e34)';
-            liveBtn.style.boxShadow = '0 10px 25px rgba(40,167,69,0.3)';
-            liveBtn.style.color = 'white';
-        }
-    }
-
-    // ==========================================
-    // 7. DEBT UI WARNING LOGIC
-    // ==========================================
-    const debtContainer = document.getElementById('dashDebtContainer');
-    const debtWarning = document.getElementById('dashDebtWarning');
-    const debt = window.taxiData.commissionDebt || 0;
-    const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
-    const firstDebt = window.taxiData.firstDebtDate || null;
-    const isOverdue = firstDebt && (Date.now() - firstDebt > SEVEN_DAYS);
-
-    if (debtContainer && debtEl) {
-        if (debt > 0) {
-            debtContainer.style.display = 'block';
-            if (debt >= 100 || isOverdue) {
-                debtContainer.style.borderColor = '#dc3545';
-                if (debtWarning) {
-                    debtWarning.style.display = 'block';
-                    debtWarning.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${debt >= 100 ? 'Debt limit (R100) reached.' : 'Debt is older than 7 days.'} You will only receive Card trips until settled.`;
-                }
-            } else {
-                debtContainer.style.borderColor = '#ffcdd2';
-                if (debtWarning) debtWarning.style.display = 'none';
-            }
-        } else {
-            debtContainer.style.display = 'none';
-        }
-    }
-    
-    // Update top Banners (Verification/Subscription notices)
-    if (typeof updateBannersVisibility === 'function') updateBannersVisibility();
-};
-// B. Route Setter Popup
-window.openSetDestinationPopup = function() {
-    closeActivePopup();
-    
-    const popup = document.getElementById('genericMessagePopup');
-    popup.innerHTML = `
-        <div class="modal-content" style="background: #ffffff !important; max-width: 400px; padding: 25px; border-radius: 24px; text-align: center;">
-            <button class="popup-close" onclick="closeActivePopup()" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 1.2rem; color: #666; cursor: pointer;">&times;</button>
-            <div style="width: 60px; height: 60px; background: #fff4e5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
-                <i class="fas fa-map-marked-alt" style="font-size: 2rem; color: #FF9F0A;"></i>
-            </div>
-            <h3 style="margin-bottom: 10px; color: #111; font-weight: 900;">Where are you heading?</h3>
-            <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Let passengers know your drop-off area so they can book you along the way.</p>
-            
-            <div style="position: relative; text-align: left; margin-bottom: 20px;">
-                <input type="text" id="driverRouteInput" placeholder="e.g. Gateway Mall, Umhlanga..." autocomplete="off" style="width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #ddd; font-weight: 800; font-size: 1rem; outline: none;">
-                <div id="driverRouteSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 12px; max-height: 200px; overflow-y: auto; display: none; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-top: 5px;"></div>
-            </div>
-            
-            <button class="btn btn-primary" onclick="saveDriverRoute()" style="width: 100%; padding: 16px; border-radius: 16px; background: #FF9F0A; color: black; border: none; font-weight: 900; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 159, 10, 0.3);">
-                Save Route
-            </button>
-            
-            <button onclick="clearDriverRoute()" style="width: 100%; padding: 14px; background: transparent; color: #dc3545; border: none; font-weight: 700; margin-top: 10px; cursor: pointer; text-decoration: underline;">
-                Clear Route (I am empty)
-            </button>
-        </div>
-    `;
-    openPopup('genericMessagePopup');
-    
-    // Autocomplete Logic
-    const input = document.getElementById('driverRouteInput');
-    const suggestions = document.getElementById('driverRouteSuggestions');
-    let timeout;
-    
-    input.addEventListener('input', function() {
-        clearTimeout(timeout);
-        const query = this.value.trim();
-        if (query.length < 3) { suggestions.style.display = 'none'; return; }
-        
-        timeout = setTimeout(() => {
-            fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&limit=5`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.features && data.features.length > 0) {
-                    suggestions.innerHTML = data.features.map(f => `
-                        <div style="padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer;" onclick="document.getElementById('driverRouteInput').value = '${f.place_name.replace(/'/g, "\\'")}'; document.getElementById('driverRouteSuggestions').style.display='none';">
-                            <strong style="color: #111;">${f.text}</strong><br>
-                            <small style="color: #888;">${f.place_name}</small>
-                        </div>
-                    `).join('');
-                    suggestions.style.display = 'block';
-                }
-            });
-        }, 300);
-    });
-};
-
-window.saveDriverRoute = function() {
-    const route = document.getElementById('driverRouteInput').value.trim();
-    if (!route) {
-        showCommunicationBanner("Please enter a destination.", "warning");
-        return;
-    }
-    
-    // Save to database
-    firebase.database().ref(`taxis/${userId}`).update({
-        destination: route,
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        if (taxiData) taxiData.destination = route;
-        updateUIWithTaxiData();
-        closeActivePopup();
-        showCommunicationBanner("Route updated! Passengers can now see where you are going.", "success");
-    });
-};
-
-window.clearDriverRoute = function() {
-    firebase.database().ref(`taxis/${userId}`).update({
-        destination: "As Directed",
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        if (taxiData) taxiData.destination = "As Directed";
-        updateUIWithTaxiData();
-        closeActivePopup();
-        showCommunicationBanner("Route cleared.", "info");
     });
 };
 window.canDriverGoOnline = function() {
@@ -28649,10 +28515,6 @@ function showClubRequestPopupFallback(request) {
 // ACCEPT CLUB REQUEST - FIXED
 // ================================================================
 
-// ================================================================
-// ACCEPT CLUB REQUEST - WITH MAKE.COM WEBHOOK (TWILIO SMS)
-// ================================================================
-
 window.acceptClubRequest = function() {
     const reqId = window.currentClubRequestId;
     if (!reqId) {
@@ -28668,14 +28530,10 @@ window.acceptClubRequest = function() {
         btn.disabled = true;
     }
     
-    firebase.database().ref(`requests/${reqId}`).once('value').then(async snapshot => {
+    firebase.database().ref(`requests/${reqId}`).once('value').then(snapshot => {
         const req = snapshot.val();
         if (!req) {
             showToast("Request not found.", "danger");
-            if (btn) {
-                btn.innerHTML = '<i class="fas fa-check"></i> Accept';
-                btn.disabled = false;
-            }
             return;
         }
         
@@ -28690,146 +28548,67 @@ window.acceptClubRequest = function() {
         // Store request data
         window.clubRequestData = req;
         
-        // Prepare driver details
+        // Update request status to 'accepted'
         const driverName = window.taxiData?.name ? 
             `${window.taxiData.name} ${window.taxiData.surname || ''}`.trim() : 'Driver';
         
-        const passKeys = req.passengers ? Object.keys(req.passengers) : [];
-        const passCount = passKeys.length || 1;
-        const maxCapacity = req.maxCapacity || 4;
-        const isFull = passCount >= maxCapacity;
-
-        // Build Firebase Payload
-        const updates = {
-            status: isFull ? 'accepted' : 'pooling',
+        firebase.database().ref(`requests/${reqId}`).update({
+            status: 'accepted',
             taxiId: window.userId,
             driverName: driverName,
             driverPhone: window.taxiData?.phone || '',
-            driverRating: window.taxiData?.rating || 5.0,
-            acceptedAt: firebase.database.ServerValue.TIMESTAMP,
-            type: 'club',
-            carCategory: 'club'
-        };
-        
-        // Assign PINs and accepted status to all passengers
-        if (passKeys.length > 0) {
-            passKeys.forEach(key => {
-                updates[`passengers/${key}/status`] = 'accepted';
-                if (!req.passengers[key].pickupPin) {
-                    updates[`passengers/${key}/pickupPin`] = Math.floor(1000 + Math.random() * 9000).toString();
-                    updates[`passengers/${key}/requirePin`] = true;
-                }
-            });
-        }
-        
-        try {
-            // 1. Commit to Firebase
-            await firebase.database().ref(`requests/${reqId}`).update(updates);
+            acceptedAt: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            console.log("✅ Request accepted in database");
             
-            // 2. Clean up from waiting list
-            firebase.database().ref(`club_pools/waiting_list/${reqId}`).remove().catch(()=>{});
-            
-            // 3. Notify all passengers (In-App & via Make.com Webhook)
-            if (passKeys.length > 0) {
-                passKeys.forEach(commuterId => {
-                    const passenger = req.passengers[commuterId];
-                    
-                    // A. In-App Notification
-                    firebase.database().ref(`notifications/commuters/${commuterId}`).push({
-                        type: 'request_accepted',
-                        driverId: window.userId,
-                        driverName: driverName,
-                        driverRating: updates.driverRating,
-                        driverPhone: updates.driverPhone,
-                        requestId: reqId,
-                        poolCount: passCount,
-                        maxCapacity: maxCapacity,
-                        isPoolFull: isFull,
-                        isClub: true,
-                        pickupPin: passenger.pickupPin || updates[`passengers/${commuterId}/pickupPin`],
-                        requirePin: true,
-                        message: isFull ? 
-                            `🚗 Pool is FULL! ${passCount}/${maxCapacity} passengers. Driver is on the way!` :
-                            `👤 Driver accepted! Waiting for ${maxCapacity - passCount} more passenger(s) to join.`,
-                        timestamp: firebase.database.ServerValue.TIMESTAMP
-                    });
-                    
-                    console.log("✅ In-App Passenger notification sent to:", commuterId);
-
-                    // B. 🚀 MAKE.COM WEBHOOK FOR TWILIO SMS 🚀
-                    // REPLACE THIS URL WITH YOUR ACTUAL MAKE.COM WEBHOOK URL
-                    const webhookUrl = "https://hook.eu2.make.com/YOUR_UNIQUE_WEBHOOK_URL_HERE"; 
-                    
-                    fetch(webhookUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            event: "club_matched",
-                            requestId: reqId,
-                            commuterId: commuterId,
-                            passengerName: passenger.commuterName || "Passenger",
-                            passengerPhone: passenger.commuterPhone || "",
-                            driverName: driverName,
-                            driverPhone: updates.driverPhone,
-                            vehicleReg: window.taxiData?.taxiRegistrationNumber || window.taxiData?.registration || "N/A",
-                            pickupAddress: passenger.pickupAddress || req.pickupAddress || "Pickup",
-                            dropoffAddress: passenger.destination || req.destination || "Destination",
-                            pickupTime: req.morningDeparture || "07:00",
-                            fare: passenger.price || req.originalPerPersonPrice || 25
-                        })
-                    }).then(res => console.log("✅ Webhook fired for SMS to", passenger.commuterName))
-                      .catch(err => console.error("❌ Webhook firing failed", err));
+            // Notify the passenger
+            const passengerId = req.commuterId;
+            if (passengerId) {
+                firebase.database().ref(`notifications/commuters/${passengerId}`).push({
+                    type: 'request_accepted',
+                    driverId: window.userId,
+                    driverName: driverName,
+                    requestId: reqId,
+                    title: '🚗 Driver Accepted!',
+                    message: `${driverName} is on the way to pick you up.`,
+                    pickupPin: req.pickupPin,
+                    requirePin: true,
+                    isClub: true,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
                 });
+                console.log("✅ Passenger notified:", passengerId);
             }
             
-            // 4. Update Driver Profile Status
-            await firebase.database().ref(`taxis/${window.userId}`).update({
+            // Update driver profile
+            firebase.database().ref(`taxis/${window.userId}`).update({
                 currentRequest: reqId,
-                isBroadcasting: !isFull,
-                isFull: isFull,
-                passengerCount: passCount
+                isBroadcasting: false,
+                isFull: false
             });
             
-            // 5. Update Local Global State
-            window.currentRequestId = reqId;
-            window.activeRequest = { key: reqId, ...req, ...updates };
-            localStorage.setItem('currentRequestId', reqId);
-            
-            // 6. Setup Cancellation Listener
-            if (typeof window.setupDriverCancellationListener === 'function') {
-                window.setupDriverCancellationListener(reqId);
-            }
-            
-            // 7. Close Popups
+            // Close popups
             closeModal('driverClubRequestPopup');
             closeModal('genericMessagePopup');
             
-            // 8. Show Success Message
-            if (typeof showCommunicationBanner === 'function') {
-                if (isFull) {
-                    showCommunicationBanner(`✅ Pool FULL! ${passCount}/${maxCapacity} passengers. Starting trip...`, "success");
-                } else {
-                    showCommunicationBanner(`✅ Pool accepted! Waiting for ${maxCapacity - passCount} more passengers.`, "info");
-                }
-            }
+            showCommunicationBanner(`✅ You accepted! Head to ${req.pickupAddress?.split(',')[0] || 'pickup'}`, "success");
             
-            // 9. Show the driver accepted popup (Live Tracking View)
+            // Show the driver accepted popup
             setTimeout(() => {
                 if (typeof window.showDriverAcceptedPopup === 'function') {
                     window.showDriverAcceptedPopup(window.userId, { requestKey: reqId });
                 }
-            }, 500);
+            }, 1000);
             
-            showToast("Passengers notified. Navigate to pickup!", "success");
+            showToast("Passenger notified. Navigate to pickup!", "success");
             
-        } catch (err) {
+        }).catch(err => {
             console.error("❌ Accept error:", err);
             showToast("Error accepting request.", "danger");
             if (btn) {
                 btn.innerHTML = '<i class="fas fa-check"></i> Accept';
                 btn.disabled = false;
             }
-        }
+        });
     }).catch(err => {
         console.error("❌ Fetch error:", err);
         showToast("Error loading request.", "danger");
@@ -28839,6 +28618,7 @@ window.acceptClubRequest = function() {
         }
     });
 };
+
 // ================================================================
 // INITIALIZE CLUB SYSTEM ON LOAD
 // ================================================================
@@ -29492,6 +29272,7 @@ window.checkAndShowTrainingPopup = function() {
     }
 };
 
+// 2. The "Book Session" Logic
 window.submitTrainingRequest = async function() {
     const dateVal = document.getElementById('trainingDate').value;
     const timeVal = document.getElementById('trainingTime').value;
@@ -29507,10 +29288,11 @@ window.submitTrainingRequest = async function() {
     btn.disabled = true;
 
     try {
-        const driverName = ((window.taxiData.name || '') + ' ' + (window.taxiData.surname || '')).trim();
+        // Prepare Data
+        const driverName = (window.taxiData.name || '') + ' ' + (window.taxiData.surname || '');
         const payload = {
-            _subject: `Training Booking: ${driverName}`,
-            Driver_Name: driverName,
+            _subject: `Training Booking: ${driverName.trim()}`,
+            Driver_Name: driverName.trim(),
             Driver_ID: window.userId,
             Phone: window.taxiData.phone || 'N/A',
             Date: dateVal,
@@ -29518,14 +29300,14 @@ window.submitTrainingRequest = async function() {
             Vehicle: window.taxiData.taxiRegistrationNumber || 'N/A'
         };
 
-        // 1. Send Email Alert via FormSubmit
+        // Send Email Alert via FormSubmit
         await fetch("https://formsubmit.co/ajax/drndlovu@mail.com", {
             method: "POST",
             headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
             body: JSON.stringify(payload)
         });
 
-        // 2. Save training status directly in Driver's profile (Authorized Write)
+        // Save status to Firebase
         await firebase.database().ref(`taxis/${window.userId}`).update({
             trainingStatus: 'requested',
             trainingDate: dateVal,
@@ -29540,7 +29322,6 @@ window.submitTrainingRequest = async function() {
     } catch (error) {
         console.error("Booking Error:", error);
         showCommunicationBanner("Connection error. Please try again.", "danger");
-    } finally {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
@@ -29753,92 +29534,21 @@ window.updateScheduleWidget = function(reqId) {
     });
 };
 
-
-window.toggleBroadcast = function() {
-    if (!window.userId || !window.taxiData) {
-        console.warn("Cannot toggle broadcast: missing userId or taxiData");
-        return;
-    }
-    
-    const isCurrentlyOnline = window.taxiData.isOnline === true;
-    const isCurrentlyBroadcasting = window.taxiData.isBroadcasting === true;
-    const isFull = window.taxiData.isFull === true;
-    
-    const isVerified = (window.taxiData.verificationStatus === 'verified' || window.taxiData.provisionalActivation === true);
-    const isTrainingDone = (window.taxiData.trainingStatus === 'completed');
-
-    // Block going online if training is not completed
-    if (isVerified && !isTrainingDone) {
-        showGenericMessage(
-            "Training Required",
-            "Congratulations! Your profile is approved. However, you must complete your training session before going online. Please book a slot using the booking form.",
-            "fa-graduation-cap",
-            "icon-warning"
-        );
-        return;
-    }
-    
-    if (isCurrentlyOnline && isCurrentlyBroadcasting) {
-        showConfirmPopup(
-            "Go Offline?",
-            "Are you sure you want to go offline? You will stop receiving ride requests from passengers.",
-            function() {
-                executeGoOffline();
-            },
-            "Yes, Go Offline",
-            "Stay Online",
-            "warning"
-        );
-        return;
-    }
-    
-    if (!isCurrentlyOnline) {
-        if (window.taxiData.vehicleSeats) {
-            executeGoOnline();
-        } else {
-            window.openSetupTripPopup();
-        }
-        return;
-    }
-    
-    if (isCurrentlyOnline && !isCurrentlyBroadcasting) {
-        showConfirmPopup(
-            "Go Live?",
-            isFull ? 
-                "Your taxi is currently full. Going live will make you visible to passengers again." :
-                "You are currently hidden. Do you want to become visible to passengers?",
-            function() {
-                executeGoOnline();
-            },
-            "Yes, Go Live",
-            "Stay Hidden",
-            "success"
-        );
-    }
-};
-
+// =================================================================
+// 1. DASHBOARD BUTTON LOGIC (Forces "Online" flow)
+// =================================================================
 window.handleDashboardOnlineClick = function() {
     if (!window.userId || !window.taxiData) return;
 
-    const isVerified = (window.taxiData.verificationStatus === 'verified' || window.taxiData.provisionalActivation === true);
-    const isTrainingDone = (window.taxiData.trainingStatus === 'completed');
-
-    if (isVerified && !isTrainingDone) {
-        showGenericMessage(
-            "Training Required",
-            "Your profile is approved! However, you must complete your training session before going online.",
-            "fa-graduation-cap",
-            "icon-warning"
-        );
-        return;
-    }
-
-    if (!window.taxiData.vehicleSeats) {
+    // If they haven't set up their Club times, force the setup popup
+    if (!window.taxiData.morningTime || !window.taxiData.returnTime) {
         window.openSetupTripPopup();
     } else {
+        // They are already set up, just go online
         window.executeGoOnline();
     }
 };
+
 // =================================================================
 // 2. THE ACTUAL "GO ONLINE" EXECUTION
 // =================================================================
@@ -30291,80 +30001,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }, 2000);
 });
-
-// =================================================================
-// LOGOUT CONFIRMATION & EXECUTION FUNCTIONS
-// =================================================================
-
-// Opens the logout confirmation popup
-window.showLogoutConfirmation = function() {
-    console.log("🔓 Prompting logout confirmation...");
-    
-    // Utilize your unified openPopup controller
-    if (typeof window.openPopup === 'function') {
-        window.openPopup('logoutConfirmationPopup');
-    } else {
-        // Fallback if openPopup is not yet initialized
-        const popup = document.getElementById('logoutConfirmationPopup');
-        if (popup) {
-            popup.classList.add('open');
-            popup.style.display = 'block';
-            const overlay = document.getElementById('popupOverlay');
-            if (overlay) overlay.classList.add('open');
-        }
-    }
-};
-
-// Executes the actual logout sequence
-window.confirmLogout = function() {
-    console.log("🚪 Logging out of Asiye...");
-    
-    // Clear all local session caches
-    localStorage.clear();
-    sessionStorage.clear();
-    
-    // Sign out from Firebase Auth and redirect to the login portal
-    firebase.auth().signOut().then(() => {
-        window.location.replace('login.html');
-    }).catch((err) => {
-        console.error("Error signing out of Firebase:", err);
-        // Fallback redirect in case of network timeout
-        window.location.replace('login.html');
-    });
-};
-
-// Inside populateRadarRequests
-firebase.database().ref('club_allocations').on('value', (snap) => {
-    const listContainer = document.getElementById('radarRequestsList');
-    if (!snap.exists()) return;
-
-    snap.forEach(child => {
-        const alloc = child.val();
-        if (alloc.status === 'pending_allocation') {
-            const html = `
-                <div style="background: #2C2C2E; border: 1px solid #FF9F0A; border-radius: 12px; padding: 12px; margin-bottom: 10px;">
-                    <div style="color: #FF9F0A; font-weight: 800; font-size: 0.7rem;">NEW ROUTE REQUEST</div>
-                    <div style="color: white; font-weight: 700;">${alloc.pickupAddress.split(',')[0]} → ${alloc.destination.split(',')[0]}</div>
-                    <button onclick="claimRoute('${child.key}')" style="width: 100%; margin-top: 10px; background: #FF9F0A; border: none; padding: 8px; border-radius: 8px; font-weight: 800;">
-                        Claim Route
-                    </button>
-                </div>
-            `;
-            listContainer.insertAdjacentHTML('afterbegin', html);
-        }
-    });
-});
-
-window.claimRoute = function(allocId) {
-    // 1. Assign driver to allocation
-    database.ref(`club_allocations/${allocId}`).update({
-        status: 'claimed',
-        taxiId: window.userId,
-        driverName: window.taxiData.name
-    }).then(() => {
-        showCommunicationBanner("Route Claimed! The passenger has been notified.", "success");
-    });
-};
 </script>
 </body>
 </html>
