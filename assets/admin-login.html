@@ -299,7 +299,6 @@
             display: block;
         }
 
-        /* Demo Credentials Box */
         .demo-creds {
             background: #f8f9fa;
             border-radius: 12px;
@@ -323,7 +322,46 @@
             color: #007BFF;
         }
 
-        /* Responsive */
+        /* Loading overlay for redirect */
+        .redirect-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.7);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            color: white;
+        }
+
+        .redirect-overlay.show {
+            display: flex;
+        }
+
+        .redirect-overlay .spinner-big {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.2);
+            border-top-color: #007BFF;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        .redirect-overlay h3 {
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .redirect-overlay p {
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+
         @media (max-width: 480px) {
             .login-container {
                 padding: 28px 20px;
@@ -342,6 +380,13 @@
     </style>
 </head>
 <body>
+
+<!-- Redirect Overlay -->
+<div id="redirectOverlay" class="redirect-overlay">
+    <div class="spinner-big"></div>
+    <h3>Redirecting to Dashboard</h3>
+    <p>Please wait...</p>
+</div>
 
 <div class="login-container">
     <!-- Header -->
@@ -436,36 +481,37 @@
     const database = firebase.database();
 
     // ============================================================
-    // CHECK IF ALREADY LOGGED IN AS ADMIN
+    // CHECK IF ALREADY LOGGED IN AS ADMIN - FIXED
     // ============================================================
-    // ============================================================
-// AUTH CHECK - UPDATED
-// ============================================================
-auth.onAuthStateChanged(function(user) {
-    if (!user) {
-        // Not logged in - redirect to admin login
-        window.location.href = 'admin-login.html';
-        return;
-    }
+    let authCheckDone = false;
 
-    // Check if user is admin
-    database.ref('admins/' + user.uid).once('value', function(snapshot) {
-        if (!snapshot.exists()) {
-            // Not an admin - sign out and redirect
-            auth.signOut().then(function() {
-                window.location.href = 'admin-login.html';
+    auth.onAuthStateChanged(function(user) {
+        // Prevent multiple redirects
+        if (authCheckDone) return;
+        
+        if (user) {
+            // Check if this user is an admin
+            database.ref('admins/' + user.uid).once('value', function(snapshot) {
+                if (snapshot.exists()) {
+                    // Already logged in as admin - redirect to admin dashboard
+                    authCheckDone = true;
+                    console.log('Admin already logged in, redirecting to admin.html');
+                    
+                    // Show redirect overlay
+                    document.getElementById('redirectOverlay').classList.add('show');
+                    
+                    setTimeout(function() {
+                        window.location.href = 'admin.html';
+                    }, 500);
+                } else {
+                    // Not an admin - sign out
+                    auth.signOut();
+                    authCheckDone = true;
+                }
             });
-        } else {
-            // Admin logged in
-            var adminData = snapshot.val();
-            document.getElementById('adminName').textContent = adminData.name || 'Admin';
-            loadAllData();
-
-            // Store admin session
-            localStorage.setItem('adminSession', 'true');
         }
     });
-});
+
     // ============================================================
     // HANDLE ADMIN LOGIN
     // ============================================================
@@ -504,6 +550,9 @@ auth.onAuthStateChanged(function(user) {
                 if (snapshot.exists()) {
                     // Admin verified - login successful
                     showSuccess('Login successful! Redirecting to dashboard...');
+
+                    // Show redirect overlay
+                    document.getElementById('redirectOverlay').classList.add('show');
 
                     // Store admin session
                     localStorage.setItem('adminSession', 'true');
@@ -567,10 +616,9 @@ auth.onAuthStateChanged(function(user) {
     }
 
     // ============================================================
-    // SHOW TOAST (for forgot password)
+    // SHOW TOAST
     // ============================================================
     function showToast(message, type) {
-        // Create a simple toast notification
         var toast = document.createElement('div');
         toast.style.cssText = `
             position: fixed;
@@ -585,9 +633,9 @@ auth.onAuthStateChanged(function(user) {
             font-size: 0.9rem;
             z-index: 99999;
             box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-            animation: slideUp 0.3s ease;
             max-width: 90%;
             text-align: center;
+            animation: slideUp 0.3s ease;
         `;
         toast.textContent = message;
         document.body.appendChild(toast);
@@ -615,41 +663,6 @@ auth.onAuthStateChanged(function(user) {
             document.getElementById('adminPassword').focus();
         }
     });
-
-    // ============================================================
-    // CREATE FIRST ADMIN (Run once to set up)
-    // ============================================================
-    // Uncomment and run this once to create the first admin account
-    /*
-    function createFirstAdmin() {
-        var email = 'admin@asiye.cloud';
-        var password = 'admin123';
-
-        auth.createUserWithEmailAndPassword(email, password)
-            .then(function(userCredential) {
-                return database.ref('admins/' + userCredential.user.uid).set({
-                    name: 'Admin',
-                    email: email,
-                    role: 'super_admin',
-                    createdAt: firebase.database.ServerValue.TIMESTAMP
-                });
-            })
-            .then(function() {
-                console.log('Admin account created successfully!');
-                alert('Admin account created! Email: admin@asiye.cloud, Password: admin123');
-            })
-            .catch(function(error) {
-                if (error.code === 'auth/email-already-in-use') {
-                    console.log('Admin account already exists. You can login.');
-                } else {
-                    console.error('Error creating admin:', error);
-                }
-            });
-    }
-
-    // Call this once to create the admin account
-    // createFirstAdmin();
-    */
 </script>
 
 </body>
