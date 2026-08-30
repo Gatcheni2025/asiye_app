@@ -45571,14 +45571,18 @@ function showAreaSelectionViewWrapper() {
 // 4. RENDER AREA SELECTION LIST
 // ================================================================
 
+// ================================================================
+// 4. RENDER AREA SELECTION LIST - FIXED (No duplicate declarations)
+// ================================================================
+
 function renderAreaSelectionList(areaList, userArea) {
-    const listContainer = document.getElementById('areaListContainer');
+    var listContainer = document.getElementById('areaListContainer');
     if (!listContainer) return;
 
     // Format the user's suburb for display
-    const displaySuburb = userArea || 'your location';
+    var displaySuburb = userArea || 'your location';
 
-    let html = `
+    var html = `
         <div style="margin-bottom: 8px; padding: 0 2px;">
             <div style="background: linear-gradient(135deg, #eef4ff, #f8f9fa); border-radius: 12px; padding: 12px 16px; border: 1px solid #cce0ff; display: flex; align-items: center; gap: 10px;">
                 <i class="fas fa-location-dot" style="color: #007BFF; font-size: 1.1rem;"></i>
@@ -45591,17 +45595,17 @@ function renderAreaSelectionList(areaList, userArea) {
         </div>
     `;
 
-    areaList.forEach((area) => {
-        const avgPrice = area.minPrice === area.maxPrice ? 
+    areaList.forEach(function(area) {
+        var avgPrice = area.minPrice === area.maxPrice ? 
             `R${area.minPrice}` : 
             `R${area.minPrice} - R${area.maxPrice}`;
         
-        const distanceStr = area.avgDistance < 1 ? 
+        var distanceStr = area.avgDistance < 1 ? 
             `${(area.avgDistance * 1000).toFixed(0)}m` : 
             `${area.avgDistance.toFixed(1)}km`;
         
         // Determine route type based on distance
-        let routeBadge = '';
+        var routeBadge = '';
         if (area.avgDistance < 3) {
             routeBadge = '<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.6rem; font-weight: 700;">Nearby</span>';
         } else if (area.avgDistance < 10) {
@@ -45663,6 +45667,9 @@ function renderAreaSelectionList(areaList, userArea) {
 
     listContainer.innerHTML = html;
 }
+// ================================================================
+// 5. SELECT DESTINATION AREA - SHOW TAXIS FOR THAT AREA
+// ================================================================
 
 // ================================================================
 // 5. SELECT DESTINATION AREA - SHOW TAXIS FOR THAT AREA
@@ -45671,7 +45678,7 @@ function renderAreaSelectionList(areaList, userArea) {
 window.selectDestinationArea = function(areaName) {
     console.log(`🎯 Selecting destination area: ${areaName}`);
     
-    const container = document.getElementById('taxiListContainer');
+    var container = document.getElementById('taxiListContainer');
     if (!container) return;
 
     // Show loading
@@ -45683,28 +45690,29 @@ window.selectDestinationArea = function(areaName) {
     `;
 
     // Fetch taxis for this destination
-    const uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
-    const uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
+    var uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
+    var uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
 
-    firebase.database().ref('taxis').once('value').then(snapshot => {
-        const matchedTaxis = [];
+    firebase.database().ref('taxis').once('value').then(function(snapshot) {
+        var matchedTaxis = [];
         if (snapshot.exists()) {
-            snapshot.forEach(child => {
-                const taxi = child.val();
+            snapshot.forEach(function(child) {
+                var taxi = child.val();
                 if (taxi.isOnline && taxi.verificationStatus === 'verified' && 
                     taxi.latitude && taxi.longitude && !taxi.isFull) {
                     
-                    const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
+                    var dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
                     if (dist <= 30) {
-                        const dest = taxi.destination || taxi.scheduledDestination || '';
+                        var dest = taxi.destination || taxi.scheduledDestination || '';
                         
-                        // STRICT MATCHING OVERRIDE: Check if driver has a specific set route
+                        // STRICT MATCHING: Driver must have a specific set route
                         if (dest && dest !== "As Directed" && dest !== "Not Set" && dest !== "Local Route") {
-                            const destArea = dest.split(',')[0].trim().replace(/[0-9]/g, '').trim();
+                            var destArea = dest.split(',')[0].trim().replace(/[0-9]/g, '').trim();
                             // Match the area name (case insensitive)
                             if (destArea && destArea.toLowerCase().includes(areaName.toLowerCase())) {
                                 taxi.taxiId = child.key;
                                 taxi.distance = dist;
+                                taxi.routeTimestamp = taxi.routeTimestamp || taxi.lastSeen || 0;
                                 matchedTaxis.push(taxi);
                             }
                         }
@@ -45715,19 +45723,20 @@ window.selectDestinationArea = function(areaName) {
 
         if (matchedTaxis.length === 0) {
             // Try broader match if exact match fails
-            firebase.database().ref('taxis').once('value').then(snap2 => {
-                const broadTaxis = [];
-                snap2.forEach(child => {
-                    const taxi = child.val();
+            firebase.database().ref('taxis').once('value').then(function(snap2) {
+                var broadTaxis = [];
+                snap2.forEach(function(child) {
+                    var taxi = child.val();
                     if (taxi.isOnline && taxi.verificationStatus === 'verified' && 
                         taxi.latitude && taxi.longitude && !taxi.isFull) {
-                        const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
+                        var dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
                         if (dist <= 30) {
-                            const dest = taxi.destination || taxi.scheduledDestination || '';
+                            var dest = taxi.destination || taxi.scheduledDestination || '';
                             if (dest && dest !== "As Directed" && dest !== "Not Set" && dest !== "Local Route") {
                                 if (dest.toLowerCase().includes(areaName.toLowerCase())) {
                                     taxi.taxiId = child.key;
                                     taxi.distance = dist;
+                                    taxi.routeTimestamp = taxi.routeTimestamp || taxi.lastSeen || 0;
                                     broadTaxis.push(taxi);
                                 }
                             }
@@ -45742,7 +45751,7 @@ window.selectDestinationArea = function(areaName) {
 
         processQueueAndRender(matchedTaxis, areaName, container);
         
-    }).catch(err => {
+    }).catch(function(err) {
         console.error("Error fetching taxis:", err);
         container.innerHTML = `
             <div style="text-align: center; padding: 40px 20px; color: #dc3545;">
@@ -45756,36 +45765,24 @@ window.selectDestinationArea = function(areaName) {
     });
 };
 
-// Helper function to process the 1-by-1 Queue
+// Helper function to process the queue and render
 function processQueueAndRender(taxis, areaName, container) {
     if (taxis.length > 0) {
-        // 1. QUEUE LOGIC: Sort by routeTimestamp (oldest waiting time = Front of the queue)
-        taxis.sort((a, b) => (a.routeTimestamp || a.lastSeen || 0) - (b.routeTimestamp || b.lastSeen || 0));
+        // Sort by routeTimestamp (oldest waiting time = Front of the queue)
+        taxis.sort(function(a, b) { 
+            return (a.routeTimestamp || 0) - (b.routeTimestamp || 0); 
+        });
         
-        // 2. ISOLATE FIRST CAR: Take only the 1st car in the queue
-        const activeLoadingTaxi = [taxis[0]]; 
-        const carsInWaiting = taxis.length - 1;
+        // ISOLATE FIRST CAR: Take only the 1st car in the queue
+        var activeLoadingTaxi = [taxis[0]]; 
+        var carsInWaiting = taxis.length - 1;
         
         window._selectedAreaName = areaName;
         window._taxiListModeActive = true;
+        window._matchedTaxisFull = taxis;
         
-        // 3. Render ONLY the first car
-        renderTaxiCards(container, activeLoadingTaxi, true, areaName);
-        
-        // 4. Inject Queue UI directly under the loaded card
-        if (carsInWaiting > 0) {
-            // Locate the wrapper created by renderTaxiCards
-            const listWrapper = container.querySelector('div[style*="display: flex; flex-direction: column; gap: 14px"]');
-            if (listWrapper) {
-                listWrapper.insertAdjacentHTML('beforeend', `
-                    <div style="background: #eef4ff; border: 1px dashed #007BFF; border-radius: 12px; padding: 12px; text-align: center; margin-top: 5px;">
-                        <i class="fas fa-layer-group" style="color: #007BFF; font-size: 1.2rem; margin-bottom: 5px;"></i>
-                        <div style="font-weight: 800; color: #007BFF; font-size: 0.9rem;">${carsInWaiting} more car(s) in queue</div>
-                        <div style="font-size: 0.75rem; color: #666;">They will move to the front once this car is full.</div>
-                    </div>
-                `);
-            }
-        }
+        // Render ONLY the first car
+        renderTaxiCardsWithQueue(container, activeLoadingTaxi, carsInWaiting, areaName);
     } else {
         // Empty state
         if (typeof window.showEmptyClubState === 'function') {
@@ -45860,6 +45857,10 @@ window.showAreaSelectionView = function() {
 };
 
 // This is the actual content renderer - renamed from showAreaSelectionView
+// ================================================================
+// AREA SELECTION VIEW CONTENT - FIXED
+// ================================================================
+
 function showAreaSelectionViewContent(container, userArea) {
     if (!container) {
         console.error("❌ Container not found for area selection view");
@@ -45867,8 +45868,8 @@ function showAreaSelectionViewContent(container, userArea) {
     }
     
     // Get user location
-    const uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
-    const uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
+    var uLat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
+    var uLng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
 
     container.innerHTML = `
         <div style="padding: 10px 0 20px 0;">
@@ -45895,14 +45896,14 @@ function showAreaSelectionViewContent(container, userArea) {
     `;
 
     // Fetch taxis and populate areas
-    firebase.database().ref('taxis').once('value').then(snapshot => {
-        const taxis = [];
+    firebase.database().ref('taxis').once('value').then(function(snapshot) {
+        var taxis = [];
         if (snapshot.exists()) {
-            snapshot.forEach(child => {
-                const taxi = child.val();
+            snapshot.forEach(function(child) {
+                var taxi = child.val();
                 if (taxi.isOnline && taxi.verificationStatus === 'verified' && 
                     taxi.latitude && taxi.longitude && !taxi.isFull) {
-                    const dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
+                    var dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
                     if (dist <= 30) {
                         taxi.taxiId = child.key;
                         taxi.distance = dist;
@@ -45912,8 +45913,8 @@ function showAreaSelectionViewContent(container, userArea) {
             });
         }
 
-        const spinnerEl = document.getElementById('areaLoadingSpinner');
-        const listContainer = document.getElementById('areaListContainer');
+        var spinnerEl = document.getElementById('areaLoadingSpinner');
+        var listContainer = document.getElementById('areaListContainer');
         
         if (taxis.length === 0) {
             if (spinnerEl) spinnerEl.style.display = 'none';
@@ -45933,16 +45934,15 @@ function showAreaSelectionViewContent(container, userArea) {
             return;
         }
 
-        // Group by destination area
-     // Group by destination area (ONLY show areas with drivers who selected a route)
-        const areaGroups = {};
-        taxis.forEach(taxi => {
-            const dest = taxi.destination || taxi.scheduledDestination || '';
+        // Group by destination area (ONLY show areas with drivers who selected a route)
+        var areaGroups = {};
+        taxis.forEach(function(taxi) {
+            var dest = taxi.destination || taxi.scheduledDestination || '';
             
             // STRICT RULE: If the driver hasn't selected a specific route, hide them from the club list
             if (!dest || dest === "As Directed" || dest === "Not Set" || dest === "Local Route") return;
 
-            let areaName = dest.split(',')[0].trim();
+            var areaName = dest.split(',')[0].trim();
             areaName = areaName.replace(/[0-9]/g, '').trim();
             if (!areaName || areaName.length < 2) return;
 
@@ -45958,20 +45958,21 @@ function showAreaSelectionViewContent(container, userArea) {
                 };
             }
 
-            const group = areaGroups[areaName];
+            var group = areaGroups[areaName];
             group.taxis.push(taxi);
             group.count++;
-            const price = parseFloat(taxi.rate) || 25;
+            var price = parseFloat(taxi.rate) || 25;
             if (price < group.minPrice) group.minPrice = price;
             if (price > group.maxPrice) group.maxPrice = price;
             group.totalDistance += taxi.distance || 0.5;
             group.avgDistance = group.totalDistance / group.count;
         });
 
-        const areaList = Object.values(areaGroups).sort((a, b) => a.avgDistance - b.avgDistance);
+        var areaList = Object.values(areaGroups).sort(function(a, b) { 
+            return a.avgDistance - b.avgDistance; 
+        });
 
         // Hide spinner, show active areas
-        const spinnerEl = document.getElementById('areaLoadingSpinner');
         if (spinnerEl) spinnerEl.style.display = 'none';
         
         if (areaList.length > 0) {
@@ -45995,6 +45996,25 @@ function showAreaSelectionViewContent(container, userArea) {
                 `;
             }
         }
+    }).catch(function(err) {
+        console.error("Error fetching taxis:", err);
+        var spinnerEl = document.getElementById('areaLoadingSpinner');
+        var listContainer = document.getElementById('areaListContainer');
+        if (spinnerEl) spinnerEl.style.display = 'none';
+        if (listContainer) {
+            listContainer.style.display = 'block';
+            listContainer.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: #dc3545;">
+                    <i class="fas fa-exclamation-triangle" style="font-size: 2rem; margin-bottom: 10px;"></i>
+                    <p>Error loading taxis. Please try again.</p>
+                    <button onclick="window.findBroadcastingTaxis()" style="margin-top: 10px; background: #007BFF; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-weight: 700; cursor: pointer;">
+                        <i class="fas fa-sync-alt"></i> Try Again
+                    </button>
+                </div>
+            `;
+        }
+    });
+}
 // ================================================================
 // 7. RENDER TAXI CARDS - CALL A CAR VIEW
 // ================================================================
@@ -46992,8 +47012,12 @@ window.selectDestination = function(destinationName, destLat, destLng, price) {
     }
 };
 
+// ================================================================
+// 8. RENDER FLAT DESTINATION LIST WITH ROUTE MATCHING
+// ================================================================
+
 function renderDestinationList(container, destinations, userAddress, userLat, userLng) {
-        console.log("📋 Rendering flat destination list...");
+    console.log("📋 Rendering destination list with route matching...");
     
     if (window._isRenderingAreaView) {
         console.warn("⚠️ Already rendering, skipping...");
@@ -47015,7 +47039,7 @@ function renderDestinationList(container, destinations, userAddress, userLat, us
                             '<span style="color: #111;">' + escapeHtml(displayAddress) + '</span>' +
                         '</h4>' +
                         '<p style="color: #888; font-size: 0.8rem; margin: 2px 0 0 0; font-weight: 500;">' +
-                            totalDestinations + ' destination' + (totalDestinations > 1 ? 's' : '') + ' nearby' +
+                            'Select a destination to see available taxis' +
                         '</p>' +
                     '</div>' +
                     '<button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer;">&times;</button>' +
@@ -47120,13 +47144,16 @@ function renderDestinationList(container, destinations, userAddress, userLat, us
     }
 }
 
-
 // ================================================================
 // 10. FIND TAXIS FOR DESTINATION
 // ================================================================
 
+// ================================================================
+// 10. FIND TAXIS FOR DESTINATION - STRICT ROUTE MATCHING
+// ================================================================
+
 function findTaxisForDestination(destinationName) {
-    console.log("🚗 Finding taxis for: " + destinationName);
+    console.log("🚗 Finding taxis for destination:", destinationName);
     
     var container = document.getElementById('taxiListContainer');
     if (!container) return;
@@ -47142,18 +47169,25 @@ function findTaxisForDestination(destinationName) {
 
     firebase.database().ref('taxis').once('value').then(function(snapshot) {
         var matchedTaxis = [];
+        var allTaxis = [];
+        
         if (snapshot.exists()) {
             snapshot.forEach(function(child) {
                 var taxi = child.val();
                 var isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
                 var isOnline = taxi.isOnline === true;
                 
+                // Only include verified, online taxis
                 if (isVerified && isOnline && taxi.latitude && taxi.longitude && !taxi.isFull) {
                     var dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
                     if (dist <= 30) {
+                        taxi.taxiId = child.key;
+                        taxi.distance = dist;
+                        
+                        // Check if taxi has a destination set
                         var dest = taxi.destination || taxi.scheduledDestination || '';
                         
-                        // STRICT MATCHING OVERRIDE: Driver MUST explicitly have a set destination
+                        // STRICT RULE: Driver MUST have a set destination to be shown
                         if (dest && dest !== "As Directed" && dest !== "Not Set" && dest !== "Local Route") {
                             var destArea = dest.split(',')[0].trim();
                             destArea = destArea.replace(/[0-9]/g, '').trim();
@@ -47163,24 +47197,53 @@ function findTaxisForDestination(destinationName) {
                             var lowerDest = destArea.toLowerCase();
                             var lowerArea = destinationName.toLowerCase();
                             
+                            // STRICT MATCH: Must contain the destination name
                             if (lowerDest.indexOf(lowerArea) !== -1 || lowerArea.indexOf(lowerDest) !== -1) {
-                                taxi.taxiId = child.key;
-                                taxi.distance = dist;
                                 matchedTaxis.push(taxi);
                             }
                         }
+                        
+                        // Still collect all taxis for the "Show All" feature
+                        allTaxis.push(taxi);
                     }
                 }
             });
         }
 
+        // Sort by distance and route timestamp (oldest first = queue order)
+        matchedTaxis.sort(function(a, b) { 
+            // First by distance (nearest first)
+            if (a.distance !== b.distance) return (a.distance || 0) - (b.distance || 0);
+            // Then by route timestamp (oldest first = been waiting longer)
+            return (a.routeTimestamp || a.lastSeen || 0) - (b.routeTimestamp || b.lastSeen || 0);
+        });
+
+        // STORE ALL TAXIS FOR LATER USE
+        window._allNearbyTaxis = allTaxis;
+        window._matchedTaxis = matchedTaxis;
+
         if (matchedTaxis.length === 0) {
-            // FIX: If no specifically matching taxis are found on this route, trigger the empty state Waitlist
+            // No taxis with this route - show empty state with waitlist
             if (typeof window.showEmptyClubState === 'function') {
                 window.showEmptyClubState(window.currentLocationName || 'Your Location', destinationName);
             } else {
                 container.innerHTML = 
                     '<div style="padding: 20px 0;">' +
+                        '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">' +
+                            '<div>' +
+                                '<div style="display: flex; align-items: center; gap: 10px;">' +
+                                    '<i class="fas fa-arrow-left" style="color: #007BFF; font-size: 1.1rem; cursor: pointer; padding: 8px;" onclick="window.openLiveClubPools()" title="Back to destinations"></i>' +
+                                    '<div>' +
+                                        '<h4 style="color: #111; margin: 0; font-weight: 900; font-size: 1.1rem;">' +
+                                            '<i class="fas fa-flag-checkered" style="color: #007BFF;"></i> ' +
+                                            escapeHtml(destinationName) +
+                                        '</h4>' +
+                                        '<p style="color: #888; font-size: 0.75rem; margin: 2px 0 0 0; font-weight: 500;">No taxis available for this destination</p>' +
+                                    '</div>' +
+                                '</div>' +
+                            '</div>' +
+                            '<button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer;">&times;</button>' +
+                        '</div>' +
                         '<div style="text-align: center; padding: 40px 20px; background: #f8f9fa; border-radius: 16px;">' +
                             '<i class="fas fa-car-side" style="font-size: 2.5rem; color: #ccc; margin-bottom: 15px;"></i>' +
                             '<h4 style="color: #666; font-weight: 800;">No taxis found</h4>' +
@@ -47194,11 +47257,19 @@ function findTaxisForDestination(destinationName) {
             return;
         }
 
-        matchedTaxis.sort(function(a, b) { return (a.distance || 0) - (b.distance || 0); });
+        // ONLY SHOW THE FIRST (OLDEST) TAXI IN THE QUEUE
+        // This ensures passengers see 1 car at a time
+        var displayTaxis = [matchedTaxis[0]];
+        var remainingInQueue = matchedTaxis.length - 1;
         
         window._selectedAreaName = destinationName;
         window._taxiListModeActive = true;
-        renderTaxiCards(container, matchedTaxis, {}, true, destinationName);
+        
+        // Render the taxi card
+        renderTaxiCardsWithQueue(container, displayTaxis, remainingInQueue, destinationName);
+        
+        // Also store all matched taxis for the "Show More" feature
+        window._matchedTaxisFull = matchedTaxis;
         
     }).catch(function(err) {
         console.error("Error fetching taxis:", err);
@@ -47212,6 +47283,196 @@ function findTaxisForDestination(destinationName) {
             '</div>';
     });
 }
+
+// ================================================================
+// 11. RENDER TAXI CARDS WITH QUEUE SYSTEM
+// ================================================================
+
+function renderTaxiCardsWithQueue(container, taxis, queueCount, selectedArea) {
+    if (!container) return;
+
+    var areaName = selectedArea || window._selectedAreaName || 'Selected Area';
+    var totalTaxis = taxis.length;
+
+    var html = 
+        '<div style="padding: 10px 0 20px 0;">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">' +
+                '<div>' +
+                    '<div style="display: flex; align-items: center; gap: 10px;">' +
+                        '<i class="fas fa-arrow-left" style="color: #007BFF; font-size: 1.1rem; cursor: pointer; padding: 8px;" onclick="window.openLiveClubPools()" title="Back to destinations"></i>' +
+                        '<div>' +
+                            '<h4 style="color: #111; margin: 0; font-weight: 900; font-size: 1.1rem;">' +
+                                '<i class="fas fa-flag-checkered" style="color: #007BFF;"></i> ' +
+                                escapeHtml(areaName) +
+                            '</h4>' +
+                            '<p style="color: #888; font-size: 0.75rem; margin: 2px 0 0 0; font-weight: 500;">' +
+                                totalTaxis + ' ' + (totalTaxis === 1 ? 'car' : 'cars') + ' available' +
+                                (queueCount > 0 ? ' • ' + queueCount + ' more in queue' : '') +
+                            '</p>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+                '<button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer;">&times;</button>' +
+            '</div>' +
+            
+            '<div style="display: flex; flex-direction: column; gap: 14px; padding: 5px 0 20px 0;">';
+
+    taxis.forEach(function(taxi) {
+        var driverName = (taxi.name || '') + ' ' + (taxi.surname || '');
+        driverName = driverName.trim() || 'Asiye Driver';
+        var rating = taxi.averageRating ? parseFloat(taxi.averageRating).toFixed(1) : 
+                      (taxi.rating ? parseFloat(taxi.rating).toFixed(1) : '5.0');
+        var vInfo = getVehicleDisplayInfo(taxi);
+        
+        var picUrl = taxi.profile_picture_url ? getValidImageUrl(taxi.profile_picture_url) : 
+                      'https://ui-avatars.com/api/?name=' + encodeURIComponent(driverName) + '&background=FF9F0A&color=fff';
+        var carImg = taxi.vehiclePhoto ? getValidImageUrl(taxi.vehiclePhoto) : 
+                      (taxi.carImage ? getValidImageUrl(taxi.carImage) : 'data/quantum.png');
+
+        var isFull = taxi.isFull === true;
+        var passCount = taxi.passengerCount || 0;
+        var maxCap = taxi.vehicleType === 'ehailing' ? 4 : 15;
+        var price = parseFloat(taxi.rate) || window.calculatedTripPrice || 25;
+        var distanceStr = (taxi.distance || 0.5).toFixed(1);
+        var etaMins = Math.ceil((taxi.distance || 0.5) * 2.5);
+
+        var statusBadge = '';
+        if (isFull || passCount >= maxCap) {
+            statusBadge = '<span style="background: #dc3545; color: white; padding: 2px 10px; border-radius: 10px; font-size: 0.65rem; font-weight: 700;">FULL</span>';
+        } else if (taxi.isOnline) {
+            statusBadge = '<span style="background: #28a745; color: white; padding: 2px 10px; border-radius: 10px; font-size: 0.65rem; font-weight: 700;">AVAILABLE</span>';
+        }
+
+        var destDisplay = (taxi.destination || taxi.scheduledDestination || 'Local Route').split(',')[0];
+        destDisplay = destDisplay.replace(/[0-9]/g, '').trim();
+        destDisplay = destDisplay.replace(/^To\s+/i, '').replace(/^Going\s+to\s+/i, '');
+
+        html += 
+            '<div style="background: #ffffff; border-radius: 20px; padding: 16px 18px; border: 1px solid ' + (isFull ? '#ffcdd2' : '#eee') + '; box-shadow: 0 2px 10px rgba(0,0,0,0.04);">' +
+                
+                '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">' +
+                    '<div style="display: flex; gap: 12px; align-items: center;">' +
+                        '<img src="' + picUrl + '" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid ' + (isFull ? '#dc3545' : '#FF9F0A') + ';" onerror="this.src=\'data/AsiyeNew.png\'">' +
+                        '<div>' +
+                            '<div style="font-weight: 800; color: #111; font-size: 1rem;">' + escapeHtml(driverName) + '</div>' +
+                            '<div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: #888;">' +
+                                '<span style="color: #FFC107;"><i class="fas fa-star"></i> ' + rating + '</span>' +
+                                '<span>•</span>' +
+                                '<span>' + distanceStr + ' km</span>' +
+                                '<span>•</span>' +
+                                '<span>~' + etaMins + ' min</span>' +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="text-align: right;">' +
+                        '<div style="font-weight: 900; color: #28a745; font-size: 1.3rem;">R' + price + '</div>' +
+                        '<div style="font-size: 0.65rem; color: #888; font-weight: 600;">per seat</div>' +
+                        statusBadge +
+                    '</div>' +
+                '</div>' +
+                
+                '<div style="background: #f8f9fa; border-radius: 12px; padding: 12px; font-size: 0.85rem; margin-bottom: 14px;">' +
+                    '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">' +
+                        '<img src="' + carImg + '" style="width: 60px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #ddd;" onerror="this.src=\'data/quantum.png\'">' +
+                        '<div>' +
+                            '<div style="font-weight: 700; color: #333;">' + escapeHtml(vInfo.fullString) + '</div>' +
+                            '<div style="font-family: monospace; background: #e9ecef; padding: 2px 8px; border-radius: 6px; display: inline-block; font-weight: 900; color: #111; font-size: 0.8rem; border: 1px solid #ccc; margin-top: 2px;">' +
+                                escapeHtml(vInfo.reg) +
+                            '</div>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #555; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px;">' +
+                        '<span><i class="fas fa-flag-checkered" style="color:#007BFF;"></i> To: <strong style="color:#111;">' + escapeHtml(destDisplay || 'Local Route') + '</strong></span>' +
+                        '<span>' + passCount + '/' + maxCap + ' <i class="fas fa-user" style="color:#888;"></i></span>' +
+                    '</div>' +
+                '</div>' +
+                
+                '<button onclick="window.callThisCar(\'' + taxi.taxiId + '\', \'' + escapeHtml(driverName) + '\', \'' + escapeHtml(destDisplay || 'Local Route') + '\', ' + price + ')" ' +
+                        'style="width: 100%; padding: 16px; border-radius: 14px; border: none; background: ' + (isFull ? '#dc3545' : '#111') + '; color: white; font-weight: 900; font-size: 1rem; cursor: ' + (isFull ? 'not-allowed' : 'pointer') + '; transition: all 0.2s; box-shadow: ' + (isFull ? 'none' : '0 4px 15px rgba(0,0,0,0.15)') + ';" ' +
+                        (isFull ? 'disabled' : '') +
+                        'onmouseover="if(!this.disabled){this.style.background=\'#28a745\'; this.style.transform=\'scale(1.01)\';}" ' +
+                        'onmouseout="if(!this.disabled){this.style.background=\'#111\'; this.style.transform=\'scale(1)\';}">' +
+                    '<i class="fas fa-phone-alt" style="margin-right: 8px;"></i> ' +
+                    (isFull ? '🚫 Car Full' : '📞 Call a car') +
+                '</button>' +
+            '</div>';
+    });
+
+    // Show queue count if there are more cars waiting
+    if (queueCount > 0) {
+        html += `
+            <div style="background: #eef4ff; border: 1px dashed #007BFF; border-radius: 12px; padding: 12px; text-align: center; margin-top: 5px;">
+                <i class="fas fa-layer-group" style="color: #007BFF; font-size: 1.2rem; margin-bottom: 5px;"></i>
+                <div style="font-weight: 800; color: #007BFF; font-size: 0.9rem;">${queueCount} more car(s) in queue</div>
+                <div style="font-size: 0.75rem; color: #666;">They will move to the front once this car is full.</div>
+                <button onclick="window.showAllMatchingTaxis()" 
+                        style="margin-top: 8px; background: transparent; color: #007BFF; border: none; font-weight: 700; cursor: pointer; text-decoration: underline;">
+                    Show all available cars
+                </button>
+            </div>
+        `;
+    }
+
+    html += 
+            '</div>' +
+            '<button onclick="window.openLiveClubPools()" style="width: 100%; padding: 12px; background: transparent; border: 1px solid #ddd; border-radius: 12px; color: #666; font-weight: 600; cursor: pointer; margin-top: 5px;">' +
+                '<i class="fas fa-arrow-left"></i> Back to Destinations' +
+            '</button>' +
+        '</div>';
+
+    container.innerHTML = html;
+    window._taxiListModeActive = true;
+}
+
+// ================================================================
+// 12. SHOW ALL MATCHING TAXIS (Override Queue)
+// ================================================================
+
+window.showAllMatchingTaxis = function() {
+    console.log("📋 Showing all matching taxis...");
+    
+    var container = document.getElementById('taxiListContainer');
+    if (!container) return;
+    
+    var allTaxis = window._matchedTaxisFull || [];
+    
+    if (allTaxis.length === 0) {
+        showToast("No taxis available for this route.", "warning");
+        return;
+    }
+    
+    var areaName = window._selectedAreaName || 'Selected Area';
+    
+    // Render all taxis
+    renderTaxiCards(container, allTaxis, {}, true, areaName);
+    
+    // Add a "Show Queue" button to go back
+    container.innerHTML += `
+        <button onclick="window.showQueueView()" 
+                style="width: 100%; padding: 12px; background: #f8f9fa; border: 1px solid #ddd; border-radius: 12px; color: #666; font-weight: 600; cursor: pointer; margin-top: 10px;">
+            <i class="fas fa-arrow-left"></i> Show Queue View (1 car at a time)
+        </button>
+    `;
+};
+
+window.showQueueView = function() {
+    var container = document.getElementById('taxiListContainer');
+    if (!container) return;
+    
+    var allTaxis = window._matchedTaxisFull || [];
+    var areaName = window._selectedAreaName || 'Selected Area';
+    
+    if (allTaxis.length === 0) {
+        showToast("No taxis available.", "warning");
+        return;
+    }
+    
+    // Only show the first car
+    var displayTaxis = [allTaxis[0]];
+    var queueCount = allTaxis.length - 1;
+    
+    renderTaxiCardsWithQueue(container, displayTaxis, queueCount, areaName);
+};
 // ================================================================
 // 11. RENDER TAXI CARDS
 // ================================================================
