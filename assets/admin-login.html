@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Login · Asye</title>
     <style>
+        /* ----- RESET & BASE ----- */
         * {
             margin: 0;
             padding: 0;
@@ -21,31 +22,34 @@
             padding: 1.5rem;
         }
 
+        /* ----- LOGIN CARD ----- */
         .login-card {
             background: #141a24;
             border-radius: 24px;
-            padding: 2.5rem 2.8rem 2.8rem;
+            padding: 2.8rem 2.8rem 2.8rem;
             width: 100%;
-            max-width: 420px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+            max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
             border: 1px solid #2a3340;
+            transition: all 0.2s;
         }
 
         .login-card h1 {
-            color: #fff;
-            font-size: 1.6rem;
+            color: #ffffff;
+            font-size: 1.8rem;
             font-weight: 600;
-            letter-spacing: -0.3px;
-            margin-bottom: 0.3rem;
+            letter-spacing: -0.5px;
+            margin-bottom: 0.2rem;
         }
 
         .login-card .subhead {
             color: #8b95a9;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             font-weight: 400;
             margin-bottom: 2rem;
         }
 
+        /* ----- FORM ELEMENTS ----- */
         .form-group {
             margin-bottom: 1.25rem;
         }
@@ -57,36 +61,38 @@
             font-weight: 500;
             text-transform: uppercase;
             letter-spacing: 0.4px;
-            margin-bottom: 0.3rem;
+            margin-bottom: 0.4rem;
         }
 
-        .form-group input[type="email"],
-        .form-group input[type="password"] {
+        .form-group input {
             width: 100%;
             background: #1e2632;
             border: 1px solid #2f3a48;
             border-radius: 12px;
-            padding: 0.8rem 1rem;
+            padding: 0.85rem 1rem;
             color: #f0f4fa;
             font-size: 0.95rem;
             outline: none;
-            transition: border 0.2s;
+            transition: border 0.25s, box-shadow 0.25s;
         }
 
         .form-group input:focus {
             border-color: #5b7cfa;
-            box-shadow: 0 0 0 3px rgba(91, 124, 250, 0.15);
+            box-shadow: 0 0 0 4px rgba(91, 124, 250, 0.12);
         }
 
         .form-group input::placeholder {
             color: #5d6a7e;
         }
 
+        /* ----- OPTIONS ROW ----- */
         .flex-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin: 0.5rem 0 1.5rem;
+            margin: 0.5rem 0 1.8rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
         }
 
         .remember-me {
@@ -100,8 +106,8 @@
 
         .remember-me input[type="checkbox"] {
             accent-color: #5b7cfa;
-            width: 16px;
-            height: 16px;
+            width: 17px;
+            height: 17px;
             cursor: pointer;
         }
 
@@ -109,36 +115,45 @@
             color: #8b9cbb;
             font-size: 0.85rem;
             text-decoration: none;
-            transition: color 0.15s;
+            transition: color 0.2s;
         }
 
         .forgot-link:hover {
             color: #b0c4e8;
         }
 
+        /* ----- SIGN IN BUTTON ----- */
         .btn-signin {
             width: 100%;
             background: #5b7cfa;
             border: none;
             border-radius: 40px;
-            padding: 0.9rem;
-            color: #fff;
+            padding: 0.95rem;
+            color: #ffffff;
             font-size: 1rem;
             font-weight: 600;
             letter-spacing: 0.3px;
             cursor: pointer;
-            transition: background 0.2s, transform 0.1s;
-            box-shadow: 0 4px 16px rgba(91, 124, 250, 0.25);
+            transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
+            box-shadow: 0 4px 20px rgba(91, 124, 250, 0.3);
         }
 
         .btn-signin:hover {
             background: #4a6ae8;
+            box-shadow: 0 6px 24px rgba(91, 124, 250, 0.4);
         }
 
         .btn-signin:active {
             transform: scale(0.97);
         }
 
+        .btn-signin:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ----- BACK LINK ----- */
         .back-link {
             display: block;
             text-align: center;
@@ -146,16 +161,17 @@
             color: #6f7d98;
             font-size: 0.85rem;
             text-decoration: none;
-            transition: color 0.15s;
+            transition: color 0.2s;
         }
 
         .back-link:hover {
             color: #a0b2d0;
         }
 
+        /* ----- FOOTER ----- */
         .footer-meta {
             margin-top: 2rem;
-            padding-top: 1.2rem;
+            padding-top: 1rem;
             border-top: 1px solid #232d3c;
             display: flex;
             justify-content: space-between;
@@ -166,15 +182,16 @@
             gap: 0.3rem;
         }
 
-        .footer-meta span {
-            color: #5f6e86;
-        }
-
         .footer-meta .brand {
             color: #7b8ba8;
             font-weight: 500;
         }
 
+        .footer-meta span {
+            color: #5f6e86;
+        }
+
+        /* ----- NETWORK BAR (like the screenshot) ----- */
         .network-bar {
             display: flex;
             gap: 1.2rem;
@@ -198,7 +215,35 @@
             font-weight: 500;
         }
 
-        /* ----- REQUEST BLOCKS (exact error format) ----- */
+        /* ----- STATUS INDICATOR ----- */
+        .status-indicator {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 0.6rem;
+        }
+
+        .status-indicator .left {
+            color: #5f6e86;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .status-indicator .badge-ok {
+            color: #6f8a6f;
+            font-size: 0.7rem;
+            background: #1a262f;
+            padding: 0.1rem 0.8rem;
+            border-radius: 30px;
+        }
+
+        .status-indicator .badge-hidden {
+            color: #7b8aa3;
+            font-size: 0.65rem;
+        }
+
+        /* ----- REQUEST BLOCKS (matching the error style) ----- */
         .request-block {
             margin-top: 1.2rem;
             background: #0e141e;
@@ -234,53 +279,18 @@
             color: #b5d6a2;
         }
 
-        .request-block .json-number {
-            color: #f7c95c;
-        }
-
         .request-block .json-bracket {
             color: #d4dcec;
         }
 
-        .divider-light {
-            margin: 0.6rem 0;
-            border-top: 1px solid #1f293a;
-        }
-
-        .status-indicator {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 0.6rem;
-        }
-
-        .status-indicator .left {
-            color: #5f6e86;
-            font-size: 0.7rem;
-            text-transform: uppercase;
-            letter-spacing: 0.3px;
-        }
-
-        .status-indicator .badge-ok {
-            color: #6f8a6f;
-            font-size: 0.7rem;
-            background: #1a262f;
-            padding: 0.1rem 0.8rem;
-            border-radius: 30px;
-        }
-
-        .status-indicator .badge-hidden {
-            color: #7b8aa3;
-            font-size: 0.65rem;
-        }
-
+        /* ----- RESPONSIVE ----- */
         @media (max-width: 480px) {
             .login-card {
                 padding: 1.8rem 1.5rem;
             }
             .flex-row {
-                flex-wrap: wrap;
-                gap: 0.5rem;
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
     </style>
@@ -293,7 +303,7 @@
     <h1>Admin Panel</h1>
     <div class="subhead">Sign in to manage your platform</div>
 
-    <!-- FORM -->
+    <!-- LOGIN FORM -->
     <form id="loginForm" onsubmit="return false;">
         <div class="form-group">
             <label for="email">Email Address</label>
@@ -315,10 +325,10 @@
         <button type="submit" class="btn-signin" id="signInBtn">Sign In</button>
     </form>
 
-    <!-- Back to Main App -->
+    <!-- BACK LINK -->
     <a href="#" class="back-link">← Back to Main App</a>
 
-    <!-- Network / status bar -->
+    <!-- NETWORK BAR -->
     <div class="network-bar">
         <span class="active">Network</span>
         <span>Performance</span>
@@ -328,7 +338,7 @@
         <span>Lighthouse</span>
     </div>
 
-    <!-- Status: Default levels -->
+    <!-- STATUS -->
     <div class="status-indicator">
         <span class="left">Default levels</span>
         <span class="badge-ok">No Issues</span>
@@ -336,7 +346,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 1 – CORRECTED INTERNAL ERROR                   -->
+    <!--  REQUEST BLOCK – Login error (auth/internal-error)           -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⛔ Login error</div>
@@ -349,7 +359,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 2 – POST                                       -->
+    <!--  REQUEST BLOCK – POST                                        -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⬆ POST</div>
@@ -372,7 +382,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 3 – REPEATED ERROR (internal)                 -->
+    <!--  REQUEST BLOCK – repeated error                              -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⛔ Login error</div>
@@ -385,7 +395,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 4 – POST (repeated)                           -->
+    <!--  REQUEST BLOCK – POST (repeated)                             -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⬆ POST</div>
@@ -408,7 +418,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 5 – internal error (third)                    -->
+    <!--  REQUEST BLOCK – error (third)                               -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⛔ Login error</div>
@@ -421,7 +431,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 6 – POST (third)                              -->
+    <!--  REQUEST BLOCK – POST (third)                                -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⬆ POST</div>
@@ -444,7 +454,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 7 – internal error (fourth)                   -->
+    <!--  REQUEST BLOCK – error (fourth)                              -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⛔ Login error</div>
@@ -457,43 +467,7 @@
     </div>
 
     <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 8 – POST (fourth)                             -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⬆ POST</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"login"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;},<br />
-            &nbsp;&nbsp;<span class="json-key">"request"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"url"</span>: <span class="json-string">"https://example.com/login"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"method"</span>: <span class="json-string">"POST"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"body"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;&nbsp;&nbsp;}<br />
-            &nbsp;&nbsp;}<br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 9 – internal error (fifth)                    -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⛔ Login error</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"code"</span>: <span class="json-string">"auth/internal-error"</span>,<br />
-            &nbsp;&nbsp;<span class="json-key">"message"</span>: <span class="json-string">"{\"error\":{\"code\":400,\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"errors\":[{\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"domain\":\"global\",\"reason\":\"invalid\"}]}}"</span><br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK 10 – POST (fifth)                             -->
+    <!--  REQUEST BLOCK – POST (fourth)                               -->
     <!-- ============================================================ -->
     <div class="request-block">
         <div class="label">⬆ POST</div>
@@ -524,18 +498,82 @@
 
 </div>
 
-<!-- tiny JS for demo -->
+<!-- ============================================================ -->
+<!--  JAVASCRIPT – handles sign-in demo                           -->
+<!-- ============================================================ -->
 <script>
-    document.getElementById('signInBtn').addEventListener('click', function(e) {
-        e.preventDefault();
-        this.textContent = 'Signing in…';
-        this.style.opacity = '0.7';
-        setTimeout(() => {
-            this.textContent = 'Sign In';
-            this.style.opacity = '1';
-            alert('Demo: Invalid login credentials (auth/internal-error)');
-        }, 800);
-    });
+    (function() {
+        const signInBtn = document.getElementById('signInBtn');
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+
+        // Helper to show a temporary message on the button
+        function setButtonState(text, disabled = true) {
+            signInBtn.textContent = text;
+            signInBtn.disabled = disabled;
+            if (disabled) {
+                signInBtn.style.opacity = '0.7';
+            } else {
+                signInBtn.style.opacity = '1';
+            }
+        }
+
+        // Simulate a login attempt
+        function handleLogin(e) {
+            e.preventDefault();
+
+            const email = emailInput.value.trim();
+            const password = passwordInput.value.trim();
+
+            // Basic validation
+            if (!email || !password) {
+                alert('Please enter both email and password.');
+                return;
+            }
+
+            // Show loading state
+            setButtonState('Signing in…', true);
+
+            // Simulate network delay
+            setTimeout(() => {
+                // Always show the internal-error demo response
+                setButtonState('Sign In', false);
+
+                // Show the error message (matching the request block)
+                alert(
+                    'Demo: Invalid login credentials (auth/internal-error)\n\n' +
+                    '{\n' +
+                    '  "code": "auth/internal-error",\n' +
+                    '  "message": "{\\"error\\":{\\"code\\":400,\\"message\\":\\"INVALID_LOGIN_CREDENTIALS\\",\\"errors\\":[{\\"message\\":\\"INVALID_LOGIN_CREDENTIALS\\",\\"domain\\":\\"global\\",\\"reason\\":\\"invalid\\"}]}}"\n' +
+                    '}'
+                );
+            }, 800);
+        }
+
+        // Attach event listeners
+        signInBtn.addEventListener('click', handleLogin);
+
+        // Also allow Enter key to submit
+        document.getElementById('loginForm').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleLogin(e);
+            }
+        });
+
+        // Reset button state if user types (optional)
+        [emailInput, passwordInput].forEach(input => {
+            input.addEventListener('input', function() {
+                if (signInBtn.disabled && signInBtn.textContent === 'Signing in…') {
+                    // Don't reset during active loading
+                    return;
+                }
+                signInBtn.textContent = 'Sign In';
+                signInBtn.disabled = false;
+                signInBtn.style.opacity = '1';
+            });
+        });
+    })();
 </script>
 
 </body>
