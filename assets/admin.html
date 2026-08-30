@@ -5,8 +5,11 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-    <!-- Google Maps Places API for autocomplete -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY&libraries=places&callback=initAutocomplete" async defer></script>
+    <!-- Mapbox GL JS & Geocoder -->
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet" />
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css" />
+    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
     <style>
         * {
             margin: 0;
@@ -246,6 +249,53 @@
             display: block;
         }
 
+        /* ----- Mapbox Geocoder Overrides ----- */
+        .mapboxgl-ctrl-geocoder {
+            width: 100% !important;
+            max-width: 100% !important;
+            background: #1e2632 !important;
+            border: 1px solid #2f3a48 !important;
+            border-radius: 12px !important;
+            box-shadow: none !important;
+            font-family: 'Inter', sans-serif !important;
+        }
+        .mapboxgl-ctrl-geocoder input {
+            background: #1e2632 !important;
+            color: #f0f4fa !important;
+            font-size: 0.95rem !important;
+            padding: 0.75rem 1rem !important;
+            height: auto !important;
+        }
+        .mapboxgl-ctrl-geocoder input::placeholder {
+            color: #5d6a7e !important;
+        }
+        .mapboxgl-ctrl-geocoder .suggestions {
+            background: #1e2632 !important;
+            border: 1px solid #2f3a48 !important;
+            border-radius: 12px !important;
+            margin-top: 4px !important;
+        }
+        .mapboxgl-ctrl-geocoder .suggestion {
+            color: #e8ecf4 !important;
+            padding: 0.6rem 1rem !important;
+            border-bottom: 1px solid #2a3340 !important;
+        }
+        .mapboxgl-ctrl-geocoder .suggestion:hover {
+            background: #2a3340 !important;
+        }
+        .mapboxgl-ctrl-geocoder .suggestion .name {
+            color: #ffffff !important;
+        }
+        .mapboxgl-ctrl-geocoder .suggestion .address {
+            color: #8b95a9 !important;
+        }
+        .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--icon {
+            display: none !important;
+        }
+        .mapboxgl-ctrl-geocoder .mapboxgl-ctrl-geocoder--pin-right {
+            display: none !important;
+        }
+
         /* ----- RESPONSIVE ----- */
         @media (max-width: 768px) {
             .dashboard {
@@ -271,30 +321,6 @@
         @media print {
             .navbar, .sidebar { display: none; }
             .dashboard { display: block; }
-        }
-
-        /* Google Places autocomplete override */
-        .pac-container {
-            background: #1e2632;
-            border: 1px solid #2f3a48;
-            border-radius: 12px;
-            margin-top: 4px;
-            color: #e8ecf4;
-            font-family: 'Inter', sans-serif;
-        }
-        .pac-item {
-            color: #e8ecf4;
-            padding: 0.6rem 1rem;
-            border-bottom: 1px solid #2a3340;
-        }
-        .pac-item:hover {
-            background: #2a3340;
-        }
-        .pac-item-query {
-            color: #ffffff;
-        }
-        .pac-matched {
-            color: #5b7cfa;
         }
     </style>
 </head>
@@ -393,20 +419,20 @@
                     </div>
 
                     <!-- ========================================================== -->
-                    <!-- AREA – with Google Places Autocomplete                     -->
-                    <!-- (Replaces "Assigned Rank" – removed)                      -->
+                    <!-- AREA – with Mapbox Geocoder (replaces Assigned Rank)       -->
                     <!-- ========================================================== -->
                     <div class="form-group">
                         <label for="area">Area <span class="required">*</span></label>
-                        <input type="text" id="area" placeholder="Start typing an address or location..." required />
+                        <div id="geocoder-container"></div>
                         <div style="font-size:0.7rem; color:#5d6a7e; margin-top:0.3rem;">
                             🌍 Type an address, city, or landmark for geo-location
                         </div>
                     </div>
 
-                    <!-- Hidden fields for lat/lng (populated by autocomplete) -->
+                    <!-- Hidden fields for lat/lng (populated by geocoder) -->
                     <input type="hidden" id="areaLat" />
                     <input type="hidden" id="areaLng" />
+                    <input type="hidden" id="areaName" />
 
                     <!-- Submit -->
                     <button type="submit" class="btn-submit" id="submitBtn">
@@ -451,13 +477,18 @@
         const vehicleYear = document.getElementById('vehicleYear');
         const vehicleColor = document.getElementById('vehicleColor');
         const licensePlate = document.getElementById('licensePlate');
-        const areaInput = document.getElementById('area');
         const areaLat = document.getElementById('areaLat');
         const areaLng = document.getElementById('areaLng');
+        const areaName = document.getElementById('areaName');
         const submitBtn = document.getElementById('submitBtn');
 
         const successMsg = document.getElementById('successMsg');
         const errorMsg = document.getElementById('errorMsg');
+
+        // ============================================================
+        // MAPBOX CONFIG
+        // ============================================================
+        const MAPBOX_TOKEN = 'pk.eyJ1IjoiYXNpbmdoLXN0dWRpbyIsImEiOiJjbHlqajN3c3QwMnY3MmxzY2I5YThvdWJwIn0.0I99oKh4TxTQO-Ssc4k9xQ';
 
         // ============================================================
         // AUTH CHECK
@@ -486,40 +517,101 @@
         });
 
         // ============================================================
-        // GOOGLE PLACES AUTOCOMPLETE
+        // MAPBOX GEOCODER
         // ============================================================
-        let autocomplete;
+        let geocoder;
 
-        function initAutocomplete() {
-            // Create the autocomplete object
-            autocomplete = new google.maps.places.Autocomplete(areaInput, {
-                types: ['geocode', 'establishment'],
-                componentRestrictions: { country: 'za' } // Restrict to South Africa
-            });
+        function initMapboxGeocoder() {
+            try {
+                // Set the access token
+                mapboxgl.accessToken = MAPBOX_TOKEN;
 
-            // When a place is selected, populate lat/lng
-            autocomplete.addListener('place_changed', function() {
-                const place = autocomplete.getPlace();
+                // Initialize the geocoder
+                geocoder = new MapboxGeocoder({
+                    accessToken: mapboxgl.accessToken,
+                    placeholder: 'Start typing an address or location...',
+                    countries: 'za', // Restrict to South Africa
+                    types: 'address,place,locality,neighborhood,country',
+                    marker: false,
+                    mapboxgl: mapboxgl
+                });
 
-                if (!place.geometry) {
-                    // User entered a non-geocodable value
-                    areaLat.value = '';
-                    areaLng.value = '';
-                    return;
+                // Add to container
+                const container = document.getElementById('geocoder-container');
+                if (container) {
+                    container.appendChild(geocoder.onAdd());
                 }
 
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
+                // When a result is selected
+                geocoder.on('result', function(event) {
+                    const result = event.result;
+                    const center = result.center || result.geometry?.coordinates;
 
-                areaLat.value = lat;
-                areaLng.value = lng;
+                    if (center) {
+                        const lat = center[1];
+                        const lng = center[0];
+                        const placeName = result.place_name || result.text || '';
 
-                console.log('📍 Location selected:', place.formatted_address, 'Lat:', lat, 'Lng:', lng);
-            });
+                        areaLat.value = lat;
+                        areaLng.value = lng;
+                        areaName.value = placeName;
+
+                        console.log('📍 Location selected:', placeName, 'Lat:', lat, 'Lng:', lng);
+                    }
+                });
+
+                // Clear lat/lng when user clears input
+                geocoder.on('clear', function() {
+                    areaLat.value = '';
+                    areaLng.value = '';
+                    areaName.value = '';
+                });
+
+                console.log('🗺️ Mapbox Geocoder initialized successfully.');
+
+            } catch (error) {
+                console.error('❌ Mapbox Geocoder initialization error:', error);
+                // Fallback: use a regular input
+                const container = document.getElementById('geocoder-container');
+                if (container) {
+                    const fallbackInput = document.createElement('input');
+                    fallbackInput.type = 'text';
+                    fallbackInput.id = 'areaFallback';
+                    fallbackInput.className = 'form-control';
+                    fallbackInput.placeholder = 'Enter area name (fallback)';
+                    fallbackInput.style.cssText = `
+                        width: 100%;
+                        background: #1e2632;
+                        border: 1px solid #2f3a48;
+                        border-radius: 12px;
+                        padding: 0.75rem 1rem;
+                        color: #f0f4fa;
+                        font-size: 0.95rem;
+                        outline: none;
+                    `;
+                    container.appendChild(fallbackInput);
+
+                    // Use fallback input
+                    fallbackInput.addEventListener('input', function() {
+                        areaName.value = this.value;
+                        areaLat.value = '';
+                        areaLng.value = '';
+                    });
+                }
+            }
         }
 
-        // Expose initAutocomplete globally for Google Maps callback
-        window.initAutocomplete = initAutocomplete;
+        // Initialize when DOM is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(initMapboxGeocoder, 500);
+        });
+
+        // Also try on load
+        window.addEventListener('load', function() {
+            if (!geocoder) {
+                initMapboxGeocoder();
+            }
+        });
 
         // ============================================================
         // FORM SUBMISSION
@@ -555,14 +647,28 @@
             e.preventDefault();
             hideMessages();
 
+            // Get area value from geocoder or fallback
+            let areaValue = areaName.value;
+            if (!areaValue) {
+                // Try to get from geocoder input
+                const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
+                if (geocoderInput) {
+                    areaValue = geocoderInput.value;
+                }
+                // Fallback
+                const fallbackInput = document.getElementById('areaFallback');
+                if (fallbackInput) {
+                    areaValue = fallbackInput.value;
+                }
+            }
+
             // Validate required fields
             const type = vehicleType.value.trim();
             const make = vehicleMake.value.trim();
             const model = vehicleModel.value.trim();
             const plate = licensePlate.value.trim();
-            const area = areaInput.value.trim();
 
-            if (!type || !make || !model || !plate || !area) {
+            if (!type || !make || !model || !plate || !areaValue) {
                 showError('Please fill in all required fields (marked with *).');
                 return;
             }
@@ -584,7 +690,7 @@
                 year: vehicleYear.value.trim() || null,
                 color: vehicleColor.value.trim() || null,
                 licensePlate: plate.toUpperCase(),
-                area: area,
+                area: areaValue,
                 areaLat: areaLat.value || null,
                 areaLng: areaLng.value || null,
                 registeredBy: user.uid,
@@ -601,18 +707,27 @@
                     setButtonLoading(false);
                     showSuccess('✅ Vehicle registered successfully!');
 
-                    // Reset form (except area which we keep for reference)
+                    // Reset form
                     vehicleType.value = '';
                     vehicleMake.value = '';
                     vehicleModel.value = '';
                     vehicleYear.value = '';
                     vehicleColor.value = '';
                     licensePlate.value = '';
-                    // Keep area but clear lat/lng
                     areaLat.value = '';
                     areaLng.value = '';
+                    areaName.value = '';
 
-                    // Log the new vehicle ID
+                    // Clear geocoder input
+                    const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
+                    if (geocoderInput) {
+                        geocoderInput.value = '';
+                    }
+                    const fallbackInput = document.getElementById('areaFallback');
+                    if (fallbackInput) {
+                        fallbackInput.value = '';
+                    }
+
                     console.log('🚗 Vehicle ID:', newVehicleRef.key);
                 })
                 .catch((error) => {
@@ -623,25 +738,12 @@
         });
 
         // ============================================================
-        // DEMO: Pre-fill with some test data (optional)
+        // DEMO: Pre-fill with test data (optional)
         // ============================================================
-        // You can uncomment this to pre-fill the form for testing
-        /*
-        vehicleType.value = 'Sedan';
-        vehicleMake.value = 'Toyota';
-        vehicleModel.value = 'Corolla';
-        vehicleYear.value = '2020';
-        vehicleColor.value = 'Silver';
-        licensePlate.value = 'ABC 123 GP';
-        areaInput.value = 'Johannesburg, South Africa';
-        areaLat.value = '-26.204103';
-        areaLng.value = '28.047305';
-        */
-
         console.log('✅ Admin dashboard ready.');
         console.log('📌 Vehicle Type: Minibus taxis removed.');
         console.log('📌 Assigned Rank removed.');
-        console.log('📌 Area field with geo-location autocomplete added.');
+        console.log('📌 Area field with Mapbox geocoder added.');
     </script>
 
 </body>
