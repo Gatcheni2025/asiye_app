@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Flutter: Test",
+      "type": "dart",
+      "request": "launch",
+      "program": "test/widget_test.dart"
+    },
+    {
+      "name": "Flutter: Current File",
+      "type": "dart",
+      "request": "launch",
+      "program": "${file}"
+    }
+  ]
+}

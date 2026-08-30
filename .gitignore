@@ -11,3 +11,9 @@ android/build/
 ios/build/
 ios/Pods/
 node_modules/
+.vercel
+.env*
+.gradle_home/
+# Flutter/Firebase auto-generated files
+**/.plugin_symlinks/
+.plugin_symlinks/

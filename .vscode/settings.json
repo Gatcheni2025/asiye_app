@@ -1,0 +1,15 @@
+{
+  "dart.flutterSdkPath": "",
+  "dart.debugExternalPackageLibraries": true,
+  "dart.debugExternalPackageLibraries": true,
+  "[dart]": {
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "Dart-Code.dart-code"
+  },
+  "flutter.testTimeout": 300000,
+  "files.exclude": {
+    "**/.dart_tool": true,
+    "**/.packages": true,
+    "**/build": true
+  }
+}

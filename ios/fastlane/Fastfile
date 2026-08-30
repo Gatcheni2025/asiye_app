@@ -12,7 +12,7 @@ platform :ios do
 
     # 1. Fetch certificates
     match(
-      git_url: "https://github.com/Gatcheni2025/asiye-certs.git",
+      git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
       app_identifier: "com.asiyeapp.asiye",
       team_id: "AC775BUGG5",

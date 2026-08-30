@@ -1,0 +1,4 @@
+storePassword=Charisma16
+keyPassword=Charisma16
+keyAlias=key0
+storeFile=../app/key_store.jks

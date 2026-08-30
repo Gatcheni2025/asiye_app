@@ -1,3 +1,20 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // Gives you access to kIsWeb
+
+// Package imports based on your errors:
+import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart'; // Needed for AndroidWebViewController
+import 'package:geolocator/geolocator.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -76,10 +93,12 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   try {
-    await Firebase.initializeApp().timeout(const Duration(seconds: 5));
-    _isFirebaseInitialized = true;
-
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    // FIX 1: Firebase requires options on the Web. We will bypass it for web testing.
+    if (!kIsWeb) {
+      await Firebase.initializeApp().timeout(const Duration(seconds: 5));
+      _isFirebaseInitialized = true;
+      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+    }
 
     // Initialize Google Sign-In singleton
     await GoogleSignIn.instance.initialize(
@@ -88,12 +107,12 @@ void main() async {
   } catch (e) {
     debugPrint("Initialization failed or timed out: $e");
   }
+  
   runApp(const MaterialApp(
     debugShowCheckedModeBanner: false,
     home: AsiyeMainShell(),
   ));
 }
-
 class AsiyeMainShell extends StatefulWidget {
   const AsiyeMainShell({super.key});
   @override
@@ -171,7 +190,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _initializeApp();
   }
 
-  Future<void> _initializeApp() async {
+ Future<void> _initializeApp() async {
     if (isTest) {
       if (mounted) {
         setState(() {
@@ -180,8 +199,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       }
       return;
     }
+ // FIX 2: Prevent the WebViewController from crashing the app on the web.
+    if (kIsWeb) {
+      debugPrint("Running on Web. Skipping native WebView creation.");
+      if (mounted) setState(() => _isLoading = false);
+      return; 
+    }
 
-    Future.delayed(const Duration(seconds: 5), () {
+   Future.delayed(const Duration(seconds: 5), () {
       if (mounted && _isLoading) {
         setState(() => _isLoading = false);
       }
