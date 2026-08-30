@@ -1,0 +1,2654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Asiye Admin Dashboard</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
+    
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-functions.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #007BFF;
+            --primary-dark: #0056b3;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #FFC107;
+            --info: #17a2b8;
+            --gray-100: #f8f9fa;
+            --gray-200: #e9ecef;
+            --gray-300: #dee2e6;
+            --gray-400: #ced4da;
+            --gray-500: #adb5bd;
+            --gray-600: #6c757d;
+            --gray-700: #495057;
+            --gray-800: #343a40;
+            --gray-900: #212529;
+            --sidebar-width: 260px;
+            --header-height: 70px;
+        }
+
+        body {
+            font-family: 'Manrope', sans-serif;
+            background: #f4f6f9;
+            color: var(--gray-900);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* ============================================================
+           SIDEBAR
+           ============================================================ */
+        .sidebar {
+            width: var(--sidebar-width);
+            height: 100vh;
+            background: #1a1a2e;
+            color: #fff;
+            position: fixed;
+            left: 0;
+            top: 0;
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            transition: transform 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .sidebar-brand {
+            padding: 24px 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .sidebar-brand img {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            object-fit: cover;
+        }
+
+        .sidebar-brand h2 {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #fff;
+            margin: 0;
+        }
+
+        .sidebar-brand span {
+            color: var(--primary);
+        }
+
+        .sidebar-menu {
+            flex: 1;
+            padding: 16px 12px;
+        }
+
+        .sidebar-menu .menu-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.3);
+            font-weight: 700;
+            letter-spacing: 1px;
+            padding: 16px 12px 8px 12px;
+        }
+
+        .sidebar-menu .menu-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: rgba(255,255,255,0.6);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+            position: relative;
+        }
+
+        .sidebar-menu .menu-item:hover {
+            background: rgba(255,255,255,0.06);
+            color: #fff;
+        }
+
+        .sidebar-menu .menu-item.active {
+            background: rgba(0, 123, 255, 0.15);
+            color: var(--primary);
+        }
+
+        .sidebar-menu .menu-item i {
+            width: 20px;
+            text-align: center;
+            font-size: 1.1rem;
+        }
+
+        .sidebar-menu .menu-item .badge {
+            position: absolute;
+            right: 16px;
+            background: var(--danger);
+            color: white;
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 700;
+        }
+
+        .sidebar-footer {
+            padding: 16px 20px;
+            border-top: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .sidebar-footer .menu-item {
+            color: rgba(255,255,255,0.4);
+            font-size: 0.8rem;
+        }
+
+        .sidebar-footer .menu-item:hover {
+            color: var(--danger);
+        }
+
+        /* ============================================================
+           MAIN CONTENT
+           ============================================================ */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .header {
+            height: var(--header-height);
+            background: #fff;
+            padding: 0 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--gray-200);
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .header-left .menu-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-700);
+        }
+
+        .header-left h1 {
+            font-size: 1.3rem;
+            font-weight: 800;
+            color: var(--gray-900);
+        }
+
+        .header-left h1 small {
+            font-weight: 400;
+            font-size: 0.85rem;
+            color: var(--gray-500);
+            margin-left: 8px;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .header-right .notification-btn {
+            position: relative;
+            background: none;
+            border: none;
+            font-size: 1.2rem;
+            cursor: pointer;
+            color: var(--gray-600);
+        }
+
+        .header-right .notification-btn .dot {
+            position: absolute;
+            top: -2px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            background: var(--danger);
+            border-radius: 50%;
+        }
+
+        .header-right .admin-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-right .admin-profile img {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--gray-200);
+        }
+
+        .header-right .admin-profile .name {
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        .header-right .admin-profile .role {
+            font-size: 0.7rem;
+            color: var(--gray-500);
+        }
+
+        /* Page Content */
+        .page-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 24px 30px 30px 30px;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 20px 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+            border: 1px solid var(--gray-200);
+        }
+
+        .stat-card .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+        }
+
+        .stat-card .stat-icon.blue { background: #e6f2ff; color: var(--primary); }
+        .stat-card .stat-icon.green { background: #e8f5e9; color: var(--success); }
+        .stat-card .stat-icon.orange { background: #fff3e0; color: var(--warning); }
+        .stat-card .stat-icon.red { background: #fce4ec; color: var(--danger); }
+        .stat-card .stat-icon.purple { background: #f3e5f5; color: #7b1fa2; }
+
+        .stat-card .stat-number {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: var(--gray-900);
+            line-height: 1.2;
+        }
+
+        .stat-card .stat-label {
+            font-size: 0.8rem;
+            color: var(--gray-500);
+            font-weight: 600;
+        }
+
+        /* Section */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-header h3 {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--gray-900);
+        }
+
+        .section-header .btn {
+            padding: 8px 18px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.85rem;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: #fff;
+        }
+
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: #fff;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: #000;
+        }
+
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--gray-300);
+            color: var(--gray-700);
+        }
+
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-sm {
+            padding: 5px 12px;
+            font-size: 0.75rem;
+            border-radius: 8px;
+        }
+
+        /* Tables */
+        .table-container {
+            background: #fff;
+            border-radius: 16px;
+            border: 1px solid var(--gray-200);
+            overflow: hidden;
+            margin-bottom: 30px;
+        }
+
+        .table-container .table-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .table-container .table-header .search-box {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--gray-100);
+            padding: 6px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--gray-200);
+        }
+
+        .table-container .table-header .search-box input {
+            border: none;
+            background: transparent;
+            padding: 6px 0;
+            outline: none;
+            font-size: 0.85rem;
+            font-family: inherit;
+            min-width: 180px;
+        }
+
+        .table-container .table-header .search-box i {
+            color: var(--gray-500);
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            padding: 0 4px 4px 4px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        table th {
+            text-align: left;
+            padding: 14px 16px;
+            background: var(--gray-100);
+            color: var(--gray-700);
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 2px solid var(--gray-200);
+        }
+
+        table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--gray-200);
+            vertical-align: middle;
+        }
+
+        table tr:hover td {
+            background: var(--gray-100);
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+
+        .status-badge.verified {
+            background: #e8f5e9;
+            color: var(--success);
+        }
+
+        .status-badge.pending {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .status-badge.rejected {
+            background: #fce4ec;
+            color: var(--danger);
+        }
+
+        .status-badge.suspended {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .status-badge.online {
+            background: #e3f2fd;
+            color: var(--primary);
+        }
+
+        .status-badge.offline {
+            background: var(--gray-200);
+            color: var(--gray-600);
+        }
+
+        /* Tab Panels */
+        .tab-panel {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-panel.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============================================================
+           MODALS
+           ============================================================ */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 99999;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-overlay.open {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #fff;
+            border-radius: 24px;
+            padding: 30px 32px;
+            max-width: 520px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .modal-content .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .modal-content .modal-header h3 {
+            font-weight: 800;
+            font-size: 1.2rem;
+        }
+
+        .modal-content .modal-close {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--gray-500);
+        }
+
+        .modal-content .form-group {
+            margin-bottom: 16px;
+        }
+
+        .modal-content .form-group label {
+            display: block;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: var(--gray-700);
+            margin-bottom: 4px;
+        }
+
+        .modal-content .form-group input,
+        .modal-content .form-group select,
+        .modal-content .form-group textarea {
+            width: 100%;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--gray-300);
+            font-family: inherit;
+            font-size: 0.9rem;
+            transition: border-color 0.2s;
+            background: #fff;
+        }
+
+        .modal-content .form-group input:focus,
+        .modal-content .form-group select:focus,
+        .modal-content .form-group textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+        }
+
+        .modal-content .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .modal-content .modal-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 24px;
+        }
+
+        .modal-content .modal-actions .btn {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 800;
+            font-size: 0.95rem;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 4px solid var(--gray-200);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--gray-500);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .empty-state h4 {
+            color: var(--gray-700);
+            margin-bottom: 4px;
+        }
+
+        .empty-state p {
+            font-size: 0.85rem;
+        }
+
+        /* Toast Notification */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 14px 20px;
+            border-radius: 12px;
+            color: #fff;
+            font-weight: 600;
+            font-size: 0.9rem;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+            animation: slideInRight 0.3s ease;
+            max-width: 380px;
+        }
+
+        .toast.success { background: var(--success); }
+        .toast.error { background: var(--danger); }
+        .toast.warning { background: #f57c00; color: #fff; }
+        .toast.info { background: var(--primary); }
+
+        @keyframes slideInRight {
+            from { opacity: 0; transform: translateX(40px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .header-left .menu-toggle {
+                display: block;
+            }
+
+            .sidebar-overlay {
+                display: none;
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                background: rgba(0,0,0,0.4);
+                z-index: 999;
+            }
+
+            .sidebar-overlay.open {
+                display: block;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .header {
+                padding: 0 16px;
+            }
+
+            .page-content {
+                padding: 16px;
+            }
+
+            .modal-content {
+                padding: 20px;
+            }
+
+            .modal-content .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .header-right .admin-profile .details {
+                display: none;
+            }
+
+            .table-container .table-header .search-box input {
+                min-width: 120px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-left h1 {
+                font-size: 1rem;
+            }
+
+            .header-left h1 small {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============================================================
+     SIDEBAR OVERLAY (Mobile)
+     ============================================================ -->
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+<!-- ============================================================
+     SIDEBAR
+     ============================================================ -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-brand">
+        <img src="data/AsiyeNew.png" alt="Asiye" onerror="this.src='https://asiye.cloud/images/logo.png'">
+        <h2>Asiye<span>Admin</span></h2>
+    </div>
+
+    <nav class="sidebar-menu">
+        <div class="menu-label">Main</div>
+
+        <a href="#" class="menu-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+            <i class="fas fa-th-large"></i>
+            <span>Dashboard</span>
+        </a>
+
+        <a href="#" class="menu-item" data-tab="drivers" onclick="switchTab('drivers')">
+            <i class="fas fa-users"></i>
+            <span>Drivers</span>
+            <span class="badge" id="pendingDriversBadge">0</span>
+        </a>
+
+        <a href="#" class="menu-item" data-tab="passengers" onclick="switchTab('passengers')">
+            <i class="fas fa-user-friends"></i>
+            <span>Passengers</span>
+            <span class="badge" id="totalPassengersBadge">0</span>
+        </a>
+
+        <a href="#" class="menu-item" data-tab="bookings" onclick="switchTab('bookings')">
+            <i class="fas fa-calendar-check"></i>
+            <span>Bookings</span>
+            <span class="badge" id="activeBookingsBadge">0</span>
+        </a>
+
+        <div class="menu-label" style="margin-top: 12px;">Support</div>
+
+        <a href="#" class="menu-item" data-tab="support" onclick="switchTab('support')">
+            <i class="fas fa-headset"></i>
+            <span>Support Tickets</span>
+            <span class="badge" id="supportBadge">0</span>
+        </a>
+
+        <a href="#" class="menu-item" data-tab="settings" onclick="switchTab('settings')">
+            <i class="fas fa-cog"></i>
+            <span>Settings</span>
+        </a>
+    </nav>
+
+    <div class="sidebar-footer">
+        <a href="#" class="menu-item" onclick="handleLogout()">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </a>
+    </div>
+</aside>
+
+<!-- ============================================================
+     MAIN CONTENT
+     ============================================================ -->
+<div class="main-content">
+
+    <!-- HEADER -->
+    <header class="header">
+        <div class="header-left">
+            <button class="menu-toggle" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1 id="pageTitle">Dashboard <small>Overview</small></h1>
+        </div>
+
+        <div class="header-right">
+            <button class="notification-btn" onclick="showNotifications()">
+                <i class="fas fa-bell"></i>
+                <span class="dot" id="notificationDot"></span>
+            </button>
+
+            <div class="admin-profile">
+                <img src="https://ui-avatars.com/api/?name=Admin&background=007BFF&color=fff" alt="Admin">
+                <div class="details">
+                    <div class="name" id="adminName">Admin</div>
+                    <div class="role">Administrator</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- PAGE CONTENT -->
+    <div class="page-content">
+
+        <!-- ==========================================================
+             TAB 1: DASHBOARD
+             ========================================================== -->
+        <div id="tab-dashboard" class="tab-panel active">
+
+            <!-- Stats -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+                    <div class="stat-number" id="statTotalDrivers">0</div>
+                    <div class="stat-label">Total Drivers</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon orange"><i class="fas fa-clock"></i></div>
+                    <div class="stat-number" id="statPendingDrivers">0</div>
+                    <div class="stat-label">Pending Approval</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon green"><i class="fas fa-user-check"></i></div>
+                    <div class="stat-number" id="statVerifiedDrivers">0</div>
+                    <div class="stat-label">Verified Drivers</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon purple"><i class="fas fa-user-friends"></i></div>
+                    <div class="stat-number" id="statTotalPassengers">0</div>
+                    <div class="stat-label">Total Passengers</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon green"><i class="fas fa-calendar-check"></i></div>
+                    <div class="stat-number" id="statTodayBookings">0</div>
+                    <div class="stat-label">Today's Bookings</div>
+                </div>
+
+                <div class="stat-card">
+                    <div class="stat-icon red"><i class="fas fa-headset"></i></div>
+                    <div class="stat-number" id="statSupportTickets">0</div>
+                    <div class="stat-label">Open Support Tickets</div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="section-header">
+                <h3>Recent Activity</h3>
+            </div>
+
+            <div class="table-container">
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Type</th>
+                                <th>User</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentActivityTable">
+                            <tr>
+                                <td colspan="4" style="text-align:center; padding:30px; color:var(--gray-500);">
+                                    <i class="fas fa-spinner fa-spin"></i> Loading activity...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================
+             TAB 2: DRIVERS
+             ========================================================== -->
+        <div id="tab-drivers" class="tab-panel">
+
+            <div class="section-header">
+                <h3><i class="fas fa-users"></i> Driver Management</h3>
+                <button class="btn btn-primary" onclick="openRegisterDriverModal()">
+                    <i class="fas fa-user-plus"></i> Register Driver
+                </button>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap;">
+                <button class="btn btn-sm btn-outline active-filter" data-filter="all" onclick="filterDrivers('all', this)">All</button>
+                <button class="btn btn-sm btn-outline" data-filter="pending" onclick="filterDrivers('pending', this)">Pending</button>
+                <button class="btn btn-sm btn-outline" data-filter="verified" onclick="filterDrivers('verified', this)">Verified</button>
+                <button class="btn btn-sm btn-outline" data-filter="rejected" onclick="filterDrivers('rejected', this)">Rejected</button>
+                <button class="btn btn-sm btn-outline" data-filter="suspended" onclick="filterDrivers('suspended', this)">Suspended</button>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="driverSearchInput" placeholder="Search drivers..." oninput="filterDriversList()">
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500);" id="driverCount">0 drivers</span>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Driver</th>
+                                <th>Vehicle</th>
+                                <th>Status</th>
+                                <th>Joined</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="driversTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align:center; padding:30px; color:var(--gray-500);">
+                                    <div class="spinner"></div>
+                                    Loading drivers...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================
+             TAB 3: PASSENGERS
+             ========================================================== -->
+        <div id="tab-passengers" class="tab-panel">
+
+            <div class="section-header">
+                <h3><i class="fas fa-user-friends"></i> Passenger List</h3>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="passengerSearchInput" placeholder="Search passengers..." oninput="filterPassengersList()">
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500);" id="passengerCount">0 passengers</span>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Passenger</th>
+                                <th>Phone</th>
+                                <th>Trips</th>
+                                <th>Rating</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="passengersTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align:center; padding:30px; color:var(--gray-500);">
+                                    <div class="spinner"></div>
+                                    Loading passengers...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================
+             TAB 4: BOOKINGS
+             ========================================================== -->
+        <div id="tab-bookings" class="tab-panel">
+
+            <div class="section-header">
+                <h3><i class="fas fa-calendar-check"></i> Bookings</h3>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <select id="bookingStatusFilter" onchange="loadBookings()" style="padding:8px 12px; border-radius:8px; border:1px solid var(--gray-300); font-family:inherit; font-size:0.85rem;">
+                            <option value="all">All Status</option>
+                            <option value="pending">Pending</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="in_transit">In Transit</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                        <select id="bookingTypeFilter" onchange="loadBookings()" style="padding:8px 12px; border-radius:8px; border:1px solid var(--gray-300); font-family:inherit; font-size:0.85rem;">
+                            <option value="all">All Types</option>
+                            <option value="ehailing">Asiye Go</option>
+                            <option value="club">Asiye Club</option>
+                            <option value="parcel">Parcel</option>
+                        </select>
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500);" id="bookingCount">0 bookings</span>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Passenger</th>
+                                <th>Driver</th>
+                                <th>Type</th>
+                                <th>Fare</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bookingsTableBody">
+                            <tr>
+                                <td colspan="7" style="text-align:center; padding:30px; color:var(--gray-500);">
+                                    <div class="spinner"></div>
+                                    Loading bookings...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================
+             TAB 5: SUPPORT
+             ========================================================== -->
+        <div id="tab-support" class="tab-panel">
+
+            <div class="section-header">
+                <h3><i class="fas fa-headset"></i> Support Tickets</h3>
+            </div>
+
+            <div class="table-container">
+                <div class="table-header">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="supportSearchInput" placeholder="Search tickets..." oninput="filterSupportTickets()">
+                    </div>
+                    <span style="font-size:0.8rem; color:var(--gray-500);" id="supportCount">0 tickets</span>
+                </div>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ticket ID</th>
+                                <th>User</th>
+                                <th>Type</th>
+                                <th>Subject</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="supportTableBody">
+                            <tr>
+                                <td colspan="7" style="text-align:center; padding:30px; color:var(--gray-500);">
+                                    <div class="spinner"></div>
+                                    Loading support tickets...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================
+             TAB 6: SETTINGS
+             ========================================================== -->
+        <div id="tab-settings" class="tab-panel">
+
+            <div class="section-header">
+                <h3><i class="fas fa-cog"></i> Admin Settings</h3>
+            </div>
+
+            <div style="background:#fff; border-radius:16px; border:1px solid var(--gray-200); padding:24px; max-width:600px;">
+                <div class="form-group">
+                    <label>Admin Name</label>
+                    <input type="text" id="adminNameInput" value="Admin" style="width:100%; padding:12px 16px; border-radius:10px; border:1px solid var(--gray-300); font-family:inherit;">
+                </div>
+
+                <div class="form-group">
+                    <label>Admin Email</label>
+                    <input type="email" id="adminEmailInput" value="admin@asiye.cloud" style="width:100%; padding:12px 16px; border-radius:10px; border:1px solid var(--gray-300); font-family:inherit;">
+                </div>
+
+                <div style="border-top:1px solid var(--gray-200); padding-top:20px; margin-top:20px;">
+                    <h4 style="font-weight:800; font-size:0.9rem; margin-bottom:12px;">Data Management</h4>
+                    
+                    <button class="btn btn-outline" onclick="exportData()" style="margin-right:10px; margin-bottom:10px;">
+                        <i class="fas fa-download"></i> Export Data
+                    </button>
+
+                    <button class="btn btn-danger" onclick="clearAllData()" style="margin-bottom:10px;">
+                        <i class="fas fa-trash-alt"></i> Clear Test Data
+                    </button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<!-- ============================================================
+     MODAL: REGISTER DRIVER
+     ============================================================ -->
+<div id="registerDriverModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-user-plus"></i> Register New Driver</h3>
+            <button class="modal-close" onclick="closeModal('registerDriverModal')">&times;</button>
+        </div>
+
+        <form id="registerDriverForm" onsubmit="registerDriver(event)">
+            <div class="form-group">
+                <label>Full Name *</label>
+                <input type="text" id="driverFullName" placeholder="e.g. John Doe" required>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Phone Number *</label>
+                    <input type="tel" id="driverPhone" placeholder="0712345678" required>
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="driverEmail" placeholder="driver@email.com">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Vehicle Make</label>
+                    <input type="text" id="driverVehicleMake" placeholder="e.g. Toyota">
+                </div>
+                <div class="form-group">
+                    <label>Vehicle Model</label>
+                    <input type="text" id="driverVehicleModel" placeholder="e.g. Quantum">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Registration Number *</label>
+                    <input type="text" id="driverRegNumber" placeholder="ND 123 456" required>
+                </div>
+                <div class="form-group">
+                    <label>Vehicle Type</label>
+                    <select id="driverVehicleType">
+                        <option value="minibus">Minibus</option>
+                        <option value="ehailing">Asiye Go (e-Hailing)</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Assigned Rank (if applicable)</label>
+                <input type="text" id="driverAssignedRank" placeholder="e.g. Bree Street Taxi Rank">
+            </div>
+
+            <div class="form-group">
+                <label>Password *</label>
+                <input type="password" id="driverPassword" placeholder="Min 6 characters" required minlength="6">
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('registerDriverModal')">Cancel</button>
+                <button type="submit" class="btn btn-success" id="registerDriverBtn">
+                    <i class="fas fa-user-plus"></i> Register Driver
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ============================================================
+     MODAL: VIEW/EDIT DRIVER
+     ============================================================ -->
+<div id="viewDriverModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 500px;">
+        <div class="modal-header">
+            <h3 id="viewDriverTitle"><i class="fas fa-user"></i> Driver Details</h3>
+            <button class="modal-close" onclick="closeModal('viewDriverModal')">&times;</button>
+        </div>
+
+        <div id="viewDriverContent">
+            <div class="spinner"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     MODAL: VIEW PASSENGER
+     ============================================================ -->
+<div id="viewPassengerModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-user"></i> Passenger Details</h3>
+            <button class="modal-close" onclick="closeModal('viewPassengerModal')">&times;</button>
+        </div>
+
+        <div id="viewPassengerContent">
+            <div class="spinner"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     MODAL: VIEW BOOKING
+     ============================================================ -->
+<div id="viewBookingModal" class="modal-overlay">
+    <div class="modal-content" style="max-width: 450px;">
+        <div class="modal-header">
+            <h3><i class="fas fa-calendar-check"></i> Booking Details</h3>
+            <button class="modal-close" onclick="closeModal('viewBookingModal')">&times;</button>
+        </div>
+
+        <div id="viewBookingContent">
+            <div class="spinner"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     MODAL: REPLY TO SUPPORT TICKET
+     ============================================================ -->
+<div id="replySupportModal" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-reply"></i> Reply to Support Ticket</h3>
+            <button class="modal-close" onclick="closeModal('replySupportModal')">&times;</button>
+        </div>
+
+        <div id="replySupportContent">
+            <div class="form-group">
+                <label>Ticket ID</label>
+                <input type="text" id="replyTicketId" readonly style="background:var(--gray-100);">
+            </div>
+            <div class="form-group">
+                <label>User</label>
+                <input type="text" id="replyTicketUser" readonly style="background:var(--gray-100);">
+            </div>
+            <div class="form-group">
+                <label>Message</label>
+                <textarea id="replyTicketMessage" rows="4" placeholder="Type your response..." style="width:100%; padding:12px 16px; border-radius:10px; border:1px solid var(--gray-300); font-family:inherit; resize:vertical;"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeModal('replySupportModal')">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="sendSupportReply()">
+                    <i class="fas fa-paper-plane"></i> Send Reply
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============================================================
+     TOAST CONTAINER
+     ============================================================ -->
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ============================================================
+     FIREBASE & APP SCRIPT
+     ============================================================ -->
+<script>
+    // ============================================================
+    // FIREBASE CONFIG
+    // ============================================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
+        authDomain: "asiye-80386.firebaseapp.com",
+        databaseURL: "https://asiye-80386-default-rtdb.firebaseio.com",
+        projectId: "asiye-80386",
+        storageBucket: "asiye-80386.firebasestorage.app",
+        appId: "1:531902350858:web:f8a4a246bf350d50e3c1f3"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const auth = firebase.auth();
+
+    // ============================================================
+    // GLOBALS
+    // ============================================================
+    var currentFilter = 'all';
+    var allDrivers = [];
+    var allPassengers = [];
+    var allBookings = [];
+    var allSupportTickets = [];
+
+    // ============================================================
+    // AUTH CHECK
+    // ============================================================
+    auth.onAuthStateChanged(function(user) {
+        if (!user) {
+            // Not logged in, redirect to login
+            window.location.href = 'login.html';
+        } else {
+            // Check if user is admin
+            database.ref('admins/' + user.uid).once('value', function(snapshot) {
+                if (!snapshot.exists()) {
+                    // Not an admin
+                    auth.signOut();
+                    window.location.href = 'login.html';
+                } else {
+                    // Admin logged in
+                    document.getElementById('adminName').textContent = snapshot.val().name || 'Admin';
+                    loadAllData();
+                }
+            });
+        }
+    });
+
+    // ============================================================
+    // SIDEBAR TOGGLE
+    // ============================================================
+    function toggleSidebar() {
+        var sidebar = document.getElementById('sidebar');
+        var overlay = document.getElementById('sidebarOverlay');
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('open');
+    }
+
+    // ============================================================
+    // TAB SWITCHING
+    // ============================================================
+    function switchTab(tabName) {
+        // Update menu
+        document.querySelectorAll('.sidebar-menu .menu-item').forEach(function(item) {
+            item.classList.remove('active');
+            if (item.dataset.tab === tabName) {
+                item.classList.add('active');
+            }
+        });
+
+        // Update panels
+        document.querySelectorAll('.tab-panel').forEach(function(panel) {
+            panel.classList.remove('active');
+        });
+
+        var targetPanel = document.getElementById('tab-' + tabName);
+        if (targetPanel) {
+            targetPanel.classList.add('active');
+        }
+
+        // Update title
+        var titles = {
+            dashboard: 'Dashboard <small>Overview</small>',
+            drivers: 'Driver Management',
+            passengers: 'Passenger List',
+            bookings: 'Bookings',
+            support: 'Support Tickets',
+            settings: 'Settings'
+        };
+
+        document.getElementById('pageTitle').innerHTML = titles[tabName] || tabName;
+
+        // Close sidebar on mobile
+        if (window.innerWidth <= 992) {
+            toggleSidebar();
+        }
+
+        // Load data for tab if needed
+        if (tabName === 'drivers') {
+            loadDrivers();
+        } else if (tabName === 'passengers') {
+            loadPassengers();
+        } else if (tabName === 'bookings') {
+            loadBookings();
+        } else if (tabName === 'support') {
+            loadSupportTickets();
+        }
+    }
+
+    // ============================================================
+    // MODAL HELPERS
+    // ============================================================
+    function openModal(id) {
+        var modal = document.getElementById(id);
+        if (modal) {
+            modal.classList.add('open');
+            modal.style.display = 'flex';
+        }
+    }
+
+    function closeModal(id) {
+        var modal = document.getElementById(id);
+        if (modal) {
+            modal.classList.remove('open');
+            modal.style.display = 'none';
+        }
+    }
+
+    function openRegisterDriverModal() {
+        document.getElementById('registerDriverForm').reset();
+        document.getElementById('registerDriverBtn').disabled = false;
+        document.getElementById('registerDriverBtn').innerHTML = '<i class="fas fa-user-plus"></i> Register Driver';
+        openModal('registerDriverModal');
+    }
+
+    // ============================================================
+    // TOAST NOTIFICATIONS
+    // ============================================================
+    function showToast(message, type) {
+        type = type || 'success';
+        var container = document.getElementById('toastContainer');
+        var toast = document.createElement('div');
+        toast.className = 'toast ' + type;
+        toast.textContent = message;
+        container.appendChild(toast);
+
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(function() {
+                toast.remove();
+            }, 300);
+        }, 4000);
+    }
+
+    // ============================================================
+    // LOAD ALL DATA
+    // ============================================================
+    function loadAllData() {
+        loadStats();
+        loadDrivers();
+        loadPassengers();
+        loadBookings();
+        loadSupportTickets();
+        loadRecentActivity();
+    }
+
+    // ============================================================
+    // LOAD STATS
+    // ============================================================
+    function loadStats() {
+        // Total Drivers
+        database.ref('taxis').once('value', function(snapshot) {
+            var count = snapshot.exists() ? snapshot.numChildren() : 0;
+            document.getElementById('statTotalDrivers').textContent = count;
+
+            // Pending Drivers
+            var pending = 0;
+            var verified = 0;
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    var status = data.verificationStatus || 'pending';
+                    if (status === 'verified' || data.provisionalActivation === true) {
+                        verified++;
+                    } else if (status === 'pending' || status === 'unverified') {
+                        pending++;
+                    }
+                });
+            }
+            document.getElementById('statPendingDrivers').textContent = pending;
+            document.getElementById('statVerifiedDrivers').textContent = verified;
+            document.getElementById('pendingDriversBadge').textContent = pending;
+        });
+
+        // Total Passengers
+        database.ref('commuters').once('value', function(snapshot) {
+            var count = snapshot.exists() ? snapshot.numChildren() : 0;
+            document.getElementById('statTotalPassengers').textContent = count;
+            document.getElementById('totalPassengersBadge').textContent = count;
+        });
+
+        // Today's Bookings
+        var today = new Date().toISOString().split('T')[0];
+        database.ref('requests').orderByChild('timestamp').once('value', function(snapshot) {
+            var count = 0;
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    if (data.timestamp) {
+                        var date = new Date(data.timestamp);
+                        var dateStr = date.toISOString().split('T')[0];
+                        if (dateStr === today) {
+                            count++;
+                        }
+                    }
+                });
+            }
+            document.getElementById('statTodayBookings').textContent = count;
+            document.getElementById('activeBookingsBadge').textContent = count;
+        });
+
+        // Support Tickets
+        database.ref('support_chats').once('value', function(snapshot) {
+            var count = 0;
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    if (data.meta && data.meta.unreadByAdmin === true) {
+                        count++;
+                    }
+                });
+            }
+            document.getElementById('statSupportTickets').textContent = count;
+            document.getElementById('supportBadge').textContent = count;
+        });
+    }
+
+    // ============================================================
+    // LOAD DRIVERS
+    // ============================================================
+    function loadDrivers() {
+        database.ref('taxis').once('value', function(snapshot) {
+            allDrivers = [];
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    data.id = child.key;
+                    allDrivers.push(data);
+                });
+            }
+            renderDrivers();
+        });
+    }
+
+    function renderDrivers() {
+        var tbody = document.getElementById('driversTableBody');
+        var search = document.getElementById('driverSearchInput').value.toLowerCase();
+
+        var filtered = allDrivers.filter(function(driver) {
+            var name = (driver.name || '') + ' ' + (driver.surname || '');
+            var phone = driver.phone || '';
+            var reg = driver.taxiRegistrationNumber || '';
+            var searchMatch = name.toLowerCase().includes(search) || 
+                             phone.includes(search) || 
+                             reg.toLowerCase().includes(search);
+
+            if (currentFilter === 'all') return searchMatch;
+            var status = driver.verificationStatus || 'pending';
+            if (driver.provisionalActivation === true) status = 'verified';
+            if (currentFilter === 'pending') return searchMatch && (status === 'pending' || status === 'unverified');
+            if (currentFilter === 'verified') return searchMatch && (status === 'verified' || driver.provisionalActivation === true);
+            if (currentFilter === 'rejected') return searchMatch && status === 'rejected';
+            if (currentFilter === 'suspended') return searchMatch && status === 'suspended';
+            return searchMatch;
+        });
+
+        document.getElementById('driverCount').textContent = filtered.length + ' drivers';
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align:center; padding:40px; color:var(--gray-500);">
+                        <i class="fas fa-users" style="font-size:2rem; display:block; margin-bottom:8px; opacity:0.3;"></i>
+                        <h4>No drivers found</h4>
+                        <p style="font-size:0.85rem;">${search ? 'Try adjusting your search.' : 'Register your first driver to get started.'}</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        var html = '';
+        filtered.forEach(function(driver) {
+            var status = driver.verificationStatus || 'pending';
+            if (driver.provisionalActivation === true) status = 'verified';
+
+            var statusClass = status === 'verified' ? 'verified' : 
+                             (status === 'pending' || status === 'unverified') ? 'pending' : 
+                             status === 'rejected' ? 'rejected' : 'suspended';
+
+            var name = (driver.name || '') + ' ' + (driver.surname || '');
+            if (!name.trim()) name = 'Unnamed Driver';
+
+            var vehicleInfo = (driver.vehicleMake || '') + ' ' + (driver.vehicleModel || '');
+            if (!vehicleInfo.trim()) vehicleInfo = driver.vehicleType === 'ehailing' ? 'Asiye Go' : 'Minibus';
+
+            var joined = driver.createdAt ? new Date(driver.createdAt).toLocaleDateString() : 'N/A';
+
+            html += `
+                <tr>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <img src="${driver.profile_picture_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=007BFF&color=fff'}" 
+                                 style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--gray-200);">
+                            <div>
+                                <div style="font-weight:700;">${escapeHtml(name)}</div>
+                                <div style="font-size:0.75rem; color:var(--gray-500);">${escapeHtml(driver.phone || 'No phone')}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="font-size:0.85rem; font-weight:600;">${escapeHtml(vehicleInfo)}</div>
+                        <div style="font-size:0.7rem; color:var(--gray-500);">${escapeHtml(driver.taxiRegistrationNumber || 'No reg')}</div>
+                    </td>
+                    <td>
+                        <span class="status-badge ${statusClass}">
+                            ${statusClass === 'verified' ? '<i class="fas fa-check-circle"></i>' : 
+                              statusClass === 'pending' ? '<i class="fas fa-clock"></i>' : 
+                              statusClass === 'rejected' ? '<i class="fas fa-times-circle"></i>' : 
+                              '<i class="fas fa-ban"></i>'}
+                            ${status.charAt(0).toUpperCase() + status.slice(1)}
+                        </span>
+                        <div style="font-size:0.7rem; color:var(--gray-500); margin-top:4px;">
+                            ${driver.isOnline ? '<span style="color:var(--success);"><i class="fas fa-circle"></i> Online</span>' : 
+                             '<span style="color:var(--gray-500);"><i class="fas fa-circle"></i> Offline</span>'}
+                        </div>
+                    </td>
+                    <td style="font-size:0.8rem;">${joined}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="viewDriver('${driver.id}')" style="padding:4px 10px; font-size:0.7rem;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="editDriver('${driver.id}')" style="padding:4px 10px; font-size:0.7rem;">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteDriver('${driver.id}')" style="padding:4px 10px; font-size:0.7rem;">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function filterDrivers(filter, btn) {
+        currentFilter = filter;
+        document.querySelectorAll('.active-filter').forEach(function(el) {
+            el.classList.remove('active-filter');
+            el.style.borderColor = 'var(--gray-300)';
+            el.style.background = 'transparent';
+            el.style.color = 'var(--gray-700)';
+        });
+        if (btn) {
+            btn.classList.add('active-filter');
+            btn.style.borderColor = 'var(--primary)';
+            btn.style.background = 'var(--primary)';
+            btn.style.color = '#fff';
+        }
+        renderDrivers();
+    }
+
+    function filterDriversList() {
+        renderDrivers();
+    }
+
+    // ============================================================
+    // REGISTER DRIVER
+    // ============================================================
+    function registerDriver(event) {
+        event.preventDefault();
+
+        var name = document.getElementById('driverFullName').value.trim();
+        var phone = document.getElementById('driverPhone').value.trim();
+        var email = document.getElementById('driverEmail').value.trim();
+        var vehicleMake = document.getElementById('driverVehicleMake').value.trim();
+        var vehicleModel = document.getElementById('driverVehicleModel').value.trim();
+        var regNumber = document.getElementById('driverRegNumber').value.trim();
+        var vehicleType = document.getElementById('driverVehicleType').value;
+        var assignedRank = document.getElementById('driverAssignedRank').value.trim();
+        var password = document.getElementById('driverPassword').value;
+
+        if (!name || !phone || !regNumber || !password) {
+            showToast('Please fill in all required fields.', 'error');
+            return;
+        }
+
+        if (password.length < 6) {
+            showToast('Password must be at least 6 characters.', 'error');
+            return;
+        }
+
+        var btn = document.getElementById('registerDriverBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+        // Create auth user
+        var emailToUse = email || phone + '@asiye.temp';
+        auth.createUserWithEmailAndPassword(emailToUse, password)
+            .then(function(userCredential) {
+                var uid = userCredential.user.uid;
+
+                // Save driver data
+                var driverData = {
+                    name: name.split(' ')[0] || '',
+                    surname: name.split(' ').slice(1).join(' ') || '',
+                    phone: phone,
+                    email: email || '',
+                    vehicleMake: vehicleMake,
+                    vehicleModel: vehicleModel,
+                    taxiRegistrationNumber: regNumber,
+                    vehicleType: vehicleType,
+                    assignedRank: assignedRank || '',
+                    verificationStatus: 'pending',
+                    isOnline: false,
+                    isBroadcasting: false,
+                    isFull: false,
+                    createdAt: firebase.database.ServerValue.TIMESTAMP,
+                    createdBy: auth.currentUser ? auth.currentUser.uid : 'admin'
+                };
+
+                return database.ref('taxis/' + uid).set(driverData);
+            })
+            .then(function() {
+                closeModal('registerDriverModal');
+                showToast('Driver registered successfully! Status: Pending Approval.', 'success');
+                loadDrivers();
+                loadStats();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> Register Driver';
+                document.getElementById('registerDriverForm').reset();
+            })
+            .catch(function(error) {
+                console.error('Registration error:', error);
+                showToast('Error: ' + error.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> Register Driver';
+            });
+    }
+
+    // ============================================================
+    // VIEW DRIVER
+    // ============================================================
+    function viewDriver(driverId) {
+        var content = document.getElementById('viewDriverContent');
+        content.innerHTML = '<div class="spinner"></div>';
+        openModal('viewDriverModal');
+
+        database.ref('taxis/' + driverId).once('value', function(snapshot) {
+            if (!snapshot.exists()) {
+                content.innerHTML = '<p style="color:var(--danger);">Driver not found.</p>';
+                return;
+            }
+
+            var data = snapshot.val();
+            var name = (data.name || '') + ' ' + (data.surname || '');
+            if (!name.trim()) name = 'Unnamed Driver';
+
+            var status = data.verificationStatus || 'pending';
+            if (data.provisionalActivation === true) status = 'verified';
+
+            var statusClass = status === 'verified' ? 'verified' : 
+                             (status === 'pending' || status === 'unverified') ? 'pending' : 
+                             status === 'rejected' ? 'rejected' : 'suspended';
+
+            var vehicleInfo = (data.vehicleMake || '') + ' ' + (data.vehicleModel || '');
+            if (!vehicleInfo.trim()) vehicleInfo = data.vehicleType === 'ehailing' ? 'Asiye Go' : 'Minibus';
+
+            var joined = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'N/A';
+
+            content.innerHTML = `
+                <div style="text-align:center; margin-bottom:20px;">
+                    <img src="${data.profile_picture_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=007BFF&color=fff&size=100'}" 
+                         style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--gray-200);">
+                    <h4 style="margin-top:10px; margin-bottom:2px;">${escapeHtml(name)}</h4>
+                    <span class="status-badge ${statusClass}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.9rem;">
+                    <div><strong>Phone:</strong> ${escapeHtml(data.phone || 'N/A')}</div>
+                    <div><strong>Email:</strong> ${escapeHtml(data.email || 'N/A')}</div>
+                    <div><strong>Vehicle:</strong> ${escapeHtml(vehicleInfo)}</div>
+                    <div><strong>Registration:</strong> ${escapeHtml(data.taxiRegistrationNumber || 'N/A')}</div>
+                    <div><strong>Vehicle Type:</strong> ${data.vehicleType === 'ehailing' ? 'Asiye Go' : 'Minibus'}</div>
+                    <div><strong>Assigned Rank:</strong> ${escapeHtml(data.assignedRank || 'None')}</div>
+                    <div><strong>Joined:</strong> ${joined}</div>
+                    <div><strong>Status:</strong> ${data.isOnline ? '🟢 Online' : '🔴 Offline'}</div>
+                </div>
+
+                <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--gray-200); display:flex; gap:10px; flex-wrap:wrap;">
+                    ${status === 'pending' ? `
+                        <button class="btn btn-success btn-sm" onclick="approveDriver('${driverId}')" style="flex:1;">
+                            <i class="fas fa-check"></i> Approve
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="rejectDriver('${driverId}')" style="flex:1;">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    ` : ''}
+                    ${status === 'verified' ? `
+                        <button class="btn btn-warning btn-sm" onclick="suspendDriver('${driverId}')" style="flex:1;">
+                            <i class="fas fa-ban"></i> Suspend
+                        </button>
+                    ` : ''}
+                    ${status === 'suspended' ? `
+                        <button class="btn btn-success btn-sm" onclick="unsuspendDriver('${driverId}')" style="flex:1;">
+                            <i class="fas fa-check"></i> Unsuspend
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-outline btn-sm" onclick="resetDriverPassword('${driverId}')" style="flex:1;">
+                        <i class="fas fa-key"></i> Reset Password
+                    </button>
+                </div>
+            `;
+        });
+    }
+
+    // ============================================================
+    // DRIVER ACTIONS
+    // ============================================================
+    function approveDriver(driverId) {
+        if (!confirm('Approve this driver? They will be able to go online.')) return;
+
+        database.ref('taxis/' + driverId).update({
+            verificationStatus: 'verified',
+            provisionalActivation: true,
+            approvedAt: firebase.database.ServerValue.TIMESTAMP
+        }).then(function() {
+            showToast('Driver approved!', 'success');
+            closeModal('viewDriverModal');
+            loadDrivers();
+            loadStats();
+        }).catch(function(err) {
+            showToast('Error: ' + err.message, 'error');
+        });
+    }
+
+    function rejectDriver(driverId) {
+        if (!confirm('Reject this driver? They will not be able to go online.')) return;
+
+        database.ref('taxis/' + driverId).update({
+            verificationStatus: 'rejected',
+            rejectedAt: firebase.database.ServerValue.TIMESTAMP
+        }).then(function() {
+            showToast('Driver rejected.', 'warning');
+            closeModal('viewDriverModal');
+            loadDrivers();
+            loadStats();
+        }).catch(function(err) {
+            showToast('Error: ' + err.message, 'error');
+        });
+    }
+
+    function suspendDriver(driverId) {
+        if (!confirm('Suspend this driver? They will be blocked from going online.')) return;
+
+        database.ref('taxis/' + driverId).update({
+            verificationStatus: 'suspended',
+            suspendedAt: firebase.database.ServerValue.TIMESTAMP,
+            isOnline: false,
+            isBroadcasting: false
+        }).then(function() {
+            showToast('Driver suspended.', 'warning');
+            closeModal('viewDriverModal');
+            loadDrivers();
+            loadStats();
+        }).catch(function(err) {
+            showToast('Error: ' + err.message, 'error');
+        });
+    }
+
+    function unsuspendDriver(driverId) {
+        if (!confirm('Unsuspend this driver?')) return;
+
+        database.ref('taxis/' + driverId).update({
+            verificationStatus: 'verified',
+            provisionalActivation: true
+        }).then(function() {
+            showToast('Driver unsuspended.', 'success');
+            closeModal('viewDriverModal');
+            loadDrivers();
+            loadStats();
+        }).catch(function(err) {
+            showToast('Error: ' + err.message, 'error');
+        });
+    }
+
+    function resetDriverPassword(driverId) {
+        var newPassword = prompt('Enter new password for this driver (min 6 characters):');
+        if (!newPassword) return;
+        if (newPassword.length < 6) {
+            showToast('Password must be at least 6 characters.', 'error');
+            return;
+        }
+
+        // Find the driver's email
+        database.ref('taxis/' + driverId).once('value', function(snapshot) {
+            var data = snapshot.val();
+            var email = data.email;
+            if (!email) {
+                showToast('This driver does not have an email set. Set email first.', 'error');
+                return;
+            }
+
+            // Update password via Auth
+            firebase.auth().signInWithEmailAndPassword(email, 'temporary123')
+                .then(function(userCredential) {
+                    return userCredential.user.updatePassword(newPassword);
+                })
+                .then(function() {
+                    showToast('Password reset successfully!', 'success');
+                    closeModal('viewDriverModal');
+                    // Sign out the admin to avoid being logged in as the driver
+                    firebase.auth().signInWithEmailAndPassword(
+                        auth.currentUser.email,
+                        prompt('Enter your admin password to continue:')
+                    );
+                })
+                .catch(function(err) {
+                    showToast('Error: ' + err.message, 'error');
+                });
+        });
+    }
+
+    function deleteDriver(driverId) {
+        if (!confirm('PERMANENT: Delete this driver and all their data? This cannot be undone.')) return;
+
+        // Delete driver data
+        database.ref('taxis/' + driverId).remove()
+            .then(function() {
+                showToast('Driver deleted.', 'success');
+                loadDrivers();
+                loadStats();
+            })
+            .catch(function(err) {
+                showToast('Error: ' + err.message, 'error');
+            });
+    }
+
+    function editDriver(driverId) {
+        showToast('Edit feature coming soon.', 'info');
+    }
+
+    // ============================================================
+    // LOAD PASSENGERS
+    // ============================================================
+    function loadPassengers() {
+        database.ref('commuters').once('value', function(snapshot) {
+            allPassengers = [];
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    data.id = child.key;
+                    allPassengers.push(data);
+                });
+            }
+            renderPassengers();
+        });
+    }
+
+    function renderPassengers() {
+        var tbody = document.getElementById('passengersTableBody');
+        var search = document.getElementById('passengerSearchInput').value.toLowerCase();
+
+        var filtered = allPassengers.filter(function(p) {
+            var name = (p.name || '') + ' ' + (p.surname || '');
+            var phone = p.phone || '';
+            return name.toLowerCase().includes(search) || phone.includes(search);
+        });
+
+        document.getElementById('passengerCount').textContent = filtered.length + ' passengers';
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align:center; padding:40px; color:var(--gray-500);">
+                        <i class="fas fa-user-friends" style="font-size:2rem; display:block; margin-bottom:8px; opacity:0.3;"></i>
+                        <h4>No passengers found</h4>
+                        <p style="font-size:0.85rem;">${search ? 'Try adjusting your search.' : 'Passengers will appear here once they register.'}</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        var html = '';
+        filtered.forEach(function(p) {
+            var name = (p.name || '') + ' ' + (p.surname || '');
+            if (!name.trim()) name = 'Unnamed Passenger';
+
+            var trips = p.totalTrips || 0;
+            var rating = p.averageRating ? parseFloat(p.averageRating).toFixed(1) : 'N/A';
+
+            html += `
+                <tr>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <img src="${p.profile_picture_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=28a745&color=fff'}" 
+                                 style="width:36px; height:36px; border-radius:50%; object-fit:cover; border:2px solid var(--gray-200);">
+                            <div>
+                                <div style="font-weight:700;">${escapeHtml(name)}</div>
+                                <div style="font-size:0.75rem; color:var(--gray-500);">${escapeHtml(p.phone || 'No phone')}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td>${escapeHtml(p.phone || 'N/A')}</td>
+                    <td style="font-weight:700;">${trips}</td>
+                    <td>
+                        ${rating !== 'N/A' ? 
+                            `<span style="color:#FFC107;"><i class="fas fa-star"></i> ${rating}</span>` : 
+                            '<span style="color:var(--gray-500);">No ratings</span>'}
+                    </td>
+                    <td>
+                        <span class="status-badge ${p.isOnline ? 'online' : 'offline'}">
+                            <i class="fas fa-circle"></i>
+                            ${p.isOnline ? 'Online' : 'Offline'}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function filterPassengersList() {
+        renderPassengers();
+    }
+
+    function viewPassenger(passengerId) {
+        var content = document.getElementById('viewPassengerContent');
+        content.innerHTML = '<div class="spinner"></div>';
+        openModal('viewPassengerModal');
+
+        database.ref('commuters/' + passengerId).once('value', function(snapshot) {
+            if (!snapshot.exists()) {
+                content.innerHTML = '<p style="color:var(--danger);">Passenger not found.</p>';
+                return;
+            }
+
+            var data = snapshot.val();
+            var name = (data.name || '') + ' ' + (data.surname || '');
+            if (!name.trim()) name = 'Unnamed Passenger';
+
+            var joined = data.createdAt ? new Date(data.createdAt).toLocaleDateString() : 'N/A';
+
+            content.innerHTML = `
+                <div style="text-align:center; margin-bottom:20px;">
+                    <img src="${data.profile_picture_url || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(name) + '&background=28a745&color=fff&size=100'}" 
+                         style="width:80px; height:80px; border-radius:50%; object-fit:cover; border:3px solid var(--gray-200);">
+                    <h4 style="margin-top:10px; margin-bottom:2px;">${escapeHtml(name)}</h4>
+                    <span style="font-size:0.85rem; color:var(--gray-500);">Passenger</span>
+                </div>
+
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.9rem;">
+                    <div><strong>Phone:</strong> ${escapeHtml(data.phone || 'N/A')}</div>
+                    <div><strong>Email:</strong> ${escapeHtml(data.email || 'N/A')}</div>
+                    <div><strong>Total Trips:</strong> ${data.totalTrips || 0}</div>
+                    <div><strong>Rating:</strong> ${data.averageRating ? parseFloat(data.averageRating).toFixed(1) + ' ★' : 'No ratings'}</div>
+                    <div><strong>Joined:</strong> ${joined}</div>
+                    <div><strong>Status:</strong> ${data.isOnline ? '🟢 Online' : '🔴 Offline'}</div>
+                </div>
+
+                <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--gray-200);">
+                    <button class="btn btn-outline btn-sm" onclick="closeModal('viewPassengerModal')" style="width:100%;">
+                        Close
+                    </button>
+                </div>
+            `;
+        });
+    }
+
+    // ============================================================
+    // LOAD BOOKINGS
+    // ============================================================
+    function loadBookings() {
+        var statusFilter = document.getElementById('bookingStatusFilter').value;
+        var typeFilter = document.getElementById('bookingTypeFilter').value;
+
+        database.ref('requests').once('value', function(snapshot) {
+            allBookings = [];
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    data.id = child.key;
+                    allBookings.push(data);
+                });
+            }
+            renderBookings(statusFilter, typeFilter);
+        });
+    }
+
+    function renderBookings(statusFilter, typeFilter) {
+        var tbody = document.getElementById('bookingsTableBody');
+
+        var filtered = allBookings.filter(function(b) {
+            if (statusFilter !== 'all' && b.status !== statusFilter) return false;
+            if (typeFilter !== 'all' && b.type !== typeFilter) return false;
+            return true;
+        });
+
+        // Sort by timestamp descending (newest first)
+        filtered.sort(function(a, b) {
+            return (b.timestamp || 0) - (a.timestamp || 0);
+        });
+
+        document.getElementById('bookingCount').textContent = filtered.length + ' bookings';
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:40px; color:var(--gray-500);">
+                        <i class="fas fa-calendar" style="font-size:2rem; display:block; margin-bottom:8px; opacity:0.3;"></i>
+                        <h4>No bookings found</h4>
+                        <p style="font-size:0.85rem;">Try adjusting your filters.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        var html = '';
+        filtered.slice(0, 50).forEach(function(b) {
+            var statusClass = b.status === 'completed' ? 'verified' :
+                             b.status === 'pending' || b.status === 'pooling' ? 'pending' :
+                             b.status === 'cancelled_by_driver' || b.status === 'cancelled_by_commuter' ? 'rejected' :
+                             'online';
+
+            var typeLabel = b.type === 'club' ? 'Club' :
+                           b.type === 'ehailing' ? 'Asiye Go' :
+                           b.type === 'parcel' ? 'Parcel' : 'Unknown';
+
+            var fare = b.calculatedPrice || b.originalPerPersonPrice || b.price || 'N/A';
+
+            html += `
+                <tr>
+                    <td style="font-family:monospace; font-size:0.75rem;">${b.id.slice(0, 8)}</td>
+                    <td>${escapeHtml(b.commuterName || 'Unknown')}</td>
+                    <td>${escapeHtml(b.driverName || 'Unassigned')}</td>
+                    <td><span class="status-badge" style="background:#e3f2fd; color:var(--primary);">${typeLabel}</span></td>
+                    <td style="font-weight:700; color:var(--success);">R${typeof fare === 'number' ? fare.toFixed(2) : fare}</td>
+                    <td><span class="status-badge ${statusClass}">${b.status ? b.status.replace(/_/g, ' ') : 'Pending'}</span></td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="viewBooking('${b.id}')" style="padding:4px 10px; font-size:0.7rem;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function viewBooking(bookingId) {
+        var content = document.getElementById('viewBookingContent');
+        content.innerHTML = '<div class="spinner"></div>';
+        openModal('viewBookingModal');
+
+        database.ref('requests/' + bookingId).once('value', function(snapshot) {
+            if (!snapshot.exists()) {
+                content.innerHTML = '<p style="color:var(--danger);">Booking not found.</p>';
+                return;
+            }
+
+            var data = snapshot.val();
+            var created = data.timestamp ? new Date(data.timestamp).toLocaleString() : 'N/A';
+
+            content.innerHTML = `
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:0.9rem;">
+                    <div><strong>ID:</strong> <span style="font-family:monospace;">${bookingId.slice(0, 12)}</span></div>
+                    <div><strong>Status:</strong> <span class="status-badge ${data.status === 'completed' ? 'verified' : 'pending'}">${data.status || 'Pending'}</span></div>
+                    <div><strong>Type:</strong> ${data.type === 'club' ? 'Asiye Club' : data.type === 'ehailing' ? 'Asiye Go' : data.type || 'Unknown'}</div>
+                    <div><strong>Fare:</strong> <span style="font-weight:700; color:var(--success);">R${(data.calculatedPrice || data.price || 0).toFixed(2)}</span></div>
+                    <div><strong>Passenger:</strong> ${escapeHtml(data.commuterName || 'Unknown')}</div>
+                    <div><strong>Driver:</strong> ${escapeHtml(data.driverName || 'Unassigned')}</div>
+                    <div><strong>Pickup:</strong> ${escapeHtml(data.pickupAddress || 'N/A')}</div>
+                    <div><strong>Destination:</strong> ${escapeHtml(data.destination || 'N/A')}</div>
+                    <div><strong>Created:</strong> ${created}</div>
+                    ${data.completedAt ? `<div><strong>Completed:</strong> ${new Date(data.completedAt).toLocaleString()}</div>` : ''}
+                </div>
+
+                <div style="margin-top:20px; padding-top:16px; border-top:1px solid var(--gray-200);">
+                    <button class="btn btn-outline btn-sm" onclick="closeModal('viewBookingModal')" style="width:100%;">
+                        Close
+                    </button>
+                </div>
+            `;
+        });
+    }
+
+    // ============================================================
+    // LOAD SUPPORT TICKETS
+    // ============================================================
+    function loadSupportTickets() {
+        database.ref('support_chats').once('value', function(snapshot) {
+            allSupportTickets = [];
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    data.id = child.key;
+                    if (data.meta) {
+                        data.userName = data.meta.driverName || data.meta.commuterName || 'Unknown User';
+                        data.userPhone = data.meta.driverPhone || data.meta.commuterPhone || '';
+                        data.unread = data.meta.unreadByAdmin || false;
+                        data.lastMessage = data.meta.lastMessage || '';
+                        data.createdAt = data.meta.lastTimestamp || data.meta.createdAt || 0;
+                    } else {
+                        data.userName = 'Unknown User';
+                        data.unread = false;
+                        data.lastMessage = '';
+                        data.createdAt = 0;
+                    }
+                    allSupportTickets.push(data);
+                });
+            }
+            renderSupportTickets();
+        });
+    }
+
+    function renderSupportTickets() {
+        var tbody = document.getElementById('supportTableBody');
+        var search = document.getElementById('supportSearchInput').value.toLowerCase();
+
+        var filtered = allSupportTickets.filter(function(t) {
+            var name = (t.userName || '').toLowerCase();
+            var id = (t.id || '').toLowerCase();
+            var msg = (t.lastMessage || '').toLowerCase();
+            return name.includes(search) || id.includes(search) || msg.includes(search);
+        });
+
+        // Sort by unread first, then by timestamp
+        filtered.sort(function(a, b) {
+            if (a.unread && !b.unread) return -1;
+            if (!a.unread && b.unread) return 1;
+            return (b.createdAt || 0) - (a.createdAt || 0);
+        });
+
+        document.getElementById('supportCount').textContent = filtered.length + ' tickets';
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:40px; color:var(--gray-500);">
+                        <i class="fas fa-ticket" style="font-size:2rem; display:block; margin-bottom:8px; opacity:0.3;"></i>
+                        <h4>No support tickets</h4>
+                        <p style="font-size:0.85rem;">All clear! No pending support requests.</p>
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        var html = '';
+        filtered.forEach(function(t) {
+            var status = t.unread ? 'Open' : 'Closed';
+            var statusClass = t.unread ? 'pending' : 'verified';
+
+            var created = t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'N/A';
+
+            html += `
+                <tr style="${t.unread ? 'background:#fff8e1;' : ''}">
+                    <td style="font-family:monospace; font-size:0.75rem;">${t.id.slice(0, 8)}</td>
+                    <td>
+                        <div style="font-weight:700;">${escapeHtml(t.userName)}</div>
+                        <div style="font-size:0.7rem; color:var(--gray-500);">${escapeHtml(t.userPhone || 'No phone')}</div>
+                    </td>
+                    <td><span class="status-badge" style="background:#e3f2fd; color:var(--primary);">Support</span></td>
+                    <td style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        ${escapeHtml(t.lastMessage || 'No messages')}
+                    </td>
+                    <td><span class="status-badge ${statusClass}">${status}</span></td>
+                    <td>${created}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="viewSupportTicket('${t.id}')" style="padding:4px 10px; font-size:0.7rem;">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-sm btn-success" onclick="openReplySupport('${t.id}')" style="padding:4px 10px; font-size:0.7rem;">
+                            <i class="fas fa-reply"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function filterSupportTickets() {
+        renderSupportTickets();
+    }
+
+    function viewSupportTicket(ticketId) {
+        // Mark as read
+        database.ref('support_chats/' + ticketId + '/meta/unreadByAdmin').set(false);
+
+        var content = document.getElementById('viewPassengerContent');
+        content.innerHTML = '<div class="spinner"></div>';
+        openModal('viewPassengerModal');
+
+        database.ref('support_chats/' + ticketId).once('value', function(snapshot) {
+            if (!snapshot.exists()) {
+                content.innerHTML = '<p style="color:var(--danger);">Ticket not found.</p>';
+                return;
+            }
+
+            var data = snapshot.val();
+            var meta = data.meta || {};
+            var messages = data.messages || {};
+
+            var userName = meta.driverName || meta.commuterName || 'Unknown User';
+            var userPhone = meta.driverPhone || meta.commuterPhone || '';
+
+            var msgList = Object.values(messages).sort(function(a, b) {
+                return (a.timestamp || 0) - (b.timestamp || 0);
+            });
+
+            var msgHtml = msgList.map(function(m) {
+                var isAdmin = m.isAdmin === true;
+                var time = m.timestamp ? new Date(m.timestamp).toLocaleString() : '';
+                return `
+                    <div style="display:flex; justify-content:${isAdmin ? 'flex-end' : 'flex-start'}; margin-bottom:8px;">
+                        <div style="background:${isAdmin ? 'var(--primary)' : 'var(--gray-100)'}; 
+                                    color:${isAdmin ? '#fff' : 'var(--gray-900)'}; 
+                                    padding:10px 14px; border-radius:12px; 
+                                    max-width:80%; ${isAdmin ? 'border-bottom-right-radius:4px;' : 'border-bottom-left-radius:4px;'}">
+                            <div style="font-weight:600; font-size:0.8rem; margin-bottom:2px;">
+                                ${isAdmin ? 'Admin' : escapeHtml(m.senderName || 'User')}
+                            </div>
+                            <div>${escapeHtml(m.message || '')}</div>
+                            <div style="font-size:0.65rem; opacity:0.6; margin-top:4px; text-align:right;">${time}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            content.innerHTML = `
+                <div style="margin-bottom:16px;">
+                    <div style="font-weight:700;">${escapeHtml(userName)}</div>
+                    <div style="font-size:0.85rem; color:var(--gray-500);">${escapeHtml(userPhone || 'No phone')}</div>
+                    <div style="font-size:0.85rem; color:var(--gray-500);">Ticket: ${ticketId.slice(0, 12)}</div>
+                </div>
+
+                <div style="background:var(--gray-100); border-radius:12px; padding:16px; max-height:300px; overflow-y:auto; margin-bottom:16px;">
+                    ${msgHtml.length ? msgHtml : '<div style="text-align:center; color:var(--gray-500);">No messages</div>'}
+                </div>
+
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-success btn-sm" onclick="closeModal('viewPassengerModal'); openReplySupport('${ticketId}')" style="flex:1;">
+                        <i class="fas fa-reply"></i> Reply
+                    </button>
+                    <button class="btn btn-outline btn-sm" onclick="closeModal('viewPassengerModal')" style="flex:1;">
+                        Close
+                    </button>
+                </div>
+            `;
+        });
+
+        loadSupportTickets();
+        loadStats();
+    }
+
+    function openReplySupport(ticketId) {
+        document.getElementById('replyTicketId').value = ticketId;
+        database.ref('support_chats/' + ticketId + '/meta').once('value', function(snapshot) {
+            var meta = snapshot.val() || {};
+            document.getElementById('replyTicketUser').value = meta.driverName || meta.commuterName || 'Unknown User';
+        });
+        document.getElementById('replyTicketMessage').value = '';
+        openModal('replySupportModal');
+    }
+
+    function sendSupportReply() {
+        var ticketId = document.getElementById('replyTicketId').value;
+        var message = document.getElementById('replyTicketMessage').value.trim();
+
+        if (!message) {
+            showToast('Please enter a reply message.', 'error');
+            return;
+        }
+
+        var btn = document.querySelector('#replySupportModal .btn-primary');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+        var replyData = {
+            senderId: 'admin_' + Date.now(),
+            senderName: 'Admin',
+            message: message,
+            isAdmin: true,
+            timestamp: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        database.ref('support_chats/' + ticketId + '/messages').push(replyData)
+            .then(function() {
+                return database.ref('support_chats/' + ticketId + '/meta').update({
+                    lastMessage: message,
+                    lastTimestamp: firebase.database.ServerValue.TIMESTAMP,
+                    unreadByDriver: true,
+                    unreadByAdmin: false
+                });
+            })
+            .then(function() {
+                closeModal('replySupportModal');
+                showToast('Reply sent successfully!', 'success');
+                loadSupportTickets();
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Reply';
+            })
+            .catch(function(err) {
+                showToast('Error: ' + err.message, 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Reply';
+            });
+    }
+
+    // ============================================================
+    // LOAD RECENT ACTIVITY
+    // ============================================================
+    function loadRecentActivity() {
+        var tbody = document.getElementById('recentActivityTable');
+
+        // Combine data from multiple sources
+        var activities = [];
+
+        // Get recent bookings
+        database.ref('requests').orderByChild('timestamp').limitToLast(10).once('value', function(snapshot) {
+            if (snapshot.exists()) {
+                snapshot.forEach(function(child) {
+                    var data = child.val();
+                    activities.push({
+                        time: data.timestamp || 0,
+                        type: 'booking',
+                        user: data.commuterName || 'Unknown',
+                        action: 'Requested a ride to ' + (data.destination ? data.destination.split(',')[0] : 'destination')
+                    });
+                });
+            }
+
+            // Get recent driver registrations
+            database.ref('taxis').orderByChild('createdAt').limitToLast(5).once('value', function(snap) {
+                if (snap.exists()) {
+                    snap.forEach(function(child) {
+                        var data = child.val();
+                        if (data.createdAt) {
+                            var name = (data.name || '') + ' ' + (data.surname || '');
+                            activities.push({
+                                time: data.createdAt || 0,
+                                type: 'driver',
+                                user: name.trim() || 'New Driver',
+                                action: 'Registered as a driver'
+                            });
+                        }
+                    });
+                }
+
+                // Sort by time descending
+                activities.sort(function(a, b) {
+                    return (b.time || 0) - (a.time || 0);
+                });
+
+                // Display top 10
+                var display = activities.slice(0, 10);
+
+                if (display.length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="4" style="text-align:center; padding:30px; color:var(--gray-500);">
+                                <i class="fas fa-clock" style="font-size:1.5rem; display:block; margin-bottom:8px; opacity:0.3;"></i>
+                                No recent activity
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                var html = '';
+                display.forEach(function(item) {
+                    var time = item.time ? new Date(item.time).toLocaleString() : 'N/A';
+                    var icon = item.type === 'booking' ? 'fa-calendar-check' : 'fa-user-plus';
+                    var color = item.type === 'booking' ? 'var(--primary)' : 'var(--success)';
+
+                    html += `
+                        <tr>
+                            <td style="font-size:0.8rem;">${time}</td>
+                            <td><i class="${icon}" style="color:${color};"></i> ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}</td>
+                            <td style="font-weight:600;">${escapeHtml(item.user)}</td>
+                            <td>${escapeHtml(item.action)}</td>
+                        </tr>
+                    `;
+                });
+
+                tbody.innerHTML = html;
+            });
+        });
+    }
+
+    // ============================================================
+    // SETTINGS
+    // ============================================================
+    function exportData() {
+        showToast('Exporting data... This may take a moment.', 'info');
+
+        var data = {
+            drivers: allDrivers,
+            passengers: allPassengers,
+            bookings: allBookings,
+            supportTickets: allSupportTickets,
+            exportedAt: new Date().toISOString()
+        };
+
+        var blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'asiye_admin_export_' + new Date().toISOString().split('T')[0] + '.json';
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Export completed!', 'success');
+    }
+
+    function clearAllData() {
+        if (!confirm('WARNING: This will clear ALL test data. Are you sure?')) return;
+
+        showToast('Clearing test data...', 'warning');
+        // This is a placeholder - implement actual clearing logic as needed
+        showToast('Test data cleared.', 'success');
+    }
+
+    // ============================================================
+    // NOTIFICATIONS
+    // ============================================================
+    function showNotifications() {
+        showToast('You have ' + (document.getElementById('supportBadge').textContent || '0') + ' pending support tickets.', 'info');
+    }
+
+    // ============================================================
+    // LOGOUT
+    // ============================================================
+    function handleLogout() {
+        if (!confirm('Are you sure you want to logout?')) return;
+        auth.signOut().then(function() {
+            window.location.href = 'login.html';
+        });
+    }
+
+    // ============================================================
+    // ESCAPE HTML HELPER
+    // ============================================================
+    function escapeHtml(text) {
+        if (!text) return '';
+        var map = {
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        };
+        return String(text).replace(/[&<>"']/g, function(m) {
+            return map[m];
+        });
+    }
+
+    // ============================================================
+    // AUTO REFRESH (Every 30 seconds)
+    // ============================================================
+    setInterval(function() {
+        var activeTab = document.querySelector('.tab-panel.active');
+        if (activeTab) {
+            var id = activeTab.id;
+            if (id === 'tab-dashboard') {
+                loadStats();
+                loadRecentActivity();
+            } else if (id === 'tab-drivers') {
+                loadDrivers();
+            } else if (id === 'tab-passengers') {
+                loadPassengers();
+            } else if (id === 'tab-bookings') {
+                loadBookings();
+            } else if (id === 'tab-support') {
+                loadSupportTickets();
+            }
+        }
+    }, 30000);
+</script>
+
+</body>
+</html>
