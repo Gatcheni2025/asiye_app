@@ -274,6 +274,8 @@
             border: 1px solid #2f3a48 !important;
             border-radius: 12px !important;
             margin-top: 4px !important;
+            max-height: 200px !important;
+            overflow-y: auto !important;
         }
         .mapboxgl-ctrl-geocoder .suggestion {
             color: #e8ecf4 !important;
@@ -357,8 +359,8 @@
         <!-- MAIN CONTENT -->
         <main class="main-content">
 
-            <div class="page-title">🚗 Vehicle Registration</div>
-            <div class="page-sub">Register a new vehicle in the system</div>
+            <div class="page-title">👤 Driver Registration</div>
+            <div class="page-sub">Register a new driver in the system</div>
 
             <!-- Success / Error Messages -->
             <div id="successMsg" class="success-msg"></div>
@@ -366,48 +368,57 @@
 
             <!-- FORM -->
             <div class="form-card">
-                <div class="form-title">Vehicle Details</div>
+                <div class="form-title">Driver Details</div>
 
-                <form id="vehicleForm" onsubmit="return false;">
+                <form id="driverForm" onsubmit="return false;">
 
-                    <!-- Vehicle Type (Minibus taxis REMOVED) -->
+                    <!-- ========================================================== -->
+                    <!-- VEHICLE TYPE – REMOVED per request                         -->
+                    <!-- ========================================================== -->
+
+                    <!-- Full Name -->
                     <div class="form-group">
-                        <label for="vehicleType">Vehicle Type <span class="required">*</span></label>
-                        <select id="vehicleType" required>
-                            <option value="">Select vehicle type...</option>
-                            <option value="Sedan">Sedan</option>
-                            <option value="SUV">SUV</option>
-                            <option value="Hatchback">Hatchback</option>
-                            <option value="Bakkie / Pickup">Bakkie / Pickup</option>
-                            <option value="Van">Van</option>
-                            <option value="Bus">Bus</option>
-                            <option value="Truck">Truck</option>
-                            <option value="Motorcycle">Motorcycle</option>
-                            <option value="Bicycle">Bicycle</option>
-                            <option value="Other">Other</option>
-                        </select>
+                        <label for="fullName">Full Name <span class="required">*</span></label>
+                        <input type="text" id="fullName" placeholder="e.g. John Doe" required />
                     </div>
 
-                    <!-- Vehicle Make -->
+                    <!-- Email -->
                     <div class="form-group">
-                        <label for="vehicleMake">Make <span class="required">*</span></label>
-                        <input type="text" id="vehicleMake" placeholder="e.g. Toyota, Ford, BMW" required />
+                        <label for="email">Email Address <span class="required">*</span></label>
+                        <input type="email" id="email" placeholder="e.g. driver@example.com" required />
                     </div>
 
-                    <!-- Vehicle Model -->
+                    <!-- ========================================================== -->
+                    <!-- PASSWORD – NEW FIELD                                      -->
+                    <!-- ========================================================== -->
                     <div class="form-group">
-                        <label for="vehicleModel">Model <span class="required">*</span></label>
-                        <input type="text" id="vehicleModel" placeholder="e.g. Corolla, F-150, X5" required />
+                        <label for="password">Password <span class="required">*</span></label>
+                        <input type="password" id="password" placeholder="Min 6 characters" required minlength="6" />
+                        <div style="font-size:0.7rem; color:#5d6a7e; margin-top:0.3rem;">
+                            🔒 Password must be at least 6 characters
+                        </div>
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="form-group">
+                        <label for="phone">Phone Number <span class="required">*</span></label>
+                        <input type="tel" id="phone" placeholder="e.g. +27 82 123 4567" required />
+                    </div>
+
+                    <!-- License Number -->
+                    <div class="form-group">
+                        <label for="licenseNumber">License Number <span class="required">*</span></label>
+                        <input type="text" id="licenseNumber" placeholder="e.g. DL1234567890" required />
                     </div>
 
                     <!-- Year & Color (row) -->
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="vehicleYear">Year</label>
+                            <label for="vehicleYear">Vehicle Year</label>
                             <input type="number" id="vehicleYear" placeholder="e.g. 2020" min="1950" max="2026" />
                         </div>
                         <div class="form-group">
-                            <label for="vehicleColor">Color</label>
+                            <label for="vehicleColor">Vehicle Color</label>
                             <input type="text" id="vehicleColor" placeholder="e.g. Red, Blue, White" />
                         </div>
                     </div>
@@ -419,7 +430,7 @@
                     </div>
 
                     <!-- ========================================================== -->
-                    <!-- AREA – with Mapbox Geocoder (replaces Assigned Rank)       -->
+                    <!-- AREA – with Mapbox Geocoder                                -->
                     <!-- ========================================================== -->
                     <div class="form-group">
                         <label for="area">Area <span class="required">*</span></label>
@@ -436,7 +447,7 @@
 
                     <!-- Submit -->
                     <button type="submit" class="btn-submit" id="submitBtn">
-                        Register Vehicle
+                        Register Driver
                     </button>
                 </form>
             </div>
@@ -470,10 +481,12 @@
         const userEmailEl = document.getElementById('userEmail');
         const logoutBtn = document.getElementById('logoutBtn');
 
-        const vehicleForm = document.getElementById('vehicleForm');
-        const vehicleType = document.getElementById('vehicleType');
-        const vehicleMake = document.getElementById('vehicleMake');
-        const vehicleModel = document.getElementById('vehicleModel');
+        const driverForm = document.getElementById('driverForm');
+        const fullName = document.getElementById('fullName');
+        const email = document.getElementById('email');
+        const password = document.getElementById('password');
+        const phone = document.getElementById('phone');
+        const licenseNumber = document.getElementById('licenseNumber');
         const vehicleYear = document.getElementById('vehicleYear');
         const vehicleColor = document.getElementById('vehicleColor');
         const licensePlate = document.getElementById('licensePlate');
@@ -486,12 +499,11 @@
         const errorMsg = document.getElementById('errorMsg');
 
         // ============================================================
-        // MAPBOX CONFIG - TOKEN FROM ENVIRONMENT VARIABLE
+        // MAPBOX CONFIG
         // ============================================================
-        // IMPORTANT: Replace this with your actual token, but DO NOT commit it to Git!
-        // Use environment variables or a config file that is .gitignored.
-        // For development, you can set a local variable (but don't commit it).
-        const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN_HERE';
+        // ⚠️ IMPORTANT: Replace this with your actual token
+        // For production, use environment variables (DO NOT commit this token to Git)
+        const MAPBOX_TOKEN = 'pk.eyJ1IjoiYXNpbmdoLXN0dWRpbyIsImEiOiJjbHlqajN3c3QwMnY3MmxzY2I5YThvdWJwIn0.0I99oKh4TxTQO-Ssc4k9xQ';
 
         // ============================================================
         // AUTH CHECK
@@ -527,7 +539,7 @@
         function initMapboxGeocoder() {
             try {
                 // Check if token is set
-                if (MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE' || !MAPBOX_TOKEN) {
+                if (!MAPBOX_TOKEN || MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE') {
                     console.warn('⚠️ Mapbox token not set. Please set your Mapbox token.');
                     showFallbackInput();
                     return;
@@ -626,7 +638,7 @@
         });
 
         // ============================================================
-        // FORM SUBMISSION
+        // FORM SUBMISSION – Creates Firebase Auth User + DB Entry
         // ============================================================
         function showSuccess(message) {
             successMsg.textContent = message;
@@ -647,27 +659,25 @@
 
         function setButtonLoading(loading) {
             if (loading) {
-                submitBtn.innerHTML = '<span class="spinner"></span> Saving...';
+                submitBtn.innerHTML = '<span class="spinner"></span> Creating Driver...';
                 submitBtn.disabled = true;
             } else {
-                submitBtn.innerHTML = 'Register Vehicle';
+                submitBtn.innerHTML = 'Register Driver';
                 submitBtn.disabled = false;
             }
         }
 
-        vehicleForm.addEventListener('submit', function(e) {
+        driverForm.addEventListener('submit', function(e) {
             e.preventDefault();
             hideMessages();
 
             // Get area value from geocoder or fallback
             let areaValue = areaName.value;
             if (!areaValue) {
-                // Try to get from geocoder input
                 const geocoderInput = document.querySelector('.mapboxgl-ctrl-geocoder input');
                 if (geocoderInput) {
                     areaValue = geocoderInput.value;
                 }
-                // Fallback
                 const fallbackInput = document.getElementById('areaFallback');
                 if (fallbackInput) {
                     areaValue = fallbackInput.value;
@@ -675,54 +685,72 @@
             }
 
             // Validate required fields
-            const type = vehicleType.value.trim();
-            const make = vehicleMake.value.trim();
-            const model = vehicleModel.value.trim();
-            const plate = licensePlate.value.trim();
+            const name = fullName.value.trim();
+            const emailVal = email.value.trim();
+            const passVal = password.value.trim();
+            const phoneVal = phone.value.trim();
+            const licenseVal = licenseNumber.value.trim();
+            const plateVal = licensePlate.value.trim();
 
-            if (!type || !make || !model || !plate || !areaValue) {
+            if (!name || !emailVal || !passVal || !phoneVal || !licenseVal || !plateVal || !areaValue) {
                 showError('Please fill in all required fields (marked with *).');
                 return;
             }
 
-            // Get current user
-            const user = auth.currentUser;
-            if (!user) {
-                showError('You must be logged in to register a vehicle.');
+            if (passVal.length < 6) {
+                showError('Password must be at least 6 characters.');
+                return;
+            }
+
+            // Get current admin user
+            const adminUser = auth.currentUser;
+            if (!adminUser) {
+                showError('You must be logged in to register a driver.');
                 return;
             }
 
             setButtonLoading(true);
 
-            // Build vehicle data object
-            const vehicleData = {
-                type: type,
-                make: make,
-                model: model,
-                year: vehicleYear.value.trim() || null,
-                color: vehicleColor.value.trim() || null,
-                licensePlate: plate.toUpperCase(),
-                area: areaValue,
-                areaLat: areaLat.value || null,
-                areaLng: areaLng.value || null,
-                registeredBy: user.uid,
-                registeredByEmail: user.email,
-                registeredAt: firebase.database.ServerValue.TIMESTAMP,
-                status: 'active'
-            };
+            // ============================================================
+            // STEP 1: Create Firebase Auth account for the driver
+            // ============================================================
+            auth.createUserWithEmailAndPassword(emailVal, passVal)
+                .then((userCredential) => {
+                    const driverUid = userCredential.user.uid;
 
-            // Save to Firebase Realtime Database
-            const newVehicleRef = database.ref('vehicles').push();
+                    // ============================================================
+                    // STEP 2: Save driver data to Realtime Database
+                    // ============================================================
+                    const driverData = {
+                        fullName: name,
+                        email: emailVal,
+                        phone: phoneVal,
+                        licenseNumber: licenseVal,
+                        vehicleYear: vehicleYear.value.trim() || null,
+                        vehicleColor: vehicleColor.value.trim() || null,
+                        licensePlate: plateVal.toUpperCase(),
+                        area: areaValue,
+                        areaLat: areaLat.value || null,
+                        areaLng: areaLng.value || null,
+                        registeredBy: adminUser.uid,
+                        registeredByEmail: adminUser.email,
+                        registeredAt: firebase.database.ServerValue.TIMESTAMP,
+                        status: 'active',
+                        role: 'driver'
+                    };
 
-            newVehicleRef.set(vehicleData)
+                    return database.ref('drivers/' + driverUid).set(driverData);
+                })
                 .then(() => {
                     setButtonLoading(false);
-                    showSuccess('✅ Vehicle registered successfully!');
+                    showSuccess('✅ Driver registered successfully!');
 
                     // Reset form
-                    vehicleType.value = '';
-                    vehicleMake.value = '';
-                    vehicleModel.value = '';
+                    fullName.value = '';
+                    email.value = '';
+                    password.value = '';
+                    phone.value = '';
+                    licenseNumber.value = '';
                     vehicleYear.value = '';
                     vehicleColor.value = '';
                     licensePlate.value = '';
@@ -740,23 +768,33 @@
                         fallbackInput.value = '';
                     }
 
-                    console.log('🚗 Vehicle ID:', newVehicleRef.key);
+                    console.log('👤 Driver registered successfully!');
                 })
                 .catch((error) => {
                     setButtonLoading(false);
-                    showError('❌ Error saving vehicle: ' + error.message);
+
+                    // Handle specific Firebase Auth errors
+                    let errorMessage = error.message;
+                    if (error.code === 'auth/email-already-in-use') {
+                        errorMessage = 'This email is already registered. Please use a different email.';
+                    } else if (error.code === 'auth/weak-password') {
+                        errorMessage = 'Password is too weak. Please use at least 6 characters.';
+                    } else if (error.code === 'auth/invalid-email') {
+                        errorMessage = 'Please enter a valid email address.';
+                    }
+
+                    showError('❌ Error: ' + errorMessage);
                     console.error('Firebase error:', error);
                 });
         });
 
         // ============================================================
-        // DEMO: Pre-fill with test data (optional)
+        // INIT
         // ============================================================
         console.log('✅ Admin dashboard ready.');
-        console.log('📌 Vehicle Type: Minibus taxis removed.');
-        console.log('📌 Assigned Rank removed.');
-        console.log('📌 Area field with Mapbox geocoder added.');
-        console.log('📌 Mapbox token: ' + (MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE' ? '⚠️ NOT SET' : '✅ SET'));
+        console.log('📌 Vehicle Type: REMOVED per request.');
+        console.log('📌 Password field: ADDED for driver registration.');
+        console.log('📌 Area field: Mapbox geocoder with autocomplete.');
     </script>
 
 </body>
