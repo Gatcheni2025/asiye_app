@@ -486,9 +486,12 @@
         const errorMsg = document.getElementById('errorMsg');
 
         // ============================================================
-        // MAPBOX CONFIG
+        // MAPBOX CONFIG - TOKEN FROM ENVIRONMENT VARIABLE
         // ============================================================
-        const MAPBOX_TOKEN = 'pk.eyJ1IjoiYXNpbmdoLXN0dWRpbyIsImEiOiJjbHlqajN3c3QwMnY3MmxzY2I5YThvdWJwIn0.0I99oKh4TxTQO-Ssc4k9xQ';
+        // IMPORTANT: Replace this with your actual token, but DO NOT commit it to Git!
+        // Use environment variables or a config file that is .gitignored.
+        // For development, you can set a local variable (but don't commit it).
+        const MAPBOX_TOKEN = 'YOUR_MAPBOX_TOKEN_HERE';
 
         // ============================================================
         // AUTH CHECK
@@ -523,6 +526,13 @@
 
         function initMapboxGeocoder() {
             try {
+                // Check if token is set
+                if (MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE' || !MAPBOX_TOKEN) {
+                    console.warn('⚠️ Mapbox token not set. Please set your Mapbox token.');
+                    showFallbackInput();
+                    return;
+                }
+
                 // Set the access token
                 mapboxgl.accessToken = MAPBOX_TOKEN;
 
@@ -571,33 +581,35 @@
 
             } catch (error) {
                 console.error('❌ Mapbox Geocoder initialization error:', error);
-                // Fallback: use a regular input
-                const container = document.getElementById('geocoder-container');
-                if (container) {
-                    const fallbackInput = document.createElement('input');
-                    fallbackInput.type = 'text';
-                    fallbackInput.id = 'areaFallback';
-                    fallbackInput.className = 'form-control';
-                    fallbackInput.placeholder = 'Enter area name (fallback)';
-                    fallbackInput.style.cssText = `
-                        width: 100%;
-                        background: #1e2632;
-                        border: 1px solid #2f3a48;
-                        border-radius: 12px;
-                        padding: 0.75rem 1rem;
-                        color: #f0f4fa;
-                        font-size: 0.95rem;
-                        outline: none;
-                    `;
-                    container.appendChild(fallbackInput);
+                showFallbackInput();
+            }
+        }
 
-                    // Use fallback input
-                    fallbackInput.addEventListener('input', function() {
-                        areaName.value = this.value;
-                        areaLat.value = '';
-                        areaLng.value = '';
-                    });
-                }
+        function showFallbackInput() {
+            const container = document.getElementById('geocoder-container');
+            if (container) {
+                const fallbackInput = document.createElement('input');
+                fallbackInput.type = 'text';
+                fallbackInput.id = 'areaFallback';
+                fallbackInput.className = 'form-control';
+                fallbackInput.placeholder = 'Enter area name (fallback)';
+                fallbackInput.style.cssText = `
+                    width: 100%;
+                    background: #1e2632;
+                    border: 1px solid #2f3a48;
+                    border-radius: 12px;
+                    padding: 0.75rem 1rem;
+                    color: #f0f4fa;
+                    font-size: 0.95rem;
+                    outline: none;
+                `;
+                container.appendChild(fallbackInput);
+
+                fallbackInput.addEventListener('input', function() {
+                    areaName.value = this.value;
+                    areaLat.value = '';
+                    areaLng.value = '';
+                });
             }
         }
 
@@ -744,6 +756,7 @@
         console.log('📌 Vehicle Type: Minibus taxis removed.');
         console.log('📌 Assigned Rank removed.');
         console.log('📌 Area field with Mapbox geocoder added.');
+        console.log('📌 Mapbox token: ' + (MAPBOX_TOKEN === 'YOUR_MAPBOX_TOKEN_HERE' ? '⚠️ NOT SET' : '✅ SET'));
     </script>
 
 </body>
