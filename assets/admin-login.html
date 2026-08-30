@@ -1,59 +1,48 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Admin Login · Asye</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <style>
-        /* ----- RESET & BASE ----- */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
         }
-
         body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             background: #0b0e14;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             padding: 1.5rem;
+            color: #e8ecf4;
         }
-
-        /* ----- LOGIN CARD ----- */
         .login-card {
             background: #141a24;
             border-radius: 24px;
             padding: 2.8rem 2.8rem 2.8rem;
             width: 100%;
-            max-width: 400px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+            max-width: 420px;
             border: 1px solid #2a3340;
-            transition: all 0.2s;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
         }
-
         .login-card h1 {
-            color: #ffffff;
             font-size: 1.8rem;
             font-weight: 600;
-            letter-spacing: -0.5px;
+            color: #ffffff;
             margin-bottom: 0.2rem;
         }
-
         .login-card .subhead {
             color: #8b95a9;
             font-size: 0.95rem;
-            font-weight: 400;
-            margin-bottom: 2rem;
+            margin-bottom: 1.8rem;
         }
-
-        /* ----- FORM ELEMENTS ----- */
         .form-group {
             margin-bottom: 1.25rem;
         }
-
         .form-group label {
             display: block;
             color: #c8d0dc;
@@ -63,7 +52,6 @@
             letter-spacing: 0.4px;
             margin-bottom: 0.4rem;
         }
-
         .form-group input {
             width: 100%;
             background: #1e2632;
@@ -75,17 +63,13 @@
             outline: none;
             transition: border 0.25s, box-shadow 0.25s;
         }
-
         .form-group input:focus {
             border-color: #5b7cfa;
             box-shadow: 0 0 0 4px rgba(91, 124, 250, 0.12);
         }
-
         .form-group input::placeholder {
             color: #5d6a7e;
         }
-
-        /* ----- OPTIONS ROW ----- */
         .flex-row {
             display: flex;
             justify-content: space-between;
@@ -94,7 +78,6 @@
             flex-wrap: wrap;
             gap: 0.5rem;
         }
-
         .remember-me {
             display: flex;
             align-items: center;
@@ -103,26 +86,22 @@
             font-size: 0.85rem;
             cursor: pointer;
         }
-
         .remember-me input[type="checkbox"] {
             accent-color: #5b7cfa;
             width: 17px;
             height: 17px;
             cursor: pointer;
         }
-
         .forgot-link {
             color: #8b9cbb;
             font-size: 0.85rem;
             text-decoration: none;
             transition: color 0.2s;
+            cursor: pointer;
         }
-
         .forgot-link:hover {
             color: #b0c4e8;
         }
-
-        /* ----- SIGN IN BUTTON ----- */
         .btn-signin {
             width: 100%;
             background: #5b7cfa;
@@ -137,23 +116,18 @@
             transition: background 0.2s, transform 0.1s, box-shadow 0.2s;
             box-shadow: 0 4px 20px rgba(91, 124, 250, 0.3);
         }
-
         .btn-signin:hover {
             background: #4a6ae8;
             box-shadow: 0 6px 24px rgba(91, 124, 250, 0.4);
         }
-
         .btn-signin:active {
             transform: scale(0.97);
         }
-
         .btn-signin:disabled {
             opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
-
-        /* ----- BACK LINK ----- */
         .back-link {
             display: block;
             text-align: center;
@@ -163,12 +137,9 @@
             text-decoration: none;
             transition: color 0.2s;
         }
-
         .back-link:hover {
             color: #a0b2d0;
         }
-
-        /* ----- FOOTER ----- */
         .footer-meta {
             margin-top: 2rem;
             padding-top: 1rem;
@@ -181,17 +152,42 @@
             flex-wrap: wrap;
             gap: 0.3rem;
         }
-
         .footer-meta .brand {
             color: #7b8ba8;
             font-weight: 500;
         }
-
-        .footer-meta span {
-            color: #5f6e86;
+        .error-msg {
+            background: #1e1a1f;
+            border: 1px solid #4a2a2a;
+            border-radius: 12px;
+            padding: 0.7rem 1rem;
+            margin-bottom: 1rem;
+            color: #f28b82;
+            font-size: 0.85rem;
+            display: none;
         }
-
-        /* ----- NETWORK BAR (like the screenshot) ----- */
+        .error-msg.show {
+            display: block;
+        }
+        .error-msg.success {
+            border-color: #2a4a2a;
+            color: #6f8a6f;
+        }
+        .spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #2f3a48;
+            border-top: 2px solid #5b7cfa;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
         .network-bar {
             display: flex;
             gap: 1.2rem;
@@ -205,31 +201,25 @@
             letter-spacing: 0.3px;
             flex-wrap: wrap;
         }
-
         .network-bar span {
             color: #7c8ba5;
         }
-
         .network-bar .active {
             color: #b8c9e8;
             font-weight: 500;
         }
-
-        /* ----- STATUS INDICATOR ----- */
         .status-indicator {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-top: 0.6rem;
         }
-
         .status-indicator .left {
             color: #5f6e86;
             font-size: 0.7rem;
             text-transform: uppercase;
             letter-spacing: 0.3px;
         }
-
         .status-indicator .badge-ok {
             color: #6f8a6f;
             font-size: 0.7rem;
@@ -237,27 +227,19 @@
             padding: 0.1rem 0.8rem;
             border-radius: 30px;
         }
-
-        .status-indicator .badge-hidden {
-            color: #7b8aa3;
-            font-size: 0.65rem;
-        }
-
-        /* ----- REQUEST BLOCKS (matching the error style) ----- */
         .request-block {
             margin-top: 1.2rem;
             background: #0e141e;
             border-radius: 14px;
             padding: 0.8rem 1rem;
             border: 1px solid #1f293a;
-            font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
             font-size: 0.7rem;
             color: #b0c4d8;
             overflow-x: auto;
             white-space: pre-wrap;
             word-break: break-word;
         }
-
         .request-block .label {
             color: #6f80a0;
             font-size: 0.6rem;
@@ -266,32 +248,13 @@
             margin-bottom: 0.3rem;
             font-weight: 600;
         }
-
-        .request-block .error-text {
-            color: #f28b82;
-        }
-
-        .request-block .json-key {
-            color: #9ac7ff;
-        }
-
-        .request-block .json-string {
-            color: #b5d6a2;
-        }
-
-        .request-block .json-bracket {
-            color: #d4dcec;
-        }
-
-        /* ----- RESPONSIVE ----- */
+        .request-block .error-text { color: #f28b82; }
+        .request-block .json-key { color: #9ac7ff; }
+        .request-block .json-string { color: #b5d6a2; }
+        .request-block .json-value { color: #f7c95c; }
         @media (max-width: 480px) {
-            .login-card {
-                padding: 1.8rem 1.5rem;
-            }
-            .flex-row {
-                flex-direction: column;
-                align-items: flex-start;
-            }
+            .login-card { padding: 1.8rem 1.5rem; }
+            .flex-row { flex-direction: column; align-items: flex-start; }
         }
     </style>
 </head>
@@ -299,36 +262,37 @@
 
 <div class="login-card">
 
-    <!-- HEADER -->
-    <h1>Admin Panel</h1>
+    <h1>🔐 Admin Panel</h1>
     <div class="subhead">Sign in to manage your platform</div>
 
-    <!-- LOGIN FORM -->
+    <!-- Error / Status message -->
+    <div id="errorMsg" class="error-msg"></div>
+
+    <!-- Login Form -->
     <form id="loginForm" onsubmit="return false;">
         <div class="form-group">
             <label for="email">Email Address</label>
-            <input type="email" id="email" value="admin@asyie.cloud" placeholder="admin@asyie.cloud" />
+            <input type="email" id="email" value="admin2@asiye.cloud" placeholder="admin@asiye.cloud" autocomplete="email" />
         </div>
 
         <div class="form-group">
             <label for="password">Password</label>
-            <input type="password" id="password" value="**********" placeholder="••••••••••" />
+            <input type="password" id="password" value="admin123" placeholder="••••••••••" autocomplete="current-password" />
         </div>
 
         <div class="flex-row">
             <label class="remember-me">
                 <input type="checkbox" checked /> Remember me
             </label>
-            <a href="#" class="forgot-link">Forgot password?</a>
+            <span class="forgot-link" onclick="resetPassword()">Forgot password?</span>
         </div>
 
         <button type="submit" class="btn-signin" id="signInBtn">Sign In</button>
     </form>
 
-    <!-- BACK LINK -->
     <a href="#" class="back-link">← Back to Main App</a>
 
-    <!-- NETWORK BAR -->
+    <!-- Network Bar -->
     <div class="network-bar">
         <span class="active">Network</span>
         <span>Performance</span>
@@ -338,158 +302,19 @@
         <span>Lighthouse</span>
     </div>
 
-    <!-- STATUS -->
+    <!-- Status -->
     <div class="status-indicator">
         <span class="left">Default levels</span>
         <span class="badge-ok">No Issues</span>
-        <span class="badge-hidden">1 hidden</span>
+        <span class="badge-hidden" style="color:#7b8aa3;font-size:0.65rem;">1 hidden</span>
     </div>
 
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – Login error (auth/internal-error)           -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⛔ Login error</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"code"</span>: <span class="json-string">"auth/internal-error"</span>,<br />
-            &nbsp;&nbsp;<span class="json-key">"message"</span>: <span class="json-string">"{\"error\":{\"code\":400,\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"errors\":[{\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"domain\":\"global\",\"reason\":\"invalid\"}]}}"</span><br />
-            <span class="error-text">}</span>
-        </div>
+    <!-- Request / Response block -->
+    <div class="request-block" id="requestBlock">
+        <div class="label" id="requestLabel">🔓 Ready to Login</div>
+        <div id="requestBody">Enter your credentials and click "Sign In"</div>
     </div>
 
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – POST                                        -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⬆ POST</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"login"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;},<br />
-            &nbsp;&nbsp;<span class="json-key">"request"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"url"</span>: <span class="json-string">"https://example.com/login"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"method"</span>: <span class="json-string">"POST"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"body"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;&nbsp;&nbsp;}<br />
-            &nbsp;&nbsp;}<br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – repeated error                              -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⛔ Login error</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"code"</span>: <span class="json-string">"auth/internal-error"</span>,<br />
-            &nbsp;&nbsp;<span class="json-key">"message"</span>: <span class="json-string">"{\"error\":{\"code\":400,\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"errors\":[{\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"domain\":\"global\",\"reason\":\"invalid\"}]}}"</span><br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – POST (repeated)                             -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⬆ POST</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"login"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;},<br />
-            &nbsp;&nbsp;<span class="json-key">"request"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"url"</span>: <span class="json-string">"https://example.com/login"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"method"</span>: <span class="json-string">"POST"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"body"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;&nbsp;&nbsp;}<br />
-            &nbsp;&nbsp;}<br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – error (third)                               -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⛔ Login error</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"code"</span>: <span class="json-string">"auth/internal-error"</span>,<br />
-            &nbsp;&nbsp;<span class="json-key">"message"</span>: <span class="json-string">"{\"error\":{\"code\":400,\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"errors\":[{\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"domain\":\"global\",\"reason\":\"invalid\"}]}}"</span><br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – POST (third)                                -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⬆ POST</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"login"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;},<br />
-            &nbsp;&nbsp;<span class="json-key">"request"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"url"</span>: <span class="json-string">"https://example.com/login"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"method"</span>: <span class="json-string">"POST"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"body"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;&nbsp;&nbsp;}<br />
-            &nbsp;&nbsp;}<br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – error (fourth)                              -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⛔ Login error</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"code"</span>: <span class="json-string">"auth/internal-error"</span>,<br />
-            &nbsp;&nbsp;<span class="json-key">"message"</span>: <span class="json-string">"{\"error\":{\"code\":400,\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"errors\":[{\"message\":\"INVALID_LOGIN_CREDENTIALS\",\"domain\":\"global\",\"reason\":\"invalid\"}]}}"</span><br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- ============================================================ -->
-    <!--  REQUEST BLOCK – POST (fourth)                               -->
-    <!-- ============================================================ -->
-    <div class="request-block">
-        <div class="label">⬆ POST</div>
-        <div>
-            <span class="error-text">{</span><br />
-            &nbsp;&nbsp;<span class="json-key">"login"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;},<br />
-            &nbsp;&nbsp;<span class="json-key">"request"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"url"</span>: <span class="json-string">"https://example.com/login"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"method"</span>: <span class="json-string">"POST"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"body"</span>: {<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"username"</span>: <span class="json-string">"admin"</span>,<br />
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="json-key">"password"</span>: <span class="json-string">"admin"</span><br />
-            &nbsp;&nbsp;&nbsp;&nbsp;}<br />
-            &nbsp;&nbsp;}<br />
-            <span class="error-text">}</span>
-        </div>
-    </div>
-
-    <!-- FOOTER -->
     <div class="footer-meta">
         <span class="brand">Admin Login · Asye</span>
         <span>Google Password Manager</span>
@@ -498,82 +323,226 @@
 
 </div>
 
-<!-- ============================================================ -->
-<!--  JAVASCRIPT – handles sign-in demo                           -->
-<!-- ============================================================ -->
 <script>
-    (function() {
-        const signInBtn = document.getElementById('signInBtn');
-        const emailInput = document.getElementById('email');
-        const passwordInput = document.getElementById('password');
+    // ============================================================
+    // FIREBASE CONFIG
+    // ============================================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
+        authDomain: "asiye-80386.firebaseapp.com",
+        databaseURL: "https://asiye-80386-default-rtdb.firebaseio.com",
+        projectId: "asiye-80386",
+        storageBucket: "asiye-80386.firebasestorage.app",
+        appId: "1:531902350858:web:f8a4a246bf350d50e3c1f3"
+    };
 
-        // Helper to show a temporary message on the button
-        function setButtonState(text, disabled = true) {
-            signInBtn.textContent = text;
-            signInBtn.disabled = disabled;
-            if (disabled) {
-                signInBtn.style.opacity = '0.7';
-            } else {
-                signInBtn.style.opacity = '1';
-            }
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+
+    // ============================================================
+    // DOM ELEMENTS
+    // ============================================================
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const signInBtn = document.getElementById('signInBtn');
+    const errorMsg = document.getElementById('errorMsg');
+    const requestBody = document.getElementById('requestBody');
+    const requestLabel = document.getElementById('requestLabel');
+
+    // ============================================================
+    // HELPER FUNCTIONS
+    // ============================================================
+    function showError(message, isSuccess = false) {
+        errorMsg.textContent = message;
+        errorMsg.className = 'error-msg show';
+        if (isSuccess) {
+            errorMsg.classList.add('success');
         }
+    }
 
-        // Simulate a login attempt
-        function handleLogin(e) {
-            e.preventDefault();
+    function hideError() {
+        errorMsg.className = 'error-msg';
+    }
 
-            const email = emailInput.value.trim();
-            const password = passwordInput.value.trim();
-
-            // Basic validation
-            if (!email || !password) {
-                alert('Please enter both email and password.');
-                return;
-            }
-
-            // Show loading state
-            setButtonState('Signing in…', true);
-
-            // Simulate network delay
-            setTimeout(() => {
-                // Always show the internal-error demo response
-                setButtonState('Sign In', false);
-
-                // Show the error message (matching the request block)
-                alert(
-                    'Demo: Invalid login credentials (auth/internal-error)\n\n' +
-                    '{\n' +
-                    '  "code": "auth/internal-error",\n' +
-                    '  "message": "{\\"error\\":{\\"code\\":400,\\"message\\":\\"INVALID_LOGIN_CREDENTIALS\\",\\"errors\\":[{\\"message\\":\\"INVALID_LOGIN_CREDENTIALS\\",\\"domain\\":\\"global\\",\\"reason\\":\\"invalid\\"}]}}"\n' +
-                    '}'
-                );
-            }, 800);
+    function setButtonLoading(loading) {
+        if (loading) {
+            signInBtn.innerHTML = '<span class="spinner"></span> Signing in…';
+            signInBtn.disabled = true;
+        } else {
+            signInBtn.innerHTML = 'Sign In';
+            signInBtn.disabled = false;
         }
+    }
 
-        // Attach event listeners
-        signInBtn.addEventListener('click', handleLogin);
+    function updateRequestBlock(label, body) {
+        requestLabel.textContent = label;
+        requestBody.innerHTML = body;
+    }
 
-        // Also allow Enter key to submit
-        document.getElementById('loginForm').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                handleLogin(e);
-            }
-        });
+    // ============================================================
+    // PASSWORD RESET
+    // ============================================================
+    function resetPassword() {
+        const email = emailInput.value.trim();
+        if (!email) {
+            showError('Please enter your email address to reset password.');
+            return;
+        }
+        hideError();
+        updateRequestBlock('⏳ Sending reset email...', 'Please wait...');
 
-        // Reset button state if user types (optional)
-        [emailInput, passwordInput].forEach(input => {
-            input.addEventListener('input', function() {
-                if (signInBtn.disabled && signInBtn.textContent === 'Signing in…') {
-                    // Don't reset during active loading
-                    return;
-                }
-                signInBtn.textContent = 'Sign In';
-                signInBtn.disabled = false;
-                signInBtn.style.opacity = '1';
+        auth.sendPasswordResetEmail(email)
+            .then(() => {
+                updateRequestBlock('✅ Reset Email Sent', `
+                    A password reset link has been sent to<br />
+                    <span class="json-string">"${email}"</span>
+                `);
+                showError('✅ Password reset email sent! Check your inbox.', true);
+            })
+            .catch((error) => {
+                updateRequestBlock('❌ Reset Failed', `
+                    <span class="error-text">{</span><br />
+                    &nbsp;&nbsp;<span class="json-key">"code"</span>: <span class="json-string">"${error.code}"</span>,<br />
+                    &nbsp;&nbsp;<span class="json-key">"message"</span>: <span class="json-string">"${error.message}"</span><br />
+                    <span class="error-text">}</span>
+                `);
+                showError('❌ ' + error.message);
             });
+    }
+    // Expose to global scope for onclick
+    window.resetPassword = resetPassword;
+
+    // ============================================================
+    // LOGIN HANDLER
+    // ============================================================
+    function handleLogin(e) {
+        e.preventDefault();
+        hideError();
+
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!email || !password) {
+            showError('Please enter both email and password.');
+            return;
+        }
+
+        // Show loading state
+        setButtonLoading(true);
+        updateRequestBlock('⏳ Authenticating...', 'Waiting for Firebase response...');
+
+        // Attempt sign-in with Firebase
+        auth.signInWithEmailAndPassword(email, password)
+            .then((userCredential) => {
+                const user = userCredential.user;
+                setButtonLoading(false);
+
+                // Show success
+                updateRequestBlock('✅ Login Successful', `
+                    <span class="json-key">"user"</span>: {<br />
+                    &nbsp;&nbsp;<span class="json-key">"uid"</span>: <span class="json-string">"${user.uid}"</span>,<br />
+                    &nbsp;&nbsp;<span class="json-key">"email"</span>: <span class="json-string">"${user.email}"</span>,<br />
+                    &nbsp;&nbsp;<span class="json-key">"emailVerified"</span>: <span class="json-value">${user.emailVerified}</span><br />
+                    }
+                `);
+
+                showError('✅ Welcome back, ' + user.email + '!', true);
+
+                // Redirect after a short delay
+                setTimeout(() => {
+                    // window.location.href = 'admin-dashboard.html';
+                    alert('✅ Login successful! You would be redirected to the dashboard now.');
+                }, 1500);
+            })
+            .catch((error) => {
+                setButtonLoading(false);
+                const errorCode = error.code;
+                const errorMessage = error.message;
+
+                // Show error in the request block
+                updateRequestBlock('❌ Login Failed', `
+                    <span class="error-text">{</span><br />
+                    &nbsp;&nbsp;<span class="json-key">"code"</span>: <span class="json-string">"${errorCode}"</span>,<br />
+                    &nbsp;&nbsp;<span class="json-key">"message"</span>: <span class="json-string">"${errorMessage}"</span><br />
+                    <span class="error-text">}</span>
+                `);
+
+                // Show user-friendly error
+                let friendlyMessage = errorMessage;
+                if (errorCode === 'auth/user-not-found') {
+                    friendlyMessage = 'No account found with this email address.';
+                } else if (errorCode === 'auth/wrong-password') {
+                    friendlyMessage = 'Incorrect password. Please try again.';
+                } else if (errorCode === 'auth/too-many-requests') {
+                    friendlyMessage = 'Too many failed attempts. Please try again later.';
+                } else if (errorCode === 'auth/invalid-email') {
+                    friendlyMessage = 'Please enter a valid email address.';
+                } else if (errorCode === 'auth/network-request-failed') {
+                    friendlyMessage = 'Network error. Please check your internet connection.';
+                } else if (errorCode === 'auth/user-disabled') {
+                    friendlyMessage = 'This account has been disabled. Please contact support.';
+                }
+                showError('❌ ' + friendlyMessage);
+            });
+    }
+
+    // ============================================================
+    // EVENT LISTENERS
+    // ============================================================
+    signInBtn.addEventListener('click', handleLogin);
+
+    // Allow Enter key to submit
+    document.getElementById('loginForm').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            handleLogin(e);
+        }
+    });
+
+    // Clear error when user types
+    [emailInput, passwordInput].forEach(input => {
+        input.addEventListener('input', function() {
+            hideError();
+            if (!signInBtn.disabled) {
+                signInBtn.innerHTML = 'Sign In';
+            }
         });
-    })();
+    });
+
+    // ============================================================
+    // CHECK IF USER IS ALREADY LOGGED IN
+    // ============================================================
+    auth.onAuthStateChanged((user) => {
+        if (user) {
+            // User is already signed in
+            updateRequestBlock('👤 Already Logged In', `
+                <span class="json-key">"user"</span>: {<br />
+                &nbsp;&nbsp;<span class="json-key">"email"</span>: <span class="json-string">"${user.email}"</span>,<br />
+                &nbsp;&nbsp;<span class="json-key">"uid"</span>: <span class="json-string">"${user.uid}"</span><br />
+                }
+            `);
+            showError('✅ You are already signed in as ' + user.email, true);
+            setTimeout(() => {
+                // Redirect to dashboard
+                // window.location.href = 'admin-dashboard.html';
+            }, 1000);
+        } else {
+            // No user signed in
+            updateRequestBlock('🔓 Ready to Login', 'Enter your credentials and click "Sign In"');
+        }
+    });
+
+    // ============================================================
+    // QUICK TEST: Verify Firebase connection on load
+    // ============================================================
+    console.log('🔥 Firebase initialized. Auth ready.');
+    console.log('📧 Test with: admin2@asiye.cloud / admin123');
+
+    // Auto-focus password for faster testing
+    // passwordInput.focus();
+
+    console.log('✅ Login page loaded. Email/Password provider should be enabled in Firebase Console.');
 </script>
 
 </body>
