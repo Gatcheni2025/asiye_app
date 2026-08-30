@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Admin Login | Asiye</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Manrope', sans-serif;
+            background: #0a0e17;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+            background-image: radial-gradient(ellipse at top left, rgba(0, 123, 255, 0.08) 0%, transparent 50%),
+                              radial-gradient(ellipse at bottom right, rgba(40, 167, 69, 0.05) 0%, transparent 50%);
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+            background: #ffffff;
+            border-radius: 24px;
+            padding: 40px 32px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            animation: slideUp 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .login-header .logo {
+            width: 72px;
+            height: 72px;
+            border-radius: 18px;
+            object-fit: cover;
+            margin-bottom: 16px;
+            box-shadow: 0 8px 25px rgba(0, 123, 255, 0.2);
+        }
+
+        .login-header h1 {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #111;
+            letter-spacing: -0.5px;
+        }
+
+        .login-header h1 span {
+            color: #007BFF;
+        }
+
+        .login-header p {
+            color: #888;
+            font-size: 0.9rem;
+            margin-top: 4px;
+        }
+
+        .login-badge {
+            display: inline-block;
+            background: #e6f2ff;
+            color: #007BFF;
+            padding: 4px 16px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-top: 8px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 700;
+            font-size: 0.8rem;
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .form-group .input-wrapper {
+            position: relative;
+        }
+
+        .form-group .input-wrapper i {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #aaa;
+            font-size: 1rem;
+        }
+
+        .form-group .input-wrapper input {
+            width: 100%;
+            padding: 14px 14px 14px 44px;
+            border-radius: 12px;
+            border: 2px solid #e9ecef;
+            font-family: inherit;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+            color: #111;
+        }
+
+        .form-group .input-wrapper input:focus {
+            outline: none;
+            border-color: #007BFF;
+            background: #fff;
+            box-shadow: 0 0 0 4px rgba(0, 123, 255, 0.08);
+        }
+
+        .form-group .input-wrapper input::placeholder {
+            color: #aaa;
+        }
+
+        .form-options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            font-size: 0.85rem;
+        }
+
+        .form-options label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #666;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .form-options label input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: #007BFF;
+            cursor: pointer;
+        }
+
+        .form-options a {
+            color: #007BFF;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .form-options a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 16px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #007BFF, #0056b3);
+            color: #fff;
+            font-size: 1.05rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 8px 25px rgba(0, 123, 255, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 35px rgba(0, 123, 255, 0.4);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-login .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        .btn-login.loading .spinner {
+            display: inline-block;
+        }
+
+        .btn-login.loading .btn-text {
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .login-divider {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 24px 0;
+            color: #ccc;
+            font-size: 0.8rem;
+        }
+
+        .login-divider::before,
+        .login-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #e9ecef;
+        }
+
+        .back-link {
+            text-align: center;
+            margin-top: 16px;
+        }
+
+        .back-link a {
+            color: #888;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: color 0.2s;
+        }
+
+        .back-link a:hover {
+            color: #007BFF;
+        }
+
+        .error-message {
+            background: #fce4ec;
+            color: #c62828;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: none;
+            border-left: 4px solid #dc3545;
+        }
+
+        .error-message.show {
+            display: block;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-6px); }
+            75% { transform: translateX(6px); }
+        }
+
+        .success-message {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: none;
+            border-left: 4px solid #28a745;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        /* Demo Credentials Box */
+        .demo-creds {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 14px 18px;
+            margin-bottom: 20px;
+            border: 1px dashed #ced4da;
+            font-size: 0.8rem;
+            color: #666;
+        }
+
+        .demo-creds strong {
+            color: #111;
+        }
+
+        .demo-creds .code {
+            background: #e9ecef;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: #007BFF;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 28px 20px;
+            }
+
+            .login-header h1 {
+                font-size: 1.4rem;
+            }
+
+            .form-options {
+                flex-direction: column;
+                gap: 8px;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-container">
+    <!-- Header -->
+    <div class="login-header">
+        <img src="data/AsiyeNew.png" alt="Asiye" class="logo" onerror="this.src='https://asiye.cloud/images/logo.png'">
+        <h1>Asiye<span>Admin</span></h1>
+        <p>Secure Administrator Access</p>
+        <span class="login-badge"><i class="fas fa-shield-alt"></i> Admin Panel</span>
+    </div>
+
+    <!-- Error / Success Messages -->
+    <div id="errorMessage" class="error-message">
+        <i class="fas fa-exclamation-circle"></i>
+        <span id="errorText">Invalid credentials. Please try again.</span>
+    </div>
+
+    <div id="successMessage" class="success-message">
+        <i class="fas fa-check-circle"></i>
+        <span id="successText">Login successful! Redirecting...</span>
+    </div>
+
+    <!-- Demo Credentials -->
+    <div class="demo-creds">
+        <strong><i class="fas fa-info-circle"></i> Demo Admin</strong><br>
+        Email: <span class="code">admin@asiye.cloud</span><br>
+        Password: <span class="code">admin123</span>
+    </div>
+
+    <!-- Login Form -->
+    <form id="loginForm" onsubmit="handleAdminLogin(event)">
+        <div class="form-group">
+            <label for="adminEmail">Email Address</label>
+            <div class="input-wrapper">
+                <i class="fas fa-envelope"></i>
+                <input type="email" id="adminEmail" placeholder="admin@asiye.cloud" value="admin@asiye.cloud" required autofocus>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="adminPassword">Password</label>
+            <div class="input-wrapper">
+                <i class="fas fa-lock"></i>
+                <input type="password" id="adminPassword" placeholder="Enter your password" value="admin123" required>
+            </div>
+        </div>
+
+        <div class="form-options">
+            <label>
+                <input type="checkbox" id="rememberMe" checked>
+                Remember me
+            </label>
+            <a href="#" onclick="showToast('Contact support to reset your admin password.', 'info'); return false;">
+                Forgot password?
+            </a>
+        </div>
+
+        <button type="submit" class="btn-login" id="loginBtn">
+            <span class="spinner"></span>
+            <span class="btn-text"><i class="fas fa-sign-in-alt"></i> Sign In</span>
+        </button>
+    </form>
+
+    <div class="login-divider">or</div>
+
+    <div class="back-link">
+        <a href="index.html">
+            <i class="fas fa-arrow-left"></i>
+            Back to Main App
+        </a>
+    </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+<script>
+    // ============================================================
+    // FIREBASE CONFIG
+    // ============================================================
+    const firebaseConfig = {
+        apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
+        authDomain: "asiye-80386.firebaseapp.com",
+        databaseURL: "https://asiye-80386-default-rtdb.firebaseio.com",
+        projectId: "asiye-80386",
+        storageBucket: "asiye-80386.firebasestorage.app",
+        appId: "1:531902350858:web:f8a4a246bf350d50e3c1f3"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const database = firebase.database();
+
+    // ============================================================
+    // CHECK IF ALREADY LOGGED IN AS ADMIN
+    // ============================================================
+    // ============================================================
+// AUTH CHECK - UPDATED
+// ============================================================
+auth.onAuthStateChanged(function(user) {
+    if (!user) {
+        // Not logged in - redirect to admin login
+        window.location.href = 'admin-login.html';
+        return;
+    }
+
+    // Check if user is admin
+    database.ref('admins/' + user.uid).once('value', function(snapshot) {
+        if (!snapshot.exists()) {
+            // Not an admin - sign out and redirect
+            auth.signOut().then(function() {
+                window.location.href = 'admin-login.html';
+            });
+        } else {
+            // Admin logged in
+            var adminData = snapshot.val();
+            document.getElementById('adminName').textContent = adminData.name || 'Admin';
+            loadAllData();
+
+            // Store admin session
+            localStorage.setItem('adminSession', 'true');
+        }
+    });
+});
+    // ============================================================
+    // HANDLE ADMIN LOGIN
+    // ============================================================
+    function handleAdminLogin(event) {
+        event.preventDefault();
+
+        var email = document.getElementById('adminEmail').value.trim();
+        var password = document.getElementById('adminPassword').value;
+        var btn = document.getElementById('loginBtn');
+        var errorEl = document.getElementById('errorMessage');
+        var successEl = document.getElementById('successMessage');
+
+        // Hide previous messages
+        errorEl.classList.remove('show');
+        successEl.classList.remove('show');
+
+        // Validate
+        if (!email || !password) {
+            showError('Please enter both email and password.');
+            return;
+        }
+
+        // Show loading state
+        btn.classList.add('loading');
+        btn.disabled = true;
+
+        // Sign in with Firebase Auth
+        auth.signInWithEmailAndPassword(email, password)
+            .then(function(userCredential) {
+                var user = userCredential.user;
+
+                // Check if this user is an admin
+                return database.ref('admins/' + user.uid).once('value');
+            })
+            .then(function(snapshot) {
+                if (snapshot.exists()) {
+                    // Admin verified - login successful
+                    showSuccess('Login successful! Redirecting to dashboard...');
+
+                    // Store admin session
+                    localStorage.setItem('adminSession', 'true');
+
+                    // Redirect to admin dashboard
+                    setTimeout(function() {
+                        window.location.href = 'admin.html';
+                    }, 1000);
+
+                } else {
+                    // User is not an admin
+                    auth.signOut();
+                    showError('Access denied. You are not registered as an administrator.');
+
+                    btn.classList.remove('loading');
+                    btn.disabled = false;
+                }
+            })
+            .catch(function(error) {
+                console.error('Login error:', error);
+
+                var message = 'Invalid email or password. Please try again.';
+                if (error.code === 'auth/user-not-found') {
+                    message = 'No account found with this email address.';
+                } else if (error.code === 'auth/wrong-password') {
+                    message = 'Incorrect password. Please try again.';
+                } else if (error.code === 'auth/too-many-requests') {
+                    message = 'Too many failed attempts. Please wait a moment.';
+                }
+
+                showError(message);
+
+                btn.classList.remove('loading');
+                btn.disabled = false;
+            });
+    }
+
+    // ============================================================
+    // SHOW ERROR MESSAGE
+    // ============================================================
+    function showError(message) {
+        var errorEl = document.getElementById('errorMessage');
+        var errorText = document.getElementById('errorText');
+        errorText.textContent = message;
+        errorEl.classList.add('show');
+
+        // Auto-hide after 5 seconds
+        setTimeout(function() {
+            errorEl.classList.remove('show');
+        }, 5000);
+    }
+
+    // ============================================================
+    // SHOW SUCCESS MESSAGE
+    // ============================================================
+    function showSuccess(message) {
+        var successEl = document.getElementById('successMessage');
+        var successText = document.getElementById('successText');
+        successText.textContent = message;
+        successEl.classList.add('show');
+    }
+
+    // ============================================================
+    // SHOW TOAST (for forgot password)
+    // ============================================================
+    function showToast(message, type) {
+        // Create a simple toast notification
+        var toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: ${type === 'info' ? '#007BFF' : '#28a745'};
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            z-index: 99999;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+            animation: slideUp 0.3s ease;
+            max-width: 90%;
+            text-align: center;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transition = 'opacity 0.3s ease';
+            setTimeout(function() {
+                toast.remove();
+            }, 300);
+        }, 4000);
+    }
+
+    // ============================================================
+    // ENTER KEY SUPPORT
+    // ============================================================
+    document.getElementById('adminPassword').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+        }
+    });
+
+    document.getElementById('adminEmail').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('adminPassword').focus();
+        }
+    });
+
+    // ============================================================
+    // CREATE FIRST ADMIN (Run once to set up)
+    // ============================================================
+    // Uncomment and run this once to create the first admin account
+    /*
+    function createFirstAdmin() {
+        var email = 'admin@asiye.cloud';
+        var password = 'admin123';
+
+        auth.createUserWithEmailAndPassword(email, password)
+            .then(function(userCredential) {
+                return database.ref('admins/' + userCredential.user.uid).set({
+                    name: 'Admin',
+                    email: email,
+                    role: 'super_admin',
+                    createdAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            })
+            .then(function() {
+                console.log('Admin account created successfully!');
+                alert('Admin account created! Email: admin@asiye.cloud, Password: admin123');
+            })
+            .catch(function(error) {
+                if (error.code === 'auth/email-already-in-use') {
+                    console.log('Admin account already exists. You can login.');
+                } else {
+                    console.error('Error creating admin:', error);
+                }
+            });
+    }
+
+    // Call this once to create the admin account
+    // createFirstAdmin();
+    */
+</script>
+
+</body>
+</html>

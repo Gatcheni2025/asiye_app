@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Admin Account</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+</head>
+<body>
+    <h1>Creating Admin Account...</h1>
+    <div id="status">Initializing...</div>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
+            authDomain: "asiye-80386.firebaseapp.com",
+            databaseURL: "https://asiye-80386-default-rtdb.firebaseio.com",
+            projectId: "asiye-80386",
+            storageBucket: "asiye-80386.firebasestorage.app",
+            appId: "1:531902350858:web:f8a4a246bf350d50e3c1f3"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const database = firebase.database();
+
+        const ADMIN_EMAIL = 'admin@asiye.cloud';
+        const ADMIN_PASSWORD = 'admin123';
+
+        function createAdmin() {
+            document.getElementById('status').textContent = 'Creating admin account...';
+
+            auth.createUserWithEmailAndPassword(ADMIN_EMAIL, ADMIN_PASSWORD)
+                .then(function(userCredential) {
+                    document.getElementById('status').textContent = 'Account created! Saving admin data...';
+                    
+                    return database.ref('admins/' + userCredential.user.uid).set({
+                        name: 'Admin',
+                        email: ADMIN_EMAIL,
+                        role: 'super_admin',
+                        createdAt: firebase.database.ServerValue.TIMESTAMP
+                    });
+                })
+                .then(function() {
+                    document.getElementById('status').innerHTML = `
+                        ✅ Admin account created successfully!<br>
+                        <strong>Email:</strong> ${ADMIN_EMAIL}<br>
+                        <strong>Password:</strong> ${ADMIN_PASSWORD}<br><br>
+                        <a href="admin-login.html">Go to Admin Login</a>
+                    `;
+                })
+                .catch(function(error) {
+                    if (error.code === 'auth/email-already-in-use') {
+                        document.getElementById('status').innerHTML = `
+                            ⚠️ Admin account already exists.<br>
+                            <strong>Email:</strong> ${ADMIN_EMAIL}<br>
+                            <strong>Password:</strong> ${ADMIN_PASSWORD}<br><br>
+                            <a href="admin-login.html">Go to Admin Login</a>
+                        `;
+                    } else {
+                        document.getElementById('status').textContent = '❌ Error: ' + error.message;
+                    }
+                });
+        }
+
+        createAdmin();
+    </script>
+</body>
+</html>
