@@ -3982,7 +3982,10 @@ body.popup-open {
             </div>
         </div>
     </div>
-
+<!-- Queue Position Display -->
+<div id="driverQueuePosition" style="background: #2C2C2E; border-radius: 12px; padding: 12px; margin-bottom: 15px; border: 1px solid #333; text-align: center; display: none;">
+    <span style="color: #888; font-size: 0.8rem;">Checking queue position...</span>
+</div>
     <!-- 2. Balance & Debt Cards -->
     <div style="display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px;">
         <div style="background: #d4f59e; border-radius: 24px; padding: 25px; position: relative; box-shadow: 0 10px 20px rgba(0,0,0,0.2);">
@@ -15187,35 +15190,122 @@ window.openSetDestinationPopup = function() {
         }
     }, 500);
 };
+// ========================================================================
+// DRIVER: SAVE DESTINATION - UPDATED WITH QUEUE TIMESTAMP
+// ========================================================================
+
 window.saveDriverRoute = function() {
-    const route = document.getElementById('driverRouteInput').value.trim();
+    var route = document.getElementById('driverRouteInput').value.trim();
     if (!route) {
         showCommunicationBanner("Please enter a destination.", "warning");
         return;
     }
     
-    // Save to database
-    firebase.database().ref(`taxis/${userId}`).update({
+    // Check if the driver is already online and has passengers
+    if (window.taxiData && window.taxiData.currentRequest) {
+        showCommunicationBanner("Cannot change destination while on a trip.", "warning");
+        return;
+    }
+    
+    // Show loading state
+    var btn = document.querySelector('#genericMessagePopup .btn-primary');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+        btn.disabled = true;
+    }
+    
+    // Save to database with route timestamp for queue ordering
+    firebase.database().ref(`taxis/${window.userId}`).update({
         destination: route,
+        routeTimestamp: firebase.database.ServerValue.TIMESTAMP,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        if (taxiData) taxiData.destination = route;
-        updateUIWithTaxiData();
+    }).then(function() {
+        if (window.taxiData) {
+            window.taxiData.destination = route;
+            window.taxiData.routeTimestamp = Date.now();
+        }
+        
+        // Update the dashboard UI
+        if (typeof window.updateUIWithTaxiData === 'function') {
+            window.updateUIWithTaxiData();
+        }
+        
         closeActivePopup();
         showCommunicationBanner("Route updated! Passengers can now see where you are going.", "success");
+        
+        // If driver is online, make sure they are visible
+        if (window.taxiData && window.taxiData.isOnline) {
+            firebase.database().ref(`taxis/${window.userId}`).update({
+                isBroadcasting: true
+            });
+        }
+    }).catch(function(err) {
+        console.error("Error saving route:", err);
+        showCommunicationBanner("Failed to save route. Please try again.", "danger");
+        if (btn) {
+            btn.innerHTML = 'Save Route';
+            btn.disabled = false;
+        }
     });
 };
 
+// ========================================================================
+// DRIVER: CLEAR ROUTE
+// ========================================================================
+
 window.clearDriverRoute = function() {
-    firebase.database().ref(`taxis/${userId}`).update({
-        destination: "As Directed",
-        updatedAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        if (taxiData) taxiData.destination = "As Directed";
-        updateUIWithTaxiData();
-        closeActivePopup();
-        showCommunicationBanner("Route cleared.", "info");
-    });
+    if (window.taxiData && window.taxiData.currentRequest) {
+        showCommunicationBanner("Cannot clear destination while on a trip.", "warning");
+        return;
+    }
+    
+    showConfirmPopup(
+        "Clear Route?",
+        "Clearing your route will make you invisible to passengers looking for this destination. Continue?",
+        function() {
+            firebase.database().ref(`taxis/${window.userId}`).update({
+                destination: "As Directed",
+                routeTimestamp: null,
+                updatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).then(function() {
+                if (window.taxiData) {
+                    window.taxiData.destination = "As Directed";
+                    window.taxiData.routeTimestamp = null;
+                }
+                if (typeof window.updateUIWithTaxiData === 'function') {
+                    window.updateUIWithTaxiData();
+                }
+                closeActivePopup();
+                showCommunicationBanner("Route cleared.", "info");
+            }).catch(function(err) {
+                console.error("Error clearing route:", err);
+                showCommunicationBanner("Failed to clear route.", "danger");
+            });
+        },
+        "Yes, Clear",
+        "Cancel",
+        "warning"
+    );
+};
+
+// ========================================================================
+// DRIVER: UPDATE ROUTE DISPLAY IN DASHBOARD
+// ========================================================================
+
+window.updateDriverRouteDisplay = function() {
+    var destEl = document.getElementById('dashDriverDestination');
+    if (!destEl) return;
+    
+    if (window.taxiData && window.taxiData.destination && 
+        window.taxiData.destination !== "As Directed" && 
+        window.taxiData.destination !== "Not Set" && 
+        window.taxiData.destination !== "Local Route") {
+        destEl.textContent = window.taxiData.destination.split(',')[0];
+        destEl.style.color = '#30D158';
+    } else {
+        destEl.textContent = "Not Set";
+        destEl.style.color = '#FF9F0A';
+    }
 };
 window.canDriverGoOnline = function() {
     if (!taxiData) return false;
@@ -30414,6 +30504,57 @@ window.claimRoute = function(allocId) {
         showCommunicationBanner("Route Claimed! The passenger has been notified.", "success");
     });
 };
+
+// ========================================================================
+// DRIVER: QUEUE MANAGEMENT - SHOW POSITION IN QUEUE
+// ========================================================================
+
+window.getDriverQueuePosition = function() {
+    if (!window.taxiData || !window.taxiData.destination || window.taxiData.destination === "As Directed") {
+        return null;
+    }
+    
+    var dest = window.taxiData.destination;
+    var myTimestamp = window.taxiData.routeTimestamp || 0;
+    var position = 1; // Default to first position
+    
+    firebase.database().ref('taxis').once('value').then(function(snapshot) {
+        if (!snapshot.exists()) return;
+        
+        var count = 0;
+        snapshot.forEach(function(child) {
+            var taxi = child.val();
+            if (taxi.taxiId === window.userId) return; // Skip self
+            
+            // Check if same destination and online
+            if (taxi.destination && taxi.destination === dest && taxi.isOnline && !taxi.isFull) {
+                var ts = taxi.routeTimestamp || 0;
+                if (ts < myTimestamp || (ts === myTimestamp && child.key < window.userId)) {
+                    count++;
+                }
+            }
+        });
+        
+        position = count + 1;
+        
+        // Update UI with queue position
+        var queueEl = document.getElementById('driverQueuePosition');
+        if (queueEl) {
+            if (position === 1) {
+                queueEl.innerHTML = '<span style="color: #28a745;">✅ You are first in the queue for this route!</span>';
+            } else {
+                queueEl.innerHTML = '<span style="color: #FF9F0A;">⏳ You are #' + position + ' in the queue for this route.</span>';
+            }
+        }
+    }).catch(function(err) {
+        console.warn("Could not get queue position:", err);
+    });
+    
+    return position;
+};
+
+// Call this after saving route
+setTimeout(window.getDriverQueuePosition, 2000);
 </script>
 </body>
 </html>
