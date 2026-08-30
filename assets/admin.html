@@ -18,7 +18,6 @@
             min-height: 100vh;
         }
 
-        /* ----- TOP NAV BAR ----- */
         .navbar {
             background: #141a24;
             border-bottom: 1px solid #2a3340;
@@ -62,14 +61,12 @@
             background: #3a2a2a;
         }
 
-        /* ----- MAIN LAYOUT ----- */
         .dashboard {
             display: grid;
             grid-template-columns: 240px 1fr;
             min-height: calc(100vh - 68px);
         }
 
-        /* ----- SIDEBAR ----- */
         .sidebar {
             background: #10161e;
             border-right: 1px solid #1f2836;
@@ -107,7 +104,6 @@
             padding: 0.4rem 1.8rem;
         }
 
-        /* ----- MAIN CONTENT ----- */
         .main-content {
             padding: 2rem 2.5rem;
             overflow-y: auto;
@@ -124,7 +120,6 @@
             margin-bottom: 1.8rem;
         }
 
-        /* ----- FORM ----- */
         .form-card {
             background: #141a24;
             border: 1px solid #2a3340;
@@ -244,7 +239,6 @@
             display: block;
         }
 
-        /* ----- RESPONSIVE ----- */
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -266,17 +260,10 @@
                 padding: 1.2rem;
             }
         }
-        @media print {
-            .navbar, .sidebar { display: none; }
-            .dashboard { display: block; }
-        }
     </style>
 </head>
 <body>
 
-    <!-- ============================================================ -->
-    <!-- NAV BAR -->
-    <!-- ============================================================ -->
     <nav class="navbar">
         <div class="brand">Asye<span>Admin</span></div>
         <div class="user-info">
@@ -285,12 +272,8 @@
         </div>
     </nav>
 
-    <!-- ============================================================ -->
-    <!-- DASHBOARD -->
-    <!-- ============================================================ -->
     <div class="dashboard">
 
-        <!-- SIDEBAR -->
         <aside class="sidebar">
             <div class="menu-item active"><span class="icon">📊</span> Dashboard</div>
             <div class="menu-item"><span class="icon">🚗</span> Vehicles</div>
@@ -302,17 +285,14 @@
             <div class="menu-item"><span class="icon">⚙️</span> Settings</div>
         </aside>
 
-        <!-- MAIN CONTENT -->
         <main class="main-content">
 
             <div class="page-title">👤 Driver Registration</div>
             <div class="page-sub">Register a new driver in the system</div>
 
-            <!-- Success / Error Messages -->
             <div id="successMsg" class="success-msg"></div>
             <div id="errorMsg" class="error-msg"></div>
 
-            <!-- FORM -->
             <div class="form-card">
                 <div class="form-title">Driver Details</div>
 
@@ -330,25 +310,37 @@
                         <input type="email" id="email" placeholder="e.g. driver@example.com" required />
                     </div>
 
-                    <!-- Password -->
-                    <div class="form-group">
-                        <label for="password">Password <span class="required">*</span></label>
-                        <input type="password" id="password" placeholder="Min 6 characters" required minlength="6" />
-                        <div style="font-size:0.7rem; color:#5d6a7e; margin-top:0.3rem;">
-                            🔒 Password must be at least 6 characters
-                        </div>
-                    </div>
-
                     <!-- Phone -->
                     <div class="form-group">
                         <label for="phone">Phone Number <span class="required">*</span></label>
-                        <input type="tel" id="phone" placeholder="e.g. +27 82 123 4567" required />
+                        <input type="tel" id="phone" placeholder="e.g. 0821234567" required />
+                    </div>
+
+                    <!-- Password -->
+                    <div class="form-group">
+                        <label for="password">Temporary Password <span class="required">*</span></label>
+                        <input type="password" id="password" placeholder="Min 6 characters" required minlength="6" />
+                        <div style="font-size:0.7rem; color:#5d6a7e; margin-top:0.3rem;">
+                            🔒 This will be the driver's initial login PIN
+                        </div>
                     </div>
 
                     <!-- License Number -->
                     <div class="form-group">
                         <label for="licenseNumber">License Number <span class="required">*</span></label>
                         <input type="text" id="licenseNumber" placeholder="e.g. DL1234567890" required />
+                    </div>
+
+                    <!-- Vehicle Make & Model (row) -->
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="vehicleMake">Vehicle Make</label>
+                            <input type="text" id="vehicleMake" placeholder="e.g. Toyota" />
+                        </div>
+                        <div class="form-group">
+                            <label for="vehicleModel">Vehicle Model</label>
+                            <input type="text" id="vehicleModel" placeholder="e.g. Corolla" />
+                        </div>
                     </div>
 
                     <!-- Year & Color (row) -->
@@ -369,30 +361,12 @@
                         <input type="text" id="licensePlate" placeholder="e.g. ABC 123 GP" required />
                     </div>
 
-                    <!-- ========================================================== -->
-                    <!-- AREA – Simple text input with manual lat/lng (no Mapbox)   -->
-                    <!-- ========================================================== -->
+                    <!-- AREA -->
                     <div class="form-group">
                         <label for="area">Area <span class="required">*</span></label>
                         <input type="text" id="area" placeholder="e.g. Johannesburg, Cape Town, Durban" required />
-                        <div style="font-size:0.7rem; color:#5d6a7e; margin-top:0.3rem;">
-                            🌍 Enter the city or area name (e.g. Johannesburg, Cape Town)
-                        </div>
                     </div>
 
-                    <!-- Optional: Manual lat/lng for advanced users -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="areaLat">Latitude (optional)</label>
-                            <input type="text" id="areaLat" placeholder="e.g. -26.2041" />
-                        </div>
-                        <div class="form-group">
-                            <label for="areaLng">Longitude (optional)</label>
-                            <input type="text" id="areaLng" placeholder="e.g. 28.0473" />
-                        </div>
-                    </div>
-
-                    <!-- Submit -->
                     <button type="submit" class="btn-submit" id="submitBtn">
                         Register Driver
                     </button>
@@ -402,13 +376,8 @@
         </main>
     </div>
 
-    <!-- ============================================================ -->
-    <!-- JAVASCRIPT                                                   -->
-    <!-- ============================================================ -->
     <script>
-        // ============================================================
-        // FIREBASE CONFIG
-        // ============================================================
+        // Firebase Config
         const firebaseConfig = {
             apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
             authDomain: "asiye-80386.firebaseapp.com",
@@ -422,32 +391,28 @@
         const auth = firebase.auth();
         const database = firebase.database();
 
-        // ============================================================
         // DOM REFS
-        // ============================================================
         const userEmailEl = document.getElementById('userEmail');
         const logoutBtn = document.getElementById('logoutBtn');
 
         const driverForm = document.getElementById('driverForm');
         const fullName = document.getElementById('fullName');
         const email = document.getElementById('email');
-        const password = document.getElementById('password');
         const phone = document.getElementById('phone');
+        const password = document.getElementById('password');
         const licenseNumber = document.getElementById('licenseNumber');
+        const vehicleMake = document.getElementById('vehicleMake');
+        const vehicleModel = document.getElementById('vehicleModel');
         const vehicleYear = document.getElementById('vehicleYear');
         const vehicleColor = document.getElementById('vehicleColor');
         const licensePlate = document.getElementById('licensePlate');
         const area = document.getElementById('area');
-        const areaLat = document.getElementById('areaLat');
-        const areaLng = document.getElementById('areaLng');
         const submitBtn = document.getElementById('submitBtn');
 
         const successMsg = document.getElementById('successMsg');
         const errorMsg = document.getElementById('errorMsg');
 
-        // ============================================================
         // AUTH CHECK
-        // ============================================================
         auth.onAuthStateChanged((user) => {
             if (user) {
                 userEmailEl.textContent = user.email || 'admin@asiye.cloud';
@@ -458,22 +423,16 @@
             }
         });
 
-        // ============================================================
         // LOGOUT
-        // ============================================================
         logoutBtn.addEventListener('click', function() {
-            auth.signOut()
-                .then(() => {
-                    window.location.href = 'admin-login.html';
-                })
-                .catch((error) => {
-                    alert('Error signing out: ' + error.message);
-                });
+            auth.signOut().then(() => {
+                window.location.href = 'admin-login.html';
+            }).catch((error) => {
+                alert('Error signing out: ' + error.message);
+            });
         });
 
-        // ============================================================
-        // FORM SUBMISSION – Creates Firebase Auth User + DB Entry
-        // ============================================================
+        // FORM SUBMISSION - SAVES TO /taxis/ NODE
         function showSuccess(message) {
             successMsg.textContent = message;
             successMsg.className = 'success-msg show';
@@ -484,11 +443,6 @@
             errorMsg.textContent = message;
             errorMsg.className = 'error-msg show';
             successMsg.className = 'success-msg';
-        }
-
-        function hideMessages() {
-            successMsg.className = 'success-msg';
-            errorMsg.className = 'error-msg';
         }
 
         function setButtonLoading(loading) {
@@ -503,18 +457,16 @@
 
         driverForm.addEventListener('submit', function(e) {
             e.preventDefault();
-            hideMessages();
 
-            // Validate required fields
             const name = fullName.value.trim();
             const emailVal = email.value.trim();
-            const passVal = password.value.trim();
             const phoneVal = phone.value.trim();
+            const passVal = password.value.trim();
             const licenseVal = licenseNumber.value.trim();
             const plateVal = licensePlate.value.trim();
             const areaVal = area.value.trim();
 
-            if (!name || !emailVal || !passVal || !phoneVal || !licenseVal || !plateVal || !areaVal) {
+            if (!name || !emailVal || !phoneVal || !passVal || !licenseVal || !plateVal || !areaVal) {
                 showError('Please fill in all required fields (marked with *).');
                 return;
             }
@@ -524,7 +476,6 @@
                 return;
             }
 
-            // Get current admin user
             const adminUser = auth.currentUser;
             if (!adminUser) {
                 showError('You must be logged in to register a driver.');
@@ -533,59 +484,63 @@
 
             setButtonLoading(true);
 
-            // ============================================================
-            // STEP 1: Create Firebase Auth account for the driver
-            // ============================================================
+            // STEP 1: Create Firebase Auth account
             auth.createUserWithEmailAndPassword(emailVal, passVal)
                 .then((userCredential) => {
                     const driverUid = userCredential.user.uid;
 
-                    // ============================================================
-                    // STEP 2: Save driver data to Realtime Database
-                    // ============================================================
+                    // STEP 2: Save driver data to /taxis/ node (not /drivers/)
                     const driverData = {
-                        fullName: name,
+                        name: name,
                         email: emailVal,
                         phone: phoneVal,
+                        tempPassword: passVal,
                         licenseNumber: licenseVal,
+                        vehicleMake: vehicleMake.value.trim() || null,
+                        vehicleModel: vehicleModel.value.trim() || null,
                         vehicleYear: vehicleYear.value.trim() || null,
                         vehicleColor: vehicleColor.value.trim() || null,
                         licensePlate: plateVal.toUpperCase(),
                         area: areaVal,
-                        areaLat: areaLat.value.trim() || null,
-                        areaLng: areaLng.value.trim() || null,
                         registeredBy: adminUser.uid,
                         registeredByEmail: adminUser.email,
                         registeredAt: firebase.database.ServerValue.TIMESTAMP,
                         status: 'active',
-                        role: 'driver'
+                        isOnline: false,
+                        destination: null,
+                        // Additional fields expected by the driver app
+                        profilePhoto: null,
+                        rating: 0,
+                        totalTrips: 0,
+                        earnings: 0
                     };
 
-                    return database.ref('drivers/' + driverUid).set(driverData);
+                    console.log('📝 Saving driver to /taxis/:', driverData);
+
+                    return database.ref('taxis/' + driverUid).set(driverData);
                 })
                 .then(() => {
                     setButtonLoading(false);
-                    showSuccess('✅ Driver registered successfully!');
+                    showSuccess('✅ Driver registered successfully in /taxis/!');
 
                     // Reset form
                     fullName.value = '';
                     email.value = '';
-                    password.value = '';
                     phone.value = '';
+                    password.value = '';
                     licenseNumber.value = '';
+                    vehicleMake.value = '';
+                    vehicleModel.value = '';
                     vehicleYear.value = '';
                     vehicleColor.value = '';
                     licensePlate.value = '';
                     area.value = '';
-                    areaLat.value = '';
-                    areaLng.value = '';
 
-                    console.log('👤 Driver registered successfully!');
+                    console.log('👤 Driver registered successfully in /taxis/ node!');
                 })
                 .catch((error) => {
                     setButtonLoading(false);
 
-                    // Handle specific Firebase Auth errors
                     let errorMessage = error.message;
                     if (error.code === 'auth/email-already-in-use') {
                         errorMessage = 'This email is already registered. Please use a different email.';
@@ -595,23 +550,17 @@
                         errorMessage = 'Please enter a valid email address.';
                     } else if (error.code === 'auth/network-request-failed') {
                         errorMessage = 'Network error. Please check your internet connection.';
-                    } else if (error.code === 'auth/too-many-requests') {
-                        errorMessage = 'Too many requests. Please try again later.';
+                    } else if (error.message.includes('PERMISSION_DENIED')) {
+                        errorMessage = 'Permission denied. Please check Firebase rules for /taxis node.';
                     }
 
                     showError('❌ Error: ' + errorMessage);
-                    console.error('Firebase error:', error);
+                    console.error('Firebase error details:', error);
                 });
         });
 
-        // ============================================================
-        // INIT
-        // ============================================================
         console.log('✅ Admin dashboard ready.');
-        console.log('📌 Vehicle Type: REMOVED per request.');
-        console.log('📌 Password field: ADDED for driver registration.');
-        console.log('📌 Area field: Simple text input (Mapbox removed due to 401 error).');
-        console.log('📌 Manual lat/lng fields added as optional.');
+        console.log('📌 Drivers saved to /taxis/ node with phone & email.');
     </script>
 
 </body>
