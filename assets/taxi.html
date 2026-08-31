@@ -6757,7 +6757,6 @@ function renderFallbackRequestPopup(popup, req, distance, locationName) {
 window.openPopup = function(popupId) {
     console.log("🚀 Opening popup:", popupId);
     
-    // Close any other popups first
     window.closeActivePopup(true);
     
     const popup = document.getElementById(popupId);
@@ -6768,7 +6767,7 @@ window.openPopup = function(popupId) {
         return;
     }
     
-    // Force display
+    // 🆕 FORCE CENTER POSITION
     popup.classList.add('open');
     popup.style.setProperty('display', 'block', 'important');
     popup.style.setProperty('visibility', 'visible', 'important');
@@ -6778,6 +6777,7 @@ window.openPopup = function(popupId) {
     popup.style.setProperty('top', '50%', 'important');
     popup.style.setProperty('left', '50%', 'important');
     popup.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
+    popup.style.setProperty('margin', '0', 'important');
     popup.style.setProperty('background', '#ffffff', 'important');
     popup.style.setProperty('border-radius', '20px', 'important');
     popup.style.setProperty('max-width', '95%', 'important');
@@ -6786,7 +6786,6 @@ window.openPopup = function(popupId) {
     popup.style.setProperty('box-shadow', '0 20px 60px rgba(0,0,0,0.3)', 'important');
     popup.style.setProperty('pointer-events', 'auto', 'important');
     
-    // Show overlay
     if (overlay) {
         overlay.classList.add('open');
         overlay.style.setProperty('display', 'block', 'important');
@@ -6804,8 +6803,6 @@ window.openPopup = function(popupId) {
     
     console.log("✅ Popup opened:", popupId);
 };
-
-
 // 3. CLOSE REQUEST POPUP - SHORTCUT
 window.updateDriverActiveTripWidget = function(req) {
     let widget = document.getElementById('driverActiveTripWidget');
@@ -7094,7 +7091,6 @@ window.showProfile = function() {
 window.closeActivePopup = function(force = false) {
     console.log("🧹 Closing popups (force:", force, ")");
     
-    // List of all popup IDs
     const popupIds = [
         'profilePopup',
         'setupTripPopup',
@@ -7115,7 +7111,7 @@ window.closeActivePopup = function(force = false) {
         'driverClubPopup',
         'parcelRequestPopup',
         'courierDashboardPopup',
-        'multiStepScannerPopup',
+        'multiStepScannerPopup'
     ];
     
     const transformResetIds = [
@@ -7124,10 +7120,10 @@ window.closeActivePopup = function(force = false) {
         'genericMessagePopup',
         'driverClubPopup',
         'driverEHailingPopup',
-        'parcelRequestPopup'
+        'parcelRequestPopup',
+        'trainingRequestPopup'
     ];
 
-    // Close each popup
     popupIds.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -7137,14 +7133,18 @@ window.closeActivePopup = function(force = false) {
             el.style.setProperty('opacity', '0', 'important');
             el.style.setProperty('z-index', '-1', 'important');
             el.style.setProperty('pointer-events', 'none', 'important');
+            // 🆕 RESET TRANSFORM TO PREVENT STICKING
             if (transformResetIds.includes(id)) {
-                // Reset transform so stale translations do not affect the next open.
                 el.style.setProperty('transform', 'none', 'important');
+                el.style.setProperty('top', 'auto', 'important');
+                el.style.setProperty('left', 'auto', 'important');
+                el.style.setProperty('bottom', 'auto', 'important');
+                el.style.setProperty('right', 'auto', 'important');
+                el.style.setProperty('margin', '0', 'important');
             }
         }
     });
     
-    // Hide overlay
     const overlay = document.getElementById('popupOverlay');
     if (overlay) {
         overlay.classList.remove('open');
@@ -7155,18 +7155,32 @@ window.closeActivePopup = function(force = false) {
         overlay.style.setProperty('pointer-events', 'none', 'important');
     }
     
-    // Reset flags
     window.isShowingRequestPopup = false;
     window.currentShowingRequestId = null;
     window.activeRequest = null;
     window._isProcessingRequest = false;
     
-    // Restore scroll
     document.body.classList.remove('popup-open');
     document.body.style.overflow = '';
     
+    // Show dashboard if no popups are open
+    const openPopups = document.querySelectorAll('.popup.open, .modal-overlay.open');
+    if (openPopups.length === 0) {
+        const dashboard = document.getElementById('verifiedDashboardOverlay');
+        if (dashboard) {
+            dashboard.style.setProperty('display', 'block', 'important');
+            dashboard.style.setProperty('visibility', 'visible', 'important');
+            dashboard.style.setProperty('z-index', '80000', 'important');
+        }
+        if (typeof window.updateUIWithTaxiData === 'function') {
+            window.updateUIWithTaxiData();
+        }
+    }
+    
     console.log("✅ All popups closed");
 };
+
+
 window.showBroadcastDashboard = function() {
     if (!window.taxiData) return;
     
@@ -15118,15 +15132,24 @@ window.updateUIWithTaxiData = function() {
     // ==========================================
     // 5. 🌟 DRIVER DESTINATION / ROUTE BOX 🌟
     // ==========================================
-    const destEl = document.getElementById('dashDriverDestination');
-    if (destEl) {
-        if (window.taxiData.destination && window.taxiData.destination !== "Local Route" && window.taxiData.destination !== "As Directed") {
-            // Only show the first part of the address string to keep it neat
-            destEl.textContent = window.taxiData.destination.split(',')[0];
-        } else {
-            destEl.textContent = "Not Set";
-        }
+   // Inside populateVerifiedDashboard, update the route section:
+const destEl = document.getElementById('dashDriverDestination');
+if (destEl) {
+    const savedRoutes = window.taxiData?.savedRoutes || [];
+    if (savedRoutes.length > 0) {
+        // Show first route with count
+        const firstRoute = savedRoutes[0];
+        const routeCount = savedRoutes.length;
+        destEl.textContent = `${firstRoute.split(',')[0]}${routeCount > 1 ? ` +${routeCount - 1} more` : ''}`;
+        destEl.style.color = '#30D158';
+    } else if (window.taxiData.destination && window.taxiData.destination !== "As Directed" && window.taxiData.destination !== "Not Set") {
+        destEl.textContent = window.taxiData.destination.split(',')[0];
+        destEl.style.color = '#30D158';
+    } else {
+        destEl.textContent = "Not Set";
+        destEl.style.color = '#FF9F0A';
     }
+}
 
     // ==========================================
     // 6. "GO ONLINE" BUTTON STATE LOGIC
@@ -15189,43 +15212,78 @@ window.updateUIWithTaxiData = function() {
 };
 // B. Route Setter Popup
 // B. Route Setter Popup (Updated to fetch locations nearby dynamically)
+// ========================================================================
+// OPEN SET DESTINATION POPUP - WITH MULTIPLE ROUTE SELECTION
+// ========================================================================
+
 window.openSetDestinationPopup = function() {
     closeActivePopup();
     
     const popup = document.getElementById('genericMessagePopup');
+    if (!popup) return;
+    
+    // Get current saved routes
+    const savedRoutes = window.taxiData?.savedRoutes || [];
+    
     popup.innerHTML = `
-        <div class="modal-content" style="background: #ffffff !important; max-width: 400px; padding: 25px; border-radius: 24px; text-align: center;">
-            <button class="popup-close" onclick="closeActivePopup()" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 1.2rem; color: #666; cursor: pointer;">&times;</button>
+        <div class="modal-content" style="background: #ffffff !important; max-width: 420px; padding: 25px; border-radius: 24px; text-align: center; position: relative;">
+            <button class="popup-close" onclick="window.closeSetDestinationPopup()" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 1.2rem; color: #666; cursor: pointer;">&times;</button>
+            
             <div style="width: 60px; height: 60px; background: #fff4e5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
                 <i class="fas fa-map-marked-alt" style="font-size: 2rem; color: #FF9F0A;"></i>
             </div>
-            <h3 style="margin-bottom: 10px; color: #111; font-weight: 900;">Where are you heading?</h3>
-            <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Select your drop-off area. You will only receive requests for this route.</p>
             
-            <div style="position: relative; text-align: left; margin-bottom: 20px;">
-                <input type="text" id="driverRouteInput" placeholder="Search or select below..." autocomplete="off" style="width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #ddd; font-weight: 800; font-size: 1rem; outline: none;" onfocus="this.select()">
+            <h3 style="margin-bottom: 10px; color: #111; font-weight: 900;">Where are you heading?</h3>
+            <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Select your drop-off areas. You will receive requests for these routes.</p>
+            
+            <!-- Search Input -->
+            <div style="position: relative; text-align: left; margin-bottom: 15px;">
+                <input type="text" id="driverRouteInput" placeholder="Search and add a route..." autocomplete="off" 
+                       style="width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #ddd; font-weight: 700; font-size: 1rem; outline: none;"
+                       onfocus="this.select()" onkeydown="if(event.key === 'Enter') window.addRouteFromInput()">
                 <div id="driverRouteSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 12px; max-height: 200px; overflow-y: auto; display: none; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-top: 5px;"></div>
             </div>
             
-            <div id="nearbyRoutesContainer" style="text-align: left; margin-bottom: 20px; max-height: 200px; overflow-y: auto;">
-                <div style="font-size: 0.75rem; color: #888; font-weight: 800; text-transform: uppercase; margin-bottom: 10px;">Nearby Routes (Within 20km)</div>
-                <div id="nearbyRoutesList">
-                    <div class="spinner" style="margin: 10px auto; width: 24px; height: 24px; border-width: 3px; border-left-color: #FF9F0A;"></div>
-                </div>
-            </div>
-            
-            <button class="btn btn-primary" onclick="saveDriverRoute()" style="width: 100%; padding: 16px; border-radius: 16px; background: #FF9F0A; color: black; border: none; font-weight: 900; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 159, 10, 0.3);">
-                Save Route
+            <button onclick="window.addRouteFromInput()" style="width: 100%; padding: 12px; background: #f8f9fa; border: 2px dashed #007BFF; border-radius: 12px; color: #007BFF; font-weight: 800; cursor: pointer; margin-bottom: 20px; transition: all 0.2s;">
+                <i class="fas fa-plus-circle"></i> Add Current Route
             </button>
             
-            <button onclick="clearDriverRoute()" style="width: 100%; padding: 14px; background: transparent; color: #dc3545; border: none; font-weight: 700; margin-top: 10px; cursor: pointer; text-decoration: underline;">
-                Clear Route (I am empty)
+            <!-- Saved Routes List -->
+            <div id="savedRoutesList" style="text-align: left; margin-bottom: 20px; max-height: 250px; overflow-y: auto;">
+                ${savedRoutes.length === 0 ? `
+                    <div style="color: #888; font-size: 0.85rem; padding: 15px; text-align: center; border: 1px dashed #ddd; border-radius: 12px;">
+                        <i class="fas fa-route" style="color: #ccc; margin-bottom: 5px; display: block;"></i>
+                        No routes added yet. Search and add your preferred drop-off areas.
+                    </div>
+                ` : `
+                    ${savedRoutes.map((route, index) => `
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #FF9F0A;">
+                            <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
+                                <span style="background: #FF9F0A; color: black; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;">${index + 1}</span>
+                                <span style="font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(route)}</span>
+                            </div>
+                            <button onclick="window.removeSavedRoute(${index})" style="background: transparent; border: none; color: #dc3545; cursor: pointer; padding: 4px 8px; font-size: 1rem; flex-shrink: 0;">
+                                <i class="fas fa-times-circle"></i>
+                            </button>
+                        </div>
+                    `).join('')}
+                `}
+            </div>
+            
+            <!-- Action Buttons -->
+            <button class="btn btn-primary" onclick="window.saveDriverRoutes()" style="width: 100%; padding: 16px; border-radius: 16px; background: #FF9F0A; color: black; border: none; font-weight: 900; font-size: 1.1rem; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 159, 10, 0.3);">
+                <i class="fas fa-save"></i> Save Routes
+            </button>
+            
+            <button onclick="window.closeSetDestinationPopup()" style="width: 100%; padding: 14px; background: transparent; color: #666; border: none; font-weight: 700; margin-top: 10px; cursor: pointer;">
+                Cancel
             </button>
         </div>
     `;
+    
     openPopup('genericMessagePopup');
     
-    // Autocomplete Logic
+    // Setup autocomplete
     const input = document.getElementById('driverRouteInput');
     const suggestions = document.getElementById('driverRouteSuggestions');
     let timeout;
@@ -15233,7 +15291,10 @@ window.openSetDestinationPopup = function() {
     input.addEventListener('input', function() {
         clearTimeout(timeout);
         const query = this.value.trim();
-        if (query.length < 2) { suggestions.style.display = 'none'; return; }
+        if (query.length < 2) { 
+            suggestions.style.display = 'none'; 
+            return; 
+        }
         
         timeout = setTimeout(() => {
             fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&types=place,locality,neighborhood,poi&limit=5`)
@@ -15241,69 +15302,158 @@ window.openSetDestinationPopup = function() {
             .then(data => {
                 if (data.features && data.features.length > 0) {
                     suggestions.innerHTML = data.features.map(f => `
-                        <div style="padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer;" onclick="document.getElementById('driverRouteInput').value = '${f.place_name.replace(/'/g, "\\'")}'; document.getElementById('driverRouteSuggestions').style.display='none';">
+                        <div style="padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s;" 
+                             onmouseover="this.style.background='#f8f9fa'" 
+                             onmouseout="this.style.background='white'"
+                             onclick="window.selectRouteSuggestion('${f.place_name.replace(/'/g, "\\'")}')">
                             <strong style="color: #111;">${f.text}</strong><br>
                             <small style="color: #888;">${f.place_name}</small>
                         </div>
                     `).join('');
                     suggestions.style.display = 'block';
+                } else {
+                    suggestions.style.display = 'none';
                 }
-            });
+            }).catch(() => { suggestions.style.display = 'none'; });
         }, 300);
     });
-
-    // Populate Nearby Routes using the hardcoded locations database
-    setTimeout(() => {
-        const listDiv = document.getElementById('nearbyRoutesList');
-        if (listDiv && typeof getNearbyLocations === 'function' && taxiLngLat && taxiLngLat.length === 2) {
-            const nearby = getNearbyLocations(taxiLngLat[1], taxiLngLat[0]).filter(loc => loc.distance <= 20);
-            if (nearby.length > 0) {
-                listDiv.innerHTML = nearby.slice(0, 10).map(loc => `
-                    <div style="padding: 12px; border: 1px solid #eee; border-radius: 12px; margin-bottom: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; background: #f8f9fa;" onclick="document.getElementById('driverRouteInput').value = '${loc.name.replace(/'/g, "\\'")}';">
-                        <strong style="color: #333; font-size: 0.95rem;">${loc.name}</strong>
-                        <span style="color: #28a745; font-size: 0.75rem; font-weight: 800; background: #e8f5e9; padding: 2px 8px; border-radius: 8px;">${loc.distance.toFixed(1)} km</span>
-                    </div>
-                `).join('');
-            } else {
-                listDiv.innerHTML = '<div style="color: #888; font-size: 0.85rem; padding: 10px;">No major locations found within 20km.</div>';
-            }
-        } else {
-            if (listDiv) listDiv.innerHTML = '<div style="color: #888; font-size: 0.85rem; padding: 10px;">Location not available. Please search above.</div>';
+    
+    document.addEventListener('click', function(e) {
+        if (e.target !== input && e.target !== suggestions) {
+            suggestions.style.display = 'none';
         }
-    }, 500);
+    });
 };
+
 // ========================================================================
-// DRIVER: SAVE DESTINATION - UPDATED WITH QUEUE TIMESTAMP
+// SELECT ROUTE SUGGESTION
 // ========================================================================
 
-window.saveDriverRoute = function() {
-    var route = document.getElementById('driverRouteInput').value.trim();
+window.selectRouteSuggestion = function(routeName) {
+    const input = document.getElementById('driverRouteInput');
+    if (input) {
+        input.value = routeName;
+        document.getElementById('driverRouteSuggestions').style.display = 'none';
+        // Auto-add the route
+        window.addRouteFromInput();
+    }
+};
+
+// ========================================================================
+// ADD ROUTE FROM INPUT
+// ========================================================================
+
+window.addRouteFromInput = function() {
+    const input = document.getElementById('driverRouteInput');
+    if (!input) return;
+    
+    const route = input.value.trim();
     if (!route) {
-        showCommunicationBanner("Please enter a destination.", "warning");
+        showCommunicationBanner("Please enter a route first.", "warning");
         return;
     }
     
-    // Check if the driver is already online and has passengers
+    // Get current saved routes
+    const savedRoutes = window.taxiData?.savedRoutes || [];
+    
+    // Check if route already exists
+    if (savedRoutes.some(r => r.toLowerCase() === route.toLowerCase())) {
+        showCommunicationBanner("This route is already in your list.", "info");
+        input.value = '';
+        return;
+    }
+    
+    // Add to list
+    savedRoutes.push(route);
+    
+    // Update the UI
+    updateSavedRoutesUI(savedRoutes);
+    input.value = '';
+    showCommunicationBanner(`Added: ${route}`, "success");
+};
+
+// ========================================================================
+// REMOVE SAVED ROUTE
+// ========================================================================
+
+window.removeSavedRoute = function(index) {
+    const savedRoutes = window.taxiData?.savedRoutes || [];
+    if (index < 0 || index >= savedRoutes.length) return;
+    
+    const removed = savedRoutes[index];
+    savedRoutes.splice(index, 1);
+    
+    // Update UI
+    updateSavedRoutesUI(savedRoutes);
+    showCommunicationBanner(`Removed: ${removed}`, "info");
+};
+
+// ========================================================================
+// UPDATE SAVED ROUTES UI
+// ========================================================================
+
+function updateSavedRoutesUI(routes) {
+    const listEl = document.getElementById('savedRoutesList');
+    if (!listEl) return;
+    
+    if (routes.length === 0) {
+        listEl.innerHTML = `
+            <div style="color: #888; font-size: 0.85rem; padding: 15px; text-align: center; border: 1px dashed #ddd; border-radius: 12px;">
+                <i class="fas fa-route" style="color: #ccc; margin-bottom: 5px; display: block;"></i>
+                No routes added yet. Search and add your preferred drop-off areas.
+            </div>
+        `;
+        return;
+    }
+    
+    listEl.innerHTML = routes.map((route, index) => `
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #FF9F0A;">
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
+                <span style="background: #FF9F0A; color: black; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;">${index + 1}</span>
+                <span style="font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(route)}</span>
+            </div>
+            <button onclick="window.removeSavedRoute(${index})" style="background: transparent; border: none; color: #dc3545; cursor: pointer; padding: 4px 8px; font-size: 1rem; flex-shrink: 0;">
+                <i class="fas fa-times-circle"></i>
+            </button>
+        </div>
+    `).join('');
+}
+
+// ========================================================================
+// SAVE DRIVER ROUTES
+// ========================================================================
+
+window.saveDriverRoutes = function() {
+    const savedRoutes = window.taxiData?.savedRoutes || [];
+    
+    if (savedRoutes.length === 0) {
+        showCommunicationBanner("Please add at least one route.", "warning");
+        return;
+    }
+    
+    // Check if driver is online and has passengers
     if (window.taxiData && window.taxiData.currentRequest) {
         showCommunicationBanner("Cannot change destination while on a trip.", "warning");
         return;
     }
     
     // Show loading state
-    var btn = document.querySelector('#genericMessagePopup .btn-primary');
+    const btn = document.querySelector('#genericMessagePopup .btn-primary');
     if (btn) {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
         btn.disabled = true;
     }
     
-    // Save to database with route timestamp for queue ordering
+    // Save to database - store as array
     firebase.database().ref(`taxis/${window.userId}`).update({
-        destination: route,
+        savedRoutes: savedRoutes,
+        destination: savedRoutes[0], // Keep first route as primary for backward compatibility
         routeTimestamp: firebase.database.ServerValue.TIMESTAMP,
         updatedAt: firebase.database.ServerValue.TIMESTAMP
     }).then(function() {
         if (window.taxiData) {
-            window.taxiData.destination = route;
+            window.taxiData.savedRoutes = savedRoutes;
+            window.taxiData.destination = savedRoutes[0];
             window.taxiData.routeTimestamp = Date.now();
         }
         
@@ -15312,8 +15462,8 @@ window.saveDriverRoute = function() {
             window.updateUIWithTaxiData();
         }
         
-        closeActivePopup();
-        showCommunicationBanner("Route updated! Passengers can now see where you are going.", "success");
+        window.closeSetDestinationPopup();
+        showCommunicationBanner(`✅ ${savedRoutes.length} routes saved!`, "success");
         
         // If driver is online, make sure they are visible
         if (window.taxiData && window.taxiData.isOnline) {
@@ -15322,15 +15472,55 @@ window.saveDriverRoute = function() {
             });
         }
     }).catch(function(err) {
-        console.error("Error saving route:", err);
-        showCommunicationBanner("Failed to save route. Please try again.", "danger");
+        console.error("Error saving routes:", err);
+        showCommunicationBanner("Failed to save routes. Please try again.", "danger");
         if (btn) {
-            btn.innerHTML = 'Save Route';
+            btn.innerHTML = 'Save Routes';
             btn.disabled = false;
         }
     });
 };
 
+// ========================================================================
+// CLOSE SET DESTINATION POPUP
+// ========================================================================
+
+window.closeSetDestinationPopup = function() {
+    console.log("🔒 Closing set destination popup...");
+    
+    const popup = document.getElementById('genericMessagePopup');
+    if (popup) {
+        popup.classList.remove('open');
+        popup.style.setProperty('display', 'none', 'important');
+        popup.style.setProperty('opacity', '0', 'important');
+        popup.style.setProperty('visibility', 'hidden', 'important');
+        popup.style.setProperty('z-index', '-1', 'important');
+        popup.style.setProperty('transform', 'none', 'important');
+        popup.style.setProperty('top', 'auto', 'important');
+        popup.style.setProperty('left', 'auto', 'important');
+    }
+    
+    const overlay = document.getElementById('popupOverlay');
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.setProperty('display', 'none', 'important');
+        overlay.style.setProperty('opacity', '0', 'important');
+        overlay.style.setProperty('visibility', 'hidden', 'important');
+        overlay.style.setProperty('z-index', '-1', 'important');
+    }
+    
+    // Show dashboard
+    const dashboard = document.getElementById('verifiedDashboardOverlay');
+    if (dashboard) {
+        dashboard.style.setProperty('display', 'block', 'important');
+        dashboard.style.setProperty('visibility', 'visible', 'important');
+        dashboard.style.setProperty('z-index', '80000', 'important');
+    }
+    
+    if (typeof window.updateUIWithTaxiData === 'function') {
+        window.updateUIWithTaxiData();
+    }
+};
 // ========================================================================
 // DRIVER: CLEAR ROUTE
 // ========================================================================
@@ -29289,7 +29479,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // ================================================================
 // TAXI.HTML - MISSING MODAL FUNCTIONS
 // ================================================================
-window.closeModal = function(modalId) {
+ window.closeModal = function(modalId) {
     console.log("🔒 closeModal called for:", modalId);
     
     if (!modalId) {
@@ -29305,19 +29495,29 @@ window.closeModal = function(modalId) {
         el.style.setProperty('visibility', 'hidden', 'important');
         el.style.setProperty('z-index', '-1', 'important');
         el.style.setProperty('pointer-events', 'none', 'important');
+        // 🆕 RESET TRANSFORM TO PREVENT STICKING IN CORNER
+        el.style.setProperty('transform', 'none', 'important');
+        el.style.setProperty('top', 'auto', 'important');
+        el.style.setProperty('left', 'auto', 'important');
+        el.style.setProperty('bottom', 'auto', 'important');
+        el.style.setProperty('right', 'auto', 'important');
     }
     
     // Also close the overlay if no popups are open
-    if (document.querySelectorAll('.popup.open, .modal-overlay.open').length === 0) {
+    const openPopups = document.querySelectorAll('.popup.open, .modal-overlay.open');
+    if (openPopups.length === 0) {
         const overlay = document.getElementById('popupOverlay');
         if (overlay) {
             overlay.classList.remove('open');
             overlay.style.setProperty('display', 'none', 'important');
+            overlay.style.setProperty('opacity', '0', 'important');
+            overlay.style.setProperty('visibility', 'hidden', 'important');
+            overlay.style.setProperty('z-index', '-1', 'important');
             overlay.style.setProperty('pointer-events', 'none', 'important');
         }
     }
     
-    // If this is the generic message popup, also show the dashboard
+    // If this is the generic message popup, show the dashboard
     if (modalId === 'genericMessagePopup' || modalId === 'trainingRequestPopup') {
         const dashboard = document.getElementById('verifiedDashboardOverlay');
         if (dashboard) {
