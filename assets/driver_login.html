@@ -413,7 +413,6 @@
       display: block;
     }
 
-    /* Modern Modal Styles */
     .reg-modal-overlay {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
       background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
@@ -496,7 +495,6 @@
 
     <div class="divider">or</div>
 
-    <!-- Redirects directly to external registration portal -->
     <button class="main-btn secondary" onclick="window.location.href='https://asiye.cloud/driverRegistration/'">
       <i class="fa-solid fa-car" style="margin-right: 8px;"></i>Become Asiye driver
     </button>
@@ -506,7 +504,7 @@
     </a>
   </div>
 
-  <!-- Custom Designed Forgot Password Modal -->
+  <!-- Forgot Password Modal -->
   <div id="forgotPasswordModal" class="reg-modal-overlay">
     <div class="reg-card">
       <button class="reg-close" onclick="closeForgotPasswordModal()">&times;</button>
@@ -535,7 +533,9 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 
   <script>
-    // Firebase Configuration
+    // ============================================================
+    // FIREBASE CONFIG
+    // ============================================================
     const firebaseConfig = {
       apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
       authDomain: "asiye-80386.firebaseapp.com",
@@ -549,8 +549,11 @@
     const auth = firebase.auth();
     const database = firebase.database();
 
-    let currentMode = 'phone'; // Defaults to Phone Number on load
+    let currentMode = 'phone';
 
+    // ============================================================
+    // UI HELPERS
+    // ============================================================
     function showToast(msg, type = 'error') {
       const t = document.getElementById('toast');
       t.innerText = msg;
@@ -604,12 +607,12 @@
     // ============================================================
     async function findDriverByIdentifier(identifier, type) {
       if (type === 'email') {
-        const taxiSnap = await database.ref('taxis').orderByChild('email').equalTo(identifier).once('value');
+        const taxiSnap = await database.ref('taxis').orderByChild('email').equalTo(identifier.toLowerCase()).once('value');
         if (taxiSnap.exists()) {
           const entries = Object.entries(taxiSnap.val());
           return { id: entries[0][0], data: entries[0][1], type: 'driver' };
         }
-        const handlerSnap = await database.ref('handlers').orderByChild('email').equalTo(identifier).once('value');
+        const handlerSnap = await database.ref('handlers').orderByChild('email').equalTo(identifier.toLowerCase()).once('value');
         if (handlerSnap.exists()) {
           const entries = Object.entries(handlerSnap.val());
           return { id: entries[0][0], data: entries[0][1], type: 'handler' };
@@ -686,7 +689,7 @@
     }
 
     // ============================================================
-    // MAIN LOGIN HANDLER (WITH AUTO-SYNC FALLBACK)
+    // MAIN LOGIN HANDLER
     // ============================================================
     async function handleDriverLogin() {
       const password = document.getElementById('driverPassword').value;
@@ -694,10 +697,11 @@
       let email = '';
       let driverData = null;
       let driverId = '';
+      let userType = 'driver';
 
       hideStatus();
 
-      if (!password) {
+      if (!password || password.length < 4) {
         showToast("Please enter your security password.", "error");
         return;
       }
@@ -707,8 +711,9 @@
       showStatus('🔍 Looking up your account...', 'info');
 
       try {
+        // Step 1: Find the driver in the database
         if (currentMode === 'email') {
-          email = document.getElementById('driverEmail').value.trim();
+          email = document.getElementById('driverEmail').value.trim().toLowerCase();
           if (!email) throw new Error("Please enter your email address.");
           if (!email.includes('@')) throw new Error("Please enter a valid email address.");
           
@@ -716,9 +721,11 @@
           if (result) {
             driverData = result.data;
             driverId = result.id;
+            userType = result.type;
             showStatus(`✅ Found driver record: ${driverData.name || 'Driver'}`, 'success');
           } else {
-            showStatus('⚠️ Driver record not found in database. Attempting to create auth account...', 'warning');
+            // No driver found, but we can still try to authenticate
+            showStatus('⚠️ Driver record not found. Attempting authentication...', 'warning');
           }
         } else {
           const phone = document.getElementById('driverPhone').value.trim();
@@ -730,6 +737,7 @@
           }
           driverData = result.data;
           driverId = result.id;
+          userType = result.type;
           email = driverData.email;
           if (!email || email === 'pending_email' || !email.includes('@')) {
             throw new Error("No valid email linked to this phone. Please use email login or contact support.");
@@ -737,65 +745,62 @@
           showStatus(`✅ Found driver record: ${driverData.name || 'Driver'}`, 'success');
         }
 
-        const tempPassword = driverData ? driverData.tempPassword : null;
-        
-        // Try the entered password first
+        // Step 2: Ensure Firebase Auth account exists and sign in
         let authResult = await ensureFirebaseAuthAccount(email, password);
 
-        // BULLETPROOF LOGIN FALLBACK: If authentication fails, but they entered their exact 
-        // temporary SMS PIN, we make a server-side sync call to reconcile Auth before signing in.
-        if (!authResult.success && tempPassword && tempPassword === password) {
+        // Step 3: If auth failed but we have a temp password, try syncing
+        if (!authResult.success && driverData && driverData.tempPassword === password) {
           showStatus('Synchronizing password with security server...', 'info');
           
           try {
             const syncResponse = await fetch('https://app.asiye.cloud/reset_driver_password.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    uid: driverId,
-                    password: password,
-                    phone: driverData.phone,
-                    name: driverData.name || 'Driver'
-                })
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                uid: driverId,
+                password: password,
+                phone: driverData.phone,
+                name: driverData.name || 'Driver'
+              })
             });
 
             const syncResult = await syncResponse.json();
 
             if (syncResult.status === 'success') {
-                authResult = await ensureFirebaseAuthAccount(email, password);
+              authResult = await ensureFirebaseAuthAccount(email, password);
             } else {
-                throw new Error("Sync failed.");
+              throw new Error("Sync failed. Please try again.");
             }
           } catch(syncErr) {
-              console.error("Auth sync fallback failed:", syncErr);
+            console.error("Auth sync fallback failed:", syncErr);
           }
         }
 
-        if (authResult && authResult.success) {
-          let userType = 'driver';
-          
-          if (driverId) {
-            const userSnap = await database.ref(`taxis/${driverId}`).once('value');
-            if (!userSnap.exists()) {
-              const handlerSnap = await database.ref(`handlers/${driverId}`).once('value');
-              if (handlerSnap.exists()) userType = 'handler';
-            }
-          }
-          
-          localStorage.setItem('userId', driverId || authResult.user.uid);
-          localStorage.setItem('userType', userType);
-          
-          const msg = '✅ Login successful! Redirecting...';
-          showToast(msg, 'success');
-          showStatus(msg, 'success');
-          
-          setTimeout(() => {
-            window.location.href = userType === 'handler' ? 'handler.html' : 'taxi.html';
-          }, 1000);
-          
-        } else {
+        // Step 4: Final auth check
+        if (!authResult || !authResult.success) {
           throw new Error(authResult?.message || 'Authentication failed. Please verify your credentials.');
         }
+
+        // Step 5: Success - store session and redirect
+        const user = authResult.user;
+        localStorage.setItem('userId', driverId || user.uid);
+        localStorage.setItem('userType', userType);
+        localStorage.setItem('driverName', driverData?.name || 'Driver');
+        
+        // Also store the driver data for immediate use
+        if (driverId && driverData) {
+          localStorage.setItem('driverData', JSON.stringify(driverData));
+        }
+
+        showToast('✅ Login successful! Redirecting...', 'success');
+        showStatus('✅ Login successful! Redirecting...', 'success');
+        
+        // Wait for Firebase auth state to propagate
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Redirect based on user type
+        const redirectPage = userType === 'handler' ? 'handler.html' : 'taxi.html';
+        window.location.href = redirectPage;
 
       } catch (e) {
         console.error('Login error:', e);
@@ -817,11 +822,10 @@
     }
 
     // ============================================================
-    // SMS & EMAIL FORGOT PASSWORD POPUP SYSTEM
+    // FORGOT PASSWORD
     // ============================================================
 
     window.showForgotPassword = function() {
-      // Pre-fill the input if they already typed something in the login inputs
       const resetInput = document.getElementById('resetIdentifier');
       if (resetInput) {
         if (currentMode === 'email') {
@@ -862,14 +866,14 @@
         let record = null;
 
         if (isEmail) {
-            record = await findDriverByIdentifier(identifier.toLowerCase(), 'email');
+          record = await findDriverByIdentifier(identifier.toLowerCase(), 'email');
         } else {
-            const cleanPhone = standardizePhoneNumber(identifier);
-            record = await findDriverByIdentifier(cleanPhone, 'phone');
+          const cleanPhone = standardizePhoneNumber(identifier);
+          record = await findDriverByIdentifier(cleanPhone, 'phone');
         }
 
         if (!record) {
-            throw new Error("No registered driver found matching those details.");
+          throw new Error("No registered driver found matching those details.");
         }
 
         const driverId = record.id;
@@ -880,44 +884,71 @@
         // Generate a new secure 6-digit login PIN
         const newTempPassword = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // 1. Update the password in Realtime Database first
+        // 1. Update the password in Realtime Database
         const dbNodePath = record.type === 'handler' ? 'handlers' : 'taxis';
         await database.ref(`${dbNodePath}/${driverId}`).update({
-            tempPassword: newTempPassword,
-            passwordLastReset: firebase.database.ServerValue.TIMESTAMP
+          tempPassword: newTempPassword,
+          passwordLastReset: firebase.database.ServerValue.TIMESTAMP
         });
 
-        // 2. Call your secure PHP Admin Proxy to update Firebase Auth & trigger Twilio SMS
+        // 2. Call the PHP endpoint to update Firebase Auth & send SMS
         const response = await fetch('https://app.asiye.cloud/reset_driver_password.php', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                uid: driverId,
-                password: newTempPassword,
-                phone: targetPhone,
-                name: driverName
-            })
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            uid: driverId,
+            password: newTempPassword,
+            phone: targetPhone,
+            name: driverName,
+            email: driverData.email || ''
+          })
         });
 
         const result = await response.json();
 
         if (result.status === 'success') {
-            showToast("A new secure login PIN has been sent to your phone via SMS!", "success");
-            showStatus("✅ New PIN sent via SMS.", "success");
-            closeForgotPasswordModal();
+          showToast("A new secure login PIN has been sent to your phone via SMS!", "success");
+          showStatus("✅ New PIN sent via SMS.", "success");
+          closeForgotPasswordModal();
         } else {
-            throw new Error(result.message || "Failed to sync password.");
+          throw new Error(result.message || "Failed to sync password.");
         }
 
       } catch (error) {
-          console.error("Reset handler failure:", error);
-          showToast(error.message, "error");
-          showStatus("❌ " + error.message, "error");
+        console.error("Reset handler failure:", error);
+        showToast(error.message, "error");
+        showStatus("❌ " + error.message, "error");
       } finally {
-          btn.innerHTML = originalHtml;
-          btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        btn.disabled = false;
       }
     }
+
+    // ============================================================
+    // ENTER KEY SUPPORT
+    // ============================================================
+    document.getElementById('driverPassword').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleDriverLogin();
+      }
+    });
+
+    document.getElementById('driverPhone').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('driverPassword').focus();
+      }
+    });
+
+    document.getElementById('driverEmail').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('driverPassword').focus();
+      }
+    });
+
+    console.log('✅ Driver login page loaded. Firebase Auth ready.');
   </script>
 </body>
 </html>
