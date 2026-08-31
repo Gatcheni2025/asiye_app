@@ -1,23 +1,20 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Admin Dashboard · Asye</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asiye Admin · Driver Verification</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #0b0e14;
-            color: #e8ecf4;
-            min-height: 100vh;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Manrope', sans-serif; background: #0b0e14; color: #e8ecf4; min-height: 100vh; }
+        
+        /* Navbar */
         .navbar {
             background: #141a24;
             border-bottom: 1px solid #2a3340;
@@ -27,26 +24,14 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 0.5rem;
+            position: sticky;
+            top: 0;
+            z-index: 100;
         }
-        .navbar .brand {
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #ffffff;
-            letter-spacing: -0.3px;
-        }
-        .navbar .brand span {
-            color: #5b7cfa;
-        }
-        .navbar .user-info {
-            display: flex;
-            align-items: center;
-            gap: 1.2rem;
-            font-size: 0.85rem;
-            color: #8b95a9;
-        }
-        .navbar .user-info .email {
-            color: #e8ecf4;
-        }
+        .navbar .brand { font-size: 1.2rem; font-weight: 700; color: #ffffff; }
+        .navbar .brand span { color: #5b7cfa; }
+        .navbar .user-info { display: flex; align-items: center; gap: 1.2rem; font-size: 0.85rem; color: #8b95a9; }
+        .navbar .user-info .email { color: #e8ecf4; }
         .navbar .user-info .btn-logout {
             background: #2a3340;
             border: none;
@@ -57,20 +42,24 @@
             cursor: pointer;
             transition: background 0.2s;
         }
-        .navbar .user-info .btn-logout:hover {
-            background: #3a2a2a;
-        }
-
+        .navbar .user-info .btn-logout:hover { background: #3a2a2a; }
+        
+        /* Dashboard Layout */
         .dashboard {
             display: grid;
             grid-template-columns: 240px 1fr;
             min-height: calc(100vh - 68px);
         }
-
+        
+        /* Sidebar */
         .sidebar {
             background: #10161e;
             border-right: 1px solid #1f2836;
             padding: 1.5rem 0;
+            height: calc(100vh - 68px);
+            position: sticky;
+            top: 68px;
+            overflow-y: auto;
         }
         .sidebar .menu-item {
             padding: 0.7rem 1.8rem;
@@ -79,23 +68,25 @@
             cursor: pointer;
             transition: background 0.15s, color 0.15s;
             border-left: 3px solid transparent;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
-        .sidebar .menu-item:hover {
-            background: #1a222e;
-            color: #e8ecf4;
-        }
+        .sidebar .menu-item:hover { background: #1a222e; color: #e8ecf4; }
         .sidebar .menu-item.active {
             color: #ffffff;
             background: #1a222e;
             border-left-color: #5b7cfa;
         }
-        .sidebar .menu-item .icon {
-            margin-right: 0.6rem;
+        .sidebar .menu-item .badge {
+            background: #dc3545;
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: auto;
         }
-        .sidebar .divider {
-            border-top: 1px solid #1f2836;
-            margin: 0.8rem 1.5rem;
-        }
+        .sidebar .divider { border-top: 1px solid #1f2836; margin: 0.8rem 1.5rem; }
         .sidebar .menu-label {
             font-size: 0.6rem;
             text-transform: uppercase;
@@ -103,169 +94,243 @@
             color: #4d5b70;
             padding: 0.4rem 1.8rem;
         }
-
+        
+        /* Main Content */
         .main-content {
             padding: 2rem 2.5rem;
             overflow-y: auto;
             max-height: calc(100vh - 68px);
         }
-        .main-content .page-title {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin-bottom: 0.2rem;
+        .main-content .page-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.2rem; }
+        .main-content .page-sub { color: #8b95a9; font-size: 0.9rem; margin-bottom: 1.8rem; }
+        
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
         }
-        .main-content .page-sub {
-            color: #8b95a9;
-            font-size: 0.9rem;
-            margin-bottom: 1.8rem;
-        }
-
-        .form-card {
+        .stat-card {
             background: #141a24;
             border: 1px solid #2a3340;
             border-radius: 16px;
-            padding: 1.8rem 2rem;
-            max-width: 700px;
+            padding: 1.2rem 1.5rem;
         }
-        .form-card .form-title {
-            font-size: 1.1rem;
-            font-weight: 600;
-            margin-bottom: 1.2rem;
-        }
-        .form-group {
-            margin-bottom: 1.2rem;
-        }
-        .form-group label {
-            display: block;
-            color: #c8d0dc;
-            font-size: 0.8rem;
-            font-weight: 500;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-            margin-bottom: 0.3rem;
-        }
-        .form-group label .required {
-            color: #f28b82;
-        }
-        .form-group input,
-        .form-group select {
-            width: 100%;
-            background: #1e2632;
-            border: 1px solid #2f3a48;
-            border-radius: 12px;
-            padding: 0.75rem 1rem;
-            color: #f0f4fa;
-            font-size: 0.95rem;
-            outline: none;
-            transition: border 0.25s, box-shadow 0.25s;
-        }
-        .form-group input:focus,
-        .form-group select:focus {
-            border-color: #5b7cfa;
-            box-shadow: 0 0 0 4px rgba(91, 124, 250, 0.12);
-        }
-        .form-group input::placeholder {
-            color: #5d6a7e;
-        }
-        .form-group select option {
+        .stat-card .stat-number { font-size: 1.8rem; font-weight: 700; color: #ffffff; }
+        .stat-card .stat-label { font-size: 0.75rem; color: #8b95a9; text-transform: uppercase; letter-spacing: 0.5px; }
+        .stat-card .stat-icon { float: right; font-size: 1.8rem; opacity: 0.3; }
+        .stat-card.pending .stat-number { color: #f8961e; }
+        .stat-card.verified .stat-number { color: #10b981; }
+        .stat-card.total .stat-number { color: #5b7cfa; }
+        
+        /* Application Cards */
+        .app-card {
             background: #141a24;
-            color: #e8ecf4;
+            border: 1px solid #2a3340;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: all 0.2s;
         }
-        .form-row {
+        .app-card:hover { border-color: #5b7cfa; }
+        .app-card .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        .app-card .app-name { font-size: 1.1rem; font-weight: 700; color: #ffffff; }
+        .app-card .app-email { font-size: 0.85rem; color: #8b95a9; }
+        .app-card .app-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .app-card .app-status.pending { background: #f8961e20; color: #f8961e; border: 1px solid #f8961e40; }
+        .app-card .app-status.verified { background: #10b98120; color: #10b981; border: 1px solid #10b98140; }
+        .app-card .app-status.rejected { background: #dc354520; color: #dc3545; border: 1px solid #dc354540; }
+        
+        .app-card .app-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.5rem 1.5rem;
+            margin: 0.8rem 0;
+            font-size: 0.85rem;
+            color: #c8d0dc;
+        }
+        .app-card .app-details .detail-label { color: #8b95a9; font-weight: 600; }
+        .app-card .app-actions {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+        .app-card .app-actions .btn {
+            padding: 0.5rem 1.2rem;
+            border-radius: 30px;
+            border: none;
+            font-weight: 700;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .btn-approve { background: #10b981; color: white; }
+        .btn-approve:hover { background: #059669; }
+        .btn-reject { background: #dc3545; color: white; }
+        .btn-reject:hover { background: #b91c1c; }
+        .btn-view { background: #2a3340; color: #e8ecf4; }
+        .btn-view:hover { background: #3a4a5a; }
+        .btn-refresh { background: #5b7cfa; color: white; }
+        .btn-refresh:hover { background: #4a6ae8; }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: #8b95a9;
+        }
+        .empty-state .icon { font-size: 3rem; opacity: 0.3; margin-bottom: 1rem; }
+        .empty-state h3 { color: #e8ecf4; margin-bottom: 0.5rem; }
+        
+        /* Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.85);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.open { display: flex; }
+        .modal-content {
+            background: #141a24;
+            border: 1px solid #2a3340;
+            border-radius: 24px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+        .modal-content .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+        .modal-content .modal-header h3 { color: #ffffff; }
+        .modal-content .modal-close {
+            background: none;
+            border: none;
+            color: #8b95a9;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+        .modal-content .modal-close:hover { color: #ffffff; }
+        
+        .modal-content .doc-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 1rem;
+            margin: 1rem 0;
         }
-        .btn-submit {
-            background: #5b7cfa;
-            border: none;
-            border-radius: 40px;
-            padding: 0.8rem 2.5rem;
-            color: #ffffff;
-            font-size: 0.95rem;
+        .modal-content .doc-item {
+            background: #1a222e;
+            padding: 0.8rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .modal-content .doc-item .doc-label { font-size: 0.7rem; color: #8b95a9; }
+        .modal-content .doc-item .doc-link {
+            color: #5b7cfa;
+            text-decoration: none;
             font-weight: 600;
-            cursor: pointer;
-            transition: background 0.2s, box-shadow 0.2s;
-            box-shadow: 0 4px 20px rgba(91, 124, 250, 0.3);
+            font-size: 0.85rem;
+            display: block;
+            margin-top: 4px;
+            word-break: break-all;
         }
-        .btn-submit:hover {
-            background: #4a6ae8;
-            box-shadow: 0 6px 24px rgba(91, 124, 250, 0.4);
+        .modal-content .doc-item .doc-link:hover { text-decoration: underline; }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            color: white;
+            font-weight: 700;
+            z-index: 2000;
+            animation: slideUp 0.3s ease;
+            max-width: 400px;
         }
-        .btn-submit:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
+        .toast.success { background: #10b981; }
+        .toast.error { background: #dc3545; }
+        .toast.info { background: #5b7cfa; }
+        @keyframes slideUp {
+            from { transform: translateY(100px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
         }
-        .btn-submit .spinner {
+        
+        /* Loading Spinner */
+        .spinner {
             display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid #2f3a48;
-            border-top: 2px solid #ffffff;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #2a3340;
+            border-top: 2px solid #5b7cfa;
             border-radius: 50%;
             animation: spin 0.7s linear infinite;
-            vertical-align: middle;
-            margin-right: 8px;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .success-msg {
-            background: #1a2a1a;
-            border: 1px solid #2a4a2a;
-            border-radius: 12px;
-            padding: 0.7rem 1rem;
-            margin-bottom: 1rem;
-            color: #6f8a6f;
-            font-size: 0.85rem;
-            display: none;
-        }
-        .success-msg.show {
-            display: block;
-        }
-        .error-msg {
-            background: #1e1a1f;
-            border: 1px solid #4a2a2a;
-            border-radius: 12px;
-            padding: 0.7rem 1rem;
-            margin-bottom: 1rem;
-            color: #f28b82;
-            font-size: 0.85rem;
-            display: none;
-        }
-        .error-msg.show {
-            display: block;
-        }
-
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Responsive */
         @media (max-width: 768px) {
-            .dashboard {
-                grid-template-columns: 1fr;
-            }
-            .sidebar {
-                display: none;
-            }
-            .main-content {
-                padding: 1.5rem;
-                max-height: none;
-            }
-            .navbar {
-                padding: 0.6rem 1rem;
-            }
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            .form-card {
-                padding: 1.2rem;
-            }
+            .dashboard { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .main-content { padding: 1rem; max-height: none; }
+            .navbar { padding: 0.6rem 1rem; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .modal-content { padding: 1.2rem; margin: 10px; }
+            .doc-grid { grid-template-columns: 1fr; }
+        }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #10161e; }
+        ::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a4a5a; }
+        
+        /* Badge for pending count */
+        .pending-count {
+            background: #dc3545;
+            color: white;
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: auto;
         }
     </style>
 </head>
 <body>
 
+    <!-- Navbar -->
     <nav class="navbar">
-        <div class="brand">Asye<span>Admin</span></div>
+        <div class="brand">Asiye <span>Admin</span></div>
         <div class="user-info">
             <span class="email" id="userEmail">Loading...</span>
             <button class="btn-logout" id="logoutBtn">Sign Out</button>
@@ -273,111 +338,81 @@
     </nav>
 
     <div class="dashboard">
-
+        <!-- Sidebar -->
         <aside class="sidebar">
-            <div class="menu-item active"><span class="icon">📊</span> Dashboard</div>
-            <div class="menu-item"><span class="icon">🚗</span> Vehicles</div>
-            <div class="menu-item"><span class="icon">👥</span> Drivers</div>
-            <div class="menu-item"><span class="icon">📝</span> Trips</div>
+            <div class="menu-item active" onclick="loadApplications()">
+                <i class="fas fa-users"></i> Applications
+                <span class="pending-count" id="pendingBadge">0</span>
+            </div>
+            <div class="menu-item" onclick="loadVerifiedDrivers()">
+                <i class="fas fa-check-circle"></i> Verified Drivers
+            </div>
+            <div class="menu-item" onclick="loadRejectedDrivers()">
+                <i class="fas fa-times-circle"></i> Rejected
+            </div>
             <div class="divider"></div>
-            <div class="menu-label">System</div>
-            <div class="menu-item"><span class="icon">🔐</span> Security</div>
-            <div class="menu-item"><span class="icon">⚙️</span> Settings</div>
+            <div class="menu-label">Management</div>
+            <div class="menu-item" onclick="showRegisterDriverForm()">
+                <i class="fas fa-user-plus"></i> Register Driver
+            </div>
+            <div class="menu-item" onclick="location.reload()">
+                <i class="fas fa-sync-alt"></i> Refresh
+            </div>
         </aside>
 
-        <main class="main-content">
+        <!-- Main Content -->
+        <main class="main-content" id="mainContent">
+            <div class="page-title">📋 Driver Applications</div>
+            <div class="page-sub">Review and verify driver applications</div>
 
-            <div class="page-title">👤 Driver Registration</div>
-            <div class="page-sub">Register a new driver in the system</div>
-
-            <div id="successMsg" class="success-msg"></div>
-            <div id="errorMsg" class="error-msg"></div>
-
-            <div class="form-card">
-                <div class="form-title">Driver Details</div>
-
-                <form id="driverForm" onsubmit="return false;">
-
-                    <!-- Full Name -->
-                    <div class="form-group">
-                        <label for="fullName">Full Name <span class="required">*</span></label>
-                        <input type="text" id="fullName" placeholder="e.g. John Doe" required />
-                    </div>
-
-                    <!-- Email -->
-                    <div class="form-group">
-                        <label for="email">Email Address <span class="required">*</span></label>
-                        <input type="email" id="email" placeholder="e.g. driver@example.com" required />
-                    </div>
-
-                    <!-- Phone -->
-                    <div class="form-group">
-                        <label for="phone">Phone Number <span class="required">*</span></label>
-                        <input type="tel" id="phone" placeholder="e.g. 0821234567" required />
-                    </div>
-
-                    <!-- Password -->
-                    <div class="form-group">
-                        <label for="password">Temporary Password <span class="required">*</span></label>
-                        <input type="password" id="password" placeholder="Min 6 characters" required minlength="6" />
-                        <div style="font-size:0.7rem; color:#5d6a7e; margin-top:0.3rem;">
-                            🔒 This will be the driver's initial login PIN
-                        </div>
-                    </div>
-
-                    <!-- License Number -->
-                    <div class="form-group">
-                        <label for="licenseNumber">License Number <span class="required">*</span></label>
-                        <input type="text" id="licenseNumber" placeholder="e.g. DL1234567890" required />
-                    </div>
-
-                    <!-- Vehicle Make & Model (row) -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="vehicleMake">Vehicle Make</label>
-                            <input type="text" id="vehicleMake" placeholder="e.g. Toyota" />
-                        </div>
-                        <div class="form-group">
-                            <label for="vehicleModel">Vehicle Model</label>
-                            <input type="text" id="vehicleModel" placeholder="e.g. Corolla" />
-                        </div>
-                    </div>
-
-                    <!-- Year & Color (row) -->
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="vehicleYear">Vehicle Year</label>
-                            <input type="number" id="vehicleYear" placeholder="e.g. 2020" min="1950" max="2026" />
-                        </div>
-                        <div class="form-group">
-                            <label for="vehicleColor">Vehicle Color</label>
-                            <input type="text" id="vehicleColor" placeholder="e.g. Red, Blue, White" />
-                        </div>
-                    </div>
-
-                    <!-- License Plate -->
-                    <div class="form-group">
-                        <label for="licensePlate">License Plate <span class="required">*</span></label>
-                        <input type="text" id="licensePlate" placeholder="e.g. ABC 123 GP" required />
-                    </div>
-
-                    <!-- AREA -->
-                    <div class="form-group">
-                        <label for="area">Area <span class="required">*</span></label>
-                        <input type="text" id="area" placeholder="e.g. Johannesburg, Cape Town, Durban" required />
-                    </div>
-
-                    <button type="submit" class="btn-submit" id="submitBtn">
-                        Register Driver
-                    </button>
-                </form>
+            <!-- Stats -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card pending">
+                    <div class="stat-icon"><i class="fas fa-clock"></i></div>
+                    <div class="stat-number" id="statPending">0</div>
+                    <div class="stat-label">Pending Review</div>
+                </div>
+                <div class="stat-card verified">
+                    <div class="stat-icon"><i class="fas fa-check"></i></div>
+                    <div class="stat-number" id="statVerified">0</div>
+                    <div class="stat-label">Verified Drivers</div>
+                </div>
+                <div class="stat-card total">
+                    <div class="stat-icon"><i class="fas fa-users"></i></div>
+                    <div class="stat-number" id="statTotal">0</div>
+                    <div class="stat-label">Total Applications</div>
+                </div>
             </div>
 
+            <!-- Applications List -->
+            <div id="applicationsList">
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="spinner" style="width: 30px; height: 30px;"></div>
+                    <p style="color: #8b95a9; margin-top: 1rem;">Loading applications...</p>
+                </div>
+            </div>
         </main>
     </div>
 
+    <!-- Detail Modal -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Application Details</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody">
+                <div style="text-align: center; padding: 1rem;">
+                    <div class="spinner" style="width: 30px; height: 30px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Firebase Config
+        // ================================================================
+        // FIREBASE CONFIG
+        // ================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
             authDomain: "asiye-80386.firebaseapp.com",
@@ -391,39 +426,37 @@
         const auth = firebase.auth();
         const database = firebase.database();
 
+        // ================================================================
         // DOM REFS
+        // ================================================================
         const userEmailEl = document.getElementById('userEmail');
         const logoutBtn = document.getElementById('logoutBtn');
+        const applicationsList = document.getElementById('applicationsList');
+        const statPending = document.getElementById('statPending');
+        const statVerified = document.getElementById('statVerified');
+        const statTotal = document.getElementById('statTotal');
+        const pendingBadge = document.getElementById('pendingBadge');
+        const detailModal = document.getElementById('detailModal');
+        const modalBody = document.getElementById('modalBody');
+        const modalTitle = document.getElementById('modalTitle');
 
-        const driverForm = document.getElementById('driverForm');
-        const fullName = document.getElementById('fullName');
-        const email = document.getElementById('email');
-        const phone = document.getElementById('phone');
-        const password = document.getElementById('password');
-        const licenseNumber = document.getElementById('licenseNumber');
-        const vehicleMake = document.getElementById('vehicleMake');
-        const vehicleModel = document.getElementById('vehicleModel');
-        const vehicleYear = document.getElementById('vehicleYear');
-        const vehicleColor = document.getElementById('vehicleColor');
-        const licensePlate = document.getElementById('licensePlate');
-        const area = document.getElementById('area');
-        const submitBtn = document.getElementById('submitBtn');
+        let currentView = 'pending';
+        let allApplications = [];
 
-        const successMsg = document.getElementById('successMsg');
-        const errorMsg = document.getElementById('errorMsg');
-
+        // ================================================================
         // AUTH CHECK
+        // ================================================================
         auth.onAuthStateChanged((user) => {
             if (user) {
                 userEmailEl.textContent = user.email || 'admin@asiye.cloud';
-                console.log('✅ Dashboard loaded for:', user.email);
+                console.log('✅ Admin logged in:', user.email);
+                loadApplications();
             } else {
                 console.log('🔒 No user found, redirecting to login...');
                 window.location.href = 'admin-login.html';
             }
         });
 
-        // LOGOUT
         logoutBtn.addEventListener('click', function() {
             auth.signOut().then(() => {
                 window.location.href = 'admin-login.html';
@@ -432,136 +465,487 @@
             });
         });
 
-        // FORM SUBMISSION - SAVES TO /taxis/ NODE
-        function showSuccess(message) {
-            successMsg.textContent = message;
-            successMsg.className = 'success-msg show';
-            errorMsg.className = 'error-msg';
+        // ================================================================
+        // LOAD APPLICATIONS
+        // ================================================================
+        function loadApplications() {
+            currentView = 'pending';
+            applicationsList.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="spinner" style="width: 30px; height: 30px;"></div>
+                    <p style="color: #8b95a9; margin-top: 1rem;">Loading applications...</p>
+                </div>
+            `;
+
+            database.ref('driver_applications').orderByChild('submittedAt').once('value', (snapshot) => {
+                allApplications = [];
+                let pendingCount = 0;
+                let verifiedCount = 0;
+
+                if (snapshot.exists()) {
+                    snapshot.forEach((child) => {
+                        const app = { key: child.key, ...child.val() };
+                        allApplications.push(app);
+                        if (app.status === 'pending') pendingCount++;
+                        if (app.status === 'verified' || app.status === 'active') verifiedCount++;
+                    });
+                }
+
+                // Update stats
+                statPending.textContent = pendingCount;
+                statVerified.textContent = verifiedCount;
+                statTotal.textContent = allApplications.length;
+                pendingBadge.textContent = pendingCount;
+
+                // Filter pending
+                const pendingApps = allApplications.filter(a => a.status === 'pending');
+                renderApplications(pendingApps);
+            });
         }
 
-        function showError(message) {
-            errorMsg.textContent = message;
-            errorMsg.className = 'error-msg show';
-            successMsg.className = 'success-msg';
+        // ================================================================
+        // LOAD VERIFIED DRIVERS
+        // ================================================================
+        function loadVerifiedDrivers() {
+            currentView = 'verified';
+            const verifiedApps = allApplications.filter(a => a.status === 'verified' || a.status === 'active');
+            renderApplications(verifiedApps, 'Verified Drivers');
         }
 
-        function setButtonLoading(loading) {
-            if (loading) {
-                submitBtn.innerHTML = '<span class="spinner"></span> Creating Driver...';
-                submitBtn.disabled = true;
-            } else {
-                submitBtn.innerHTML = 'Register Driver';
-                submitBtn.disabled = false;
-            }
+        // ================================================================
+        // LOAD REJECTED DRIVERS
+        // ================================================================
+        function loadRejectedDrivers() {
+            currentView = 'rejected';
+            const rejectedApps = allApplications.filter(a => a.status === 'rejected');
+            renderApplications(rejectedApps, 'Rejected Applications');
         }
 
-        driverForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-
-            const name = fullName.value.trim();
-            const emailVal = email.value.trim();
-            const phoneVal = phone.value.trim();
-            const passVal = password.value.trim();
-            const licenseVal = licenseNumber.value.trim();
-            const plateVal = licensePlate.value.trim();
-            const areaVal = area.value.trim();
-
-            if (!name || !emailVal || !phoneVal || !passVal || !licenseVal || !plateVal || !areaVal) {
-                showError('Please fill in all required fields (marked with *).');
+        // ================================================================
+        // RENDER APPLICATIONS
+        // ================================================================
+        function renderApplications(apps, title = null) {
+            if (apps.length === 0) {
+                applicationsList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon"><i class="fas fa-inbox"></i></div>
+                        <h3>${title || 'No applications found'}</h3>
+                        <p>${title === 'Verified Drivers' ? 'No drivers have been verified yet.' : 'No pending applications to review.'}</p>
+                    </div>
+                `;
                 return;
             }
 
-            if (passVal.length < 6) {
-                showError('Password must be at least 6 characters.');
+            // Sort by submittedAt (newest first)
+            apps.sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
+
+            let html = '';
+            apps.forEach((app) => {
+                const name = app.fullName || app.name || 'Unknown Driver';
+                const email = app.email || 'No email';
+                const phone = app.phone || 'No phone';
+                const status = app.status || 'pending';
+                const submittedDate = app.submittedAt ? new Date(app.submittedAt).toLocaleDateString() : 'N/A';
+                const vehicle = `${app.vehicleMake || ''} ${app.vehicleModel || ''}`.trim() || 'N/A';
+                const reg = app.taxiRegistrationNumber || app.reg || 'N/A';
+                const workArea = app.workArea || app.area || 'N/A';
+
+                const statusClass = status === 'pending' ? 'pending' : status === 'verified' ? 'verified' : 'rejected';
+                const statusLabel = status === 'pending' ? '⏳ Pending' : status === 'verified' ? '✅ Verified' : '❌ Rejected';
+
+                html += `
+                    <div class="app-card">
+                        <div class="app-header">
+                            <div>
+                                <div class="app-name">${escapeHtml(name)}</div>
+                                <div class="app-email">${escapeHtml(email)} • ${escapeHtml(phone)}</div>
+                            </div>
+                            <span class="app-status ${statusClass}">${statusLabel}</span>
+                        </div>
+                        <div class="app-details">
+                            <div><span class="detail-label">📍 Area:</span> ${escapeHtml(workArea)}</div>
+                            <div><span class="detail-label">🚗 Vehicle:</span> ${escapeHtml(vehicle)}</div>
+                            <div><span class="detail-label">📋 Reg:</span> ${escapeHtml(reg)}</div>
+                            <div><span class="detail-label">📅 Submitted:</span> ${submittedDate}</div>
+                        </div>
+                        <div class="app-actions">
+                            <button class="btn btn-view" onclick="viewApplication('${app.key}')">
+                                <i class="fas fa-eye"></i> View Details
+                            </button>
+                            ${status === 'pending' ? `
+                                <button class="btn btn-approve" onclick="approveDriver('${app.key}')">
+                                    <i class="fas fa-check"></i> Approve & Activate
+                                </button>
+                                <button class="btn btn-reject" onclick="rejectDriver('${app.key}')">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                            ` : ''}
+                            ${status === 'verified' ? `
+                                <button class="btn btn-reject" onclick="deactivateDriver('${app.key}')">
+                                    <i class="fas fa-ban"></i> Deactivate
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            applicationsList.innerHTML = html;
+        }
+
+        // ================================================================
+        // VIEW APPLICATION DETAILS
+        // ================================================================
+        function viewApplication(key) {
+            const app = allApplications.find(a => a.key === key);
+            if (!app) {
+                showToast('Application not found', 'error');
                 return;
             }
 
-            const adminUser = auth.currentUser;
-            if (!adminUser) {
-                showError('You must be logged in to register a driver.');
+            modalTitle.textContent = `Application: ${app.fullName || app.name || 'Driver'}`;
+
+            const name = app.fullName || app.name || 'Unknown';
+            const email = app.email || 'No email';
+            const phone = app.phone || 'No phone';
+            const workArea = app.workArea || app.area || 'N/A';
+            const vehicleMake = app.vehicleMake || 'N/A';
+            const vehicleModel = app.vehicleModel || 'N/A';
+            const vehicleColor = app.vehicleColor || 'N/A';
+            const reg = app.taxiRegistrationNumber || app.reg || 'N/A';
+            const year = app.vehicleYear || 'N/A';
+            const status = app.status || 'pending';
+            const submittedDate = app.submittedAt ? new Date(app.submittedAt).toLocaleString() : 'N/A';
+            const noClearance = app.noClearance ? 'Yes (Will pay R299 fee)' : 'No';
+
+            // Get references
+            let refsHtml = 'No references provided';
+            if (app.references && app.references.length > 0) {
+                refsHtml = app.references.map((r, i) => 
+                    `<div style="padding: 4px 0; border-bottom: 1px solid #1a222e;">${i+1}. ${escapeHtml(r.name)} - ${escapeHtml(r.phone)}</div>`
+                ).join('');
+            }
+
+            // Documents
+            const docs = app.documents || {};
+            const docItems = [
+                { label: 'Selfie', url: docs.FACE || app.profile_picture_url },
+                { label: 'Car Photo', url: docs.CAR_FRONT || app.vehiclePhoto },
+                { label: 'ID Document', url: docs.ID_DOC },
+                { label: 'Proof of Address', url: docs.PROOF_OF_ADDRESS },
+                { label: 'PDP', url: docs.PDP },
+                { label: 'Police Clearance', url: docs.CLEARANCE }
+            ];
+
+            let docHtml = docItems.map(d => `
+                <div class="doc-item">
+                    <div class="doc-label">${d.label}</div>
+                    ${d.url && d.url !== 'No File' && d.url !== 'Error' ? 
+                        `<a href="${d.url}" target="_blank" class="doc-link"><i class="fas fa-external-link-alt"></i> View Document</a>` : 
+                        `<span style="color: #5d6a7e; font-size: 0.8rem;">${d.url || 'Not provided'}</span>`
+                    }
+                </div>
+            `).join('');
+
+            modalBody.innerHTML = `
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem; font-size: 0.9rem;">
+                        <div><span style="color: #8b95a9;">Full Name:</span> <strong>${escapeHtml(name)}</strong></div>
+                        <div><span style="color: #8b95a9;">Email:</span> <strong>${escapeHtml(email)}</strong></div>
+                        <div><span style="color: #8b95a9;">Phone:</span> <strong>${escapeHtml(phone)}</strong></div>
+                        <div><span style="color: #8b95a9;">Work Area:</span> <strong>${escapeHtml(workArea)}</strong></div>
+                        <div><span style="color: #8b95a9;">Vehicle:</span> <strong>${escapeHtml(vehicleMake)} ${escapeHtml(vehicleModel)}</strong></div>
+                        <div><span style="color: #8b95a9;">Color:</span> <strong>${escapeHtml(vehicleColor)}</strong></div>
+                        <div><span style="color: #8b95a9;">Registration:</span> <strong>${escapeHtml(reg)}</strong></div>
+                        <div><span style="color: #8b95a9;">Year:</span> <strong>${escapeHtml(year)}</strong></div>
+                        <div><span style="color: #8b95a9;">Status:</span> <strong style="color: ${status === 'pending' ? '#f8961e' : status === 'verified' ? '#10b981' : '#dc3545'}">${status.toUpperCase()}</strong></div>
+                        <div><span style="color: #8b95a9;">Submitted:</span> <strong>${submittedDate}</strong></div>
+                        <div><span style="color: #8b95a9;">No Clearance:</span> <strong>${noClearance}</strong></div>
+                    </div>
+                </div>
+                <hr style="border-color: #2a3340; margin: 1rem 0;">
+                <div style="margin-bottom: 1rem;">
+                    <h4 style="color: #e8ecf4; margin-bottom: 0.5rem;"><i class="fas fa-users"></i> References</h4>
+                    <div style="background: #1a222e; padding: 0.8rem; border-radius: 12px; font-size: 0.85rem;">
+                        ${refsHtml}
+                    </div>
+                </div>
+                <div>
+                    <h4 style="color: #e8ecf4; margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Documents</h4>
+                    <div class="doc-grid">
+                        ${docHtml}
+                    </div>
+                </div>
+                ${status === 'pending' ? `
+                    <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
+                        <button class="btn btn-approve" onclick="approveDriver('${key}')" style="flex:1;">
+                            <i class="fas fa-check"></i> Approve & Activate
+                        </button>
+                        <button class="btn btn-reject" onclick="rejectDriver('${key}')" style="flex:1;">
+                            <i class="fas fa-times"></i> Reject
+                        </button>
+                    </div>
+                ` : ''}
+                <button class="btn btn-view" onclick="closeModal()" style="width:100%; margin-top: 1rem;">
+                    <i class="fas fa-times"></i> Close
+                </button>
+            `;
+
+            detailModal.classList.add('open');
+        }
+
+        // ================================================================
+        // APPROVE DRIVER
+        // ================================================================
+        function approveDriver(key) {
+            if (!confirm('Approve this driver application? They will be activated immediately.')) return;
+
+            const app = allApplications.find(a => a.key === key);
+            if (!app) {
+                showToast('Application not found', 'error');
                 return;
             }
 
-            setButtonLoading(true);
+            // Show loading on the button
+            const btns = document.querySelectorAll('.btn-approve');
+            btns.forEach(b => {
+                if (b.textContent.includes('Approve')) {
+                    b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                    b.disabled = true;
+                }
+            });
 
-            // STEP 1: Create Firebase Auth account
-            auth.createUserWithEmailAndPassword(emailVal, passVal)
-                .then((userCredential) => {
-                    const driverUid = userCredential.user.uid;
+            // Generate a unique driver ID
+            const driverId = app.email ? app.email.replace(/[^a-zA-Z0-9]/g, '_') : `driver_${Date.now()}`;
 
-                    // STEP 2: Save driver data to /taxis/ node (not /drivers/)
-                    const driverData = {
-                        name: name,
-                        email: emailVal,
-                        phone: phoneVal,
-                        tempPassword: passVal,
-                        licenseNumber: licenseVal,
-                        vehicleMake: vehicleMake.value.trim() || null,
-                        vehicleModel: vehicleModel.value.trim() || null,
-                        vehicleYear: vehicleYear.value.trim() || null,
-                        vehicleColor: vehicleColor.value.trim() || null,
-                        licensePlate: plateVal.toUpperCase(),
-                        area: areaVal,
-                        registeredBy: adminUser.uid,
-                        registeredByEmail: adminUser.email,
-                        registeredAt: firebase.database.ServerValue.TIMESTAMP,
-                        status: 'active',
-                        isOnline: false,
-                        destination: null,
-                        // Additional fields expected by the driver app
-                        profilePhoto: null,
-                        rating: 0,
-                        totalTrips: 0,
-                        earnings: 0
-                    };
+            // Prepare driver data for the taxis node
+            const driverData = {
+                name: app.fullName || app.name || 'Driver',
+                surname: app.fullName ? app.fullName.split(' ').slice(1).join(' ') : '',
+                email: app.email || '',
+                phone: app.phone || '',
+                taxiRegistrationNumber: app.taxiRegistrationNumber || app.reg || 'N/A',
+                vehicleMake: app.vehicleMake || 'N/A',
+                vehicleModel: app.vehicleModel || 'N/A',
+                vehicleColor: app.vehicleColor || 'N/A',
+                vehicleYear: app.vehicleYear || 'N/A',
+                vehiclePhoto: app.vehiclePhoto || app.documents?.CAR_FRONT || '',
+                profile_picture_url: app.profile_picture_url || app.documents?.FACE || '',
+                area: app.workArea || app.area || 'N/A',
+                assignedRank: app.workArea || app.area || null,
+                verificationStatus: 'verified',
+                provisionalActivation: true,
+                isOnline: false,
+                isBroadcasting: false,
+                isFull: false,
+                rating: 5.0,
+                totalTrips: 0,
+                earnings: 0,
+                walletBalance: 0,
+                commissionDebt: 0,
+                references: app.references || [],
+                verifiedAt: firebase.database.ServerValue.TIMESTAMP,
+                createdAt: firebase.database.ServerValue.TIMESTAMP,
+                trainingStatus: 'completed',
+                documents: app.documents || {}
+            };
 
-                    console.log('📝 Saving driver to /taxis/:', driverData);
-
-                    return database.ref('taxis/' + driverUid).set(driverData);
+            // 1. Save to taxis node
+            database.ref(`taxis/${driverId}`).set(driverData)
+                .then(() => {
+                    // 2. Update the application status
+                    return database.ref(`driver_applications/${key}`).update({
+                        status: 'verified',
+                        verifiedAt: firebase.database.ServerValue.TIMESTAMP,
+                        driverId: driverId,
+                        verifiedBy: auth.currentUser ? auth.currentUser.uid : 'admin'
+                    });
                 })
                 .then(() => {
-                    setButtonLoading(false);
-                    showSuccess('✅ Driver registered successfully in /taxis/!');
-
-                    // Reset form
-                    fullName.value = '';
-                    email.value = '';
-                    phone.value = '';
-                    password.value = '';
-                    licenseNumber.value = '';
-                    vehicleMake.value = '';
-                    vehicleModel.value = '';
-                    vehicleYear.value = '';
-                    vehicleColor.value = '';
-                    licensePlate.value = '';
-                    area.value = '';
-
-                    console.log('👤 Driver registered successfully in /taxis/ node!');
-                })
-                .catch((error) => {
-                    setButtonLoading(false);
-
-                    let errorMessage = error.message;
-                    if (error.code === 'auth/email-already-in-use') {
-                        errorMessage = 'This email is already registered. Please use a different email.';
-                    } else if (error.code === 'auth/weak-password') {
-                        errorMessage = 'Password is too weak. Please use at least 6 characters.';
-                    } else if (error.code === 'auth/invalid-email') {
-                        errorMessage = 'Please enter a valid email address.';
-                    } else if (error.code === 'auth/network-request-failed') {
-                        errorMessage = 'Network error. Please check your internet connection.';
-                    } else if (error.message.includes('PERMISSION_DENIED')) {
-                        errorMessage = 'Permission denied. Please check Firebase rules for /taxis node.';
+                    showToast(`✅ Driver ${app.fullName || 'Driver'} verified and activated!`, 'success');
+                    
+                    // Send notification to driver
+                    if (app.phone) {
+                        sendDriverNotification(app.phone, app.fullName || 'Driver', 'approved');
                     }
 
-                    showError('❌ Error: ' + errorMessage);
-                    console.error('Firebase error details:', error);
+                    // Reload applications
+                    setTimeout(loadApplications, 1000);
+                })
+                .catch((error) => {
+                    console.error('Error approving driver:', error);
+                    showToast('Error approving driver: ' + error.message, 'error');
+                    // Reset buttons
+                    const btns = document.querySelectorAll('.btn-approve');
+                    btns.forEach(b => {
+                        b.innerHTML = '<i class="fas fa-check"></i> Approve & Activate';
+                        b.disabled = false;
+                    });
                 });
+        }
+
+        // ================================================================
+        // REJECT DRIVER
+        // ================================================================
+        function rejectDriver(key) {
+            const reason = prompt('Please provide a reason for rejection:');
+            if (reason === null) return; // User cancelled
+
+            if (!confirm(`Reject this driver application? Reason: ${reason}`)) return;
+
+            database.ref(`driver_applications/${key}`).update({
+                status: 'rejected',
+                rejectedAt: firebase.database.ServerValue.TIMESTAMP,
+                rejectionReason: reason,
+                rejectedBy: auth.currentUser ? auth.currentUser.uid : 'admin'
+            }).then(() => {
+                showToast('❌ Application rejected', 'info');
+                
+                // Send notification to driver
+                const app = allApplications.find(a => a.key === key);
+                if (app && app.phone) {
+                    sendDriverNotification(app.phone, app.fullName || 'Driver', 'rejected', reason);
+                }
+                
+                loadApplications();
+            }).catch((error) => {
+                showToast('Error rejecting: ' + error.message, 'error');
+            });
+        }
+
+        // ================================================================
+        // DEACTIVATE DRIVER
+        // ================================================================
+        function deactivateDriver(key) {
+            if (!confirm('Deactivate this driver? They will lose access to the app.')) return;
+
+            const app = allApplications.find(a => a.key === key);
+            if (!app || !app.driverId) {
+                showToast('Driver ID not found', 'error');
+                return;
+            }
+
+            database.ref(`taxis/${app.driverId}`).update({
+                verificationStatus: 'unverified',
+                provisionalActivation: false,
+                isOnline: false,
+                isBroadcasting: false
+            }).then(() => {
+                return database.ref(`driver_applications/${key}`).update({
+                    status: 'rejected',
+                    deactivatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+            }).then(() => {
+                showToast('Driver deactivated', 'info');
+                loadApplications();
+            }).catch((error) => {
+                showToast('Error: ' + error.message, 'error');
+            });
+        }
+
+        // ================================================================
+        // SEND DRIVER NOTIFICATION (via WhatsApp)
+        // ================================================================
+        function sendDriverNotification(phone, name, status, reason = '') {
+            // Format phone
+            let cleanPhone = String(phone).replace(/\D/g, '');
+            if (cleanPhone.startsWith('0')) cleanPhone = '27' + cleanPhone.substring(1);
+            if (!cleanPhone.startsWith('27')) cleanPhone = '27' + cleanPhone;
+
+            let message = '';
+            if (status === 'approved') {
+                message = `🎉 Congratulations ${name}!\n\nYour Asiye driver application has been APPROVED! You can now log in to the driver app and start earning.\n\n📱 Download the app: https://asiye.app/driver\n\nThank you for joining Asiye! 🚗`;
+            } else if (status === 'rejected') {
+                message = `📋 Hi ${name},\n\nYour Asiye driver application has been reviewed and unfortunately was not approved at this time.\n\nReason: ${reason || 'Not provided'}\n\nYou may re-apply after addressing the above issue.\n\nThank you for your interest in Asiye.`;
+            }
+
+            if (!message) return;
+
+            // Send via WhatsApp using the bot endpoint
+            fetch('https://app.asiye.cloud/whatsapp_bot.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'send_notification',
+                    phone: cleanPhone,
+                    message: message
+                })
+            }).catch(err => console.error('WhatsApp notification error:', err));
+        }
+
+        // ================================================================
+        // SHOW REGISTER DRIVER FORM (Redirect to driver-onboarding.html)
+        // ================================================================
+        function showRegisterDriverForm() {
+            window.open('driver-onboarding.html', '_blank');
+        }
+
+        // ================================================================
+        // MODAL HELPERS
+        // ================================================================
+        function closeModal() {
+            detailModal.classList.remove('open');
+        }
+
+        // Close modal on overlay click
+        detailModal.addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // ================================================================
+        // TOAST NOTIFICATION
+        // ================================================================
+        function showToast(message, type = 'info') {
+            const existing = document.querySelector('.toast');
+            if (existing) existing.remove();
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transition = 'opacity 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // ================================================================
+        // ESCAPE HTML
+        // ================================================================
+        function escapeHtml(text) {
+            if (!text) return '';
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        // ================================================================
+        // LISTEN FOR NEW APPLICATIONS (Real-time)
+        // ================================================================
+        database.ref('driver_applications').on('child_added', function(snapshot) {
+            // Reload when a new application is added
+            if (currentView === 'pending') {
+                loadApplications();
+            }
+        });
+
+        // ================================================================
+        // LISTEN FOR STATUS CHANGES (Real-time)
+        // ================================================================
+        database.ref('driver_applications').on('child_changed', function(snapshot) {
+            // Reload when an application status changes
+            loadApplications();
         });
 
         console.log('✅ Admin dashboard ready.');
-        console.log('📌 Drivers saved to /taxis/ node with phone & email.');
+        console.log('📌 Drivers are saved to /taxis/ node on approval.');
     </script>
-
 </body>
 </html>
