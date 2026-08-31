@@ -3909,6 +3909,14 @@ body.popup-open {
 #verifiedDashboardOverlay {
     z-index: 80000;
 }
+
+#multiStepScannerPopup {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    z-index: -1 !important;
+    pointer-events: none !important;
+}
 </style>
 </head>
 <body>
@@ -4116,8 +4124,7 @@ body.popup-open {
         </div>
     </div>
 </div>
-<!-- New Side Controls Container -->
-<!-- New Side Controls Container -->
+
 <!-- New Side Controls Container -->
 <div id="side-controls-container">
     <!-- NEW: Driver Profile Picture (Security Check) -->
@@ -7108,6 +7115,7 @@ window.closeActivePopup = function(force = false) {
         'driverClubPopup',
         'parcelRequestPopup',
         'courierDashboardPopup'
+        'multiStepScannerPopup'
     ];
     
     const transformResetIds = [
@@ -7690,29 +7698,37 @@ async function initializeApp(uid) {
             const isVerified = (vStatus === 'verified' || taxiData.provisionalActivation === true);
 
             // 🚨 SIMPLIFIED ONBOARDING: Show training booking popup directly
-            if (forceOnboarding || !isVerified) {
-                console.log("🚨 New/Unverified user detected. Showing simple training booking flow.");
-                
-                // Hide standard UI
-                const uis = ['verifiedDashboardOverlay', 'nav-menu', 'side-controls-container', 'passengerCounter'];
-                uis.forEach(id => {
-                    const el = document.getElementById(id);
-                    if (el) el.style.setProperty('display', 'none', 'important');
-                });
+           // In initializeApp, find this section:
+if (forceOnboarding || !isVerified) {
+    console.log("🚨 Unverified user detected. Launching scanner...");
+    
+    // Hide standard UI
+    const uis = ['verifiedDashboardOverlay', 'nav-menu', 'side-controls-container', 'passengerCounter'];
+    uis.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.setProperty('display', 'none', 'important');
+    });
 
-                // 🆕 DIRECTLY SHOW TRAINING POPUP - NO MULTI-STEP SCANNER
-                setTimeout(() => {
-                    if (typeof window.showSimpleTrainingPopup === 'function') {
-                        window.showSimpleTrainingPopup();
-                    } else {
-                        // Fallback: Show training popup
-                        const popup = document.getElementById('trainingRequestPopup');
-                        if (popup) {
-                            window.openPopup('trainingRequestPopup');
-                        }
-                    }
-                }, 500);
+    // 🆕 REPLACE with simple training popup
+    setTimeout(() => {
+        if (typeof window.showSimpleTrainingPopup === 'function') {
+            window.showSimpleTrainingPopup();
+        } else {
+            // Fallback
+            const popup = document.getElementById('trainingRequestPopup');
+            if (popup) {
+                window.openPopup('trainingRequestPopup');
             } else {
+                showGenericMessage(
+                    "Welcome to Asiye!", 
+                    "Please book your training session to get started.", 
+                    "fa-graduation-cap", 
+                    "icon-info"
+                );
+            }
+        }
+    }, 500);
+} else {
                 console.log("✅ User is verified. Loading standard dashboard...");
                 window.updateUIWithTaxiData();
                 
@@ -7738,6 +7754,9 @@ async function initializeApp(uid) {
 // ========================================================================
 // SIMPLE TRAINING POPUP - NO MULTI-STEP SCANNER
 // ========================================================================
+// ========================================================================
+// SIMPLE TRAINING POPUP - NO MULTI-STEP SCANNER
+// ========================================================================
 
 window.showSimpleTrainingPopup = function() {
     console.log("📚 Showing simple training booking popup...");
@@ -7748,11 +7767,10 @@ window.showSimpleTrainingPopup = function() {
     // Make sure the popup element exists
     let popup = document.getElementById('trainingRequestPopup');
     if (!popup) {
-        // Create it if it doesn't exist
         popup = document.createElement('div');
         popup.id = 'trainingRequestPopup';
         popup.className = 'popup';
-        popup.style.cssText = 'max-width: 400px; text-align: center; padding: 25px; z-index: 100000; border-radius: 24px;';
+        popup.style.cssText = 'max-width: 400px; text-align: center; padding: 25px; z-index: 100000; border-radius: 24px; background: white;';
         document.body.appendChild(popup);
     }
     
@@ -7767,9 +7785,9 @@ window.showSimpleTrainingPopup = function() {
         dateInput.value = minDateStr;
     }
     
-    // Show the popup with simplified UI
+    // Show the popup
     popup.innerHTML = `
-        <button class="popup-close" onclick="dismissTrainingPopup()">&times;</button>
+        <button class="popup-close" onclick="window.dismissTrainingPopup()">&times;</button>
         <div style="width: 70px; height: 70px; background: #e6f2ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
             <i class="fas fa-graduation-cap" style="font-size: 2.5rem; color: #007BFF;"></i>
         </div>
@@ -7786,11 +7804,11 @@ window.showSimpleTrainingPopup = function() {
             <input type="time" id="trainingTime" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ccc; font-family: inherit;">
         </div>
 
-        <button id="trainingSubmitBtn" class="btn btn-primary" onclick="window.submitTrainingRequest()" style="width:100%; border-radius: 12px; padding: 16px; font-weight: 900; font-size: 1.1rem;">
+        <button id="trainingSubmitBtn" class="btn btn-primary" onclick="window.submitTrainingRequest()" style="width:100%; border-radius: 12px; padding: 16px; font-weight: 900; font-size: 1.1rem; background: #007BFF; color: white; border: none; cursor: pointer;">
             <i class="fas fa-calendar-check"></i> Book Session
         </button>
 
-        <button class="btn btn-outline" onclick="window.dismissTrainingPopup()" style="width:100%; margin-top: 10px; border-radius: 12px; padding: 14px; font-weight: 700;">
+        <button onclick="window.dismissTrainingPopup()" style="width:100%; margin-top: 10px; border-radius: 12px; padding: 14px; font-weight: 700; background: transparent; border: 1px solid #ccc; color: #666; cursor: pointer;">
             I'll do this later
         </button>
     `;
@@ -14086,6 +14104,30 @@ window.closeCourierDashboard = function() {
     document.body.classList.remove('popup-open');
     document.body.style.overflow = '';
 };
+
+window.injectCleanScannerHTML = function() {
+    console.log("📱 Scanner HTML injection skipped - using simple training flow instead.");
+    
+    // Instead of creating the scanner popup, show the simple training popup
+    setTimeout(() => {
+        if (typeof window.showSimpleTrainingPopup === 'function') {
+            window.showSimpleTrainingPopup();
+        } else {
+            // Fallback: show training request popup directly
+            const popup = document.getElementById('trainingRequestPopup');
+            if (popup) {
+                window.openPopup('trainingRequestPopup');
+            } else {
+                showGenericMessage(
+                    "Welcome to Asiye!", 
+                    "Please book your training session to get started.", 
+                    "fa-graduation-cap", 
+                    "icon-info"
+                );
+            }
+        }
+    }, 300);
+};
 // onclick="window.closeCourierDashboard()"
 window.promptSelfieUpload = function() {
         if (!taxiData) return;
@@ -14116,8 +14158,47 @@ window.promptSelfieUpload = function() {
             }
         }
     };   
-   
-   
+   window.launchOnboardingStep = function() {
+    console.log("🚀 Launching onboarding - showing simple training popup...");
+    
+    // Hide any scanner elements
+    const scannerPopup = document.getElementById('multiStepScannerPopup');
+    if (scannerPopup) {
+        scannerPopup.style.display = 'none';
+        scannerPopup.classList.remove('open');
+    }
+    
+    // Show the simple training popup
+    if (typeof window.showSimpleTrainingPopup === 'function') {
+        window.showSimpleTrainingPopup();
+    } else {
+        const popup = document.getElementById('trainingRequestPopup');
+        if (popup) {
+            window.openPopup('trainingRequestPopup');
+        }
+    }
+};
+  window.resumeVerification = function() {
+    console.log("🔄 Resuming verification - showing training popup...");
+    
+    // Instead of launching multi-step scanner, show simple training popup
+    if (typeof window.showSimpleTrainingPopup === 'function') {
+        window.showSimpleTrainingPopup();
+    } else {
+        // Fallback: show training request popup
+        const popup = document.getElementById('trainingRequestPopup');
+        if (popup) {
+            window.openPopup('trainingRequestPopup');
+        } else {
+            showGenericMessage(
+                "Welcome to Asiye!", 
+                "Please book your training session to get started.", 
+                "fa-graduation-cap", 
+                "icon-info"
+            );
+        }
+    }
+}; 
 
 window.injectFastTrackHTML = function() {
         ['vehicleDetailsPopup', 'referencesPopup'].forEach(id => {
