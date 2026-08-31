@@ -15403,6 +15403,10 @@ window.openSetDestinationPopup = function() {
 // LOAD NEARBY AREAS - COMPLETE FIX
 // ========================================================================
 
+// ========================================================================
+// LOAD NEARBY AREAS - USE FALLBACK DIRECTLY
+// ========================================================================
+
 function loadNearbyAreas(lat, lng) {
     const listEl = document.getElementById('nearbyAreasList');
     const countEl = document.getElementById('nearbyCount');
@@ -15420,85 +15424,14 @@ function loadNearbyAreas(lat, lng) {
         return;
     }
     
-    // 🚨 FIX: Ensure coordinates are within valid range
-    const validLat = Math.max(-90, Math.min(90, parseFloat(lat)));
-    const validLng = Math.max(-180, Math.min(180, parseFloat(lng)));
-    
-    // Mapbox expects: longitude,latitude (lng,lat)
-    const lngLat = `${validLng},${validLat}`;
-    
-    console.log("📍 Fetching nearby areas for:", lngLat);
-    
-    // Use Mapbox to find nearby places
-    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=20&country=za&proximity=${lngLat}`)
-        .then(res => {
-            if (!res.ok) {
-                throw new Error(`HTTP error! status: ${res.status}`);
-            }
-            return res.json();
-        })
-        .then(data => {
-            if (data.features && data.features.length > 0) {
-                // Filter and sort by distance
-                const places = data.features.map(f => ({
-                    name: f.place_name,
-                    text: f.text,
-                    distance: calculateDistance(validLat, validLng, f.center[1], f.center[0])
-                })).filter(p => p.distance <= 20)
-                  .sort((a, b) => a.distance - b.distance);
-                
-                if (countEl) countEl.textContent = `${places.length} areas`;
-                
-                if (places.length === 0) {
-                    // Try fallback
-                    loadNearbyAreasFallback(validLat, validLng);
-                    return;
-                }
-                
-                // Display places
-                let html = '';
-                const uniquePlaces = [];
-                const seenNames = new Set();
-                
-                places.forEach(p => {
-                    const nameKey = p.text || p.name;
-                    if (!seenNames.has(nameKey)) {
-                        seenNames.add(nameKey);
-                        uniquePlaces.push(p);
-                    }
-                });
-                
-                uniquePlaces.slice(0, 12).forEach(p => {
-                    const name = p.text || p.name;
-                    const dist = p.distance;
-                    const distText = dist < 1 ? `${(dist * 1000).toFixed(0)}m` : `${dist.toFixed(1)}km`;
-                    
-                    html += `
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f5f5f5; cursor: pointer; transition: background 0.2s;"
-                             onmouseover="this.style.background='#f8f9fa'" 
-                             onmouseout="this.style.background='transparent'"
-                             onclick="window.addNearbyRoute('${name.replace(/'/g, "\\'")}')">
-                            <div style="display: flex; align-items: center; gap: 10px;">
-                                <i class="fas fa-map-pin" style="color: #007BFF; width: 16px;"></i>
-                                <span style="font-weight: 600; color: #111; font-size: 0.9rem;">${escapeHtml(name)}</span>
-                            </div>
-                            <span style="font-size: 0.75rem; color: #888; font-weight: 600;">${distText}</span>
-                        </div>
-                    `;
-                });
-                
-                listEl.innerHTML = html;
-            } else {
-                // Try fallback
-                loadNearbyAreasFallback(validLat, validLng);
-            }
-        })
-        .catch(err => {
-            console.error("Error loading nearby areas from Mapbox:", err);
-            // 🆕 Use fallback with SA Key Locations
-            loadNearbyAreasFallback(validLat, validLng);
-        });
+    // 🚀 DIRECTLY USE SA KEY LOCATIONS FALLBACK - Skip Mapbox API
+    console.log("📍 Loading nearby areas using SA Key Locations database");
+    loadNearbyAreasFallback(lat, lng);
 }
+// ========================================================================
+// SELECT ROUTE SUGGESTION - FIXED
+// ========================================================================
+
 // ========================================================================
 // SELECT ROUTE SUGGESTION - FIXED
 // ========================================================================
@@ -15506,14 +15439,17 @@ function loadNearbyAreas(lat, lng) {
 window.selectRouteSuggestion = function(routeName) {
     console.log("📍 Selecting route suggestion:", routeName);
     
+    if (!routeName) return;
+    
     const input = document.getElementById('driverRouteInput');
     if (input) {
         input.value = routeName;
         document.getElementById('driverRouteSuggestions').style.display = 'none';
-        // Auto-add the route
+        // Add the route directly
         window.addRouteFromInput();
     }
 };
+
 // ========================================================================
 // GET CURRENT LOCATION NAME
 // ========================================================================
@@ -15558,25 +15494,46 @@ function getCurrentLocationName(lat, lng) {
 // ========================================================================
 // ADD NEARBY ROUTE
 // ========================================================================
+// ========================================================================
+// ADD NEARBY ROUTE - WORKS WITHOUT MAPBOX
+// ========================================================================
 
 window.addNearbyRoute = function(routeName) {
-    if (!routeName) return;
+    console.log("📍 Adding nearby route:", routeName);
     
-    const savedRoutes = window.taxiData?.savedRoutes || [];
-    
-    if (savedRoutes.some(r => r.toLowerCase() === routeName.toLowerCase())) {
-        showCommunicationBanner("This route is already in your list.", "info");
+    if (!routeName) {
+        showCommunicationBanner("Invalid route name.", "warning");
         return;
     }
     
+    // Get current saved routes from taxiData or initialize
+    const savedRoutes = window.taxiData?.savedRoutes || [];
+    
+    // Check if route already exists (case insensitive)
+    if (savedRoutes.some(r => r.toLowerCase() === routeName.toLowerCase())) {
+        showCommunicationBanner(`"${routeName}" is already in your list.`, "info");
+        return;
+    }
+    
+    // Add to list
     savedRoutes.push(routeName);
+    
+    // Update taxiData
+    if (window.taxiData) {
+        window.taxiData.savedRoutes = savedRoutes;
+    }
+    
+    // Update the UI
     updateSavedRoutesUI(savedRoutes);
-    showCommunicationBanner(`Added: ${routeName}`, "success");
+    showCommunicationBanner(`✅ Added: ${routeName}`, "success");
+    
+    console.log("📋 Current routes:", savedRoutes);
 };
-// ========================================================================
-// ADD ROUTE FROM INPUT
-// ========================================================================
 
+
+// ========================================================================
+// ADD ROUTE FROM INPUT - FIXED
+// ========================================================================
 // ========================================================================
 // ADD ROUTE FROM INPUT - FIXED
 // ========================================================================
@@ -15594,9 +15551,9 @@ window.addRouteFromInput = function() {
     // Get current saved routes
     const savedRoutes = window.taxiData?.savedRoutes || [];
     
-    // Check if route already exists
+    // Check if route already exists (case insensitive)
     if (savedRoutes.some(r => r.toLowerCase() === route.toLowerCase())) {
-        showCommunicationBanner("This route is already in your list.", "info");
+        showCommunicationBanner(`"${route}" is already in your list.`, "info");
         input.value = '';
         return;
     }
@@ -15604,11 +15561,17 @@ window.addRouteFromInput = function() {
     // Add to list
     savedRoutes.push(route);
     
+    // Update taxiData
+    if (window.taxiData) {
+        window.taxiData.savedRoutes = savedRoutes;
+    }
+    
     // Update the UI
     updateSavedRoutesUI(savedRoutes);
     input.value = '';
-    showCommunicationBanner(`Added: ${route}`, "success");
+    showCommunicationBanner(`✅ Added: ${route}`, "success");
 };
+
 // ========================================================================
 // REMOVE SAVED ROUTE
 // ========================================================================
@@ -31277,6 +31240,14 @@ window.getDriverQueuePosition = function() {
 
 // Call this after saving route
 setTimeout(window.getDriverQueuePosition, 2000);
+
+// Make sure functions are globally accessible
+window.addNearbyRoute = addNearbyRoute;
+window.addRouteFromInput = addRouteFromInput;
+window.selectRouteSuggestion = selectRouteSuggestion;
+window.saveDriverRoutes = saveDriverRoutes;
+window.removeSavedRoute = removeSavedRoute;
+window.closeSetDestinationPopup = closeSetDestinationPopup;
 </script>
 </body>
 </html>
