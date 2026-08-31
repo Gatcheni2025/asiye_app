@@ -15362,15 +15362,27 @@ window.openSetDestinationPopup = function() {
 // LOAD NEARBY AREAS
 // ========================================================================
 
+// ========================================================================
+// LOAD NEARBY AREAS - FIXED COORDINATES ORDER
+// ========================================================================
+
 function loadNearbyAreas(lat, lng) {
     const listEl = document.getElementById('nearbyAreasList');
     const countEl = document.getElementById('nearbyCount');
     
     if (!listEl) return;
     
+    // 🚨 FIX: Mapbox expects longitude,latitude (not latitude,longitude)
+    const lngLat = `${lng},${lat}`;
+    
     // Use Mapbox to find nearby places
-    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=20&country=za`)
-        .then(res => res.json())
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=20&country=za`)
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+        })
         .then(data => {
             if (data.features && data.features.length > 0) {
                 // Filter and sort by distance
@@ -15386,7 +15398,7 @@ function loadNearbyAreas(lat, lng) {
                 if (places.length === 0) {
                     listEl.innerHTML = `
                         <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
-                            No nearby areas found within 20km.
+                            No nearby areas found within 20km. Try searching above.
                         </div>
                     `;
                     return;
@@ -15442,7 +15454,7 @@ function loadNearbyAreas(lat, lng) {
                 if (countEl) countEl.textContent = '0 areas';
                 listEl.innerHTML = `
                     <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
-                        No nearby areas found.
+                        No nearby areas found. Try searching above.
                     </div>
                 `;
             }
@@ -15459,15 +15471,42 @@ function loadNearbyAreas(lat, lng) {
 }
 
 // ========================================================================
+// SELECT ROUTE SUGGESTION - FIXED
+// ========================================================================
+
+window.selectRouteSuggestion = function(routeName) {
+    console.log("📍 Selecting route suggestion:", routeName);
+    
+    const input = document.getElementById('driverRouteInput');
+    if (input) {
+        input.value = routeName;
+        document.getElementById('driverRouteSuggestions').style.display = 'none';
+        // Auto-add the route
+        window.addRouteFromInput();
+    }
+};
+// ========================================================================
 // GET CURRENT LOCATION NAME
+// ========================================================================
+
+// ========================================================================
+// GET CURRENT LOCATION NAME - FIXED COORDINATES ORDER
 // ========================================================================
 
 function getCurrentLocationName(lat, lng) {
     const el = document.getElementById('driverCurrentArea');
     if (!el) return;
     
-    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=1&country=za`)
-        .then(res => res.json())
+    // 🚨 FIX: Mapbox expects longitude,latitude
+    const lngLat = `${lng},${lat}`;
+    
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=1&country=za`)
+        .then(res => {
+            if (!res.ok) {
+                throw new Error(`HTTP error! status: ${res.status}`);
+            }
+            return res.json();
+        })
         .then(data => {
             if (data.features && data.features.length > 0) {
                 const name = data.features[0].place_name.split(',')[0].trim();
@@ -15476,11 +15515,11 @@ function getCurrentLocationName(lat, lng) {
                 el.textContent = "Unknown Area";
             }
         })
-        .catch(() => {
+        .catch(err => {
+            console.error("Error getting location name:", err);
             el.textContent = "Unknown Area";
         });
 }
-
 // ========================================================================
 // ADD NEARBY ROUTE
 // ========================================================================
@@ -15501,6 +15540,10 @@ window.addNearbyRoute = function(routeName) {
 };
 // ========================================================================
 // ADD ROUTE FROM INPUT
+// ========================================================================
+
+// ========================================================================
+// ADD ROUTE FROM INPUT - FIXED
 // ========================================================================
 
 window.addRouteFromInput = function() {
@@ -15531,9 +15574,12 @@ window.addRouteFromInput = function() {
     input.value = '';
     showCommunicationBanner(`Added: ${route}`, "success");
 };
-
 // ========================================================================
 // REMOVE SAVED ROUTE
+// ========================================================================
+
+// ========================================================================
+// REMOVE SAVED ROUTE - FIXED
 // ========================================================================
 
 window.removeSavedRoute = function(index) {
@@ -15547,9 +15593,12 @@ window.removeSavedRoute = function(index) {
     updateSavedRoutesUI(savedRoutes);
     showCommunicationBanner(`Removed: ${removed}`, "info");
 };
-
 // ========================================================================
 // UPDATE SAVED ROUTES UI
+// ========================================================================
+
+// ========================================================================
+// UPDATE SAVED ROUTES UI - FIXED
 // ========================================================================
 
 function updateSavedRoutesUI(routes) {
@@ -15560,14 +15609,14 @@ function updateSavedRoutesUI(routes) {
         listEl.innerHTML = `
             <div style="color: #888; font-size: 0.85rem; padding: 15px; text-align: center; border: 1px dashed #ddd; border-radius: 12px;">
                 <i class="fas fa-route" style="color: #ccc; margin-bottom: 5px; display: block;"></i>
-                No routes added yet. Search and add your preferred drop-off areas.
+                No routes added yet. Select from nearby areas or search above.
             </div>
         `;
         return;
     }
     
     listEl.innerHTML = routes.map((route, index) => `
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #FF9F0A;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 6px; border-left: 4px solid #FF9F0A;">
             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
                 <span style="background: #FF9F0A; color: black; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;">${index + 1}</span>
                 <span style="font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(route)}</span>
@@ -15577,10 +15626,18 @@ function updateSavedRoutesUI(routes) {
             </button>
         </div>
     `).join('');
+    
+    // Also update the saved routes in the background
+    if (window.taxiData) {
+        window.taxiData.savedRoutes = routes;
+    }
 }
-
 // ========================================================================
 // SAVE DRIVER ROUTES
+// ========================================================================
+
+// ========================================================================
+// SAVE DRIVER ROUTES - FIXED
 // ========================================================================
 
 window.saveDriverRoutes = function() {
@@ -15622,6 +15679,7 @@ window.saveDriverRoutes = function() {
             window.updateUIWithTaxiData();
         }
         
+        // Close the popup properly
         window.closeSetDestinationPopup();
         showCommunicationBanner(`✅ ${savedRoutes.length} routes saved!`, "success");
         
@@ -15640,9 +15698,12 @@ window.saveDriverRoutes = function() {
         }
     });
 };
-
 // ========================================================================
 // CLOSE SET DESTINATION POPUP
+// ========================================================================
+
+// ========================================================================
+// CLOSE SET DESTINATION POPUP - FIXED
 // ========================================================================
 
 window.closeSetDestinationPopup = function() {
@@ -15655,9 +15716,13 @@ window.closeSetDestinationPopup = function() {
         popup.style.setProperty('opacity', '0', 'important');
         popup.style.setProperty('visibility', 'hidden', 'important');
         popup.style.setProperty('z-index', '-1', 'important');
+        // 🆕 Reset transform to prevent sticking
         popup.style.setProperty('transform', 'none', 'important');
         popup.style.setProperty('top', 'auto', 'important');
         popup.style.setProperty('left', 'auto', 'important');
+        popup.style.setProperty('bottom', 'auto', 'important');
+        popup.style.setProperty('right', 'auto', 'important');
+        popup.style.setProperty('margin', '0', 'important');
     }
     
     const overlay = document.getElementById('popupOverlay');
@@ -15667,6 +15732,7 @@ window.closeSetDestinationPopup = function() {
         overlay.style.setProperty('opacity', '0', 'important');
         overlay.style.setProperty('visibility', 'hidden', 'important');
         overlay.style.setProperty('z-index', '-1', 'important');
+        overlay.style.setProperty('pointer-events', 'none', 'important');
     }
     
     // Show dashboard
@@ -15680,7 +15746,63 @@ window.closeSetDestinationPopup = function() {
     if (typeof window.updateUIWithTaxiData === 'function') {
         window.updateUIWithTaxiData();
     }
+    
+    document.body.classList.remove('popup-open');
+    document.body.style.overflow = '';
 };
+
+// ========================================================================
+// LOAD NEARBY AREAS - FALLBACK USING SA KEY LOCATIONS
+// ========================================================================
+
+function loadNearbyAreasFallback(lat, lng) {
+    const listEl = document.getElementById('nearbyAreasList');
+    const countEl = document.getElementById('nearbyCount');
+    
+    if (!listEl) return;
+    
+    // Use SA Key Locations as fallback
+    const nearbyLocations = saKeyLocations.map(loc => {
+        const dist = calculateDistance(lat, lng, loc.lat, loc.lng);
+        return { ...loc, distance: dist };
+    }).filter(loc => loc.distance <= 20)
+      .sort((a, b) => a.distance - b.distance);
+    
+    if (countEl) countEl.textContent = `${nearbyLocations.length} areas`;
+    
+    if (nearbyLocations.length === 0) {
+        listEl.innerHTML = `
+            <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
+                No nearby areas found. Try searching above.
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    nearbyLocations.slice(0, 12).forEach(p => {
+        const dist = p.distance;
+        const distText = dist < 1 ? `${(dist * 1000).toFixed(0)}m` : `${dist.toFixed(1)}km`;
+        const icon = p.type === 'mall' ? 'fa-shopping-bag' : p.type === 'rank' ? 'fa-taxi' : 'fa-map-pin';
+        const color = p.type === 'mall' ? '#E83E8C' : p.type === 'rank' ? '#FF9F0A' : '#007BFF';
+        
+        html += `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f5f5f5; cursor: pointer; transition: background 0.2s;"
+                 onmouseover="this.style.background='#f8f9fa'" 
+                 onmouseout="this.style.background='transparent'"
+                 onclick="window.addNearbyRoute('${p.name.replace(/'/g, "\\'")}')">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <i class="fas ${icon}" style="color: ${color}; width: 16px;"></i>
+                    <span style="font-weight: 600; color: #111; font-size: 0.9rem;">${escapeHtml(p.name)}</span>
+                    <span style="font-size: 0.6rem; background: ${color}20; color: ${color}; padding: 1px 6px; border-radius: 8px; font-weight: 700;">${p.type || 'LOC'}</span>
+                </div>
+                <span style="font-size: 0.75rem; color: #888; font-weight: 600;">${distText}</span>
+            </div>
+        `;
+    });
+    
+    listEl.innerHTML = html;
+}
 // ========================================================================
 // DRIVER: CLEAR ROUTE
 // ========================================================================
@@ -30018,75 +30140,6 @@ window.updateRankLocationCard = async function() {
     } catch(e) {
         console.error("Error in updateRankLocationCard:", e);
         if (rankAddressDisplay) rankAddressDisplay.textContent = 'Location unavailable';
-    }
-};
-
-window.showRankInfoPopup = async function() {
-    if (!window.taxiData || !window.taxiData.assignedRank) {
-        if (typeof showCommunicationBanner === 'function') showCommunicationBanner("No rank assigned to your account", "warning");
-        return;
-    }
-
-    const rankName = window.taxiData.assignedRank;
-    const popup = document.getElementById('rankInfoPopup');
-    if (!popup) return;
-
-    document.getElementById('rankInfoName').textContent = rankName;
-    document.getElementById('rankInfoStatus').textContent = 'Fetching rank details...';
-    document.getElementById('rankInfoAddress').textContent = 'Loading...';
-    document.getElementById('rankInfoDistance').textContent = 'Calculating...';
-    document.getElementById('rankInfoManager').textContent = 'Loading...';
-    document.getElementById('rankInfoPhone').textContent = 'Loading...';
-
-    if (typeof openPopup === 'function') openPopup('rankInfoPopup');
-
-    try {
-        const [rankInfo, managerDetails] = await Promise.all([
-            withTimeout(typeof fetchRankAddress === 'function' ? fetchRankAddress(rankName) : Promise.resolve(null), 6000).catch(() => null),
-            withTimeout(typeof fetchRankManagerDetails === 'function' ? fetchRankManagerDetails(rankName) : Promise.resolve(null), 6000).catch(() => null)
-        ]);
-
-        if (rankInfo && rankInfo.address) {
-            document.getElementById('rankInfoAddress').textContent = rankInfo.address;
-            if (rankInfo.distance !== undefined && rankInfo.distance !== null) {
-                const distanceKm = rankInfo.distance;
-                document.getElementById('rankInfoDistance').textContent = distanceKm < 1 ?
-                    `${(distanceKm * 1000).toFixed(0)} meters away` : `${distanceKm.toFixed(1)} km away`;
-            } else {
-                document.getElementById('rankInfoDistance').textContent = 'Distance unknown';
-            }
-            window.currentRankCoordinates = { lat: rankInfo.lat, lng: rankInfo.lng };
-        } else {
-            document.getElementById('rankInfoAddress').textContent = 'Address not available';
-            document.getElementById('rankInfoDistance').textContent = 'Unable to calculate';
-            window.currentRankCoordinates = null;
-        }
-
-        if (managerDetails) {
-            document.getElementById('rankInfoManager').textContent = managerDetails.managerName || 'Not assigned';
-            document.getElementById('rankInfoPhone').textContent = managerDetails.managerPhone || 'N/A';
-            document.getElementById('rankInfoStatus').textContent = '✓ Active Rank';
-            document.getElementById('rankInfoStatus').style.color = '#28a745';
-        } else {
-            document.getElementById('rankInfoManager').textContent = 'Contact Admin';
-            document.getElementById('rankInfoPhone').textContent = '0861 274 937';
-            document.getElementById('rankInfoStatus').textContent = '⚠️ Rank Information Pending';
-            document.getElementById('rankInfoStatus').style.color = '#ffc107';
-        }
-        
-        const navigateBtn = document.getElementById('rankInfoNavigateBtn');
-        if (navigateBtn) {
-            const newBtn = navigateBtn.cloneNode(true);
-            navigateBtn.parentNode.replaceChild(newBtn, navigateBtn);
-            newBtn.onclick = () => {
-                if (window.currentRankCoordinates && typeof showDirectionsOnMap === 'function') {
-                    window.closeActivePopup();
-                    showDirectionsOnMap(window.currentRankCoordinates.lat, window.currentRankCoordinates.lng, "Your Assigned Rank");
-                }
-            };
-        }
-    } catch(e) {
-        document.getElementById('rankInfoStatus').textContent = 'Connection Error';
     }
 };
 
