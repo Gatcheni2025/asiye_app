@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asiye Admin · Driver Verification</title>
+    <title>Asiye Admin · Driver Verification & Passenger Data</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -14,7 +14,6 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Manrope', sans-serif; background: #0b0e14; color: #e8ecf4; min-height: 100vh; }
         
-        /* Navbar */
         .navbar {
             background: #141a24;
             border-bottom: 1px solid #2a3340;
@@ -44,14 +43,8 @@
         }
         .navbar .user-info .btn-logout:hover { background: #3a2a2a; }
         
-        /* Dashboard Layout */
-        .dashboard {
-            display: grid;
-            grid-template-columns: 240px 1fr;
-            min-height: calc(100vh - 68px);
-        }
+        .dashboard { display: grid; grid-template-columns: 240px 1fr; min-height: calc(100vh - 68px); }
         
-        /* Sidebar */
         .sidebar {
             background: #10161e;
             border-right: 1px solid #1f2836;
@@ -73,11 +66,7 @@
             gap: 10px;
         }
         .sidebar .menu-item:hover { background: #1a222e; color: #e8ecf4; }
-        .sidebar .menu-item.active {
-            color: #ffffff;
-            background: #1a222e;
-            border-left-color: #5b7cfa;
-        }
+        .sidebar .menu-item.active { color: #ffffff; background: #1a222e; border-left-color: #5b7cfa; }
         .sidebar .menu-item .badge {
             background: #dc3545;
             color: white;
@@ -95,16 +84,10 @@
             padding: 0.4rem 1.8rem;
         }
         
-        /* Main Content */
-        .main-content {
-            padding: 2rem 2.5rem;
-            overflow-y: auto;
-            max-height: calc(100vh - 68px);
-        }
+        .main-content { padding: 2rem 2.5rem; overflow-y: auto; max-height: calc(100vh - 68px); }
         .main-content .page-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.2rem; }
         .main-content .page-sub { color: #8b95a9; font-size: 0.9rem; margin-bottom: 1.8rem; }
         
-        /* Stats Cards */
         .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -123,8 +106,8 @@
         .stat-card.pending .stat-number { color: #f8961e; }
         .stat-card.verified .stat-number { color: #10b981; }
         .stat-card.total .stat-number { color: #5b7cfa; }
+        .stat-card.commuters .stat-number { color: #4cc9f0; }
         
-        /* Application Cards */
         .app-card {
             background: #141a24;
             border: 1px solid #2a3340;
@@ -154,6 +137,7 @@
         .app-card .app-status.pending { background: #f8961e20; color: #f8961e; border: 1px solid #f8961e40; }
         .app-card .app-status.verified { background: #10b98120; color: #10b981; border: 1px solid #10b98140; }
         .app-card .app-status.rejected { background: #dc354520; color: #dc3545; border: 1px solid #dc354540; }
+        .app-card .app-status.active { background: #5b7cfa20; color: #5b7cfa; border: 1px solid #5b7cfa40; }
         
         .app-card .app-details {
             display: grid;
@@ -190,17 +174,17 @@
         .btn-view:hover { background: #3a4a5a; }
         .btn-refresh { background: #5b7cfa; color: white; }
         .btn-refresh:hover { background: #4a6ae8; }
+        .btn-create { background: #f8961e; color: white; }
+        .btn-create:hover { background: #e0850a; }
+        .btn-warning { background: #f8961e; color: white; }
+        .btn-warning:hover { background: #e0850a; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
         
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 3rem 2rem;
-            color: #8b95a9;
-        }
+        .empty-state { text-align: center; padding: 3rem 2rem; color: #8b95a9; }
         .empty-state .icon { font-size: 3rem; opacity: 0.3; margin-bottom: 1rem; }
         .empty-state h3 { color: #e8ecf4; margin-bottom: 0.5rem; }
         
-        /* Modal */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -241,20 +225,15 @@
         }
         .modal-content .modal-close:hover { color: #ffffff; }
         
-        .modal-content .doc-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin: 1rem 0;
-        }
-        .modal-content .doc-item {
+        .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0; }
+        .doc-item {
             background: #1a222e;
             padding: 0.8rem;
             border-radius: 12px;
             text-align: center;
         }
-        .modal-content .doc-item .doc-label { font-size: 0.7rem; color: #8b95a9; }
-        .modal-content .doc-item .doc-link {
+        .doc-item .doc-label { font-size: 0.7rem; color: #8b95a9; }
+        .doc-item .doc-link {
             color: #5b7cfa;
             text-decoration: none;
             font-weight: 600;
@@ -263,9 +242,8 @@
             margin-top: 4px;
             word-break: break-all;
         }
-        .modal-content .doc-item .doc-link:hover { text-decoration: underline; }
+        .doc-item .doc-link:hover { text-decoration: underline; }
         
-        /* Toast */
         .toast {
             position: fixed;
             bottom: 2rem;
@@ -286,7 +264,6 @@
             to { transform: translateY(0); opacity: 1; }
         }
         
-        /* Loading Spinner */
         .spinner {
             display: inline-block;
             width: 20px;
@@ -298,24 +275,6 @@
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
-        /* Responsive */
-        @media (max-width: 768px) {
-            .dashboard { grid-template-columns: 1fr; }
-            .sidebar { display: none; }
-            .main-content { padding: 1rem; max-height: none; }
-            .navbar { padding: 0.6rem 1rem; }
-            .stats-grid { grid-template-columns: 1fr 1fr; }
-            .modal-content { padding: 1.2rem; margin: 10px; }
-            .doc-grid { grid-template-columns: 1fr; }
-        }
-        
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #10161e; }
-        ::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3a4a5a; }
-        
-        /* Badge for pending count */
         .pending-count {
             background: #dc3545;
             color: white;
@@ -324,11 +283,121 @@
             border-radius: 10px;
             margin-left: auto;
         }
+        
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            padding: 0.5rem 1.5rem;
+            border-radius: 30px;
+            background: #1a222e;
+            color: #8b95a9;
+            border: 1px solid #2a3340;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover { color: #e8ecf4; }
+        .tab-btn.active {
+            background: #5b7cfa;
+            color: white;
+            border-color: #5b7cfa;
+        }
+        
+        .search-box {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 0.7rem 1.2rem;
+            border-radius: 30px;
+            border: 1px solid #2a3340;
+            background: #1a222e;
+            color: #e8ecf4;
+            font-size: 0.9rem;
+            min-width: 200px;
+        }
+        .search-box input::placeholder { color: #8b95a9; }
+        .search-box input:focus { outline: none; border-color: #5b7cfa; }
+        
+        .commuter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 1rem;
+        }
+        .commuter-card {
+            background: #141a24;
+            border: 1px solid #2a3340;
+            border-radius: 16px;
+            padding: 1.2rem;
+            transition: all 0.2s;
+        }
+        .commuter-card:hover { border-color: #5b7cfa; }
+        .commuter-card .name { font-weight: 700; color: #fff; }
+        .commuter-card .phone { color: #8b95a9; font-size: 0.85rem; }
+        .commuter-card .detail {
+            font-size: 0.8rem;
+            color: #c8d0dc;
+            margin-top: 4px;
+        }
+        .commuter-card .badge-status {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 600;
+            margin-top: 6px;
+        }
+        .badge-status.active { background: #10b98120; color: #10b981; }
+        .badge-status.inactive { background: #dc354520; color: #dc3545; }
+        
+        @media (max-width: 768px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .main-content { padding: 1rem; max-height: none; }
+            .navbar { padding: 0.6rem 1rem; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .modal-content { padding: 1.2rem; margin: 10px; }
+            .doc-grid { grid-template-columns: 1fr; }
+            .commuter-grid { grid-template-columns: 1fr; }
+        }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #10161e; }
+        ::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a4a5a; }
+        
+        .password-display {
+            background: #1a222e;
+            padding: 0.8rem 1.2rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 1.1rem;
+            color: #4cc9f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 0.5rem 0;
+        }
+        .password-display .copy-btn {
+            background: #2a3340;
+            border: none;
+            color: #8b95a9;
+            padding: 0.3rem 0.8rem;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .password-display .copy-btn:hover { color: #fff; }
     </style>
 </head>
 <body>
 
-    <!-- Navbar -->
     <nav class="navbar">
         <div class="brand">Asiye <span>Admin</span></div>
         <div class="user-info">
@@ -338,7 +407,6 @@
     </nav>
 
     <div class="dashboard">
-        <!-- Sidebar -->
         <aside class="sidebar">
             <div class="menu-item active" onclick="loadApplications()">
                 <i class="fas fa-users"></i> Applications
@@ -347,25 +415,23 @@
             <div class="menu-item" onclick="loadVerifiedDrivers()">
                 <i class="fas fa-check-circle"></i> Verified Drivers
             </div>
+            <div class="menu-item" onclick="loadCommuters()">
+                <i class="fas fa-user-friends"></i> Passengers
+            </div>
             <div class="menu-item" onclick="loadRejectedDrivers()">
                 <i class="fas fa-times-circle"></i> Rejected
             </div>
             <div class="divider"></div>
             <div class="menu-label">Management</div>
-            <div class="menu-item" onclick="showRegisterDriverForm()">
-                <i class="fas fa-user-plus"></i> Register Driver
-            </div>
             <div class="menu-item" onclick="location.reload()">
                 <i class="fas fa-sync-alt"></i> Refresh
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="main-content" id="mainContent">
-            <div class="page-title">📋 Driver Applications</div>
-            <div class="page-sub">Review and verify driver applications</div>
+            <div class="page-title" id="pageTitle">📋 Driver Applications</div>
+            <div class="page-sub" id="pageSub">Review and verify driver applications</div>
 
-            <!-- Stats -->
             <div class="stats-grid" id="statsGrid">
                 <div class="stat-card pending">
                     <div class="stat-icon"><i class="fas fa-clock"></i></div>
@@ -377,6 +443,11 @@
                     <div class="stat-number" id="statVerified">0</div>
                     <div class="stat-label">Verified Drivers</div>
                 </div>
+                <div class="stat-card commuters">
+                    <div class="stat-icon"><i class="fas fa-user-friends"></i></div>
+                    <div class="stat-number" id="statCommuters">0</div>
+                    <div class="stat-label">Total Passengers</div>
+                </div>
                 <div class="stat-card total">
                     <div class="stat-icon"><i class="fas fa-users"></i></div>
                     <div class="stat-number" id="statTotal">0</div>
@@ -384,11 +455,10 @@
                 </div>
             </div>
 
-            <!-- Applications List -->
             <div id="applicationsList">
                 <div style="text-align: center; padding: 2rem;">
                     <div class="spinner" style="width: 30px; height: 30px;"></div>
-                    <p style="color: #8b95a9; margin-top: 1rem;">Loading applications...</p>
+                    <p style="color: #8b95a9; margin-top: 1rem;">Loading...</p>
                 </div>
             </div>
         </main>
@@ -404,6 +474,31 @@
             <div id="modalBody">
                 <div style="text-align: center; padding: 1rem;">
                     <div class="spinner" style="width: 30px; height: 30px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Login Modal -->
+    <div class="modal-overlay" id="createLoginModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>🔑 Create Driver Login</h3>
+                <button class="modal-close" onclick="document.getElementById('createLoginModal').classList.remove('open')">&times;</button>
+            </div>
+            <div id="createLoginBody">
+                <p style="color: #8b95a9; margin-bottom: 1rem;">Generate a secure password for this driver to access the app.</p>
+                <div class="password-display">
+                    <span id="generatedPassword">········</span>
+                    <button class="copy-btn" onclick="copyGeneratedPassword()"><i class="fas fa-copy"></i> Copy</button>
+                </div>
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+                    <button class="btn btn-refresh" onclick="generateNewPassword()"><i class="fas fa-sync-alt"></i> Generate New</button>
+                </div>
+                <p style="color: #8b95a9; font-size: 0.85rem;">This password will be sent to the driver via WhatsApp and email.</p>
+                <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                    <button class="btn btn-success" onclick="confirmCreateLogin()"><i class="fas fa-check"></i> Create Login & Notify</button>
+                    <button class="btn btn-reject" onclick="document.getElementById('createLoginModal').classList.remove('open')">Cancel</button>
                 </div>
             </div>
         </div>
@@ -435,13 +530,15 @@
         const statPending = document.getElementById('statPending');
         const statVerified = document.getElementById('statVerified');
         const statTotal = document.getElementById('statTotal');
+        const statCommuters = document.getElementById('statCommuters');
         const pendingBadge = document.getElementById('pendingBadge');
-        const detailModal = document.getElementById('detailModal');
-        const modalBody = document.getElementById('modalBody');
-        const modalTitle = document.getElementById('modalTitle');
+        const pageTitle = document.getElementById('pageTitle');
+        const pageSub = document.getElementById('pageSub');
 
         let currentView = 'pending';
         let allApplications = [];
+        let allCommuters = [];
+        let pendingCreateDriver = null;
 
         // ================================================================
         // AUTH CHECK
@@ -470,6 +567,9 @@
         // ================================================================
         function loadApplications() {
             currentView = 'pending';
+            pageTitle.textContent = '📋 Driver Applications';
+            pageSub.textContent = 'Review and verify driver applications';
+
             applicationsList.innerHTML = `
                 <div style="text-align: center; padding: 2rem;">
                     <div class="spinner" style="width: 30px; height: 30px;"></div>
@@ -477,237 +577,136 @@
                 </div>
             `;
 
-            database.ref('driver_applications').orderByChild('submittedAt').once('value', (snapshot) => {
+            // Load both applications and commuters count
+            Promise.all([
+                database.ref('driver_applications').orderByChild('submittedAt').once('value'),
+                database.ref('commuters').once('value')
+            ]).then(([appsSnap, commutersSnap]) => {
                 allApplications = [];
                 let pendingCount = 0;
                 let verifiedCount = 0;
 
-                if (snapshot.exists()) {
-                    snapshot.forEach((child) => {
+                if (appsSnap.exists()) {
+                    appsSnap.forEach((child) => {
                         const app = { key: child.key, ...child.val() };
                         allApplications.push(app);
-                        if (app.status === 'pending') pendingCount++;
+                        if (app.status === 'pending' || app.status === 'pending_review') pendingCount++;
                         if (app.status === 'verified' || app.status === 'active') verifiedCount++;
                     });
                 }
+
+                const commuterCount = commutersSnap.exists() ? commutersSnap.numChildren() : 0;
+                allCommuters = commutersSnap.exists() ? Object.keys(commutersSnap.val()).length : 0;
 
                 // Update stats
                 statPending.textContent = pendingCount;
                 statVerified.textContent = verifiedCount;
                 statTotal.textContent = allApplications.length;
+                statCommuters.textContent = commuterCount;
                 pendingBadge.textContent = pendingCount;
 
-                // Filter pending
-                const pendingApps = allApplications.filter(a => a.status === 'pending');
+                const pendingApps = allApplications.filter(a => a.status === 'pending' || a.status === 'pending_review');
                 renderApplications(pendingApps);
             });
         }
 
-  // Add this function to admin.html
-function loadAllVerifiedDrivers() {
-    // Check both places: taxis with verificationStatus, and driver_applications
-    const taxisRef = database.ref('taxis');
-    const appsRef = database.ref('driver_applications');
-    
-    let allVerified = [];
-    
-    // First, get all verified drivers from taxis node
-    taxisRef.orderByChild('verificationStatus').equalTo('verified').once('value', (snapshot) => {
-        if (snapshot.exists()) {
-            snapshot.forEach((child) => {
-                const driver = child.val();
-                allVerified.push({
-                    key: child.key,
-                    ...driver,
-                    _source: 'taxis'
-                });
-            });
-        }
-        
-        // Also check for provisionalActivation
-        taxisRef.orderByChild('provisionalActivation').equalTo(true).once('value', (snapshot2) => {
-            if (snapshot2.exists()) {
-                snapshot2.forEach((child) => {
-                    const driver = child.val();
-                    // Avoid duplicates
-                    if (!allVerified.find(d => d.key === child.key)) {
-                        allVerified.push({
-                            key: child.key,
-                            ...driver,
-                            _source: 'taxis'
-                        });
-                    }
-                });
-            }
-            
-            // Then get from driver_applications that are verified
-            appsRef.orderByChild('status').equalTo('verified').once('value', (snapshot3) => {
-                if (snapshot3.exists()) {
-                    snapshot3.forEach((child) => {
-                        const app = child.val();
-                        if (!allVerified.find(d => d.email === app.email)) {
-                            allVerified.push({
-                                key: child.key,
-                                ...app,
-                                _source: 'applications'
-                            });
+        // ================================================================
+        // LOAD VERIFIED DRIVERS
+        // ================================================================
+        function loadVerifiedDrivers() {
+            currentView = 'verified';
+            pageTitle.textContent = '✅ Verified Drivers';
+            pageSub.textContent = 'All approved and active drivers';
+
+            applicationsList.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="spinner" style="width: 30px; height: 30px;"></div>
+                    <p style="color: #8b95a9; margin-top: 1rem;">Loading verified drivers...</p>
+                </div>
+            `;
+
+            Promise.all([
+                database.ref('driver_applications').orderByChild('status').equalTo('verified').once('value'),
+                database.ref('taxis').once('value')
+            ]).then(([appsSnap, taxisSnap]) => {
+                const verified = [];
+                
+                // From applications
+                if (appsSnap.exists()) {
+                    appsSnap.forEach((child) => {
+                        const app = { key: child.key, ...child.val(), _source: 'application' };
+                        verified.push(app);
+                    });
+                }
+
+                // From taxis node (active drivers)
+                if (taxisSnap.exists()) {
+                    taxisSnap.forEach((child) => {
+                        const driver = child.val();
+                        if (driver.verificationStatus === 'verified' || driver.provisionalActivation === true) {
+                            // Check if not already in list
+                            if (!verified.find(d => d.email === driver.email || d.key === child.key)) {
+                                verified.push({ 
+                                    key: child.key, 
+                                    ...driver, 
+                                    _source: 'taxis',
+                                    status: 'verified',
+                                    fullName: driver.name || 'Unknown'
+                                });
+                            }
                         }
                     });
                 }
-                
-                // Update stats and render
-                renderVerifiedDrivers(allVerified);
+
+                renderVerifiedDrivers(verified);
             });
-        });
-    });
-}
-
-// Replace loadVerifiedDrivers with this:
-function loadVerifiedDrivers() {
-    currentView = 'verified';
-    applicationsList.innerHTML = `
-        <div style="text-align: center; padding: 2rem;">
-            <div class="spinner" style="width: 30px; height: 30px;"></div>
-            <p style="color: #8b95a9; margin-top: 1rem;">Loading verified drivers...</p>
-        </div>
-    `;
-    loadAllVerifiedDrivers();
-}
-
-function renderVerifiedDrivers(drivers) {
-    if (drivers.length === 0) {
-        applicationsList.innerHTML = `
-            <div class="empty-state">
-                <div class="icon"><i class="fas fa-users"></i></div>
-                <h3>No Verified Drivers</h3>
-                <p>Drivers will appear here once they are verified.</p>
-            </div>
-        `;
-        return;
-    }
-    
-    // Sort by name
-    drivers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-    
-    let html = '';
-    drivers.forEach((driver) => {
-        const name = driver.name || driver.fullName || 'Unknown Driver';
-        const email = driver.email || 'No email';
-        const phone = driver.phone || 'No phone';
-        const reg = driver.taxiRegistrationNumber || 'N/A';
-        const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
-        const source = driver._source === 'taxis' ? '✅ Active' : '📋 Application';
-        
-        html += `
-            <div class="app-card" style="border-color: #10b98140;">
-                <div class="app-header">
-                    <div>
-                        <div class="app-name">${escapeHtml(name)}</div>
-                        <div class="app-email">${escapeHtml(email)} • ${escapeHtml(phone)}</div>
-                    </div>
-                    <span class="app-status verified">✅ Verified</span>
-                </div>
-                <div class="app-details">
-                    <div><span class="detail-label">🚗 Vehicle:</span> ${escapeHtml(vehicle)}</div>
-                    <div><span class="detail-label">📋 Reg:</span> ${escapeHtml(reg)}</div>
-                    <div><span class="detail-label">📌 Source:</span> ${source}</div>
-                </div>
-                <div class="app-actions">
-                    <button class="btn btn-view" onclick="viewDriverFromTaxis('${driver.key}')">
-                        <i class="fas fa-eye"></i> View Profile
-                    </button>
-                    <button class="btn btn-reject" onclick="deactivateDriver('${driver.key}')">
-                        <i class="fas fa-ban"></i> Deactivate
-                    </button>
-                </div>
-            </div>
-        `;
-    });
-    
-    applicationsList.innerHTML = html;
-}
-
-// Add function to view driver from taxis node
-function viewDriverFromTaxis(key) {
-    database.ref(`taxis/${key}`).once('value', (snapshot) => {
-        const driver = snapshot.val();
-        if (!driver) {
-            showToast('Driver not found', 'error');
-            return;
         }
-        
-        modalTitle.textContent = `Driver: ${driver.name || 'Unknown'}`;
-        
-        const name = driver.name || 'Unknown';
-        const email = driver.email || 'No email';
-        const phone = driver.phone || 'No phone';
-        const reg = driver.taxiRegistrationNumber || 'N/A';
-        const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
-        const color = driver.vehicleColor || 'N/A';
-        const year = driver.vehicleYear || 'N/A';
-        const area = driver.loadingArea || driver.assignedRank || 'N/A';
-        const status = driver.verificationStatus || 'unknown';
-        const verifiedAt = driver.verifiedAt ? new Date(driver.verifiedAt).toLocaleString() : 'N/A';
-        const trips = driver.totalTrips || 0;
-        const rating = driver.averageRating || '5.0';
-        
-        const docUrls = driver.documents || {};
-        const docItems = [
-            { label: 'Selfie', url: driver.profile_picture_url || docUrls.FACE },
-            { label: 'Car Photo', url: driver.vehiclePhoto || docUrls.CAR_FRONT },
-            { label: 'ID', url: docUrls.ID_FRONT || docUrls.ID_DOC },
-            { label: 'PDP', url: docUrls.PDP },
-            { label: 'Clearance', url: docUrls.CLEARANCE }
-        ];
-        
-        let docHtml = docItems.map(d => `
-            <div class="doc-item">
-                <div class="doc-label">${d.label}</div>
-                ${d.url ? 
-                    `<a href="${d.url}" target="_blank" class="doc-link"><i class="fas fa-external-link-alt"></i> View</a>` : 
-                    `<span style="color: #5d6a7e; font-size: 0.8rem;">Not provided</span>`
-                }
-            </div>
-        `).join('');
-        
-        modalBody.innerHTML = `
-            <div style="margin-bottom: 1.5rem;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem; font-size: 0.9rem;">
-                    <div><span style="color: #8b95a9;">Name:</span> <strong>${escapeHtml(name)}</strong></div>
-                    <div><span style="color: #8b95a9;">Email:</span> <strong>${escapeHtml(email)}</strong></div>
-                    <div><span style="color: #8b95a9;">Phone:</span> <strong>${escapeHtml(phone)}</strong></div>
-                    <div><span style="color: #8b95a9;">Area:</span> <strong>${escapeHtml(area)}</strong></div>
-                    <div><span style="color: #8b95a9;">Vehicle:</span> <strong>${escapeHtml(vehicle)}</strong></div>
-                    <div><span style="color: #8b95a9;">Color:</span> <strong>${escapeHtml(color)}</strong></div>
-                    <div><span style="color: #8b95a9;">Registration:</span> <strong>${escapeHtml(reg)}</strong></div>
-                    <div><span style="color: #8b95a9;">Year:</span> <strong>${escapeHtml(year)}</strong></div>
-                    <div><span style="color: #8b95a9;">Rating:</span> <strong>⭐ ${rating}</strong></div>
-                    <div><span style="color: #8b95a9;">Trips:</span> <strong>${trips}</strong></div>
-                    <div><span style="color: #8b95a9;">Verified:</span> <strong>${verifiedAt}</strong></div>
-                    <div><span style="color: #8b95a9;">Status:</span> <strong style="color: #10b981;">${status.toUpperCase()}</strong></div>
+
+        // ================================================================
+        // LOAD COMMUTERS (PASSENGERS)
+        // ================================================================
+        function loadCommuters() {
+            currentView = 'commuters';
+            pageTitle.textContent = '👥 Passengers';
+            pageSub.textContent = 'View all registered passengers and their activity';
+
+            applicationsList.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="spinner" style="width: 30px; height: 30px;"></div>
+                    <p style="color: #8b95a9; margin-top: 1rem;">Loading passengers...</p>
                 </div>
-            </div>
-            <hr style="border-color: #2a3340; margin: 1rem 0;">
-            <div>
-                <h4 style="color: #e8ecf4; margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Documents</h4>
-                <div class="doc-grid">${docHtml}</div>
-            </div>
-            <button class="btn btn-view" onclick="closeModal()" style="width:100%; margin-top: 1rem;">
-                <i class="fas fa-times"></i> Close
-            </button>
-        `;
-        
-        detailModal.classList.add('open');
-    });
-}
+            `;
+
+            database.ref('commuters').once('value', (snapshot) => {
+                const commuters = [];
+                if (snapshot.exists()) {
+                    snapshot.forEach((child) => {
+                        const data = child.val();
+                        commuters.push({
+                            key: child.key,
+                            ...data,
+                            // Add derived fields
+                            fullName: data.name + ' ' + (data.surname || ''),
+                            hasReferral: !!data.referredBy,
+                            referralCount: data.referralCount || 0
+                        });
+                    });
+                }
+                renderCommuters(commuters);
+                statCommuters.textContent = commuters.length;
+            });
+        }
 
         // ================================================================
         // LOAD REJECTED DRIVERS
         // ================================================================
         function loadRejectedDrivers() {
             currentView = 'rejected';
+            pageTitle.textContent = '❌ Rejected Applications';
+            pageSub.textContent = 'Applications that were not approved';
+
             const rejectedApps = allApplications.filter(a => a.status === 'rejected');
-            renderApplications(rejectedApps, 'Rejected Applications');
+            renderApplications(rejectedApps);
         }
 
         // ================================================================
@@ -725,7 +724,6 @@ function viewDriverFromTaxis(key) {
                 return;
             }
 
-            // Sort by submittedAt (newest first)
             apps.sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0));
 
             let html = '';
@@ -739,8 +737,12 @@ function viewDriverFromTaxis(key) {
                 const reg = app.taxiRegistrationNumber || app.reg || 'N/A';
                 const workArea = app.workArea || app.area || 'N/A';
 
-                const statusClass = status === 'pending' ? 'pending' : status === 'verified' ? 'verified' : 'rejected';
-                const statusLabel = status === 'pending' ? '⏳ Pending' : status === 'verified' ? '✅ Verified' : '❌ Rejected';
+                const statusClass = status === 'pending' || status === 'pending_review' ? 'pending' : 
+                                   status === 'verified' ? 'verified' : 'rejected';
+                const statusLabel = status === 'pending' || status === 'pending_review' ? '⏳ Pending' : 
+                                   status === 'verified' ? '✅ Verified' : '❌ Rejected';
+
+                const isPending = status === 'pending' || status === 'pending_review';
 
                 html += `
                     <div class="app-card">
@@ -761,15 +763,18 @@ function viewDriverFromTaxis(key) {
                             <button class="btn btn-view" onclick="viewApplication('${app.key}')">
                                 <i class="fas fa-eye"></i> View Details
                             </button>
-                            ${status === 'pending' ? `
+                            ${isPending ? `
                                 <button class="btn btn-approve" onclick="approveDriver('${app.key}')">
-                                    <i class="fas fa-check"></i> Approve & Activate
+                                    <i class="fas fa-check"></i> Approve
                                 </button>
                                 <button class="btn btn-reject" onclick="rejectDriver('${app.key}')">
                                     <i class="fas fa-times"></i> Reject
                                 </button>
                             ` : ''}
                             ${status === 'verified' ? `
+                                <button class="btn btn-create" onclick="showCreateLogin('${app.key}')">
+                                    <i class="fas fa-key"></i> Create Login
+                                </button>
                                 <button class="btn btn-reject" onclick="deactivateDriver('${app.key}')">
                                     <i class="fas fa-ban"></i> Deactivate
                                 </button>
@@ -780,6 +785,143 @@ function viewDriverFromTaxis(key) {
             });
 
             applicationsList.innerHTML = html;
+        }
+
+        // ================================================================
+        // RENDER VERIFIED DRIVERS
+        // ================================================================
+        function renderVerifiedDrivers(drivers) {
+            if (drivers.length === 0) {
+                applicationsList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon"><i class="fas fa-users"></i></div>
+                        <h3>No Verified Drivers</h3>
+                        <p>Drivers will appear here once they are verified.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            drivers.sort((a, b) => (a.fullName || a.name || '').localeCompare(b.fullName || b.name || ''));
+
+            let html = '';
+            drivers.forEach((driver) => {
+                const name = driver.fullName || driver.name || 'Unknown Driver';
+                const email = driver.email || 'No email';
+                const phone = driver.phone || 'No phone';
+                const reg = driver.taxiRegistrationNumber || driver.reg || 'N/A';
+                const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
+                const source = driver._source === 'taxis' ? '✅ Active' : '📋 Application';
+                const hasLogin = driver.hasLogin !== false;
+
+                html += `
+                    <div class="app-card" style="border-color: #10b98140;">
+                        <div class="app-header">
+                            <div>
+                                <div class="app-name">${escapeHtml(name)}</div>
+                                <div class="app-email">${escapeHtml(email)} • ${escapeHtml(phone)}</div>
+                            </div>
+                            <span class="app-status verified">✅ Verified</span>
+                        </div>
+                        <div class="app-details">
+                            <div><span class="detail-label">🚗 Vehicle:</span> ${escapeHtml(vehicle)}</div>
+                            <div><span class="detail-label">📋 Reg:</span> ${escapeHtml(reg)}</div>
+                            <div><span class="detail-label">📌 Source:</span> ${source}</div>
+                            <div><span class="detail-label">🔑 Login:</span> ${hasLogin ? '✅ Created' : '❌ Not Created'}</div>
+                        </div>
+                        <div class="app-actions">
+                            <button class="btn btn-view" onclick="viewDriverProfile('${driver.key}')">
+                                <i class="fas fa-eye"></i> View Profile
+                            </button>
+                            ${!hasLogin ? `
+                                <button class="btn btn-create" onclick="showCreateLogin('${driver.key}')">
+                                    <i class="fas fa-key"></i> Create Login
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-reject" onclick="deactivateDriver('${driver.key}')">
+                                <i class="fas fa-ban"></i> Deactivate
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            applicationsList.innerHTML = html;
+        }
+
+        // ================================================================
+        // RENDER COMMUTERS
+        // ================================================================
+        function renderCommuters(commuters) {
+            if (commuters.length === 0) {
+                applicationsList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="icon"><i class="fas fa-user-friends"></i></div>
+                        <h3>No Passengers Found</h3>
+                        <p>No passengers have registered yet.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Sort by name
+            commuters.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
+
+            // Search bar
+            let html = `
+                <div class="search-box">
+                    <input type="text" id="commuterSearch" placeholder="Search by name, phone, or email..." oninput="filterCommuters()">
+                </div>
+                <div class="commuter-grid" id="commuterGrid">
+            `;
+
+            commuters.forEach((commuter) => {
+                const name = commuter.fullName || commuter.name || 'Unknown';
+                const phone = commuter.phone || 'No phone';
+                const email = commuter.email || 'No email';
+                const credits = commuter.credits || 0;
+                const totalEarnings = commuter.totalEarnings || 0;
+                const trips = commuter.totalTrips || 0;
+                const rating = commuter.averageRating || 'N/A';
+                const referralCount = commuter.referralCount || 0;
+                const referredBy = commuter.referredBy || 'None';
+                const status = commuter.isActive !== false ? 'active' : 'inactive';
+
+                html += `
+                    <div class="commuter-card" data-name="${name.toLowerCase()}" data-phone="${phone}" data-email="${email}">
+                        <div class="name">${escapeHtml(name)}</div>
+                        <div class="phone"><i class="fas fa-phone"></i> ${escapeHtml(phone)}</div>
+                        <div class="detail"><i class="fas fa-envelope"></i> ${escapeHtml(email)}</div>
+                        <div class="detail"><i class="fas fa-star" style="color: #ffc107;"></i> Rating: ${rating}</div>
+                        <div class="detail"><i class="fas fa-route"></i> Trips: ${trips}</div>
+                        <div class="detail"><i class="fas fa-coins"></i> Credits: R${credits}</div>
+                        <div class="detail"><i class="fas fa-wallet"></i> Earnings: R${totalEarnings}</div>
+                        <div class="detail"><i class="fas fa-users"></i> Referrals: ${referralCount}</div>
+                        <div class="detail"><i class="fas fa-user-plus"></i> Referred By: ${escapeHtml(referredBy)}</div>
+                        <span class="badge-status ${status}">${status === 'active' ? 'Active' : 'Inactive'}</span>
+                    </div>
+                `;
+            });
+
+            html += '</div>';
+            applicationsList.innerHTML = html;
+        }
+
+        // ================================================================
+        // FILTER COMMUTERS
+        // ================================================================
+        function filterCommuters() {
+            const search = document.getElementById('commuterSearch');
+            if (!search) return;
+            const query = search.value.toLowerCase();
+            const cards = document.querySelectorAll('.commuter-card');
+            cards.forEach(card => {
+                const name = card.dataset.name || '';
+                const phone = card.dataset.phone || '';
+                const email = card.dataset.email || '';
+                const match = name.includes(query) || phone.includes(query) || email.includes(query);
+                card.style.display = match ? '' : 'none';
+            });
         }
 
         // ================================================================
@@ -807,7 +949,6 @@ function viewDriverFromTaxis(key) {
             const submittedDate = app.submittedAt ? new Date(app.submittedAt).toLocaleString() : 'N/A';
             const noClearance = app.noClearance ? 'Yes (Will pay R299 fee)' : 'No';
 
-            // Get references
             let refsHtml = 'No references provided';
             if (app.references && app.references.length > 0) {
                 refsHtml = app.references.map((r, i) => 
@@ -815,7 +956,6 @@ function viewDriverFromTaxis(key) {
                 ).join('');
             }
 
-            // Documents
             const docs = app.documents || {};
             const docItems = [
                 { label: 'Selfie', url: docs.FACE || app.profile_picture_url },
@@ -865,7 +1005,7 @@ function viewDriverFromTaxis(key) {
                         ${docHtml}
                     </div>
                 </div>
-                ${status === 'pending' ? `
+                ${status === 'pending' || status === 'pending_review' ? `
                     <div style="margin-top: 1.5rem; display: flex; gap: 0.5rem;">
                         <button class="btn btn-approve" onclick="approveDriver('${key}')" style="flex:1;">
                             <i class="fas fa-check"></i> Approve & Activate
@@ -880,7 +1020,219 @@ function viewDriverFromTaxis(key) {
                 </button>
             `;
 
-            detailModal.classList.add('open');
+            document.getElementById('detailModal').classList.add('open');
+        }
+
+        // ================================================================
+        // VIEW DRIVER PROFILE (from taxis node)
+        // ================================================================
+        function viewDriverProfile(key) {
+            database.ref(`taxis/${key}`).once('value', (snapshot) => {
+                const driver = snapshot.val();
+                if (!driver) {
+                    showToast('Driver not found', 'error');
+                    return;
+                }
+
+                modalTitle.textContent = `Driver: ${driver.name || 'Unknown'}`;
+
+                const name = driver.name || 'Unknown';
+                const email = driver.email || 'No email';
+                const phone = driver.phone || 'No phone';
+                const reg = driver.taxiRegistrationNumber || 'N/A';
+                const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
+                const color = driver.vehicleColor || 'N/A';
+                const year = driver.vehicleYear || 'N/A';
+                const area = driver.loadingArea || driver.assignedRank || 'N/A';
+                const status = driver.verificationStatus || 'unknown';
+                const verifiedAt = driver.verifiedAt ? new Date(driver.verifiedAt).toLocaleString() : 'N/A';
+                const trips = driver.totalTrips || 0;
+                const rating = driver.averageRating || '5.0';
+                const walletBalance = driver.walletBalance || 0;
+                const totalEarnings = driver.totalEarnings || 0;
+                const hasLogin = driver.hasLogin !== false;
+
+                const docUrls = driver.documents || {};
+                const docItems = [
+                    { label: 'Selfie', url: driver.profile_picture_url || docUrls.FACE },
+                    { label: 'Car Photo', url: driver.vehiclePhoto || docUrls.CAR_FRONT },
+                    { label: 'ID', url: docUrls.ID_FRONT || docUrls.ID_DOC },
+                    { label: 'PDP', url: docUrls.PDP },
+                    { label: 'Clearance', url: docUrls.CLEARANCE }
+                ];
+
+                let docHtml = docItems.map(d => `
+                    <div class="doc-item">
+                        <div class="doc-label">${d.label}</div>
+                        ${d.url ? 
+                            `<a href="${d.url}" target="_blank" class="doc-link"><i class="fas fa-external-link-alt"></i> View</a>` : 
+                            `<span style="color: #5d6a7e; font-size: 0.8rem;">Not provided</span>`
+                        }
+                    </div>
+                `).join('');
+
+                modalBody.innerHTML = `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem; font-size: 0.9rem;">
+                            <div><span style="color: #8b95a9;">Name:</span> <strong>${escapeHtml(name)}</strong></div>
+                            <div><span style="color: #8b95a9;">Email:</span> <strong>${escapeHtml(email)}</strong></div>
+                            <div><span style="color: #8b95a9;">Phone:</span> <strong>${escapeHtml(phone)}</strong></div>
+                            <div><span style="color: #8b95a9;">Area:</span> <strong>${escapeHtml(area)}</strong></div>
+                            <div><span style="color: #8b95a9;">Vehicle:</span> <strong>${escapeHtml(vehicle)}</strong></div>
+                            <div><span style="color: #8b95a9;">Color:</span> <strong>${escapeHtml(color)}</strong></div>
+                            <div><span style="color: #8b95a9;">Registration:</span> <strong>${escapeHtml(reg)}</strong></div>
+                            <div><span style="color: #8b95a9;">Year:</span> <strong>${escapeHtml(year)}</strong></div>
+                            <div><span style="color: #8b95a9;">Rating:</span> <strong>⭐ ${rating}</strong></div>
+                            <div><span style="color: #8b95a9;">Trips:</span> <strong>${trips}</strong></div>
+                            <div><span style="color: #8b95a9;">Wallet:</span> <strong>R${walletBalance.toFixed(2)}</strong></div>
+                            <div><span style="color: #8b95a9;">Earnings:</span> <strong>R${totalEarnings.toFixed(2)}</strong></div>
+                            <div><span style="color: #8b95a9;">Verified:</span> <strong>${verifiedAt}</strong></div>
+                            <div><span style="color: #8b95a9;">Status:</span> <strong style="color: #10b981;">${status.toUpperCase()}</strong></div>
+                            <div><span style="color: #8b95a9;">Login:</span> <strong>${hasLogin ? '✅ Created' : '❌ Not Created'}</strong></div>
+                        </div>
+                    </div>
+                    <hr style="border-color: #2a3340; margin: 1rem 0;">
+                    <div>
+                        <h4 style="color: #e8ecf4; margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Documents</h4>
+                        <div class="doc-grid">${docHtml}</div>
+                    </div>
+                    ${!hasLogin ? `
+                        <button class="btn btn-create" onclick="showCreateLogin('${key}')" style="width:100%; margin-top: 1rem;">
+                            <i class="fas fa-key"></i> Create Login for Driver
+                        </button>
+                    ` : ''}
+                    <button class="btn btn-view" onclick="closeModal()" style="width:100%; margin-top: 1rem;">
+                        <i class="fas fa-times"></i> Close
+                    </button>
+                `;
+
+                document.getElementById('detailModal').classList.add('open');
+            });
+        }
+
+        // ================================================================
+        // SHOW CREATE LOGIN MODAL
+        // ================================================================
+        let generatedPassword = '';
+
+        function generateNewPassword() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+            let password = '';
+            for (let i = 0; i < 12; i++) {
+                password += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            generatedPassword = password;
+            document.getElementById('generatedPassword').textContent = password;
+        }
+
+        function copyGeneratedPassword() {
+            navigator.clipboard.writeText(generatedPassword).then(() => {
+                showToast('Password copied to clipboard!', 'info');
+            });
+        }
+
+        function showCreateLogin(key) {
+            pendingCreateDriver = key;
+            generateNewPassword();
+            document.getElementById('createLoginModal').classList.add('open');
+        }
+
+        function confirmCreateLogin() {
+            if (!pendingCreateDriver) return;
+
+            const driver = allApplications.find(a => a.key === pendingCreateDriver) || 
+                          { fullName: 'Driver', email: 'driver@asiye.com', phone: 'N/A' };
+
+            // Get the driver data from taxis node if available
+            database.ref(`taxis/${pendingCreateDriver}`).once('value', (snapshot) => {
+                const taxiData = snapshot.val() || {};
+                const name = taxiData.name || driver.fullName || driver.name || 'Driver';
+                const email = taxiData.email || driver.email || `driver_${pendingCreateDriver}@asiye.com`;
+                const phone = taxiData.phone || driver.phone || 'N/A';
+
+                // Create Firebase Auth user
+                auth.createUserWithEmailAndPassword(email, generatedPassword)
+                    .then((userCredential) => {
+                        const user = userCredential.user;
+                        
+                        // Update user profile with display name
+                        user.updateProfile({
+                            displayName: name
+                        }).then(() => {
+                            // Update driver record with login info
+                            return database.ref(`taxis/${pendingCreateDriver}`).update({
+                                hasLogin: true,
+                                loginCreatedAt: firebase.database.ServerValue.TIMESTAMP,
+                                userUid: user.uid
+                            });
+                        }).then(() => {
+                            // Update application status
+                            return database.ref(`driver_applications/${pendingCreateDriver}`).update({
+                                hasLogin: true,
+                                userUid: user.uid
+                            });
+                        }).then(() => {
+                            // Send notification to driver
+                            sendDriverCredentials(phone, name, email, generatedPassword);
+                            
+                            document.getElementById('createLoginModal').classList.remove('open');
+                            showToast(`✅ Login created for ${name}!`, 'success');
+                            loadApplications();
+                        });
+                    })
+                    .catch((error) => {
+                        console.error('Error creating user:', error);
+                        if (error.code === 'auth/email-already-in-use') {
+                            // Email already exists - try to set password
+                            auth.fetchSignInMethodsForEmail(email).then((methods) => {
+                                if (methods.includes('password')) {
+                                    // User exists, we can't set password via admin API
+                                    // Send reset link instead
+                                    auth.sendPasswordResetEmail(email).then(() => {
+                                        showToast(`Password reset email sent to ${email}`, 'info');
+                                        database.ref(`taxis/${pendingCreateDriver}`).update({
+                                            hasLogin: true,
+                                            loginCreatedAt: firebase.database.ServerValue.TIMESTAMP
+                                        });
+                                        document.getElementById('createLoginModal').classList.remove('open');
+                                        loadApplications();
+                                    });
+                                } else {
+                                    showToast('Email exists but no password set. Please use a different email.', 'error');
+                                }
+                            });
+                        } else {
+                            showToast('Error creating login: ' + error.message, 'error');
+                        }
+                    });
+            });
+        }
+
+        // ================================================================
+        // SEND DRIVER CREDENTIALS
+        // ================================================================
+        function sendDriverCredentials(phone, name, email, password) {
+            // Format phone
+            let cleanPhone = String(phone).replace(/\D/g, '');
+            if (cleanPhone.startsWith('0')) cleanPhone = '27' + cleanPhone.substring(1);
+            if (!cleanPhone.startsWith('27')) cleanPhone = '27' + cleanPhone;
+
+            const message = `🎉 Welcome to Asiye, ${name}!\n\nYour driver account has been created.\n\n📧 Email: ${email}\n🔑 Password: ${password}\n\nPlease login to the driver app to start earning.\n\n📱 Download: https://app.asiye.cloud/driver\n\nThank you for joining Asiye! 🚗`;
+
+            fetch('https://app.asiye.cloud/whatsapp_bot.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'send_notification',
+                    phone: cleanPhone,
+                    message: message
+                })
+            }).catch(err => console.error('WhatsApp notification error:', err));
+
+            // Also try email if available
+            if (email && email.includes('@')) {
+                // Could implement email sending here
+            }
         }
 
         // ================================================================
@@ -895,19 +1247,8 @@ function viewDriverFromTaxis(key) {
                 return;
             }
 
-            // Show loading on the button
-            const btns = document.querySelectorAll('.btn-approve');
-            btns.forEach(b => {
-                if (b.textContent.includes('Approve')) {
-                    b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-                    b.disabled = true;
-                }
-            });
-
-            // Generate a unique driver ID
             const driverId = app.email ? app.email.replace(/[^a-zA-Z0-9]/g, '_') : `driver_${Date.now()}`;
 
-            // Prepare driver data for the taxis node
             const driverData = {
                 name: app.fullName || app.name || 'Driver',
                 surname: app.fullName ? app.fullName.split(' ').slice(1).join(' ') : '',
@@ -936,13 +1277,12 @@ function viewDriverFromTaxis(key) {
                 verifiedAt: firebase.database.ServerValue.TIMESTAMP,
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 trainingStatus: 'completed',
-                documents: app.documents || {}
+                documents: app.documents || {},
+                hasLogin: false
             };
 
-            // 1. Save to taxis node
             database.ref(`taxis/${driverId}`).set(driverData)
                 .then(() => {
-                    // 2. Update the application status
                     return database.ref(`driver_applications/${key}`).update({
                         status: 'verified',
                         verifiedAt: firebase.database.ServerValue.TIMESTAMP,
@@ -951,25 +1291,16 @@ function viewDriverFromTaxis(key) {
                     });
                 })
                 .then(() => {
-                    showToast(`✅ Driver ${app.fullName || 'Driver'} verified and activated!`, 'success');
+                    showToast(`✅ Driver ${app.fullName || 'Driver'} verified!`, 'success');
                     
-                    // Send notification to driver
-                    if (app.phone) {
-                        sendDriverNotification(app.phone, app.fullName || 'Driver', 'approved');
-                    }
-
-                    // Reload applications
-                    setTimeout(loadApplications, 1000);
+                    // Show create login option
+                    showCreateLogin(key);
+                    
+                    setTimeout(loadApplications, 500);
                 })
                 .catch((error) => {
                     console.error('Error approving driver:', error);
                     showToast('Error approving driver: ' + error.message, 'error');
-                    // Reset buttons
-                    const btns = document.querySelectorAll('.btn-approve');
-                    btns.forEach(b => {
-                        b.innerHTML = '<i class="fas fa-check"></i> Approve & Activate';
-                        b.disabled = false;
-                    });
                 });
         }
 
@@ -978,7 +1309,7 @@ function viewDriverFromTaxis(key) {
         // ================================================================
         function rejectDriver(key) {
             const reason = prompt('Please provide a reason for rejection:');
-            if (reason === null) return; // User cancelled
+            if (reason === null) return;
 
             if (!confirm(`Reject this driver application? Reason: ${reason}`)) return;
 
@@ -990,7 +1321,6 @@ function viewDriverFromTaxis(key) {
             }).then(() => {
                 showToast('❌ Application rejected', 'info');
                 
-                // Send notification to driver
                 const app = allApplications.find(a => a.key === key);
                 if (app && app.phone) {
                     sendDriverNotification(app.phone, app.fullName || 'Driver', 'rejected', reason);
@@ -1008,22 +1338,23 @@ function viewDriverFromTaxis(key) {
         function deactivateDriver(key) {
             if (!confirm('Deactivate this driver? They will lose access to the app.')) return;
 
-            const app = allApplications.find(a => a.key === key);
-            if (!app || !app.driverId) {
-                showToast('Driver ID not found', 'error');
-                return;
-            }
-
-            database.ref(`taxis/${app.driverId}`).update({
+            database.ref(`taxis/${key}`).update({
                 verificationStatus: 'unverified',
                 provisionalActivation: false,
                 isOnline: false,
                 isBroadcasting: false
             }).then(() => {
-                return database.ref(`driver_applications/${key}`).update({
-                    status: 'rejected',
-                    deactivatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
+                return database.ref(`driver_applications`).orderByChild('driverId').equalTo(key).once('value')
+                    .then((snapshot) => {
+                        if (snapshot.exists()) {
+                            snapshot.forEach((child) => {
+                                child.ref.update({
+                                    status: 'rejected',
+                                    deactivatedAt: firebase.database.ServerValue.TIMESTAMP
+                                });
+                            });
+                        }
+                    });
             }).then(() => {
                 showToast('Driver deactivated', 'info');
                 loadApplications();
@@ -1033,24 +1364,22 @@ function viewDriverFromTaxis(key) {
         }
 
         // ================================================================
-        // SEND DRIVER NOTIFICATION (via WhatsApp)
+        // SEND DRIVER NOTIFICATION
         // ================================================================
         function sendDriverNotification(phone, name, status, reason = '') {
-            // Format phone
             let cleanPhone = String(phone).replace(/\D/g, '');
             if (cleanPhone.startsWith('0')) cleanPhone = '27' + cleanPhone.substring(1);
             if (!cleanPhone.startsWith('27')) cleanPhone = '27' + cleanPhone;
 
             let message = '';
             if (status === 'approved') {
-                message = `🎉 Congratulations ${name}!\n\nYour Asiye driver application has been APPROVED! You can now log in to the driver app and start earning.\n\n📱 Download the app: https://asiye.app/driver\n\nThank you for joining Asiye! 🚗`;
+                message = `🎉 Congratulations ${name}!\n\nYour Asiye driver application has been APPROVED! You can now log in to the driver app and start earning.\n\n📱 Download the app: https://app.asiye.cloud/driver\n\nThank you for joining Asiye! 🚗`;
             } else if (status === 'rejected') {
                 message = `📋 Hi ${name},\n\nYour Asiye driver application has been reviewed and unfortunately was not approved at this time.\n\nReason: ${reason || 'Not provided'}\n\nYou may re-apply after addressing the above issue.\n\nThank you for your interest in Asiye.`;
             }
 
             if (!message) return;
 
-            // Send via WhatsApp using the bot endpoint
             fetch('https://app.asiye.cloud/whatsapp_bot.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1063,21 +1392,13 @@ function viewDriverFromTaxis(key) {
         }
 
         // ================================================================
-        // SHOW REGISTER DRIVER FORM (Redirect to driver-onboarding.html)
-        // ================================================================
-        function showRegisterDriverForm() {
-            window.open('driver-onboarding.html', '_blank');
-        }
-
-        // ================================================================
         // MODAL HELPERS
         // ================================================================
         function closeModal() {
-            detailModal.classList.remove('open');
+            document.getElementById('detailModal').classList.remove('open');
         }
 
-        // Close modal on overlay click
-        detailModal.addEventListener('click', function(e) {
+        document.getElementById('detailModal').addEventListener('click', function(e) {
             if (e.target === this) closeModal();
         });
 
@@ -1116,25 +1437,26 @@ function viewDriverFromTaxis(key) {
         }
 
         // ================================================================
-        // LISTEN FOR NEW APPLICATIONS (Real-time)
+        // REAL-TIME LISTENERS
         // ================================================================
         database.ref('driver_applications').on('child_added', function(snapshot) {
-            // Reload when a new application is added
-            if (currentView === 'pending') {
-                loadApplications();
-            }
+            if (currentView === 'pending') loadApplications();
         });
 
-        // ================================================================
-        // LISTEN FOR STATUS CHANGES (Real-time)
-        // ================================================================
         database.ref('driver_applications').on('child_changed', function(snapshot) {
-            // Reload when an application status changes
             loadApplications();
         });
 
-        console.log('✅ Admin dashboard ready.');
-        console.log('📌 Drivers are saved to /taxis/ node on approval.');
+        // Load commuters count periodically
+        setInterval(() => {
+            database.ref('commuters').once('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    statCommuters.textContent = snapshot.numChildren();
+                }
+            });
+        }, 30000);
+
+        console.log('✅ Admin dashboard with login creation ready.');
     </script>
 </body>
 </html>
