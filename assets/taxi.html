@@ -7684,7 +7684,9 @@ async function initializeApp(uid) {
         }
 
         if (snapshot && snapshot.exists()) {
+            // Hide preloader
             document.getElementById('solidPreloader').style.display = 'none';
+            
             taxiData = snapshot.val();
             window.taxiData = taxiData; 
             window.isHandlerMode = (window.dbNode === 'handlers' || taxiData.type === 'handler' || taxiData.role === 'handler');
@@ -7696,9 +7698,12 @@ async function initializeApp(uid) {
             if (typeof initializeMapAndLocation === 'function') initializeMapAndLocation();
             if (typeof setupTaxiDataListener === 'function') setupTaxiDataListener();
 
+            // Process referral if pending
             const pendingRef = localStorage.getItem('pendingReferral');
             if (pendingRef && !taxiData.binaryCountsProcessed) {
-                if (typeof window.processPendingReferralCounters === 'function') window.processPendingReferralCounters(userId, pendingRef);
+                if (typeof window.processPendingReferralCounters === 'function') {
+                    window.processPendingReferralCounters(userId, pendingRef);
+                }
                 localStorage.removeItem('pendingReferral');
             }
 
@@ -7706,76 +7711,179 @@ async function initializeApp(uid) {
                 window.setupMasterDriverListener();
             }
 
+            // ================================================
+            // 🚨 VERIFICATION CHECK - FIXED
+            // ================================================
             const urlParams = new URLSearchParams(window.location.search);
             const forceOnboarding = urlParams.get('onboarding') === 'true';
+            
+            // Check verification status from multiple possible sources
             const vStatus = taxiData.verificationStatus || 'unverified';
-            const isVerified = (vStatus === 'verified' || taxiData.provisionalActivation === true);
+            const isVerified = (vStatus === 'verified' || taxiData.provisionalActivation === true || taxiData.isVerified === true);
+            const trainingDone = (taxiData.trainingStatus === 'completed');
+            
+            console.log("🔍 Verification check:", { 
+                vStatus, 
+                isVerified, 
+                trainingDone,
+                provisionalActivation: taxiData.provisionalActivation,
+                isVerifiedField: taxiData.isVerified
+            });
 
-            // 🚨 SIMPLIFIED ONBOARDING: Show training booking popup directly
-           // In initializeApp, find this section:
-if (forceOnboarding || !isVerified) {
-    console.log("🚨 Unverified user detected. Launching scanner...");
-    
-    // Hide standard UI
-    const uis = ['verifiedDashboardOverlay', 'nav-menu', 'side-controls-container', 'passengerCounter'];
-    uis.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.setProperty('display', 'none', 'important');
-    });
-
-    // 🆕 REPLACE with simple training popup
-    setTimeout(() => {
-        if (typeof window.showSimpleTrainingPopup === 'function') {
-            window.showSimpleTrainingPopup();
-        } else {
-            // Fallback
-            const popup = document.getElementById('trainingRequestPopup');
-            if (popup) {
-                window.openPopup('trainingRequestPopup');
-            } else {
-                showGenericMessage(
-                    "Welcome to Asiye!", 
-                    "Please book your training session to get started.", 
-                    "fa-graduation-cap", 
-                    "icon-info"
-                );
-            }
-        }
-    }, 500);
-} else {
-                console.log("✅ User is verified. Loading standard dashboard...");
-                window.updateUIWithTaxiData();
+            // 🚨 IF NOT VERIFIED - Show appropriate message
+            if (!isVerified) {
+                console.log("🚨 Unverified user detected. Checking for pending application...");
                 
-                setTimeout(() => {
-                    if (typeof window.restoreDriverTripState === 'function') {
-                        window.restoreDriverTripState();
+                // Hide standard UI
+                const uis = ['verifiedDashboardOverlay', 'nav-menu', 'side-controls-container', 'passengerCounter'];
+                uis.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.setProperty('display', 'none', 'important');
+                });
+
+                // Check if there's already a pending application
+                if (taxiData.email) {
+                    try {
+                        const appSnap = await database.ref('driver_applications')
+                            .orderByChild('email')
+                            .equalTo(taxiData.email)
+                            .once('value');
+                        
+                        let hasPending = false;
+                        let appStatus = 'unknown';
+                        
+                        if (appSnap.exists()) {
+                            appSnap.forEach(child => {
+                                const app = child.val();
+                                appStatus = app.status || 'pending';
+                                if (app.status === 'pending' || app.status === 'pending_review') {
+                                    hasPending = true;
+                                }
+                            });
+                        }
+                        
+                        if (hasPending) {
+                            // Show pending status
+                            showGenericMessage(
+                                "Application Pending Review",
+                                "Your driver application is currently being reviewed by our team. You will receive a notification once verified. This usually takes 24-48 hours.",
+                                "fa-clock",
+                                "icon-warning"
+                            );
+                            // Show limited dashboard
+                            showLimitedDashboard();
+                        } else {
+                            // Check if there's a rejected application
+                            if (appStatus === 'rejected') {
+                                showGenericMessage(
+                                    "Application Not Approved",
+                                    "Your application was not approved. Please contact support for more information.",
+                                    "fa-times-circle",
+                                    "icon-danger"
+                                );
+                                showLimitedDashboard();
+                            } else {
+                                // No application found - show training/verification popup
+                                setTimeout(() => {
+                                    if (typeof window.showSimpleTrainingPopup === 'function') {
+                                        window.showSimpleTrainingPopup();
+                                    } else {
+                                        showGenericMessage(
+                                            "Verification Required",
+                                            "Please complete your driver verification to start earning. Contact support if you need assistance.",
+                                            "fa-id-card",
+                                            "icon-warning"
+                                        );
+                                    }
+                                }, 500);
+                            }
+                        }
+                    } catch (err) {
+                        console.warn("Error checking applications:", err);
+                        // Fallback: show training popup
+                        setTimeout(() => {
+                            if (typeof window.showSimpleTrainingPopup === 'function') {
+                                window.showSimpleTrainingPopup();
+                            }
+                        }, 500);
                     }
-                    if (typeof window.checkAndShowTrainingPopup === 'function') {
-                        window.checkAndShowTrainingPopup();
-                    }
-                }, 1500);
+                } else {
+                    // No email - show training popup
+                    setTimeout(() => {
+                        if (typeof window.showSimpleTrainingPopup === 'function') {
+                            window.showSimpleTrainingPopup();
+                        }
+                    }, 500);
+                }
+                return; // STOP HERE - Don't proceed to dashboard
             }
+            
+            // ✅ USER IS VERIFIED - Show full dashboard
+            console.log("✅ User is verified. Loading standard dashboard...");
+            
+            // Show dashboard and hide map initially
+            const dashboard = document.getElementById('verifiedDashboardOverlay');
+            if (dashboard) {
+                dashboard.style.setProperty('display', 'block', 'important');
+                dashboard.style.setProperty('z-index', '80000', 'important');
+            }
+            
+            const mapElement = document.getElementById('map');
+            if (mapElement) {
+                mapElement.style.setProperty('display', 'none', 'important');
+            }
+            
+            // Show navigation
+            const navMenu = document.getElementById('nav-menu');
+            if (navMenu) navMenu.style.setProperty('display', 'flex', 'important');
+            const sideControls = document.getElementById('side-controls-container');
+            if (sideControls) sideControls.style.setProperty('display', 'flex', 'important');
+            
+            // Update UI
+            window.updateUIWithTaxiData();
+            
+            // Check if training is done - if not, show training popup
+            if (!trainingDone && !forceOnboarding) {
+                // Check if training was already dismissed
+                const trainingDismissed = localStorage.getItem('trainingPromptStatus') === 'dismissed';
+                if (!trainingDismissed) {
+                    setTimeout(() => {
+                        if (typeof window.checkAndShowTrainingPopup === 'function') {
+                            window.checkAndShowTrainingPopup();
+                        }
+                    }, 1500);
+                }
+            }
+            
+            // Restore any active trip
+            setTimeout(() => {
+                if (typeof window.restoreDriverTripState === 'function') {
+                    window.restoreDriverTripState();
+                }
+            }, 1500);
 
         } else {
-            if (typeof handleLoginError === 'function') handleLoginError("Profile not found in database.");
+            // Profile not found
+            if (typeof handleLoginError === 'function') {
+                handleLoginError("Profile not found in database.");
+            } else {
+                showPreloaderError("Profile not found. Please contact support.");
+            }
         }
     } catch (error) {
         console.error("Initialization error:", error);
-        if (typeof showPreloaderError === 'function') showPreloaderError("Failed to load profile.");
+        if (typeof showPreloaderError === 'function') {
+            showPreloaderError("Failed to load profile. Please check your connection.");
+        }
     }
 }
-
 // ========================================================================
 // SIMPLE TRAINING POPUP - NO MULTI-STEP SCANNER
 // ========================================================================
-// ========================================================================
-// SIMPLE TRAINING POPUP - NO MULTI-STEP SCANNER
-// ========================================================================
-
 window.showSimpleTrainingPopup = function() {
     console.log("📚 Showing simple training booking popup...");
     
-    // Close any existing popups
+    // Close any existing popups first
     if (typeof closeActivePopup === 'function') closeActivePopup();
     
     // Make sure the popup element exists
@@ -7799,7 +7907,7 @@ window.showSimpleTrainingPopup = function() {
         dateInput.value = minDateStr;
     }
     
-    // Show the popup
+    // Build the popup HTML
     popup.innerHTML = `
         <button class="popup-close" onclick="window.dismissTrainingPopup()">&times;</button>
         <div style="width: 70px; height: 70px; background: #e6f2ff; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
@@ -7811,11 +7919,11 @@ window.showSimpleTrainingPopup = function() {
         </p>
         
         <div style="text-align: left; margin-bottom: 20px; background: #f8f9fa; padding: 15px; border-radius: 12px; border: 1px solid #eee;">
-            <label style="display:block; font-weight: 800; font-size:0.85rem; color:#333; margin-bottom:5px;">Preferred Date</label>
-            <input type="date" id="trainingDate" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ccc; margin-bottom:15px; font-family: inherit;">
+            <label style="display:block; font-weight: 800; font-size:0.85rem; color:#333; margin-bottom:5px;">Preferred Date (Tomorrow onwards)</label>
+            <input type="date" id="trainingDate" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ccc; margin-bottom:15px; font-family: inherit; background: white; color: #333;">
             
             <label style="display:block; font-weight: 800; font-size:0.85rem; color:#333; margin-bottom:5px;">Preferred Time</label>
-            <input type="time" id="trainingTime" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ccc; font-family: inherit;">
+            <input type="time" id="trainingTime" style="width:100%; padding:12px; border-radius:10px; border:1px solid #ccc; font-family: inherit; background: white; color: #333;">
         </div>
 
         <button id="trainingSubmitBtn" class="btn btn-primary" onclick="window.submitTrainingRequest()" style="width:100%; border-radius: 12px; padding: 16px; font-weight: 900; font-size: 1.1rem; background: #007BFF; color: white; border: none; cursor: pointer;">
@@ -7827,15 +7935,66 @@ window.showSimpleTrainingPopup = function() {
         </button>
     `;
     
-    // Open the popup
+    // Open the popup with proper overlay
     if (typeof openPopup === 'function') {
         openPopup('trainingRequestPopup');
     } else {
         popup.classList.add('open');
         popup.style.display = 'block';
+        popup.style.visibility = 'visible';
+        popup.style.opacity = '1';
+        popup.style.zIndex = '100000';
+        popup.style.position = 'fixed';
+        popup.style.top = '50%';
+        popup.style.left = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        popup.style.maxWidth = '400px';
+        popup.style.width = '92%';
+        popup.style.maxHeight = '85vh';
+        popup.style.overflowY = 'auto';
+        popup.style.borderRadius = '24px';
+        popup.style.background = '#ffffff';
+        popup.style.boxShadow = '0 20px 60px rgba(0,0,0,0.3)';
+        popup.style.pointerEvents = 'auto';
+        
         const overlay = document.getElementById('popupOverlay');
-        if (overlay) overlay.classList.add('open');
+        if (overlay) {
+            overlay.classList.add('open');
+            overlay.style.display = 'block';
+            overlay.style.visibility = 'visible';
+            overlay.style.opacity = '1';
+            overlay.style.zIndex = '99999';
+            overlay.style.position = 'fixed';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.width = '100vw';
+            overlay.style.height = '100vh';
+            overlay.style.background = 'rgba(0,0,0,0.6)';
+            overlay.style.pointerEvents = 'auto';
+        }
     }
+    
+    // Ensure the "I'll do this later" button works by re-attaching
+    const laterBtn = popup.querySelector('button[onclick*="dismissTrainingPopup"]');
+    if (laterBtn) {
+        laterBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.dismissTrainingPopup();
+        };
+    }
+    
+    // Ensure the close button works
+    const closeBtn = popup.querySelector('.popup-close');
+    if (closeBtn) {
+        closeBtn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.dismissTrainingPopup();
+        };
+    }
+    
+    console.log("✅ Training popup displayed");
 };
 
 window.restoreDriverTripState = function() {
@@ -30145,34 +30304,58 @@ window.updateRankLocationCard = async function() {
 // =================================================================
 // 🎓 TRAINING REQUEST SYSTEM (FIXED)
 // =================================================================
-
-// 1. Function to show the popup (Only if not already done)
 window.checkAndShowTrainingPopup = function() {
     if (!window.taxiData || !window.userId) return;
     
     // Don't interrupt if the driver is currently in a trip
     if (window.currentRequestId || window.activeRequest) return;
 
-    // Check status from Database or LocalStorage
+    // Check if training is already completed
     const trainingStatus = window.taxiData.trainingStatus || localStorage.getItem('trainingPromptStatus');
     
-    if (trainingStatus !== 'requested' && trainingStatus !== 'completed' && trainingStatus !== 'dismissed') {
-        
-        // Set date input minimum to tomorrow
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const minDateStr = tomorrow.toISOString().split('T')[0];
-        
-        const dateInput = document.getElementById('trainingDate');
-        if (dateInput) {
-            dateInput.min = minDateStr;
-            dateInput.value = minDateStr;
+    // If training is already completed or requested, don't show
+    if (trainingStatus === 'completed' || trainingStatus === 'requested') {
+        console.log("✅ Training already completed or requested, skipping popup");
+        return;
+    }
+    
+    // If training was dismissed, check if we should show again (after 7 days)
+    if (trainingStatus === 'dismissed') {
+        const dismissedDate = localStorage.getItem('trainingDismissedDate');
+        if (dismissedDate) {
+            const daysSinceDismiss = (Date.now() - parseInt(dismissedDate)) / (1000 * 60 * 60 * 24);
+            if (daysSinceDismiss < 7) {
+                console.log(`⏳ Training dismissed ${Math.round(daysSinceDismiss)} days ago, skipping`);
+                return;
+            }
         }
+    }
 
+    // Show the training popup
+    console.log("🎓 Showing training popup...");
+    
+    // Set date input minimum to tomorrow
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const minDateStr = tomorrow.toISOString().split('T')[0];
+    
+    const dateInput = document.getElementById('trainingDate');
+    if (dateInput) {
+        dateInput.min = minDateStr;
+        dateInput.value = minDateStr;
+    }
+
+    // Use the unified popup system
+    if (typeof window.openPopup === 'function') {
         window.openPopup('trainingRequestPopup');
+    } else {
+        const popup = document.getElementById('trainingRequestPopup');
+        if (popup) {
+            popup.style.display = 'block';
+            popup.classList.add('open');
+        }
     }
 };
-
 window.submitTrainingRequest = async function() {
     const dateVal = document.getElementById('trainingDate').value;
     const timeVal = document.getElementById('trainingTime').value;
@@ -30188,39 +30371,56 @@ window.submitTrainingRequest = async function() {
     btn.disabled = true;
 
     try {
-        const driverName = ((window.taxiData.name || '') + ' ' + (window.taxiData.surname || '')).trim();
+        const driverName = ((window.taxiData?.name || '') + ' ' + (window.taxiData?.surname || '')).trim() || 'Driver';
         const payload = {
             _subject: `Training Booking: ${driverName}`,
             Driver_Name: driverName,
-            Driver_ID: window.userId,
-            Phone: window.taxiData.phone || 'N/A',
+            Driver_ID: window.userId || 'Unknown',
+            Phone: window.taxiData?.phone || 'N/A',
             Date: dateVal,
             Time: timeVal,
-            Vehicle: window.taxiData.taxiRegistrationNumber || 'N/A'
+            Vehicle: window.taxiData?.taxiRegistrationNumber || 'N/A'
         };
 
+        // Send to email via formsubmit
         await fetch("https://formsubmit.co/ajax/drndlovu@mail.com", {
             method: "POST",
             headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
             body: JSON.stringify(payload)
         });
 
-        await firebase.database().ref(`taxis/${window.userId}`).update({
-            trainingStatus: 'requested',
-            trainingDate: dateVal,
-            trainingTime: timeVal
-        });
+        // Also send to database
+        if (window.userId) {
+            await firebase.database().ref(`taxis/${window.userId}`).update({
+                trainingStatus: 'requested',
+                trainingDate: dateVal,
+                trainingTime: timeVal,
+                trainingRequestedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            
+            // Update local taxiData
+            if (window.taxiData) {
+                window.taxiData.trainingStatus = 'requested';
+                window.taxiData.trainingDate = dateVal;
+                window.taxiData.trainingTime = timeVal;
+            }
+        }
 
         localStorage.setItem('trainingPromptStatus', 'requested');
         
-        // 🆕 Close the training popup properly
-        window.closeActivePopup();
+        // Close the training popup properly
+        window.dismissTrainingPopup();
         
-        // 🆕 Show success with proper close handler
+        // Show success with proper close handler
         if (typeof window.showTrainingSuccessPopup === 'function') {
             window.showTrainingSuccessPopup();
         } else {
-            showGenericMessage("Success!", "Your training is booked! We will contact you shortly.", "fa-calendar-check", "icon-success");
+            showGenericMessage(
+                "Success!", 
+                "Your training is booked! We will contact you shortly.", 
+                "fa-calendar-check", 
+                "icon-success"
+            );
         }
 
     } catch (error) {
@@ -30359,22 +30559,164 @@ window.closeTrainingSuccessPopup = function() {
     
     console.log("✅ Training success popup closed, dashboard shown");
 };
-// 3. The "I'll do it later" Logic
-window.dismissTrainingPopup = function() {
-    console.log("Training prompt dismissed.");
-    localStorage.setItem('trainingPromptStatus', 'dismissed');
-    window.closeActivePopup();
+function showLimitedDashboard() {
+    console.log("📋 Showing limited dashboard (unverified user)");
     
-    // Show the dashboard with limited functionality
     const dashboard = document.getElementById('verifiedDashboardOverlay');
     if (dashboard) {
         dashboard.style.setProperty('display', 'block', 'important');
+        dashboard.style.setProperty('visibility', 'visible', 'important');
+        dashboard.style.setProperty('z-index', '80000', 'important');
+        
+        // Populate dashboard with user info
+        if (window.taxiData) {
+            const nameEl = document.getElementById('dashDriverName');
+            if (nameEl) nameEl.textContent = (window.taxiData.name || 'Driver') + '!';
+            
+            const picEl = document.getElementById('dashProfilePic');
+            if (picEl) {
+                picEl.src = window.taxiData.profile_picture_url || 'https://ui-avatars.com/api/?name=D&background=111&color=fff';
+            }
+        }
+        
+        // Disable "Go Online" button
+        const goBtn = document.getElementById('dashMainGoOnlineBtn');
+        if (goBtn) {
+            goBtn.innerHTML = '<i class="fas fa-clock"></i> Pending Verification';
+            goBtn.style.background = '#6c757d';
+            goBtn.style.boxShadow = 'none';
+            goBtn.style.cursor = 'not-allowed';
+            goBtn.disabled = true;
+            goBtn.onclick = function() {
+                showGenericMessage(
+                    "Verification Pending",
+                    "Your application is being reviewed. You'll be notified once approved.",
+                    "fa-clock",
+                    "icon-info"
+                );
+            };
+        }
+        
+        // Hide map and navigation
+        const mapElement = document.getElementById('map');
+        if (mapElement) {
+            mapElement.style.setProperty('display', 'none', 'important');
+        }
+        const navMenu = document.getElementById('nav-menu');
+        if (navMenu) navMenu.style.setProperty('display', 'none', 'important');
+        const sideControls = document.getElementById('side-controls-container');
+        if (sideControls) sideControls.style.setProperty('display', 'none', 'important');
+        
+        // Update stats
+        if (typeof window.populateVerifiedDashboard === 'function') {
+            window.populateVerifiedDashboard();
+        }
+    }
+}
+window.dismissTrainingPopup = function() {
+    console.log("🔒 Dismissing training popup...");
+    
+    // Save to localStorage to prevent showing again
+    localStorage.setItem('trainingPromptStatus', 'dismissed');
+    
+    // Save to database if user is logged in
+    if (window.userId) {
+        firebase.database().ref(`taxis/${window.userId}`).update({
+            trainingStatus: 'dismissed'
+        }).catch(() => {});
+    }
+    
+    // 1. Close the training popup
+    const popup = document.getElementById('trainingRequestPopup');
+    if (popup) {
+        popup.classList.remove('open');
+        popup.style.setProperty('display', 'none', 'important');
+        popup.style.setProperty('opacity', '0', 'important');
+        popup.style.setProperty('visibility', 'hidden', 'important');
+        popup.style.setProperty('z-index', '-1', 'important');
+        popup.style.setProperty('pointer-events', 'none', 'important');
+        // Reset transform to prevent sticking
+        popup.style.setProperty('transform', 'none', 'important');
+        popup.style.setProperty('top', 'auto', 'important');
+        popup.style.setProperty('left', 'auto', 'important');
+        popup.style.setProperty('bottom', 'auto', 'important');
+        popup.style.setProperty('right', 'auto', 'important');
+        popup.style.setProperty('margin', '0', 'important');
+    }
+    
+    // 2. Close the generic message popup if it's open
+    const genericPopup = document.getElementById('genericMessagePopup');
+    if (genericPopup) {
+        genericPopup.classList.remove('open');
+        genericPopup.style.setProperty('display', 'none', 'important');
+        genericPopup.style.setProperty('opacity', '0', 'important');
+        genericPopup.style.setProperty('visibility', 'hidden', 'important');
+        genericPopup.style.setProperty('z-index', '-1', 'important');
+        genericPopup.style.setProperty('pointer-events', 'none', 'important');
+        genericPopup.style.setProperty('transform', 'none', 'important');
+    }
+    
+    // 3. Close the overlay
+    const overlay = document.getElementById('popupOverlay');
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.setProperty('display', 'none', 'important');
+        overlay.style.setProperty('opacity', '0', 'important');
+        overlay.style.setProperty('visibility', 'hidden', 'important');
+        overlay.style.setProperty('z-index', '-1', 'important');
+        overlay.style.setProperty('pointer-events', 'none', 'important');
+    }
+    
+    // 4. Close any other popups using the unified function
+    if (typeof window.closeActivePopup === 'function') {
+        window.closeActivePopup(true);
+    }
+    
+    // 5. Show the dashboard
+    const dashboard = document.getElementById('verifiedDashboardOverlay');
+    if (dashboard) {
+        dashboard.style.setProperty('display', 'block', 'important');
+        dashboard.style.setProperty('visibility', 'visible', 'important');
         dashboard.style.setProperty('z-index', '80000', 'important');
     }
     
+    // 6. Hide map and navigation (driver is not online)
+    const mapElement = document.getElementById('map');
+    if (mapElement) {
+        mapElement.style.setProperty('display', 'none', 'important');
+    }
+    const navMenu = document.getElementById('nav-menu');
+    if (navMenu) {
+        navMenu.style.setProperty('display', 'none', 'important');
+    }
+    const sideControls = document.getElementById('side-controls-container');
+    if (sideControls) {
+        sideControls.style.setProperty('display', 'none', 'important');
+    }
+    
+    // 7. Reset body scroll
+    document.body.classList.remove('popup-open');
+    document.body.style.overflow = '';
+    
+    // 8. Update UI
     if (typeof window.updateUIWithTaxiData === 'function') {
         window.updateUIWithTaxiData();
     }
+    
+    // 9. Show a message if the driver is not verified
+    if (window.taxiData) {
+        const isVerified = (window.taxiData.verificationStatus === 'verified' || window.taxiData.provisionalActivation === true);
+        if (!isVerified) {
+            showGenericMessage(
+                "Verification Required",
+                "Your account is not yet verified. Please contact support or complete your training to get verified.",
+                "fa-id-card",
+                "icon-warning"
+            );
+        }
+    }
+    
+    console.log("✅ Training popup dismissed, dashboard shown");
 };
 // ========================================================================
 // 2. CLUB SCHEDULE LOCKING UI

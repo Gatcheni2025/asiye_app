@@ -503,14 +503,203 @@
             });
         }
 
-        // ================================================================
-        // LOAD VERIFIED DRIVERS
-        // ================================================================
-        function loadVerifiedDrivers() {
-            currentView = 'verified';
-            const verifiedApps = allApplications.filter(a => a.status === 'verified' || a.status === 'active');
-            renderApplications(verifiedApps, 'Verified Drivers');
+  // Add this function to admin.html
+function loadAllVerifiedDrivers() {
+    // Check both places: taxis with verificationStatus, and driver_applications
+    const taxisRef = database.ref('taxis');
+    const appsRef = database.ref('driver_applications');
+    
+    let allVerified = [];
+    
+    // First, get all verified drivers from taxis node
+    taxisRef.orderByChild('verificationStatus').equalTo('verified').once('value', (snapshot) => {
+        if (snapshot.exists()) {
+            snapshot.forEach((child) => {
+                const driver = child.val();
+                allVerified.push({
+                    key: child.key,
+                    ...driver,
+                    _source: 'taxis'
+                });
+            });
         }
+        
+        // Also check for provisionalActivation
+        taxisRef.orderByChild('provisionalActivation').equalTo(true).once('value', (snapshot2) => {
+            if (snapshot2.exists()) {
+                snapshot2.forEach((child) => {
+                    const driver = child.val();
+                    // Avoid duplicates
+                    if (!allVerified.find(d => d.key === child.key)) {
+                        allVerified.push({
+                            key: child.key,
+                            ...driver,
+                            _source: 'taxis'
+                        });
+                    }
+                });
+            }
+            
+            // Then get from driver_applications that are verified
+            appsRef.orderByChild('status').equalTo('verified').once('value', (snapshot3) => {
+                if (snapshot3.exists()) {
+                    snapshot3.forEach((child) => {
+                        const app = child.val();
+                        if (!allVerified.find(d => d.email === app.email)) {
+                            allVerified.push({
+                                key: child.key,
+                                ...app,
+                                _source: 'applications'
+                            });
+                        }
+                    });
+                }
+                
+                // Update stats and render
+                renderVerifiedDrivers(allVerified);
+            });
+        });
+    });
+}
+
+// Replace loadVerifiedDrivers with this:
+function loadVerifiedDrivers() {
+    currentView = 'verified';
+    applicationsList.innerHTML = `
+        <div style="text-align: center; padding: 2rem;">
+            <div class="spinner" style="width: 30px; height: 30px;"></div>
+            <p style="color: #8b95a9; margin-top: 1rem;">Loading verified drivers...</p>
+        </div>
+    `;
+    loadAllVerifiedDrivers();
+}
+
+function renderVerifiedDrivers(drivers) {
+    if (drivers.length === 0) {
+        applicationsList.innerHTML = `
+            <div class="empty-state">
+                <div class="icon"><i class="fas fa-users"></i></div>
+                <h3>No Verified Drivers</h3>
+                <p>Drivers will appear here once they are verified.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort by name
+    drivers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    
+    let html = '';
+    drivers.forEach((driver) => {
+        const name = driver.name || driver.fullName || 'Unknown Driver';
+        const email = driver.email || 'No email';
+        const phone = driver.phone || 'No phone';
+        const reg = driver.taxiRegistrationNumber || 'N/A';
+        const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
+        const source = driver._source === 'taxis' ? '✅ Active' : '📋 Application';
+        
+        html += `
+            <div class="app-card" style="border-color: #10b98140;">
+                <div class="app-header">
+                    <div>
+                        <div class="app-name">${escapeHtml(name)}</div>
+                        <div class="app-email">${escapeHtml(email)} • ${escapeHtml(phone)}</div>
+                    </div>
+                    <span class="app-status verified">✅ Verified</span>
+                </div>
+                <div class="app-details">
+                    <div><span class="detail-label">🚗 Vehicle:</span> ${escapeHtml(vehicle)}</div>
+                    <div><span class="detail-label">📋 Reg:</span> ${escapeHtml(reg)}</div>
+                    <div><span class="detail-label">📌 Source:</span> ${source}</div>
+                </div>
+                <div class="app-actions">
+                    <button class="btn btn-view" onclick="viewDriverFromTaxis('${driver.key}')">
+                        <i class="fas fa-eye"></i> View Profile
+                    </button>
+                    <button class="btn btn-reject" onclick="deactivateDriver('${driver.key}')">
+                        <i class="fas fa-ban"></i> Deactivate
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    applicationsList.innerHTML = html;
+}
+
+// Add function to view driver from taxis node
+function viewDriverFromTaxis(key) {
+    database.ref(`taxis/${key}`).once('value', (snapshot) => {
+        const driver = snapshot.val();
+        if (!driver) {
+            showToast('Driver not found', 'error');
+            return;
+        }
+        
+        modalTitle.textContent = `Driver: ${driver.name || 'Unknown'}`;
+        
+        const name = driver.name || 'Unknown';
+        const email = driver.email || 'No email';
+        const phone = driver.phone || 'No phone';
+        const reg = driver.taxiRegistrationNumber || 'N/A';
+        const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
+        const color = driver.vehicleColor || 'N/A';
+        const year = driver.vehicleYear || 'N/A';
+        const area = driver.loadingArea || driver.assignedRank || 'N/A';
+        const status = driver.verificationStatus || 'unknown';
+        const verifiedAt = driver.verifiedAt ? new Date(driver.verifiedAt).toLocaleString() : 'N/A';
+        const trips = driver.totalTrips || 0;
+        const rating = driver.averageRating || '5.0';
+        
+        const docUrls = driver.documents || {};
+        const docItems = [
+            { label: 'Selfie', url: driver.profile_picture_url || docUrls.FACE },
+            { label: 'Car Photo', url: driver.vehiclePhoto || docUrls.CAR_FRONT },
+            { label: 'ID', url: docUrls.ID_FRONT || docUrls.ID_DOC },
+            { label: 'PDP', url: docUrls.PDP },
+            { label: 'Clearance', url: docUrls.CLEARANCE }
+        ];
+        
+        let docHtml = docItems.map(d => `
+            <div class="doc-item">
+                <div class="doc-label">${d.label}</div>
+                ${d.url ? 
+                    `<a href="${d.url}" target="_blank" class="doc-link"><i class="fas fa-external-link-alt"></i> View</a>` : 
+                    `<span style="color: #5d6a7e; font-size: 0.8rem;">Not provided</span>`
+                }
+            </div>
+        `).join('');
+        
+        modalBody.innerHTML = `
+            <div style="margin-bottom: 1.5rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1.5rem; font-size: 0.9rem;">
+                    <div><span style="color: #8b95a9;">Name:</span> <strong>${escapeHtml(name)}</strong></div>
+                    <div><span style="color: #8b95a9;">Email:</span> <strong>${escapeHtml(email)}</strong></div>
+                    <div><span style="color: #8b95a9;">Phone:</span> <strong>${escapeHtml(phone)}</strong></div>
+                    <div><span style="color: #8b95a9;">Area:</span> <strong>${escapeHtml(area)}</strong></div>
+                    <div><span style="color: #8b95a9;">Vehicle:</span> <strong>${escapeHtml(vehicle)}</strong></div>
+                    <div><span style="color: #8b95a9;">Color:</span> <strong>${escapeHtml(color)}</strong></div>
+                    <div><span style="color: #8b95a9;">Registration:</span> <strong>${escapeHtml(reg)}</strong></div>
+                    <div><span style="color: #8b95a9;">Year:</span> <strong>${escapeHtml(year)}</strong></div>
+                    <div><span style="color: #8b95a9;">Rating:</span> <strong>⭐ ${rating}</strong></div>
+                    <div><span style="color: #8b95a9;">Trips:</span> <strong>${trips}</strong></div>
+                    <div><span style="color: #8b95a9;">Verified:</span> <strong>${verifiedAt}</strong></div>
+                    <div><span style="color: #8b95a9;">Status:</span> <strong style="color: #10b981;">${status.toUpperCase()}</strong></div>
+                </div>
+            </div>
+            <hr style="border-color: #2a3340; margin: 1rem 0;">
+            <div>
+                <h4 style="color: #e8ecf4; margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Documents</h4>
+                <div class="doc-grid">${docHtml}</div>
+            </div>
+            <button class="btn btn-view" onclick="closeModal()" style="width:100%; margin-top: 1rem;">
+                <i class="fas fa-times"></i> Close
+            </button>
+        `;
+        
+        detailModal.classList.add('open');
+    });
+}
 
         // ================================================================
         // LOAD REJECTED DRIVERS
