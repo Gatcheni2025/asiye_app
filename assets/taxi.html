@@ -15215,9 +15215,8 @@ if (destEl) {
 // ========================================================================
 // OPEN SET DESTINATION POPUP - WITH MULTIPLE ROUTE SELECTION
 // ========================================================================
-
 // ========================================================================
-// OPEN SET DESTINATION POPUP - WITH NEARBY AREAS
+// OPEN SET DESTINATION POPUP - WITH PROPER COORDINATES
 // ========================================================================
 
 window.openSetDestinationPopup = function() {
@@ -15229,9 +15228,28 @@ window.openSetDestinationPopup = function() {
     // Get current saved routes
     const savedRoutes = window.taxiData?.savedRoutes || [];
     
-    // Get driver's current location
-    const driverLat = window.taxiData?.latitude || window.commuterLat || -26.2041;
-    const driverLng = window.taxiData?.longitude || window.commuterLng || 28.0473;
+    // 🚨 Get driver's current location - use stored values with fallback
+    let driverLat = window.taxiData?.latitude || window.commuterLat || null;
+    let driverLng = window.taxiData?.longitude || window.commuterLng || null;
+    
+    // If no coordinates, try to get from map
+    if (!driverLat || !driverLng && window.map && typeof window.map.getCenter === 'function') {
+        try {
+            const center = window.map.getCenter();
+            driverLat = center.lat;
+            driverLng = center.lng;
+        } catch(e) {
+            console.warn("Could not get map center");
+        }
+    }
+    
+    // Final fallback
+    if (!driverLat || !driverLng) {
+        driverLat = -26.2041;  // Johannesburg
+        driverLng = 28.0473;
+    }
+    
+    console.log("📍 Driver location for routes:", driverLat, driverLng);
     
     popup.innerHTML = `
         <div class="modal-content" style="background: #ffffff !important; max-width: 480px; width: 95%; padding: 25px; border-radius: 24px; text-align: center; position: relative; max-height: 90vh; overflow-y: auto;">
@@ -15310,11 +15328,27 @@ window.openSetDestinationPopup = function() {
     
     openPopup('genericMessagePopup');
     
-    // Load nearby areas
-    loadNearbyAreas(driverLat, driverLng);
-    
-    // Get current location name
-    getCurrentLocationName(driverLat, driverLng);
+    // Load nearby areas using the driver's location
+    if (driverLat && driverLng) {
+        loadNearbyAreas(driverLat, driverLng);
+        getCurrentLocationName(driverLat, driverLng);
+    } else {
+        // Try to get location from map
+        if (window.map && typeof window.map.getCenter === 'function') {
+            try {
+                const center = window.map.getCenter();
+                loadNearbyAreas(center.lat, center.lng);
+                getCurrentLocationName(center.lat, center.lng);
+            } catch(e) {
+                console.warn("Could not get map center for nearby areas");
+                document.getElementById('nearbyAreasList').innerHTML = `
+                    <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
+                        Location not available. Please search above.
+                    </div>
+                `;
+            }
+        }
+    }
     
     // Setup autocomplete
     const input = document.getElementById('driverRouteInput');
@@ -15330,7 +15364,11 @@ window.openSetDestinationPopup = function() {
         }
         
         timeout = setTimeout(() => {
-            fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&types=place,locality,neighborhood,poi&limit=5&proximity=${driverLng},${driverLat}`)
+            // Use the driver's location for proximity
+            const proxLat = driverLat || -26.2041;
+            const proxLng = driverLng || 28.0473;
+            
+            fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&types=place,locality,neighborhood,poi&limit=5&proximity=${proxLng},${proxLat}`)
             .then(res => res.json())
             .then(data => {
                 if (data.features && data.features.length > 0) {
@@ -15361,9 +15399,8 @@ window.openSetDestinationPopup = function() {
 // ========================================================================
 // LOAD NEARBY AREAS
 // ========================================================================
-
 // ========================================================================
-// LOAD NEARBY AREAS - FIXED COORDINATES ORDER
+// LOAD NEARBY AREAS - COMPLETE FIX
 // ========================================================================
 
 function loadNearbyAreas(lat, lng) {
@@ -15372,11 +15409,28 @@ function loadNearbyAreas(lat, lng) {
     
     if (!listEl) return;
     
-    // 🚨 FIX: Mapbox expects longitude,latitude (not latitude,longitude)
-    const lngLat = `${lng},${lat}`;
+    // Validate coordinates
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+        console.warn("Invalid coordinates for nearby areas:", lat, lng);
+        listEl.innerHTML = `
+            <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
+                Location not available. Please search above.
+            </div>
+        `;
+        return;
+    }
+    
+    // 🚨 FIX: Ensure coordinates are within valid range
+    const validLat = Math.max(-90, Math.min(90, parseFloat(lat)));
+    const validLng = Math.max(-180, Math.min(180, parseFloat(lng)));
+    
+    // Mapbox expects: longitude,latitude (lng,lat)
+    const lngLat = `${validLng},${validLat}`;
+    
+    console.log("📍 Fetching nearby areas for:", lngLat);
     
     // Use Mapbox to find nearby places
-    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=20&country=za`)
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=20&country=za&proximity=${lngLat}`)
         .then(res => {
             if (!res.ok) {
                 throw new Error(`HTTP error! status: ${res.status}`);
@@ -15389,36 +15443,24 @@ function loadNearbyAreas(lat, lng) {
                 const places = data.features.map(f => ({
                     name: f.place_name,
                     text: f.text,
-                    distance: calculateDistance(lat, lng, f.center[1], f.center[0])
+                    distance: calculateDistance(validLat, validLng, f.center[1], f.center[0])
                 })).filter(p => p.distance <= 20)
                   .sort((a, b) => a.distance - b.distance);
                 
                 if (countEl) countEl.textContent = `${places.length} areas`;
                 
                 if (places.length === 0) {
-                    listEl.innerHTML = `
-                        <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
-                            No nearby areas found within 20km. Try searching above.
-                        </div>
-                    `;
+                    // Try fallback
+                    loadNearbyAreasFallback(validLat, validLng);
                     return;
                 }
                 
-                // Also add SA key locations nearby
-                const nearbyLocations = saKeyLocations.map(loc => {
-                    const dist = calculateDistance(lat, lng, loc.lat, loc.lng);
-                    return { ...loc, distance: dist, isKeyLocation: true };
-                }).filter(loc => loc.distance <= 20)
-                  .sort((a, b) => a.distance - b.distance)
-                  .slice(0, 5);
-                
-                // Combine and display
+                // Display places
                 let html = '';
-                const allPlaces = [...places.slice(0, 8), ...nearbyLocations];
                 const uniquePlaces = [];
                 const seenNames = new Set();
                 
-                allPlaces.forEach(p => {
+                places.forEach(p => {
                     const nameKey = p.text || p.name;
                     if (!seenNames.has(nameKey)) {
                         seenNames.add(nameKey);
@@ -15430,9 +15472,6 @@ function loadNearbyAreas(lat, lng) {
                     const name = p.text || p.name;
                     const dist = p.distance;
                     const distText = dist < 1 ? `${(dist * 1000).toFixed(0)}m` : `${dist.toFixed(1)}km`;
-                    const isKey = p.isKeyLocation || false;
-                    const icon = isKey ? 'fa-taxi' : 'fa-map-pin';
-                    const color = isKey ? '#FF9F0A' : '#007BFF';
                     
                     html += `
                         <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f5f5f5; cursor: pointer; transition: background 0.2s;"
@@ -15440,9 +15479,8 @@ function loadNearbyAreas(lat, lng) {
                              onmouseout="this.style.background='transparent'"
                              onclick="window.addNearbyRoute('${name.replace(/'/g, "\\'")}')">
                             <div style="display: flex; align-items: center; gap: 10px;">
-                                <i class="fas ${icon}" style="color: ${color}; width: 16px;"></i>
+                                <i class="fas fa-map-pin" style="color: #007BFF; width: 16px;"></i>
                                 <span style="font-weight: 600; color: #111; font-size: 0.9rem;">${escapeHtml(name)}</span>
-                                ${isKey ? '<span style="font-size: 0.6rem; background: #FF9F0A; color: black; padding: 1px 6px; border-radius: 8px; font-weight: 700;">RANK</span>' : ''}
                             </div>
                             <span style="font-size: 0.75rem; color: #888; font-weight: 600;">${distText}</span>
                         </div>
@@ -15451,25 +15489,16 @@ function loadNearbyAreas(lat, lng) {
                 
                 listEl.innerHTML = html;
             } else {
-                if (countEl) countEl.textContent = '0 areas';
-                listEl.innerHTML = `
-                    <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
-                        No nearby areas found. Try searching above.
-                    </div>
-                `;
+                // Try fallback
+                loadNearbyAreasFallback(validLat, validLng);
             }
         })
         .catch(err => {
-            console.error("Error loading nearby areas:", err);
-            if (countEl) countEl.textContent = 'Error loading';
-            listEl.innerHTML = `
-                <div style="color: #dc3545; font-size: 0.85rem; padding: 10px; text-align: center;">
-                    Could not load nearby areas. Please search above.
-                </div>
-            `;
+            console.error("Error loading nearby areas from Mapbox:", err);
+            // 🆕 Use fallback with SA Key Locations
+            loadNearbyAreasFallback(validLat, validLng);
         });
 }
-
 // ========================================================================
 // SELECT ROUTE SUGGESTION - FIXED
 // ========================================================================
@@ -15488,16 +15517,21 @@ window.selectRouteSuggestion = function(routeName) {
 // ========================================================================
 // GET CURRENT LOCATION NAME
 // ========================================================================
-
 // ========================================================================
-// GET CURRENT LOCATION NAME - FIXED COORDINATES ORDER
+// GET CURRENT LOCATION NAME - COMPLETE FIX
 // ========================================================================
 
 function getCurrentLocationName(lat, lng) {
     const el = document.getElementById('driverCurrentArea');
     if (!el) return;
     
-    // 🚨 FIX: Mapbox expects longitude,latitude
+    // Validate coordinates
+    if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+        el.textContent = "Unknown Area";
+        return;
+    }
+    
+    // Mapbox expects: longitude,latitude
     const lngLat = `${lng},${lat}`;
     
     fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lngLat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=1&country=za`)
@@ -15511,6 +15545,7 @@ function getCurrentLocationName(lat, lng) {
             if (data.features && data.features.length > 0) {
                 const name = data.features[0].place_name.split(',')[0].trim();
                 el.textContent = name;
+                console.log("📍 Current location:", name);
             } else {
                 el.textContent = "Unknown Area";
             }
