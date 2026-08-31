@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asiye Admin · Driver Verification & Passenger Data</title>
+    <title>Asiye Admin · Driver Verification & Password Management</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
@@ -138,6 +138,7 @@
         .app-card .app-status.verified { background: #10b98120; color: #10b981; border: 1px solid #10b98140; }
         .app-card .app-status.rejected { background: #dc354520; color: #dc3545; border: 1px solid #dc354540; }
         .app-card .app-status.active { background: #5b7cfa20; color: #5b7cfa; border: 1px solid #5b7cfa40; }
+        .app-card .app-status.no-password { background: #f8961e20; color: #f8961e; border: 1px solid #f8961e40; }
         
         .app-card .app-details {
             display: grid;
@@ -180,6 +181,8 @@
         .btn-warning:hover { background: #e0850a; }
         .btn-success { background: #10b981; color: white; }
         .btn-success:hover { background: #059669; }
+        .btn-reset { background: #7c3aed; color: white; }
+        .btn-reset:hover { background: #6d28d9; }
         
         .empty-state { text-align: center; padding: 3rem 2rem; color: #8b95a9; }
         .empty-state .icon { font-size: 3rem; opacity: 0.3; margin-bottom: 1rem; }
@@ -203,7 +206,7 @@
             background: #141a24;
             border: 1px solid #2a3340;
             border-radius: 24px;
-            max-width: 600px;
+            max-width: 650px;
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
@@ -357,21 +360,50 @@
         .badge-status.active { background: #10b98120; color: #10b981; }
         .badge-status.inactive { background: #dc354520; color: #dc3545; }
         
-        @media (max-width: 768px) {
-            .dashboard { grid-template-columns: 1fr; }
-            .sidebar { display: none; }
-            .main-content { padding: 1rem; max-height: none; }
-            .navbar { padding: 0.6rem 1rem; }
-            .stats-grid { grid-template-columns: 1fr 1fr; }
-            .modal-content { padding: 1.2rem; margin: 10px; }
-            .doc-grid { grid-template-columns: 1fr; }
-            .commuter-grid { grid-template-columns: 1fr; }
+        /* Password Modal Styles */
+        .password-input-group {
+            margin-bottom: 1.5rem;
         }
-        
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #10161e; }
-        ::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3a4a5a; }
+        .password-input-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: #8b95a9;
+            margin-bottom: 0.3rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .password-input-group input {
+            width: 100%;
+            padding: 0.8rem 1rem;
+            border-radius: 12px;
+            border: 1px solid #2a3340;
+            background: #1a222e;
+            color: #e8ecf4;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+        .password-input-group input:focus {
+            outline: none;
+            border-color: #5b7cfa;
+            box-shadow: 0 0 0 3px rgba(91, 124, 250, 0.2);
+        }
+        .password-strength {
+            height: 4px;
+            border-radius: 2px;
+            margin-top: 8px;
+            background: #2a3340;
+            transition: all 0.3s;
+        }
+        .password-strength.weak { background: #dc3545; width: 33%; }
+        .password-strength.medium { background: #f8961e; width: 66%; }
+        .password-strength.strong { background: #10b981; width: 100%; }
+        .password-match {
+            font-size: 0.8rem;
+            margin-top: 4px;
+        }
+        .password-match.match { color: #10b981; }
+        .password-match.no-match { color: #dc3545; }
         
         .password-display {
             background: #1a222e;
@@ -394,6 +426,39 @@
             cursor: pointer;
         }
         .password-display .copy-btn:hover { color: #fff; }
+        
+        .password-requirements {
+            background: #1a222e;
+            padding: 1rem;
+            border-radius: 12px;
+            margin: 1rem 0;
+        }
+        .password-requirements .req {
+            font-size: 0.8rem;
+            color: #8b95a9;
+            padding: 4px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .password-requirements .req .check { color: #10b981; }
+        .password-requirements .req .cross { color: #dc3545; }
+        
+        @media (max-width: 768px) {
+            .dashboard { grid-template-columns: 1fr; }
+            .sidebar { display: none; }
+            .main-content { padding: 1rem; max-height: none; }
+            .navbar { padding: 0.6rem 1rem; }
+            .stats-grid { grid-template-columns: 1fr 1fr; }
+            .modal-content { padding: 1.2rem; margin: 10px; }
+            .doc-grid { grid-template-columns: 1fr; }
+            .commuter-grid { grid-template-columns: 1fr; }
+        }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #10161e; }
+        ::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a4a5a; }
     </style>
 </head>
 <body>
@@ -479,26 +544,40 @@
         </div>
     </div>
 
-    <!-- Create Login Modal -->
-    <div class="modal-overlay" id="createLoginModal">
+    <!-- Create Password Modal -->
+    <div class="modal-overlay" id="createPasswordModal">
         <div class="modal-content">
             <div class="modal-header">
                 <h3>🔑 Create Driver Login</h3>
-                <button class="modal-close" onclick="document.getElementById('createLoginModal').classList.remove('open')">&times;</button>
+                <button class="modal-close" onclick="document.getElementById('createPasswordModal').classList.remove('open')">&times;</button>
             </div>
-            <div id="createLoginBody">
-                <p style="color: #8b95a9; margin-bottom: 1rem;">Generate a secure password for this driver to access the app.</p>
-                <div class="password-display">
-                    <span id="generatedPassword">········</span>
-                    <button class="copy-btn" onclick="copyGeneratedPassword()"><i class="fas fa-copy"></i> Copy</button>
+            <div id="createPasswordBody">
+                <p style="color: #8b95a9; margin-bottom: 1rem;">Set a secure password for this driver. The password will be sent via SMS and email.</p>
+                
+                <div class="password-input-group">
+                    <label>Set Password</label>
+                    <input type="password" id="newPasswordInput" placeholder="Enter a strong password" oninput="checkPasswordStrength()">
+                    <div class="password-strength" id="strengthBar"></div>
                 </div>
-                <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
-                    <button class="btn btn-refresh" onclick="generateNewPassword()"><i class="fas fa-sync-alt"></i> Generate New</button>
+                
+                <div class="password-input-group">
+                    <label>Confirm Password</label>
+                    <input type="password" id="confirmPasswordInput" placeholder="Re-enter password" oninput="checkPasswordMatch()">
+                    <div class="password-match" id="passwordMatchMsg"></div>
                 </div>
-                <p style="color: #8b95a9; font-size: 0.85rem;">This password will be sent to the driver via WhatsApp and email.</p>
+                
+                <div class="password-requirements">
+                    <div class="req" id="reqLength"><span class="cross">✗</span> At least 8 characters</div>
+                    <div class="req" id="reqUpper"><span class="cross">✗</span> At least one uppercase letter</div>
+                    <div class="req" id="reqLower"><span class="cross">✗</span> At least one lowercase letter</div>
+                    <div class="req" id="reqNumber"><span class="cross">✗</span> At least one number</div>
+                </div>
+                
                 <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
-                    <button class="btn btn-success" onclick="confirmCreateLogin()"><i class="fas fa-check"></i> Create Login & Notify</button>
-                    <button class="btn btn-reject" onclick="document.getElementById('createLoginModal').classList.remove('open')">Cancel</button>
+                    <button class="btn btn-success" id="createPasswordBtn" onclick="confirmCreatePassword()" disabled>
+                        <i class="fas fa-check"></i> Create Login & Notify
+                    </button>
+                    <button class="btn btn-reject" onclick="document.getElementById('createPasswordModal').classList.remove('open')">Cancel</button>
                 </div>
             </div>
         </div>
@@ -537,7 +616,6 @@
 
         let currentView = 'pending';
         let allApplications = [];
-        let allCommuters = [];
         let pendingCreateDriver = null;
 
         // ================================================================
@@ -577,11 +655,11 @@
                 </div>
             `;
 
-            // Load both applications and commuters count
             Promise.all([
                 database.ref('driver_applications').orderByChild('submittedAt').once('value'),
-                database.ref('commuters').once('value')
-            ]).then(([appsSnap, commutersSnap]) => {
+                database.ref('commuters').once('value'),
+                database.ref('taxis').once('value')
+            ]).then(([appsSnap, commutersSnap, taxisSnap]) => {
                 allApplications = [];
                 let pendingCount = 0;
                 let verifiedCount = 0;
@@ -595,14 +673,33 @@
                     });
                 }
 
-                const commuterCount = commutersSnap.exists() ? commutersSnap.numChildren() : 0;
-                allCommuters = commutersSnap.exists() ? Object.keys(commutersSnap.val()).length : 0;
+                // Also check taxis node for verified drivers not in applications
+                if (taxisSnap.exists()) {
+                    taxisSnap.forEach((child) => {
+                        const driver = child.val();
+                        if (driver.verificationStatus === 'verified' || driver.provisionalActivation === true) {
+                            // Check if already in applications
+                            const exists = allApplications.find(a => a.email === driver.email || a.key === child.key);
+                            if (!exists) {
+                                allApplications.push({
+                                    key: child.key,
+                                    ...driver,
+                                    status: 'verified',
+                                    fullName: driver.name || 'Unknown',
+                                    _source: 'taxis'
+                                });
+                                verifiedCount++;
+                            }
+                        }
+                    });
+                }
 
-                // Update stats
+                const commuterCount = commutersSnap.exists() ? commutersSnap.numChildren() : 0;
+                statCommuters.textContent = commuterCount;
+
                 statPending.textContent = pendingCount;
                 statVerified.textContent = verifiedCount;
                 statTotal.textContent = allApplications.length;
-                statCommuters.textContent = commuterCount;
                 pendingBadge.textContent = pendingCount;
 
                 const pendingApps = allApplications.filter(a => a.status === 'pending' || a.status === 'pending_review');
@@ -631,27 +728,27 @@
             ]).then(([appsSnap, taxisSnap]) => {
                 const verified = [];
                 
-                // From applications
                 if (appsSnap.exists()) {
                     appsSnap.forEach((child) => {
                         const app = { key: child.key, ...child.val(), _source: 'application' };
+                        // Check if they have a password set
+                        app.hasLogin = child.val().hasLogin || false;
                         verified.push(app);
                     });
                 }
 
-                // From taxis node (active drivers)
                 if (taxisSnap.exists()) {
                     taxisSnap.forEach((child) => {
                         const driver = child.val();
                         if (driver.verificationStatus === 'verified' || driver.provisionalActivation === true) {
-                            // Check if not already in list
                             if (!verified.find(d => d.email === driver.email || d.key === child.key)) {
                                 verified.push({ 
                                     key: child.key, 
                                     ...driver, 
                                     _source: 'taxis',
                                     status: 'verified',
-                                    fullName: driver.name || 'Unknown'
+                                    fullName: driver.name || 'Unknown',
+                                    hasLogin: driver.hasLogin || false
                                 });
                             }
                         }
@@ -663,7 +760,7 @@
         }
 
         // ================================================================
-        // LOAD COMMUTERS (PASSENGERS)
+        // LOAD COMMUTERS
         // ================================================================
         function loadCommuters() {
             currentView = 'commuters';
@@ -685,7 +782,6 @@
                         commuters.push({
                             key: child.key,
                             ...data,
-                            // Add derived fields
                             fullName: data.name + ' ' + (data.surname || ''),
                             hasReferral: !!data.referredBy,
                             referralCount: data.referralCount || 0
@@ -736,6 +832,7 @@
                 const vehicle = `${app.vehicleMake || ''} ${app.vehicleModel || ''}`.trim() || 'N/A';
                 const reg = app.taxiRegistrationNumber || app.reg || 'N/A';
                 const workArea = app.workArea || app.area || 'N/A';
+                const hasLogin = app.hasLogin || false;
 
                 const statusClass = status === 'pending' || status === 'pending_review' ? 'pending' : 
                                    status === 'verified' ? 'verified' : 'rejected';
@@ -758,6 +855,7 @@
                             <div><span class="detail-label">🚗 Vehicle:</span> ${escapeHtml(vehicle)}</div>
                             <div><span class="detail-label">📋 Reg:</span> ${escapeHtml(reg)}</div>
                             <div><span class="detail-label">📅 Submitted:</span> ${submittedDate}</div>
+                            <div><span class="detail-label">🔑 Login:</span> ${hasLogin ? '✅ Created' : '❌ Not Created'}</div>
                         </div>
                         <div class="app-actions">
                             <button class="btn btn-view" onclick="viewApplication('${app.key}')">
@@ -771,10 +869,17 @@
                                     <i class="fas fa-times"></i> Reject
                                 </button>
                             ` : ''}
-                            ${status === 'verified' ? `
-                                <button class="btn btn-create" onclick="showCreateLogin('${app.key}')">
-                                    <i class="fas fa-key"></i> Create Login
+                            ${status === 'verified' && !hasLogin ? `
+                                <button class="btn btn-create" onclick="showCreatePassword('${app.key}')">
+                                    <i class="fas fa-key"></i> Set Password
                                 </button>
+                            ` : ''}
+                            ${status === 'verified' && hasLogin ? `
+                                <button class="btn btn-reset" onclick="showResetPassword('${app.key}')">
+                                    <i class="fas fa-key"></i> Reset Password
+                                </button>
+                            ` : ''}
+                            ${status === 'verified' ? `
                                 <button class="btn btn-reject" onclick="deactivateDriver('${app.key}')">
                                     <i class="fas fa-ban"></i> Deactivate
                                 </button>
@@ -834,10 +939,14 @@
                                 <i class="fas fa-eye"></i> View Profile
                             </button>
                             ${!hasLogin ? `
-                                <button class="btn btn-create" onclick="showCreateLogin('${driver.key}')">
-                                    <i class="fas fa-key"></i> Create Login
+                                <button class="btn btn-create" onclick="showCreatePassword('${driver.key}')">
+                                    <i class="fas fa-key"></i> Set Password
                                 </button>
-                            ` : ''}
+                            ` : `
+                                <button class="btn btn-reset" onclick="showResetPassword('${driver.key}')">
+                                    <i class="fas fa-key"></i> Reset Password
+                                </button>
+                            `}
                             <button class="btn btn-reject" onclick="deactivateDriver('${driver.key}')">
                                 <i class="fas fa-ban"></i> Deactivate
                             </button>
@@ -864,10 +973,8 @@
                 return;
             }
 
-            // Sort by name
             commuters.sort((a, b) => (a.fullName || '').localeCompare(b.fullName || ''));
 
-            // Search bar
             let html = `
                 <div class="search-box">
                     <input type="text" id="commuterSearch" placeholder="Search by name, phone, or email..." oninput="filterCommuters()">
@@ -1024,7 +1131,7 @@
         }
 
         // ================================================================
-        // VIEW DRIVER PROFILE (from taxis node)
+        // VIEW DRIVER PROFILE
         // ================================================================
         function viewDriverProfile(key) {
             database.ref(`taxis/${key}`).once('value', (snapshot) => {
@@ -1097,10 +1204,14 @@
                         <div class="doc-grid">${docHtml}</div>
                     </div>
                     ${!hasLogin ? `
-                        <button class="btn btn-create" onclick="showCreateLogin('${key}')" style="width:100%; margin-top: 1rem;">
-                            <i class="fas fa-key"></i> Create Login for Driver
+                        <button class="btn btn-create" onclick="showCreatePassword('${key}')" style="width:100%; margin-top: 1rem;">
+                            <i class="fas fa-key"></i> Set Password
                         </button>
-                    ` : ''}
+                    ` : `
+                        <button class="btn btn-reset" onclick="showResetPassword('${key}')" style="width:100%; margin-top: 1rem;">
+                            <i class="fas fa-key"></i> Reset Password
+                        </button>
+                    `}
                     <button class="btn btn-view" onclick="closeModal()" style="width:100%; margin-top: 1rem;">
                         <i class="fas fa-times"></i> Close
                     </button>
@@ -1111,108 +1222,241 @@
         }
 
         // ================================================================
-        // SHOW CREATE LOGIN MODAL
+        // PASSWORD STRENGTH CHECK
         // ================================================================
-        let generatedPassword = '';
+        let passwordValid = false;
 
-        function generateNewPassword() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-            let password = '';
-            for (let i = 0; i < 12; i++) {
-                password += chars.charAt(Math.floor(Math.random() * chars.length));
+        function checkPasswordStrength() {
+            const password = document.getElementById('newPasswordInput').value;
+            const bar = document.getElementById('strengthBar');
+            const reqLength = document.getElementById('reqLength');
+            const reqUpper = document.getElementById('reqUpper');
+            const reqLower = document.getElementById('reqLower');
+            const reqNumber = document.getElementById('reqNumber');
+
+            const hasLength = password.length >= 8;
+            const hasUpper = /[A-Z]/.test(password);
+            const hasLower = /[a-z]/.test(password);
+            const hasNumber = /[0-9]/.test(password);
+
+            reqLength.innerHTML = hasLength ? '<span class="check">✓</span> At least 8 characters' : '<span class="cross">✗</span> At least 8 characters';
+            reqUpper.innerHTML = hasUpper ? '<span class="check">✓</span> At least one uppercase letter' : '<span class="cross">✗</span> At least one uppercase letter';
+            reqLower.innerHTML = hasLower ? '<span class="check">✓</span> At least one lowercase letter' : '<span class="cross">✗</span> At least one lowercase letter';
+            reqNumber.innerHTML = hasNumber ? '<span class="check">✓</span> At least one number' : '<span class="cross">✗</span> At least one number';
+
+            const strength = [hasLength, hasUpper, hasLower, hasNumber].filter(Boolean).length;
+            
+            bar.className = 'password-strength';
+            if (strength === 4) { bar.classList.add('strong'); passwordValid = true; }
+            else if (strength >= 2) { bar.classList.add('medium'); passwordValid = false; }
+            else { bar.classList.add('weak'); passwordValid = false; }
+
+            checkPasswordMatch();
+        }
+
+        function checkPasswordMatch() {
+            const password = document.getElementById('newPasswordInput').value;
+            const confirm = document.getElementById('confirmPasswordInput').value;
+            const msg = document.getElementById('passwordMatchMsg');
+            const btn = document.getElementById('createPasswordBtn');
+
+            if (confirm.length === 0) {
+                msg.textContent = '';
+                msg.className = 'password-match';
+                btn.disabled = true;
+                return;
             }
-            generatedPassword = password;
-            document.getElementById('generatedPassword').textContent = password;
+
+            if (password === confirm) {
+                msg.textContent = '✅ Passwords match';
+                msg.className = 'password-match match';
+                btn.disabled = !passwordValid;
+            } else {
+                msg.textContent = '❌ Passwords do not match';
+                msg.className = 'password-match no-match';
+                btn.disabled = true;
+            }
         }
 
-        function copyGeneratedPassword() {
-            navigator.clipboard.writeText(generatedPassword).then(() => {
-                showToast('Password copied to clipboard!', 'info');
-            });
-        }
-
-        function showCreateLogin(key) {
+        // ================================================================
+        // SHOW CREATE PASSWORD MODAL
+        // ================================================================
+        function showCreatePassword(key) {
             pendingCreateDriver = key;
-            generateNewPassword();
-            document.getElementById('createLoginModal').classList.add('open');
+            document.getElementById('newPasswordInput').value = '';
+            document.getElementById('confirmPasswordInput').value = '';
+            document.getElementById('strengthBar').className = 'password-strength';
+            document.getElementById('passwordMatchMsg').textContent = '';
+            document.getElementById('passwordMatchMsg').className = 'password-match';
+            document.getElementById('createPasswordBtn').disabled = true;
+            document.getElementById('createPasswordModal').classList.add('open');
+            setTimeout(() => document.getElementById('newPasswordInput').focus(), 300);
         }
 
-        function confirmCreateLogin() {
+        // ================================================================
+        // SHOW RESET PASSWORD
+        // ================================================================
+        function showResetPassword(key) {
+            if (!confirm('Reset password for this driver? A new password will be generated and sent via SMS.')) return;
+            
+            const driver = allApplications.find(a => a.key === key);
+            if (!driver) {
+                showToast('Driver not found', 'error');
+                return;
+            }
+
+            // Generate a random 8-character password
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+            let newPassword = '';
+            for (let i = 0; i < 12; i++) {
+                newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+
+            const email = driver.email || `driver_${key}@asiye.com`;
+            const name = driver.fullName || driver.name || 'Driver';
+            const phone = driver.phone || '';
+
+            // Update Firebase Auth password
+            auth.signInWithEmailAndPassword(email, newPassword)
+                .then((userCredential) => {
+                    return userCredential.user.updatePassword(newPassword);
+                })
+                .catch((error) => {
+                    if (error.code === 'auth/user-not-found') {
+                        // Create the user first
+                        return auth.createUserWithEmailAndPassword(email, newPassword)
+                            .then((userCredential) => {
+                                return userCredential.user.updateProfile({ displayName: name });
+                            });
+                    }
+                    throw error;
+                })
+                .then(() => {
+                    // Update database
+                    return database.ref(`taxis/${key}`).update({
+                        hasLogin: true,
+                        passwordLastReset: firebase.database.ServerValue.TIMESTAMP
+                    });
+                })
+                .then(() => {
+                    // Update application
+                    return database.ref(`driver_applications`).orderByChild('driverId').equalTo(key).once('value')
+                        .then((snapshot) => {
+                            if (snapshot.exists()) {
+                                snapshot.forEach((child) => {
+                                    child.ref.update({
+                                        hasLogin: true,
+                                        passwordLastReset: firebase.database.ServerValue.TIMESTAMP
+                                    });
+                                });
+                            }
+                        });
+                })
+                .then(() => {
+                    // Send notification
+                    sendDriverCredentials(phone, name, email, newPassword);
+                    showToast(`✅ Password reset for ${name}`, 'success');
+                    loadApplications();
+                })
+                .catch((error) => {
+                    console.error('Reset password error:', error);
+                    showToast('Error resetting password: ' + error.message, 'error');
+                });
+        }
+
+        // ================================================================
+        // CONFIRM CREATE PASSWORD
+        // ================================================================
+        function confirmCreatePassword() {
             if (!pendingCreateDriver) return;
 
-            const driver = allApplications.find(a => a.key === pendingCreateDriver) || 
-                          { fullName: 'Driver', email: 'driver@asiye.com', phone: 'N/A' };
+            const password = document.getElementById('newPasswordInput').value;
+            const confirm = document.getElementById('confirmPasswordInput').value;
 
-            // Get the driver data from taxis node if available
-            database.ref(`taxis/${pendingCreateDriver}`).once('value', (snapshot) => {
-                const taxiData = snapshot.val() || {};
-                const name = taxiData.name || driver.fullName || driver.name || 'Driver';
-                const email = taxiData.email || driver.email || `driver_${pendingCreateDriver}@asiye.com`;
-                const phone = taxiData.phone || driver.phone || 'N/A';
+            if (password !== confirm) {
+                showToast('Passwords do not match', 'error');
+                return;
+            }
 
-                // Create Firebase Auth user
-                auth.createUserWithEmailAndPassword(email, generatedPassword)
-                    .then((userCredential) => {
-                        const user = userCredential.user;
-                        
-                        // Update user profile with display name
-                        user.updateProfile({
-                            displayName: name
-                        }).then(() => {
-                            // Update driver record with login info
-                            return database.ref(`taxis/${pendingCreateDriver}`).update({
-                                hasLogin: true,
-                                loginCreatedAt: firebase.database.ServerValue.TIMESTAMP,
-                                userUid: user.uid
+            if (!passwordValid) {
+                showToast('Please choose a stronger password', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('createPasswordBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+
+            const driver = allApplications.find(a => a.key === pendingCreateDriver);
+            if (!driver) {
+                showToast('Driver not found', 'error');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-check"></i> Create Login & Notify';
+                return;
+            }
+
+            const email = driver.email || `driver_${pendingCreateDriver}@asiye.com`;
+            const name = driver.fullName || driver.name || 'Driver';
+            const phone = driver.phone || '';
+
+            // Create Firebase Auth user
+            auth.createUserWithEmailAndPassword(email, password)
+                .then((userCredential) => {
+                    const user = userCredential.user;
+                    return user.updateProfile({ displayName: name })
+                        .then(() => user);
+                })
+                .then((user) => {
+                    return Promise.all([
+                        database.ref(`taxis/${pendingCreateDriver}`).update({
+                            hasLogin: true,
+                            userUid: user.uid,
+                            passwordLastReset: firebase.database.ServerValue.TIMESTAMP
+                        }),
+                        database.ref(`driver_applications/${pendingCreateDriver}`).update({
+                            hasLogin: true,
+                            userUid: user.uid,
+                            passwordLastReset: firebase.database.ServerValue.TIMESTAMP
+                        })
+                    ]);
+                })
+                .then(() => {
+                    sendDriverCredentials(phone, name, email, password);
+                    document.getElementById('createPasswordModal').classList.remove('open');
+                    showToast(`✅ Login created for ${name}!`, 'success');
+                    loadApplications();
+                })
+                .catch((error) => {
+                    console.error('Error creating user:', error);
+                    if (error.code === 'auth/email-already-in-use') {
+                        // Try to set password via reset
+                        auth.sendPasswordResetEmail(email)
+                            .then(() => {
+                                showToast(`Password reset email sent to ${email}`, 'info');
+                                database.ref(`taxis/${pendingCreateDriver}`).update({
+                                    hasLogin: true,
+                                    passwordLastReset: firebase.database.ServerValue.TIMESTAMP
+                                });
+                                document.getElementById('createPasswordModal').classList.remove('open');
+                                loadApplications();
+                            })
+                            .catch((resetError) => {
+                                showToast('Email exists but cannot reset. Try a different email.', 'error');
                             });
-                        }).then(() => {
-                            // Update application status
-                            return database.ref(`driver_applications/${pendingCreateDriver}`).update({
-                                hasLogin: true,
-                                userUid: user.uid
-                            });
-                        }).then(() => {
-                            // Send notification to driver
-                            sendDriverCredentials(phone, name, email, generatedPassword);
-                            
-                            document.getElementById('createLoginModal').classList.remove('open');
-                            showToast(`✅ Login created for ${name}!`, 'success');
-                            loadApplications();
-                        });
-                    })
-                    .catch((error) => {
-                        console.error('Error creating user:', error);
-                        if (error.code === 'auth/email-already-in-use') {
-                            // Email already exists - try to set password
-                            auth.fetchSignInMethodsForEmail(email).then((methods) => {
-                                if (methods.includes('password')) {
-                                    // User exists, we can't set password via admin API
-                                    // Send reset link instead
-                                    auth.sendPasswordResetEmail(email).then(() => {
-                                        showToast(`Password reset email sent to ${email}`, 'info');
-                                        database.ref(`taxis/${pendingCreateDriver}`).update({
-                                            hasLogin: true,
-                                            loginCreatedAt: firebase.database.ServerValue.TIMESTAMP
-                                        });
-                                        document.getElementById('createLoginModal').classList.remove('open');
-                                        loadApplications();
-                                    });
-                                } else {
-                                    showToast('Email exists but no password set. Please use a different email.', 'error');
-                                }
-                            });
-                        } else {
-                            showToast('Error creating login: ' + error.message, 'error');
-                        }
-                    });
-            });
+                    } else {
+                        showToast('Error creating login: ' + error.message, 'error');
+                    }
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-check"></i> Create Login & Notify';
+                });
         }
 
         // ================================================================
         // SEND DRIVER CREDENTIALS
         // ================================================================
         function sendDriverCredentials(phone, name, email, password) {
-            // Format phone
             let cleanPhone = String(phone).replace(/\D/g, '');
             if (cleanPhone.startsWith('0')) cleanPhone = '27' + cleanPhone.substring(1);
             if (!cleanPhone.startsWith('27')) cleanPhone = '27' + cleanPhone;
@@ -1228,18 +1472,13 @@
                     message: message
                 })
             }).catch(err => console.error('WhatsApp notification error:', err));
-
-            // Also try email if available
-            if (email && email.includes('@')) {
-                // Could implement email sending here
-            }
         }
 
         // ================================================================
         // APPROVE DRIVER
         // ================================================================
         function approveDriver(key) {
-            if (!confirm('Approve this driver application? They will be activated immediately.')) return;
+            if (!confirm('Approve this driver application? You will be prompted to set a password.')) return;
 
             const app = allApplications.find(a => a.key === key);
             if (!app) {
@@ -1287,16 +1526,15 @@
                         status: 'verified',
                         verifiedAt: firebase.database.ServerValue.TIMESTAMP,
                         driverId: driverId,
-                        verifiedBy: auth.currentUser ? auth.currentUser.uid : 'admin'
+                        verifiedBy: auth.currentUser ? auth.currentUser.uid : 'admin',
+                        hasLogin: false
                     });
                 })
                 .then(() => {
                     showToast(`✅ Driver ${app.fullName || 'Driver'} verified!`, 'success');
-                    
-                    // Show create login option
-                    showCreateLogin(key);
-                    
-                    setTimeout(loadApplications, 500);
+                    // Show create password modal
+                    setTimeout(() => showCreatePassword(key), 500);
+                    loadApplications();
                 })
                 .catch((error) => {
                     console.error('Error approving driver:', error);
@@ -1447,16 +1685,7 @@
             loadApplications();
         });
 
-        // Load commuters count periodically
-        setInterval(() => {
-            database.ref('commuters').once('value', (snapshot) => {
-                if (snapshot.exists()) {
-                    statCommuters.textContent = snapshot.numChildren();
-                }
-            });
-        }, 30000);
-
-        console.log('✅ Admin dashboard with login creation ready.');
+        console.log('✅ Admin dashboard with password management ready.');
     </script>
 </body>
 </html>
