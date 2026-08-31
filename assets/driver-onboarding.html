@@ -1,0 +1,555 @@
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Asiye · Driver Onboarding</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Manrope', sans-serif; background: #f4f6fb; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .form-container { max-width: 560px; width: 100%; background: #ffffff; padding: 25px; border-radius: 25px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1); }
+    .header { text-align: center; margin-bottom: 25px; }
+    h2 { font-size: 1.2rem; color: #0b1b3a; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; font-weight: 700; font-size: 0.75rem; margin-bottom: 5px; color: #334155; text-transform: uppercase; }
+    input, select { width: 100%; padding: 12px; border-radius: 12px; border: 1.5px solid #e9eef2; outline: none; font-family: inherit; }
+    
+    /* Camera Styles */
+    .camera-wrapper { background: #000; border-radius: 20px; overflow: hidden; height: 300px; position: relative; margin-bottom: 15px; border: 2px solid #eee; }
+    #video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); /* Mirror view for UX */ }
+    #photoPreview { width: 100%; height: 100%; object-fit: cover; display: none; }
+    
+    .btn { width: 100%; padding: 15px; border-radius: 15px; border: none; font-weight: 800; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 10px; transition: 0.3s; }
+    .btn-primary { background: #4361ee; color: white; }
+    .btn-success { background: #10b981; color: white; }
+    .btn-outline { background: transparent; border: 1.5px solid #cbd5e1; }
+    .btn:disabled { background: #ccc; cursor: not-allowed; }
+    
+    .step { display: none; }
+    .step.active { display: block; }
+    .alert-box { background: #fff7ed; border: 1px solid #fed7aa; padding: 12px; border-radius: 12px; font-size: 0.8rem; color: #9a3412; margin-top: 10px; }
+    
+    /* Reference Styles */
+    .ref-item { background: #f8fafc; padding: 15px; border-radius: 15px; border: 1px solid #e2e8f0; margin-bottom: 10px; }
+    .ref-item label { color: #4361ee; font-size: 0.7rem; }
+    .ref-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .autocomplete-container {
+        position: relative;
+        width: 100%;
+    }
+    .suggestions-list {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 0 0 12px 12px;
+        z-index: 1000;
+        max-height: 200px;
+        overflow-y: auto;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        display: none;
+    }
+    .suggestion-item {
+        padding: 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #eee;
+        color: #333;
+        font-size: 0.9rem;
+    }
+    .suggestion-item:hover {
+        background-color: #f0f7ff;
+        color: #4361ee;
+    }
+</style>
+</head>
+<body>
+
+<div class="form-container">
+  <div class="header"><h1>Driver Application</h1></div>
+
+  <!-- STEP 1: IDENTITY -->
+  <div id="step1" class="step active">
+    <h2><i class="fas fa-user"></i> Identity & Selfie</h2>
+    <div class="form-group"><label>Full Name & Surname</label><input type="text" id="fullName" placeholder="Thabo Molefe"></div>
+    <div class="form-group"><label>SA ID Number</label><input type="text" id="idNumber" placeholder="9001015800081"></div>
+    <div class="form-group"><label>Phone Number</label><input type="tel" id="phone" placeholder="081 234 5678"></div>
+
+    <div class="camera-wrapper">
+      <video id="video" autoplay playsinline muted></video>
+      <img id="photoPreview">
+    </div>
+    
+    <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn btn-outline" id="captureBtn" onclick="captureSelfie()"><i class="fas fa-camera"></i> Capture</button>
+        <button type="button" class="btn btn-outline" id="retakeBtn" style="display:none" onclick="startCamera()"><i class="fas fa-sync"></i> Retake</button>
+    </div>
+    
+    <button class="btn btn-primary" onclick="goToStep(2)">Next: Vehicle Details</button>
+  </div>
+
+  <!-- STEP 2: VEHICLE -->
+ <!-- STEP 2: VEHICLE -->
+  <div id="step2" class="step">
+    <h2><i class="fas fa-car"></i> Vehicle Info</h2>
+    <div class="form-group">
+        <label>Preferred Area of Work</label>
+        <div class="autocomplete-container">
+            <input type="text" id="workArea" placeholder="Start typing suburb or city..." autocomplete="off">
+            <div id="suggestionsList" class="suggestions-list"></div>
+        </div>
+    </div>
+    <div class="form-group"><label>Vehicle Make</label><input type="text" id="carMake" placeholder="e.g. Toyota"></div>
+    <div class="form-group"><label>Vehicle Model</label><input type="text" id="carModel" placeholder="e.g. Corolla / Quantum"></div>
+    <div class="form-group"><label>Vehicle Color</label><input type="text" id="carColor" placeholder="e.g. White"></div>
+    <div class="form-group"><label>Registration (Number Plate)</label><input type="text" id="carReg" placeholder="e.g. ND 123 456"></div>
+    <div class="form-group"><label>Year</label><input type="number" id="carYear" placeholder="2020"></div>
+    
+    <div class="form-group">
+        <label>Photo of Car (Front View - MUST show Number Plate)</label>
+        <input type="file" id="fileCar" accept="image/*">
+    </div>
+    <button class="btn btn-primary" onclick="goToStep(3)">Next: Documents</button>
+    <button class="btn btn-outline" onclick="goToStep(1)">Back</button>
+  </div>
+  <!-- STEP 3: DOCUMENTS -->
+  <div id="step3" class="step">
+    <h2><i class="fas fa-file-invoice"></i> Documents</h2>
+    <div class="form-group"><label>Upload ID Document</label><input type="file" id="fileId" accept="image/*"></div>
+    <div class="form-group"><label>Professional Driving Permit (PDP)</label><input type="file" id="filePdp" accept="image/*"></div>
+    <div class="form-group">
+    <label>Proof of Address (Not older than 3 months)</label>
+    <input type="file" id="filePoa" accept="image/*">
+    <small style="color: var(--danger); font-size: 0.7rem;">Mandatory: Utility bill, bank statement, or store account.</small>
+</div>
+    <div class="form-group">
+        <label>Police Clearance (Not older than 3 months)</label>
+        <input type="file" id="fileClearance" accept="image/*" onchange="checkClearance()">
+        <div id="clearanceNotice" class="alert-box" style="display:none;">
+            <strong>Notice:</strong> No Clearance? R299 verification fee will be charged for criminal check.
+        </div>
+        <div style="margin-top:5px; font-size: 0.8rem;">
+            <input type="checkbox" id="noClearance" onchange="checkClearance()"> I don't have a clearance certificate
+        </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="goToStep(4)">Next: References</button>
+    <button class="btn btn-outline" onclick="goToStep(2)">Back</button>
+  </div>
+
+  <!-- STEP 4: FINAL -->
+  <div id="step4" class="step">
+    <h2><i class="fas fa-users"></i> Character References</h2>
+    <p style="font-size: 0.75rem; color: #666; margin-bottom: 10px;">Please provide details for 3 people who can vouch for you.</p>
+    
+    <div id="referenceContainer">
+      <div class="ref-item">
+          <label>Reference 1</label>
+          <div class="ref-row">
+              <input type="text" class="ref-name" placeholder="Name & Surname">
+              <input type="tel" class="ref-phone" placeholder="Phone Number">
+          </div>
+      </div>
+      <div class="ref-item">
+          <label>Reference 2</label>
+          <div class="ref-row">
+              <input type="text" class="ref-name" placeholder="Name & Surname">
+              <input type="tel" class="ref-phone" placeholder="Phone Number">
+          </div>
+      </div>
+      <div class="ref-item">
+          <label>Reference 3</label>
+          <div class="ref-row">
+              <input type="text" class="ref-name" placeholder="Name & Surname">
+              <input type="tel" class="ref-phone" placeholder="Phone Number">
+          </div>
+      </div>
+    </div>
+    
+    <div class="form-group"><label>Email for account</label><input type="email" id="email" placeholder="email@example.com"></div>
+    <button class="btn btn-success" id="finalSubmit" onclick="submitApplication()">Submit Application</button>
+    <button class="btn btn-outline" onclick="goToStep(3)">Back</button>
+  </div>
+</div>
+<script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script>
+<link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
+<script>
+  // 1. Config
+  const firebaseConfig = {
+    apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
+    authDomain: "asiye-80386.firebaseapp.com",
+    databaseURL: "https://asiye-80386-default-rtdb.firebaseio.com",
+    projectId: "asiye-80386",
+    storageBucket: "asiye-80386.firebasestorage.app",
+    appId: "1:531902350858:web:f8a4a246bf350d50e3c1f3"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const database = firebase.database();
+
+  let selfieBlob = null;
+  let stream = null;
+
+  // 2. Camera Logic
+  async function startCamera() {
+    const video = document.getElementById('video');
+    const preview = document.getElementById('photoPreview');
+    const captureBtn = document.getElementById('captureBtn');
+    const retakeBtn = document.getElementById('retakeBtn');
+
+    preview.style.display = 'none';
+    video.style.display = 'block';
+    captureBtn.style.display = 'flex';
+    retakeBtn.style.display = 'none';
+
+    try {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
+        
+        // Added specific constraints to prevent black screen on some devices
+        stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: "user",
+                width: { ideal: 640 },
+                height: { ideal: 480 }
+            },
+            audio: false 
+        });
+        
+        video.srcObject = stream;
+        // Explicitly call play
+        await video.play();
+        
+    } catch (err) {
+        console.error("Camera error: ", err);
+        alert("Unable to access camera. Please ensure you have granted permission.");
+    }
+  }
+
+  function captureSelfie() {
+    const v = document.getElementById('video');
+    const canvas = document.createElement('canvas');
+    canvas.width = v.videoWidth; 
+    canvas.height = v.videoHeight;
+    const ctx = canvas.getContext('2d');
+    
+    // Draw mirrored image to canvas
+    ctx.translate(canvas.width, 0);
+    ctx.scale(-1, 1);
+    ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+    
+    canvas.toBlob((blob) => { 
+        selfieBlob = blob; 
+    }, 'image/jpeg', 0.8);
+
+    const dataUrl = canvas.toDataURL('image/jpeg');
+    document.getElementById('photoPreview').src = dataUrl;
+    document.getElementById('photoPreview').style.display = 'block';
+    v.style.display = 'none';
+    
+    document.getElementById('captureBtn').style.display = 'none';
+    document.getElementById('retakeBtn').style.display = 'flex';
+
+    if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+    }
+  }
+
+  // 3. Navigation
+  function goToStep(n) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step' + n).classList.add('active');
+    if(n === 1) startCamera();
+    window.scrollTo(0,0);
+  }
+
+  function checkClearance() {
+    const check = document.getElementById('noClearance');
+    const notice = document.getElementById('clearanceNotice');
+    notice.style.display = check.checked ? 'block' : 'none';
+  }
+
+  // 4. Upload Helper
+  async function compressAndUpload(fileId, driverIdentifier) {
+    const fileInput = document.getElementById(fileId);
+    const file = fileInput ? fileInput.files[0] : null;
+    if (!file) return "No File";
+    
+    const uid = driverIdentifier || "new_driver_" + Date.now();
+
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 800;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+                canvas.width = width;
+                canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob(async (blob) => {
+                    const formData = new FormData();
+                    formData.append('file', blob, 'upload.jpg');
+                    formData.append('api_key', 'asiye_secure_upload_2025');
+                    formData.append('userId', uid);
+                    
+                    try {
+                        const res = await fetch('https://app.asiye.cloud/upload_handler.php', { 
+                            method: 'POST', 
+                            body: formData 
+                        });
+                        const data = await res.json();
+                        resolve(data.status === 'success' ? data.url : "Upload Error");
+                    } catch (e) { resolve("Network Error"); }
+                }, 'image/jpeg', 0.6);
+            };
+        };
+    });
+  }
+
+  async function uploadSelfie(driverIdentifier) {
+    if (!selfieBlob) return "No Selfie";
+    const formData = new FormData();
+    formData.append('file', selfieBlob, 'face.jpg');
+    formData.append('api_key', 'asiye_secure_upload_2025');
+    formData.append('userId', driverIdentifier);
+    try {
+        const res = await fetch('https://app.asiye.cloud/upload_handler.php', { method: 'POST', body: formData });
+        const data = await res.json();
+        return data.url || "Upload Error";
+    } catch (e) { return "Network Error"; }
+  }
+
+  // 5. Submit Application
+ async function submitApplication() {
+    const btn = document.getElementById('finalSubmit');
+    
+    // 1. Collect all inputs
+    const fullName = document.getElementById('fullName').value.trim();
+    const email = document.getElementById('email').value.trim().toLowerCase();
+    const phone = document.getElementById('phone').value.trim();
+    const workArea = document.getElementById('workArea').value.trim();
+    
+    // Files
+    const fileCar = document.getElementById('fileCar').files[0];
+    const fileId = document.getElementById('fileId').files[0];
+    const filePoa = document.getElementById('filePoa').files[0]; // Proof of Address
+
+    // 2. Strict Validation
+    if (!fullName || !email || !phone || !workArea) {
+        alert("Please fill in all text fields to continue.");
+        return;
+    }
+    if (!selfieBlob) {
+        alert("Please capture a live selfie in Step 1.");
+        return;
+    }
+    if (!fileCar) {
+        alert("Please upload a front picture of your car showing the number plate.");
+        return;
+    }
+    if (!fileId) {
+        alert("Please upload your ID Document.");
+        return;
+    }
+    if (!filePoa) {
+        alert("Please upload a Proof of Address (not older than 3 months).");
+        return;
+    }
+
+    // UI Loading state
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Verifying...';
+
+    try {
+        // 3. Check if user already exists (prevents admin approval errors)
+        const exists = await checkUserExists(email, phone);
+        if (exists) {
+            alert("⚠️ This email or phone is already registered or has a pending application.");
+            btn.disabled = false;
+            btn.innerHTML = 'Submit Application';
+            return;
+        }
+
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading Files...';
+
+        const driverId = email.replace(/[^a-zA-Z0-9]/g, "_");
+
+        // 4. Simultaneous Uploads to your PHP Server
+        const [faceUrl, carUrl, idUrl, poaUrl, pdpUrl, clearanceUrl] = await Promise.all([
+            uploadSelfie(driverId),
+            compressAndUpload('fileCar', driverId),
+            compressAndUpload('fileId', driverId),
+            compressAndUpload('filePoa', driverId), // POA is now part of the main upload
+            compressAndUpload('filePdp', driverId),
+            compressAndUpload('fileClearance', driverId)
+        ]);
+
+        // 5. References Collection (Name + Phone)
+        const refs = [];
+        document.querySelectorAll('.ref-item').forEach(item => {
+            const rName = item.querySelector('.ref-name').value.trim();
+            const rPhone = item.querySelector('.ref-phone').value.trim();
+            if (rName && rPhone) refs.push({ name: rName, phone: rPhone });
+        });
+
+        // 6. Format Phone for Database
+        let dbPhone = phone.replace(/\D/g, '');
+        if (dbPhone.startsWith('0')) dbPhone = '27' + dbPhone.substring(1);
+
+        // 7. Final Data Object
+       // 7. Final Data Object
+        const appData = {
+            fullName,
+            name: fullName.split(' ')[0], // Formats Name for app display
+            surname: fullName.split(' ').slice(1).join(' '), // Formats Surname
+            phone: dbPhone,
+            email,
+            workArea,
+            vehicleMake: document.getElementById('carMake').value || "N/A",
+            vehicleModel: document.getElementById('carModel').value || "N/A",
+            vehicleColor: document.getElementById('carColor').value || "N/A",
+            taxiRegistrationNumber: document.getElementById('carReg').value || "N/A",
+            vehicleYear: document.getElementById('carYear').value || "N/A",
+            profile_picture_url: faceUrl, // Map selfie to this specific field
+    vehiclePhoto: carUrl, 
+            references: refs,
+            noClearance: document.getElementById('noClearance').checked,
+            status: 'pending',
+            submittedAt: firebase.database.ServerValue.TIMESTAMP,
+            documents: {
+                FACE: faceUrl || "Error",
+                CAR_FRONT: carUrl || "Error", 
+                ID_DOC: idUrl || "Error",
+                PROOF_OF_ADDRESS: poaUrl || "Error",
+                PDP: pdpUrl || "No File",
+                CLEARANCE: clearanceUrl || "No File"
+            }
+        };
+
+        // 8. Write to Firebase
+        await database.ref('driver_applications').push(appData);
+
+        alert("✅ Application Submitted! We will review your car details and documents shortly.");
+        window.location.reload();
+
+    } catch (error) {
+        console.error(error);
+        alert("❌ Error: Submission failed. " + error.message);
+        btn.disabled = false;
+        btn.innerHTML = 'Submit Application';
+    }
+}
+
+  window.onload = startCamera;
+// 1. Set your Mapbox Token (Use the one from your admin.html)
+const mapboxToken = 'pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw';
+
+function initMapboxAutocomplete() {
+    const input = document.getElementById('workArea');
+    const suggestionsBox = document.getElementById('suggestionsList');
+    let debounceTimer;
+
+    input.addEventListener('input', function() {
+        const query = this.value.trim();
+        clearTimeout(debounceTimer);
+
+        if (query.length < 3) {
+            suggestionsBox.style.display = 'none';
+            return;
+        }
+
+        // Wait 300ms after user stops typing to save API credits
+        debounceTimer = setTimeout(() => {
+            fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxToken}&country=za&types=neighborhood,locality,place&limit=5`)
+                .then(response => response.json())
+                .then(data => {
+                    suggestionsBox.innerHTML = '';
+                    if (data.features && data.features.length > 0) {
+                        suggestionsBox.style.display = 'block';
+                        data.features.forEach(feature => {
+                            const div = document.createElement('div');
+                            div.className = 'suggestion-item';
+                            // Remove ", South Africa" from the display name for cleanliness
+                            const displayName = feature.place_name.replace(', South Africa', '');
+                            div.innerText = displayName;
+                            
+                            div.onclick = function() {
+                                input.value = displayName;
+                                suggestionsBox.style.display = 'none';
+                            };
+                            suggestionsBox.appendChild(div);
+                        });
+                    } else {
+                        suggestionsBox.style.display = 'none';
+                    }
+                })
+                .catch(err => console.error("Mapbox Autocomplete Error:", err));
+        }, 300);
+    });
+
+    // Close dropdown if clicking outside
+    document.addEventListener('click', function(e) {
+        if (e.target !== input) {
+            suggestionsBox.style.display = 'none';
+        }
+    });
+}
+
+// Call this when the page loads
+window.addEventListener('load', initMapboxAutocomplete);
+// --- NEW: CHECK IF USER EXISTS BEFORE SUBMITTING ---
+async function checkUserExists(email, phone) {
+    // Format phone to match DB (27...)
+    let cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.startsWith('0')) cleanPhone = '27' + cleanPhone.substring(1);
+
+    const nodes = ['commuters', 'taxis', 'driver_applications'];
+    const checks = [];
+
+    for (const node of nodes) {
+        checks.push(database.ref(node).orderByChild('email').equalTo(email).once('value'));
+        checks.push(database.ref(node).orderByChild('phone').equalTo(cleanPhone).once('value'));
+    }
+
+    const results = await Promise.all(checks);
+    // If any snapshot has data, the user exists
+    return results.some(snap => snap.exists());
+}
+function standardizePhoneNumber(phone) {
+    // 1. Remove all non-numeric characters (spaces, +, dashes)
+    let clean = String(phone).replace(/\D/g, '');
+
+    // 2. Handle 082... -> 2782...
+    if (clean.startsWith('0') && clean.length === 10) {
+        clean = '27' + clean.substring(1);
+    }
+    
+    // 3. Handle 82... (omitted zero) -> 2782...
+    if (clean.length === 9) {
+        clean = '27' + clean;
+    }
+
+    // 4. Final result is always 27 followed by 9 digits (Total 11 digits)
+    return clean;
+}
+</script>
+</body>
+</html>
