@@ -15216,6 +15216,10 @@ if (destEl) {
 // OPEN SET DESTINATION POPUP - WITH MULTIPLE ROUTE SELECTION
 // ========================================================================
 
+// ========================================================================
+// OPEN SET DESTINATION POPUP - WITH NEARBY AREAS
+// ========================================================================
+
 window.openSetDestinationPopup = function() {
     closeActivePopup();
     
@@ -15225,39 +15229,62 @@ window.openSetDestinationPopup = function() {
     // Get current saved routes
     const savedRoutes = window.taxiData?.savedRoutes || [];
     
+    // Get driver's current location
+    const driverLat = window.taxiData?.latitude || window.commuterLat || -26.2041;
+    const driverLng = window.taxiData?.longitude || window.commuterLng || 28.0473;
+    
     popup.innerHTML = `
-        <div class="modal-content" style="background: #ffffff !important; max-width: 420px; padding: 25px; border-radius: 24px; text-align: center; position: relative;">
-            <button class="popup-close" onclick="window.closeSetDestinationPopup()" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 1.2rem; color: #666; cursor: pointer;">&times;</button>
+        <div class="modal-content" style="background: #ffffff !important; max-width: 480px; width: 95%; padding: 25px; border-radius: 24px; text-align: center; position: relative; max-height: 90vh; overflow-y: auto;">
+            <button class="popup-close" onclick="window.closeSetDestinationPopup()" style="position: absolute; right: 15px; top: 15px; background: #f0f0f0; border: none; width: 32px; height: 32px; border-radius: 50%; font-size: 1.2rem; color: #666; cursor: pointer; z-index: 10;">&times;</button>
             
             <div style="width: 60px; height: 60px; background: #fff4e5; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
                 <i class="fas fa-map-marked-alt" style="font-size: 2rem; color: #FF9F0A;"></i>
             </div>
             
-            <h3 style="margin-bottom: 10px; color: #111; font-weight: 900;">Where are you heading?</h3>
-            <p style="color: #666; font-size: 0.9rem; margin-bottom: 20px;">Select your drop-off areas. You will receive requests for these routes.</p>
+            <h3 style="margin-bottom: 5px; color: #111; font-weight: 900;">Where are you heading?</h3>
+            <p style="color: #666; font-size: 0.9rem; margin-bottom: 15px;">Select your drop-off areas. You will receive requests for these routes.</p>
+            
+            <!-- Current Location Display -->
+            <div id="currentLocationDisplay" style="background: #e8f5e9; border: 1px solid #28a745; border-radius: 12px; padding: 10px 15px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px;">
+                <i class="fas fa-location-dot" style="color: #28a745;"></i>
+                <span style="font-weight: 700; color: #111; font-size: 0.9rem;">📍 You are currently in: <span id="driverCurrentArea">Detecting...</span></span>
+            </div>
             
             <!-- Search Input -->
-            <div style="position: relative; text-align: left; margin-bottom: 15px;">
+            <div style="position: relative; text-align: left; margin-bottom: 12px;">
                 <input type="text" id="driverRouteInput" placeholder="Search and add a route..." autocomplete="off" 
                        style="width: 100%; padding: 14px; border-radius: 12px; border: 2px solid #ddd; font-weight: 700; font-size: 1rem; outline: none;"
                        onfocus="this.select()" onkeydown="if(event.key === 'Enter') window.addRouteFromInput()">
                 <div id="driverRouteSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 12px; max-height: 200px; overflow-y: auto; display: none; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-top: 5px;"></div>
             </div>
             
-            <button onclick="window.addRouteFromInput()" style="width: 100%; padding: 12px; background: #f8f9fa; border: 2px dashed #007BFF; border-radius: 12px; color: #007BFF; font-weight: 800; cursor: pointer; margin-bottom: 20px; transition: all 0.2s;">
+            <button onclick="window.addRouteFromInput()" style="width: 100%; padding: 10px; background: #f8f9fa; border: 2px dashed #007BFF; border-radius: 12px; color: #007BFF; font-weight: 800; cursor: pointer; margin-bottom: 15px; transition: all 0.2s;">
                 <i class="fas fa-plus-circle"></i> Add Current Route
             </button>
             
+            <!-- Nearby Areas Section -->
+            <div style="text-align: left; margin-bottom: 15px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <span style="font-weight: 800; color: #333; font-size: 0.9rem;"><i class="fas fa-map-pin" style="color: #FF9F0A;"></i> Nearby Areas (Within 20km)</span>
+                    <span style="font-size: 0.7rem; color: #888;" id="nearbyCount">Loading...</span>
+                </div>
+                <div id="nearbyAreasList" style="max-height: 180px; overflow-y: auto; padding-right: 5px;">
+                    <div style="text-align: center; padding: 15px; color: #888;">
+                        <i class="fas fa-spinner fa-spin"></i> Loading nearby areas...
+                    </div>
+                </div>
+            </div>
+            
             <!-- Saved Routes List -->
-            <div id="savedRoutesList" style="text-align: left; margin-bottom: 20px; max-height: 250px; overflow-y: auto;">
+            <div id="savedRoutesList" style="text-align: left; margin-bottom: 15px; max-height: 150px; overflow-y: auto;">
                 ${savedRoutes.length === 0 ? `
                     <div style="color: #888; font-size: 0.85rem; padding: 15px; text-align: center; border: 1px dashed #ddd; border-radius: 12px;">
                         <i class="fas fa-route" style="color: #ccc; margin-bottom: 5px; display: block;"></i>
-                        No routes added yet. Search and add your preferred drop-off areas.
+                        No routes added yet. Select from nearby areas or search above.
                     </div>
                 ` : `
                     ${savedRoutes.map((route, index) => `
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 8px; border-left: 4px solid #FF9F0A;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: #f8f9fa; border-radius: 10px; margin-bottom: 6px; border-left: 4px solid #FF9F0A;">
                             <div style="display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;">
                                 <span style="background: #FF9F0A; color: black; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.7rem; flex-shrink: 0;">${index + 1}</span>
                                 <span style="font-weight: 700; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(route)}</span>
@@ -15283,6 +15310,12 @@ window.openSetDestinationPopup = function() {
     
     openPopup('genericMessagePopup');
     
+    // Load nearby areas
+    loadNearbyAreas(driverLat, driverLng);
+    
+    // Get current location name
+    getCurrentLocationName(driverLat, driverLng);
+    
     // Setup autocomplete
     const input = document.getElementById('driverRouteInput');
     const suggestions = document.getElementById('driverRouteSuggestions');
@@ -15297,7 +15330,7 @@ window.openSetDestinationPopup = function() {
         }
         
         timeout = setTimeout(() => {
-            fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&types=place,locality,neighborhood,poi&limit=5`)
+            fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}&country=za&types=place,locality,neighborhood,poi&limit=5&proximity=${driverLng},${driverLat}`)
             .then(res => res.json())
             .then(data => {
                 if (data.features && data.features.length > 0) {
@@ -15326,19 +15359,146 @@ window.openSetDestinationPopup = function() {
 };
 
 // ========================================================================
-// SELECT ROUTE SUGGESTION
+// LOAD NEARBY AREAS
 // ========================================================================
 
-window.selectRouteSuggestion = function(routeName) {
-    const input = document.getElementById('driverRouteInput');
-    if (input) {
-        input.value = routeName;
-        document.getElementById('driverRouteSuggestions').style.display = 'none';
-        // Auto-add the route
-        window.addRouteFromInput();
-    }
-};
+function loadNearbyAreas(lat, lng) {
+    const listEl = document.getElementById('nearbyAreasList');
+    const countEl = document.getElementById('nearbyCount');
+    
+    if (!listEl) return;
+    
+    // Use Mapbox to find nearby places
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=20&country=za`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.features && data.features.length > 0) {
+                // Filter and sort by distance
+                const places = data.features.map(f => ({
+                    name: f.place_name,
+                    text: f.text,
+                    distance: calculateDistance(lat, lng, f.center[1], f.center[0])
+                })).filter(p => p.distance <= 20)
+                  .sort((a, b) => a.distance - b.distance);
+                
+                if (countEl) countEl.textContent = `${places.length} areas`;
+                
+                if (places.length === 0) {
+                    listEl.innerHTML = `
+                        <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
+                            No nearby areas found within 20km.
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // Also add SA key locations nearby
+                const nearbyLocations = saKeyLocations.map(loc => {
+                    const dist = calculateDistance(lat, lng, loc.lat, loc.lng);
+                    return { ...loc, distance: dist, isKeyLocation: true };
+                }).filter(loc => loc.distance <= 20)
+                  .sort((a, b) => a.distance - b.distance)
+                  .slice(0, 5);
+                
+                // Combine and display
+                let html = '';
+                const allPlaces = [...places.slice(0, 8), ...nearbyLocations];
+                const uniquePlaces = [];
+                const seenNames = new Set();
+                
+                allPlaces.forEach(p => {
+                    const nameKey = p.text || p.name;
+                    if (!seenNames.has(nameKey)) {
+                        seenNames.add(nameKey);
+                        uniquePlaces.push(p);
+                    }
+                });
+                
+                uniquePlaces.slice(0, 12).forEach(p => {
+                    const name = p.text || p.name;
+                    const dist = p.distance;
+                    const distText = dist < 1 ? `${(dist * 1000).toFixed(0)}m` : `${dist.toFixed(1)}km`;
+                    const isKey = p.isKeyLocation || false;
+                    const icon = isKey ? 'fa-taxi' : 'fa-map-pin';
+                    const color = isKey ? '#FF9F0A' : '#007BFF';
+                    
+                    html += `
+                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #f5f5f5; cursor: pointer; transition: background 0.2s;"
+                             onmouseover="this.style.background='#f8f9fa'" 
+                             onmouseout="this.style.background='transparent'"
+                             onclick="window.addNearbyRoute('${name.replace(/'/g, "\\'")}')">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <i class="fas ${icon}" style="color: ${color}; width: 16px;"></i>
+                                <span style="font-weight: 600; color: #111; font-size: 0.9rem;">${escapeHtml(name)}</span>
+                                ${isKey ? '<span style="font-size: 0.6rem; background: #FF9F0A; color: black; padding: 1px 6px; border-radius: 8px; font-weight: 700;">RANK</span>' : ''}
+                            </div>
+                            <span style="font-size: 0.75rem; color: #888; font-weight: 600;">${distText}</span>
+                        </div>
+                    `;
+                });
+                
+                listEl.innerHTML = html;
+            } else {
+                if (countEl) countEl.textContent = '0 areas';
+                listEl.innerHTML = `
+                    <div style="color: #888; font-size: 0.85rem; padding: 10px; text-align: center;">
+                        No nearby areas found.
+                    </div>
+                `;
+            }
+        })
+        .catch(err => {
+            console.error("Error loading nearby areas:", err);
+            if (countEl) countEl.textContent = 'Error loading';
+            listEl.innerHTML = `
+                <div style="color: #dc3545; font-size: 0.85rem; padding: 10px; text-align: center;">
+                    Could not load nearby areas. Please search above.
+                </div>
+            `;
+        });
+}
 
+// ========================================================================
+// GET CURRENT LOCATION NAME
+// ========================================================================
+
+function getCurrentLocationName(lat, lng) {
+    const el = document.getElementById('driverCurrentArea');
+    if (!el) return;
+    
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=place,locality,neighborhood&limit=1&country=za`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.features && data.features.length > 0) {
+                const name = data.features[0].place_name.split(',')[0].trim();
+                el.textContent = name;
+            } else {
+                el.textContent = "Unknown Area";
+            }
+        })
+        .catch(() => {
+            el.textContent = "Unknown Area";
+        });
+}
+
+// ========================================================================
+// ADD NEARBY ROUTE
+// ========================================================================
+
+window.addNearbyRoute = function(routeName) {
+    if (!routeName) return;
+    
+    const savedRoutes = window.taxiData?.savedRoutes || [];
+    
+    if (savedRoutes.some(r => r.toLowerCase() === routeName.toLowerCase())) {
+        showCommunicationBanner("This route is already in your list.", "info");
+        return;
+    }
+    
+    savedRoutes.push(routeName);
+    updateSavedRoutesUI(savedRoutes);
+    showCommunicationBanner(`Added: ${routeName}`, "success");
+};
 // ========================================================================
 // ADD ROUTE FROM INPUT
 // ========================================================================
@@ -29650,12 +29810,12 @@ window.showGenericMessage = function(title, message, iconClass, iconColorClass) 
     }
     
     // 🆕 Check if this is the training success message
-    if (title === "Success!" && message.includes("training is booked")) {
+    if (title === "Success!" && message && message.includes("training is booked")) {
         // Use the dedicated training success popup instead
         if (typeof window.showTrainingSuccessPopup === 'function') {
             window.showTrainingSuccessPopup();
         } else {
-            // Fallback to generic
+            // Fallback
             showGenericMessageFallback(title, message, iconClass, iconColorClass);
         }
         return;
@@ -29663,6 +29823,11 @@ window.showGenericMessage = function(title, message, iconClass, iconColorClass) 
     
     // Reset any rogue classes
     popup.className = 'modal-overlay';
+    
+    // Reset transform to prevent sticking
+    popup.style.setProperty('transform', 'none', 'important');
+    popup.style.setProperty('top', 'auto', 'important');
+    popup.style.setProperty('left', 'auto', 'important');
     
     // Force center alignment
     popup.style.alignItems = 'center';
@@ -29673,7 +29838,7 @@ window.showGenericMessage = function(title, message, iconClass, iconColorClass) 
             <i class="fas ${iconClass} ${iconColorClass}" style="font-size: 3.5rem; margin-bottom: 20px; color: #007BFF; display: block;"></i>
             <h3 style="color: #111111 !important; font-size: 1.4rem; font-weight: 800; margin: 0 0 10px 0 !important;">${title}</h3>
             <p style="color: #555555 !important; font-size: 0.95rem; margin: 0 0 25px 0 !important; line-height: 1.5 !important;">${message}</p>
-            <button class="btn btn-primary" onclick="window.closeModal('genericMessagePopup')" style="width: 100%; padding: 14px; font-size: 1rem; border-radius: 12px; background: #007BFF; color: white; border: none; font-weight: 800; cursor: pointer;">
+            <button class="btn btn-primary" onclick="window.closeGenericMessagePopup()" style="width: 100%; padding: 14px; font-size: 1rem; border-radius: 12px; background: #007BFF; color: white; border: none; font-weight: 800; cursor: pointer;">
                 OK
             </button>
         </div>
@@ -29682,29 +29847,54 @@ window.showGenericMessage = function(title, message, iconClass, iconColorClass) 
     openModal('genericMessagePopup');
 };
 
-// Fallback function for generic messages
-function showGenericMessageFallback(title, message, iconClass, iconColorClass) {
-    const popup = document.getElementById('genericMessagePopup');
-    if (!popup) return;
-    
-    popup.className = 'modal-overlay';
-    popup.style.alignItems = 'center';
-    popup.style.justifyContent = 'center';
-    
-    popup.innerHTML = `
-        <div class="modal-content" style="background:#ffffff !important; max-width: 340px !important; margin: auto !important; padding: 30px 25px !important; border-radius: 24px !important; text-align: center !important; transform: none !important; height: auto !important; min-height: unset !important; box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;">
-            <i class="fas ${iconClass} ${iconColorClass}" style="font-size: 3.5rem; margin-bottom: 20px; color: #007BFF; display: block;"></i>
-            <h3 style="color: #111111 !important; font-size: 1.4rem; font-weight: 800; margin: 0 0 10px 0 !important;">${title}</h3>
-            <p style="color: #555555 !important; font-size: 0.95rem; margin: 0 0 25px 0 !important; line-height: 1.5 !important;">${message}</p>
-            <button class="btn btn-primary" onclick="window.closeModal('genericMessagePopup')" style="width: 100%; padding: 14px; font-size: 1rem; border-radius: 12px; background: #007BFF; color: white; border: none; font-weight: 800; cursor: pointer;">
-                OK
-            </button>
-        </div>
-    `;
-    
-    openModal('genericMessagePopup');
-}
+// ========================================================================
+// CLOSE GENERIC MESSAGE POPUP
+// ========================================================================
 
+window.closeGenericMessagePopup = function() {
+    console.log("🔒 Closing generic message popup...");
+    
+    const popup = document.getElementById('genericMessagePopup');
+    if (popup) {
+        popup.classList.remove('open');
+        popup.style.setProperty('display', 'none', 'important');
+        popup.style.setProperty('opacity', '0', 'important');
+        popup.style.setProperty('visibility', 'hidden', 'important');
+        popup.style.setProperty('z-index', '-1', 'important');
+        // 🆕 Reset transform to prevent sticking
+        popup.style.setProperty('transform', 'none', 'important');
+        popup.style.setProperty('top', 'auto', 'important');
+        popup.style.setProperty('left', 'auto', 'important');
+        popup.style.setProperty('bottom', 'auto', 'important');
+        popup.style.setProperty('right', 'auto', 'important');
+        popup.style.setProperty('margin', '0', 'important');
+    }
+    
+    const overlay = document.getElementById('popupOverlay');
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.setProperty('display', 'none', 'important');
+        overlay.style.setProperty('opacity', '0', 'important');
+        overlay.style.setProperty('visibility', 'hidden', 'important');
+        overlay.style.setProperty('z-index', '-1', 'important');
+        overlay.style.setProperty('pointer-events', 'none', 'important');
+    }
+    
+    // Show dashboard
+    const dashboard = document.getElementById('verifiedDashboardOverlay');
+    if (dashboard) {
+        dashboard.style.setProperty('display', 'block', 'important');
+        dashboard.style.setProperty('visibility', 'visible', 'important');
+        dashboard.style.setProperty('z-index', '80000', 'important');
+    }
+    
+    if (typeof window.updateUIWithTaxiData === 'function') {
+        window.updateUIWithTaxiData();
+    }
+    
+    document.body.classList.remove('popup-open');
+    document.body.style.overflow = '';
+};
 // ================================================================
 // ESCAPE HTML - Helper
 // ================================================================
@@ -29958,14 +30148,12 @@ window.submitTrainingRequest = async function() {
             Vehicle: window.taxiData.taxiRegistrationNumber || 'N/A'
         };
 
-        // 1. Send Email Alert via FormSubmit
         await fetch("https://formsubmit.co/ajax/drndlovu@mail.com", {
             method: "POST",
             headers: {'Content-Type': 'application/json', 'Accept': 'application/json'},
             body: JSON.stringify(payload)
         });
 
-        // 2. Save training status directly in Driver's profile
         await firebase.database().ref(`taxis/${window.userId}`).update({
             trainingStatus: 'requested',
             trainingDate: dateVal,
@@ -29974,11 +30162,15 @@ window.submitTrainingRequest = async function() {
 
         localStorage.setItem('trainingPromptStatus', 'requested');
         
-        // 🆕 FIX: Close the training popup FIRST, then show success
+        // 🆕 Close the training popup properly
         window.closeActivePopup();
         
-        // 🔥 FIX: Show success message with a properly working OK button
-        showTrainingSuccessPopup();
+        // 🆕 Show success with proper close handler
+        if (typeof window.showTrainingSuccessPopup === 'function') {
+            window.showTrainingSuccessPopup();
+        } else {
+            showGenericMessage("Success!", "Your training is booked! We will contact you shortly.", "fa-calendar-check", "icon-success");
+        }
 
     } catch (error) {
         console.error("Booking Error:", error);
@@ -29988,9 +30180,12 @@ window.submitTrainingRequest = async function() {
         btn.disabled = false;
     }
 };
-
 // ========================================================================
 // TRAINING SUCCESS POPUP - WITH WORKING OK BUTTON
+// ========================================================================
+
+// ========================================================================
+// TRAINING SUCCESS POPUP - WITH PROPER CLOSE
 // ========================================================================
 
 window.showTrainingSuccessPopup = function() {
@@ -30002,10 +30197,17 @@ window.showTrainingSuccessPopup = function() {
     const popup = document.getElementById('genericMessagePopup');
     if (!popup) {
         console.error("❌ genericMessagePopup not found");
-        // Fallback: use alert
         alert("Your training is booked! We will contact you shortly.");
         return;
     }
+    
+    // 🆕 RESET ANY STALE TRANSFORMS
+    popup.style.setProperty('transform', 'none', 'important');
+    popup.style.setProperty('top', 'auto', 'important');
+    popup.style.setProperty('left', 'auto', 'important');
+    popup.style.setProperty('bottom', 'auto', 'important');
+    popup.style.setProperty('right', 'auto', 'important');
+    popup.style.setProperty('margin', '0', 'important');
     
     // Force popup to be centered and visible
     popup.style.cssText = `
@@ -30048,15 +30250,18 @@ window.showTrainingSuccessPopup = function() {
     popup.classList.add('open');
     console.log("✅ Training success popup displayed");
 };
-
 // ========================================================================
 // CLOSE TRAINING SUCCESS POPUP
+// ========================================================================
+
+// ========================================================================
+// CLOSE TRAINING SUCCESS POPUP - COMPLETE RESET
 // ========================================================================
 
 window.closeTrainingSuccessPopup = function() {
     console.log("🔒 Closing training success popup...");
     
-    // Close the generic message popup
+    // 1. Close the generic message popup
     const popup = document.getElementById('genericMessagePopup');
     if (popup) {
         popup.classList.remove('open');
@@ -30064,9 +30269,16 @@ window.closeTrainingSuccessPopup = function() {
         popup.style.setProperty('opacity', '0', 'important');
         popup.style.setProperty('visibility', 'hidden', 'important');
         popup.style.setProperty('z-index', '-1', 'important');
+        // 🆕 CRITICAL: Reset transform to prevent top-left sticking
+        popup.style.setProperty('transform', 'none', 'important');
+        popup.style.setProperty('top', 'auto', 'important');
+        popup.style.setProperty('left', 'auto', 'important');
+        popup.style.setProperty('bottom', 'auto', 'important');
+        popup.style.setProperty('right', 'auto', 'important');
+        popup.style.setProperty('margin', '0', 'important');
     }
     
-    // Also close any overlay
+    // 2. Close overlay
     const overlay = document.getElementById('popupOverlay');
     if (overlay) {
         overlay.classList.remove('open');
@@ -30074,9 +30286,10 @@ window.closeTrainingSuccessPopup = function() {
         overlay.style.setProperty('opacity', '0', 'important');
         overlay.style.setProperty('visibility', 'hidden', 'important');
         overlay.style.setProperty('z-index', '-1', 'important');
+        overlay.style.setProperty('pointer-events', 'none', 'important');
     }
     
-    // Show the dashboard
+    // 3. Show the dashboard
     const dashboard = document.getElementById('verifiedDashboardOverlay');
     if (dashboard) {
         dashboard.style.setProperty('display', 'block', 'important');
@@ -30084,10 +30297,14 @@ window.closeTrainingSuccessPopup = function() {
         dashboard.style.setProperty('z-index', '80000', 'important');
     }
     
-    // Update UI
+    // 4. Update UI
     if (typeof window.updateUIWithTaxiData === 'function') {
         window.updateUIWithTaxiData();
     }
+    
+    // 5. Reset body scroll
+    document.body.classList.remove('popup-open');
+    document.body.style.overflow = '';
     
     console.log("✅ Training success popup closed, dashboard shown");
 };
