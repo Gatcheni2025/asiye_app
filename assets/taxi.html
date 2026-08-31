@@ -29289,22 +29289,11 @@ document.addEventListener('DOMContentLoaded', function() {
 // ================================================================
 // TAXI.HTML - MISSING MODAL FUNCTIONS
 // ================================================================
-
-// ================================================================
-// CLOSE MODAL - UNIFIED FUNCTION
-// ================================================================
-
 window.closeModal = function(modalId) {
     console.log("🔒 closeModal called for:", modalId);
     
     if (!modalId) {
-        // Close all modals if no ID provided
-        document.querySelectorAll('.modal-overlay').forEach(el => {
-            el.classList.remove('open');
-            el.style.setProperty('display', 'none', 'important');
-            el.style.setProperty('opacity', '0', 'important');
-            el.style.setProperty('visibility', 'hidden', 'important');
-        });
+        window.closeActivePopup();
         return;
     }
     
@@ -29315,9 +29304,32 @@ window.closeModal = function(modalId) {
         el.style.setProperty('opacity', '0', 'important');
         el.style.setProperty('visibility', 'hidden', 'important');
         el.style.setProperty('z-index', '-1', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+    }
+    
+    // Also close the overlay if no popups are open
+    if (document.querySelectorAll('.popup.open, .modal-overlay.open').length === 0) {
+        const overlay = document.getElementById('popupOverlay');
+        if (overlay) {
+            overlay.classList.remove('open');
+            overlay.style.setProperty('display', 'none', 'important');
+            overlay.style.setProperty('pointer-events', 'none', 'important');
+        }
+    }
+    
+    // If this is the generic message popup, also show the dashboard
+    if (modalId === 'genericMessagePopup' || modalId === 'trainingRequestPopup') {
+        const dashboard = document.getElementById('verifiedDashboardOverlay');
+        if (dashboard) {
+            dashboard.style.setProperty('display', 'block', 'important');
+            dashboard.style.setProperty('visibility', 'visible', 'important');
+            dashboard.style.setProperty('z-index', '80000', 'important');
+        }
+        if (typeof window.updateUIWithTaxiData === 'function') {
+            window.updateUIWithTaxiData();
+        }
     }
 };
-
 // ================================================================
 // OPEN MODAL - UNIFIED FUNCTION
 // ================================================================
@@ -29437,6 +29449,18 @@ window.showGenericMessage = function(title, message, iconClass, iconColorClass) 
         return;
     }
     
+    // 🆕 Check if this is the training success message
+    if (title === "Success!" && message.includes("training is booked")) {
+        // Use the dedicated training success popup instead
+        if (typeof window.showTrainingSuccessPopup === 'function') {
+            window.showTrainingSuccessPopup();
+        } else {
+            // Fallback to generic
+            showGenericMessageFallback(title, message, iconClass, iconColorClass);
+        }
+        return;
+    }
+    
     // Reset any rogue classes
     popup.className = 'modal-overlay';
     
@@ -29458,6 +29482,28 @@ window.showGenericMessage = function(title, message, iconClass, iconColorClass) 
     openModal('genericMessagePopup');
 };
 
+// Fallback function for generic messages
+function showGenericMessageFallback(title, message, iconClass, iconColorClass) {
+    const popup = document.getElementById('genericMessagePopup');
+    if (!popup) return;
+    
+    popup.className = 'modal-overlay';
+    popup.style.alignItems = 'center';
+    popup.style.justifyContent = 'center';
+    
+    popup.innerHTML = `
+        <div class="modal-content" style="background:#ffffff !important; max-width: 340px !important; margin: auto !important; padding: 30px 25px !important; border-radius: 24px !important; text-align: center !important; transform: none !important; height: auto !important; min-height: unset !important; box-shadow: 0 15px 35px rgba(0,0,0,0.2) !important;">
+            <i class="fas ${iconClass} ${iconColorClass}" style="font-size: 3.5rem; margin-bottom: 20px; color: #007BFF; display: block;"></i>
+            <h3 style="color: #111111 !important; font-size: 1.4rem; font-weight: 800; margin: 0 0 10px 0 !important;">${title}</h3>
+            <p style="color: #555555 !important; font-size: 0.95rem; margin: 0 0 25px 0 !important; line-height: 1.5 !important;">${message}</p>
+            <button class="btn btn-primary" onclick="window.closeModal('genericMessagePopup')" style="width: 100%; padding: 14px; font-size: 1rem; border-radius: 12px; background: #007BFF; color: white; border: none; font-weight: 800; cursor: pointer;">
+                OK
+            </button>
+        </div>
+    `;
+    
+    openModal('genericMessagePopup');
+}
 
 // ================================================================
 // ESCAPE HTML - Helper
@@ -29493,33 +29539,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     return R * c;
 }
 
-
-window.closeModal = function(modalId) {
-    if (!modalId) {
-        window.closeActivePopup();
-        return;
-    }
-    const el = document.getElementById(modalId);
-    if (el) {
-        el.classList.remove('open');
-        el.style.setProperty('display', 'none', 'important');
-        el.style.setProperty('opacity', '0', 'important');
-        el.style.setProperty('visibility', 'hidden', 'important');
-        el.style.setProperty('z-index', '-1', 'important');
-        el.style.setProperty('pointer-events', 'none', 'important');
-    }
-    
-    // Ensure dim overlay is dropped if no popups are actively open
-    if (document.querySelectorAll('.popup.open, .modal-overlay.open').length === 0) {
-        const overlay = document.getElementById('popupOverlay');
-        if (overlay) {
-            overlay.classList.remove('open');
-            overlay.style.setProperty('display', 'none', 'important');
-            overlay.style.setProperty('pointer-events', 'none', 'important');
-        }
-    }
-};
-;
 
 window.updateRankLocationCard = async function() {
     const rankCard = document.getElementById('rankLocationCard');
@@ -29746,7 +29765,7 @@ window.submitTrainingRequest = async function() {
             body: JSON.stringify(payload)
         });
 
-        // 2. Save training status directly in Driver's profile (Authorized Write)
+        // 2. Save training status directly in Driver's profile
         await firebase.database().ref(`taxis/${window.userId}`).update({
             trainingStatus: 'requested',
             trainingDate: dateVal,
@@ -29755,8 +29774,11 @@ window.submitTrainingRequest = async function() {
 
         localStorage.setItem('trainingPromptStatus', 'requested');
         
+        // 🆕 FIX: Close the training popup FIRST, then show success
         window.closeActivePopup();
-        showGenericMessage("Success!", "Your training is booked! We will contact you shortly.", "fa-calendar-check", "icon-success");
+        
+        // 🔥 FIX: Show success message with a properly working OK button
+        showTrainingSuccessPopup();
 
     } catch (error) {
         console.error("Booking Error:", error);
@@ -29767,6 +29789,108 @@ window.submitTrainingRequest = async function() {
     }
 };
 
+// ========================================================================
+// TRAINING SUCCESS POPUP - WITH WORKING OK BUTTON
+// ========================================================================
+
+window.showTrainingSuccessPopup = function() {
+    console.log("✅ Showing training success popup...");
+    
+    // Close any existing popups first
+    window.closeActivePopup();
+    
+    const popup = document.getElementById('genericMessagePopup');
+    if (!popup) {
+        console.error("❌ genericMessagePopup not found");
+        // Fallback: use alert
+        alert("Your training is booked! We will contact you shortly.");
+        return;
+    }
+    
+    // Force popup to be centered and visible
+    popup.style.cssText = `
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        z-index: 2147483647 !important;
+        background: rgba(0,0,0,0.85) !important;
+        align-items: center !important;
+        justify-content: center !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    `;
+    
+    popup.innerHTML = `
+        <div class="modal-content" style="background: #ffffff !important; max-width: 380px; width: 92%; margin: auto !important; padding: 30px 25px !important; border-radius: 24px !important; text-align: center !important; box-shadow: 0 20px 60px rgba(0,0,0,0.3) !important; transform: none !important; position: relative !important;">
+            
+            <div style="width: 70px; height: 70px; background: #e8f5e9; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 15px;">
+                <i class="fas fa-check-circle" style="font-size: 2.5rem; color: #28a745;"></i>
+            </div>
+            
+            <h3 style="margin: 0 0 10px 0; color: #111; font-weight: 900; font-size: 1.3rem;">Success!</h3>
+            
+            <p style="color: #666; font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">
+                Your training is booked! We will contact you shortly.
+            </p>
+            
+            <button id="trainingSuccessOkBtn" onclick="window.closeTrainingSuccessPopup()" 
+                    style="width: 100%; padding: 16px; border-radius: 14px; font-weight: 900; font-size: 1.05rem; background: #007BFF; color: white; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(0,123,255,0.3);">
+                OK
+            </button>
+        </div>
+    `;
+    
+    popup.classList.add('open');
+    console.log("✅ Training success popup displayed");
+};
+
+// ========================================================================
+// CLOSE TRAINING SUCCESS POPUP
+// ========================================================================
+
+window.closeTrainingSuccessPopup = function() {
+    console.log("🔒 Closing training success popup...");
+    
+    // Close the generic message popup
+    const popup = document.getElementById('genericMessagePopup');
+    if (popup) {
+        popup.classList.remove('open');
+        popup.style.setProperty('display', 'none', 'important');
+        popup.style.setProperty('opacity', '0', 'important');
+        popup.style.setProperty('visibility', 'hidden', 'important');
+        popup.style.setProperty('z-index', '-1', 'important');
+    }
+    
+    // Also close any overlay
+    const overlay = document.getElementById('popupOverlay');
+    if (overlay) {
+        overlay.classList.remove('open');
+        overlay.style.setProperty('display', 'none', 'important');
+        overlay.style.setProperty('opacity', '0', 'important');
+        overlay.style.setProperty('visibility', 'hidden', 'important');
+        overlay.style.setProperty('z-index', '-1', 'important');
+    }
+    
+    // Show the dashboard
+    const dashboard = document.getElementById('verifiedDashboardOverlay');
+    if (dashboard) {
+        dashboard.style.setProperty('display', 'block', 'important');
+        dashboard.style.setProperty('visibility', 'visible', 'important');
+        dashboard.style.setProperty('z-index', '80000', 'important');
+    }
+    
+    // Update UI
+    if (typeof window.updateUIWithTaxiData === 'function') {
+        window.updateUIWithTaxiData();
+    }
+    
+    console.log("✅ Training success popup closed, dashboard shown");
+};
 // 3. The "I'll do it later" Logic
 window.dismissTrainingPopup = function() {
     console.log("Training prompt dismissed.");
