@@ -11194,73 +11194,110 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 <!-- BEAUTIFIED DRAGGABLE DASHBOARD (IMAGE 1 STYLE) -->
 <div id="homeBottomSheet" class="modal-overlay open" style="display: flex; align-items: flex-end; background: transparent; z-index: 10000; pointer-events: none; position: fixed; bottom: 0; left: 0; width: 100vw; height: 100vh;">
     
-    <div class="modal-content indrive-sheet" id="homeSheetContent" style="pointer-events: auto; background: #1C1C1E !important; padding: 0 20px 20px 20px !important; border-radius: 28px 28px 0 0 !important; width: 100%; height: 65vh; display: flex; flex-direction: column; transition: transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s ease-out; box-shadow: 0 -5px 30px rgba(0,0,0,0.5); border: 1px solid #333 !important;">  
-        
-        <!-- DRAG HANDLE -->
-        <div id="homeSheetDragHandle" style="width: 100%; padding: 15px 0; cursor: grab; display: flex; justify-content: center; flex-shrink: 0; touch-action: none;">
-            <div class="sheet-handle" style="width: 48px; height: 6px; background: #48484A; border-radius: 6px;"></div>
-        </div>
-        
-        <!-- SCROLLABLE CONTENT (NEW UI) -->
-        <div style="flex: 1; overflow-y: auto; overflow-x: hidden; padding: 0 0 20px 0; -webkit-overflow-scrolling: touch;">
-            
-            <h3 style="color: #fff; margin: 0 0 15px 0; font-weight: 800; font-size: 1.35rem; letter-spacing: -0.5px;">How will you be travelling today?</h3>
-            
-            <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 30px;">
-                <!-- 1. Club Option -->
-                <div onclick="openAsiyeClubGateway()" style="background: #2C2C2E; border: 2px solid #FF9F0A; border-radius: 20px; padding: 18px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 8px 20px rgba(255, 159, 10, 0.15); transition: transform 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 16px;">
-                        <div style="background: rgba(255, 159, 10, 0.2); width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center;">
-                            <i class="fas fa-users" style="color: #FF9F0A; font-size: 1.6rem;"></i>
-                        </div>
-                        <div>
-                            <strong style="color: white; font-size: 1.2rem; display: block; margin-bottom: 2px;">Asiye Club</strong>
-                            <span style="color: #A1A1AA; font-size: 0.9rem;">Lift Club (e.g. to work/school)</span>
-                        </div>
-                    </div>
-                    <i class="fas fa-arrow-right" style="color: #FF9F0A; font-size: 1.2rem;"></i>
-                </div>
-
-                <!-- 2. Private Option -->
-                <div onclick="openEHailingTaxis()" style="background: #2C2C2E; border: 2px solid #0A84FF; border-radius: 20px; padding: 18px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; box-shadow: 0 8px 20px rgba(10, 132, 255, 0.15); transition: transform 0.2s;">
-                    <div style="display: flex; align-items: center; gap: 16px;">
-                        <div style="background: rgba(10, 132, 255, 0.2); width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center;">
-                            <i class="fas fa-car-side" style="color: #0A84FF; font-size: 1.6rem;"></i>
-                        </div>
-                        <div>
-                            <strong style="color: white; font-size: 1.2rem; display: block; margin-bottom: 2px;">Private Ride</strong>
-                            <span style="color: #A1A1AA; font-size: 0.9rem;">Travel alone (Asiye Go)</span>
-                        </div>
-                    </div>
-                    <i class="fas fa-arrow-right" style="color: #0A84FF; font-size: 1.2rem;"></i>
-                </div>
-            </div>
-
-            <!-- Other Services Grid -->
-            <div style="color: #98989D; font-size: 0.85rem; padding: 0 0 10px 5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">Other Services</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px;">
-                <div onclick="openHandlers()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-people-carry" style="color: #30D158; font-size: 1.8rem;"></i>
-                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Handlers</span>
-                </div>
-                <div onclick="openAsiyeDelivery()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-box-open" style="color: #BF5AF2; font-size: 1.8rem;"></i>
-                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Asiye Delivery</span>
-                </div>
-                <div onclick="openSafetyCenter()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-shield-alt" style="color: #FF3B30; font-size: 1.8rem;"></i>
-                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Safety</span>
-                </div>
-                <div onclick="showPaymentNotices()" style="background: #2C2C2E; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; height: 100px; cursor: pointer; border: 1px solid #3A3A3C;">
-                    <i class="fas fa-wallet" style="color: #0A84FF; font-size: 1.8rem;"></i>
-                    <span style="color: #EBEBF5; font-weight: 700; font-size: 1rem;">Wallet</span>
-                </div>
-            </div>
-            
-            <div style="height: 30px;"></div> <!-- Padding for scroll bottom -->
-        </div>
-
+    <!-- index.html: Updated homeBottomSheet content -->
+<div class="modal-content indrive-sheet" id="homeSheetContent" style="background: #ffffff !important; color: #111 !important; border-radius: 28px 28px 0 0 !important;">  
+    <div id="homeSheetDragHandle" style="width: 100%; padding: 15px 0; cursor: grab; display: flex; justify-content: center; flex-shrink: 0; touch-action: none;">
+        <div class="sheet-handle" style="width: 48px; height: 6px; background: #e0e0e0; border-radius: 6px;"></div>
     </div>
+    
+    <div id="booking-flow-container" style="flex: 1; overflow-y: auto; padding: 0 5px 20px 5px;">
+        <!-- VIEW 1: INITIAL SEARCH -->
+        <div id="view-initial-search">
+            <h3 style="color: #111; margin: 0 0 20px 0; font-weight: 800; font-size: 1.5rem;">Where to?</h3>
+            
+            <!-- Modern Search Input Trigger -->
+            <div onclick="openModal('destinationPromptPopup')" style="background: #F2F4F6; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 15px; cursor: pointer; border: 1px solid #eee;">
+                <i class="fas fa-search" style="color: #007BFF; font-size: 1.2rem;"></i>
+                <span style="color: #888; font-weight: 600; font-size: 1.1rem;">Enter destination...</span>
+            </div>
+
+            <div style="margin-top: 25px;">
+                <p style="color: #888; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; margin-bottom: 15px;">Other Services</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div onclick="openAsiyeDelivery()" style="background: #F2F4F6; border-radius: 18px; padding: 15px; text-align: center;">
+                        <i class="fas fa-box" style="color: #FF9F0A; font-size: 1.5rem; margin-bottom: 5px;"></i>
+                        <div style="font-weight: 800; font-size: 0.9rem;">Parcels</div>
+                    </div>
+                    <div onclick="openSafetyCenter()" style="background: #F2F4F6; border-radius: 18px; padding: 15px; text-align: center;">
+                        <i class="fas fa-shield-alt" style="color: #FF3B30; font-size: 1.5rem; margin-bottom: 5px;"></i>
+                        <div style="font-weight: 800; font-size: 0.9rem;">Safety</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: CONFIRMATION (Hidden by default) -->
+        <div id="view-confirm-ride" style="display: none;">
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                <button onclick="resetBookingUI()" style="background: #eee; border: none; width: 35px; height: 35px; border-radius: 50%;"><i class="fas fa-arrow-left"></i></button>
+                <h3 style="margin: 0; font-weight: 800;">Confirm Trip</h3>
+            </div>
+
+            <!-- Route Details Card -->
+            <div style="background: #f8f9fa; border-radius: 20px; padding: 15px; margin-bottom: 20px; border: 1px solid #eee;">
+                <div style="display: flex; gap: 15px; margin-bottom: 12px;">
+                    <i class="fas fa-circle" style="color: #007BFF; font-size: 0.8rem; margin-top: 5px;"></i>
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.7rem; color: #888; font-weight: 800;">PICKUP</div>
+                        <div id="confirm-pickup-addr" style="font-weight: 700; font-size: 0.95rem;">Current Location</div>
+                    </div>
+                    <div id="driver-eta-tag" style="background: #eef4ff; color: #007BFF; padding: 4px 10px; border-radius: 10px; font-weight: 800; font-size: 0.7rem;">-- min away</div>
+                </div>
+                <div style="display: flex; gap: 15px;">
+                    <i class="fas fa-square" style="color: #000; font-size: 0.8rem; margin-top: 5px;"></i>
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.7rem; color: #888; font-weight: 800;">DESTINATION</div>
+                        <div id="confirm-dest-addr" style="font-weight: 700; font-size: 0.95rem;">--</div>
+                    </div>
+                    <div id="trip-duration-tag" style="background: #f1f1f1; color: #555; padding: 4px 10px; border-radius: 10px; font-weight: 800; font-size: 0.7rem;">-- min trip</div>
+                </div>
+            </div>
+
+            <!-- Price Options -->
+            <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px;">
+                <!-- Private Ride -->
+                <div onclick="selectRideType('private')" id="opt-private" style="border: 2px solid #007BFF; border-radius: 16px; padding: 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-car" style="font-size: 1.5rem; color: #007BFF;"></i>
+                        <div>
+                            <div style="font-weight: 800;">Asiye Go (Private)</div>
+                            <div style="font-size: 0.75rem; color: #888;">Travel alone, leave now</div>
+                        </div>
+                    </div>
+                    <div id="price-go" style="font-weight: 900; font-size: 1.2rem; color: #28a745;">R--</div>
+                </div>
+
+                <!-- Shared Ride (4 Seater) -->
+                <div onclick="selectRideType('club4')" id="opt-club4" style="border: 1px solid #eee; border-radius: 16px; padding: 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-users" style="font-size: 1.5rem; color: #FF9F0A;"></i>
+                        <div>
+                            <div style="font-weight: 800;">Asiye Club (4 Seater)</div>
+                            <div style="font-size: 0.75rem; color: #888;">Shared with 3 others</div>
+                        </div>
+                    </div>
+                    <div id="price-club4" style="font-weight: 900; font-size: 1.2rem; color: #28a745;">R--</div>
+                </div>
+
+                <!-- Shared Ride (6 Seater) -->
+                <div onclick="selectRideType('club6')" id="opt-club6" style="border: 1px solid #eee; border-radius: 16px; padding: 15px; display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <i class="fas fa-bus" style="font-size: 1.5rem; color: #28a745;"></i>
+                        <div>
+                            <div style="font-weight: 800;">Asiye Club (7 Seater)</div>
+                            <div style="font-size: 0.75rem; color: #888;">Shared with 5 others</div>
+                        </div>
+                    </div>
+                    <div id="price-club6" style="font-weight: 900; font-size: 1.2rem; color: #28a745;">R--</div>
+                </div>
+            </div>
+
+            <button id="final-booking-btn" onclick="executeBooking()" style="width: 100%; background: #000; color: #fff; padding: 18px; border-radius: 16px; font-weight: 900; font-size: 1.1rem;">
+                Select a Ride
+            </button>
+        </div>
+    </div>
+</div>
 </div>         
            
 
@@ -47811,6 +47848,82 @@ console.log("  - openLiveClubPools: " + typeof window.openLiveClubPools);
 console.log("  - selectDestination: " + typeof window.selectDestination);
 console.log("  - callThisCar: " + typeof window.callThisCar);
 console.log("  - closeClubTaxisList: " + typeof window.closeClubTaxisList);
+
+// index.html logic
+window.selectedRideType = null;
+window.currentTripDistance = 0;
+
+window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
+    if (type === 'destination') {
+        window.userDropOffDestination = fullPlaceName;
+        window.ehailingDestLng = lng;
+        window.ehailingDestLat = lat;
+        
+        closeModal('destinationPromptPopup');
+        showRideSelectionView(fullPlaceName, lat, lng);
+    }
+};
+
+async function showRideSelectionView(destName, destLat, destLng) {
+    const pickupLat = window.commuterLat;
+    const pickupLng = window.commuterLng;
+
+    // 1. Calculate Distance and Pricing
+    const dist = calculateDistance(pickupLat, pickupLng, destLat, destLng) * 1.2; // 20% road curve buffer
+    window.currentTripDistance = dist;
+
+    const baseGoPrice = Math.max(30, Math.round(30 + (dist * 9.50))); // R30 base + R9.5/km
+    const club4Price = Math.max(15, Math.round(baseGoPrice / 4));
+    const club6Price = Math.max(12, Math.round(baseGoPrice / 6));
+
+    // 2. Update UI text
+    document.getElementById('confirm-dest-addr').textContent = destName.split(',')[0];
+    document.getElementById('price-go').textContent = `R${baseGoPrice}`;
+    document.getElementById('price-club4').textContent = `R${club4Price}`;
+    document.getElementById('price-club6').textContent = `R${club6Price}`;
+    
+    // 3. Fetch ETA and Duration from Mapbox
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destLng},${destLat}?access_token=${mapboxgl.accessToken}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.routes && data.routes[0]) {
+        const route = data.routes[0];
+        document.getElementById('trip-duration-tag').textContent = `${Math.round(route.duration / 60)} min trip`;
+        document.getElementById('driver-eta-tag').textContent = `Driver ~4 min away`; // Local simulated ETA
+        
+        // Draw route on map
+        drawRouteToTaxi(route.geometry);
+    }
+
+    // 4. Switch Views and expand sheet
+    document.getElementById('view-initial-search').style.display = 'none';
+    document.getElementById('view-confirm-ride').style.display = 'block';
+    document.getElementById('homeSheetContent').style.height = '85vh';
+    
+    // Fit map to show both points
+    const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destLng, destLat]);
+    map.fitBounds(bounds, { padding: { top: 50, bottom: 450, left: 50, right: 50 } });
+}
+
+window.selectRideType = function(type) {
+    window.selectedRideType = type;
+    
+    // UI Feedback
+    ['private', 'club4', 'club6'].forEach(id => {
+        document.getElementById('opt-' + id).style.borderColor = '#eee';
+    });
+    document.getElementById('opt-' + type).style.borderColor = (type === 'private') ? '#007BFF' : '#FF9F0A';
+    
+    const priceText = document.getElementById('price-' + type).textContent;
+    document.getElementById('final-booking-btn').textContent = `Request ${type === 'private' ? 'Asiye Go' : 'Club Seat'} (${priceText})`;
+};
+
+function resetBookingUI() {
+    document.getElementById('view-initial-search').style.display = 'block';
+    document.getElementById('view-confirm-ride').style.display = 'none';
+    document.getElementById('homeSheetContent').style.height = '65vh';
+    if (map) map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16 });
+}
 </script>
 </body>
 </html>
