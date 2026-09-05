@@ -47943,7 +47943,9 @@ window.selectRideType = function(type) {
     });
     document.getElementById('opt-' + type).style.borderColor = (type === 'private') ? '#007BFF' : '#FF9F0A';
     
-    const priceText = document.getElementById('price-' + type).textContent;
+    const priceId = (type === 'private') ? 'price-go' : 'price-' + type;
+    const priceEl = document.getElementById(priceId);
+    const priceText = priceEl ? priceEl.textContent : 'R--';
     document.getElementById('final-booking-btn').textContent = `Request ${type === 'private' ? 'Asiye Go' : 'Club Seat'} (${priceText})`;
 };
 
