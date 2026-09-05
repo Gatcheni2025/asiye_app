@@ -47908,7 +47908,7 @@ async function showRideSelectionView(destName, destLat, destLng) {
     document.getElementById('price-club6').textContent = `R${club6Price}`;
     
     // 3. Fetch ETA and Duration from Mapbox
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destLng},${destLat}?access_token=${mapboxgl.accessToken}`;
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destLng},${destLat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.routes && data.routes[0]) {
@@ -47926,8 +47926,12 @@ async function showRideSelectionView(destName, destLat, destLng) {
     document.getElementById('homeSheetContent').style.height = '85vh';
     
     // Fit map to show both points
-    const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destLng, destLat]);
-    map.fitBounds(bounds, { padding: { top: 50, bottom: 450, left: 50, right: 50 } });
+    try {
+        const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destLng, destLat]);
+        map.fitBounds(bounds, { padding: { top: 50, bottom: 450, left: 50, right: 50 } });
+    } catch (e) {
+        console.warn("showRideSelectionView: fitBounds failed", e);
+    }
 }
 
 window.selectRideType = function(type) {
@@ -47941,6 +47945,21 @@ window.selectRideType = function(type) {
     
     const priceText = document.getElementById('price-' + type).textContent;
     document.getElementById('final-booking-btn').textContent = `Request ${type === 'private' ? 'Asiye Go' : 'Club Seat'} (${priceText})`;
+};
+
+window.executeBooking = function() {
+    if (!window.selectedRideType) {
+        showGenericMessage('Select a Ride', 'Please choose a ride option first.', 'fa-car', 'icon-info');
+        return;
+    }
+
+    if (window.selectedRideType === 'private') {
+        if (typeof window.findAsiyeGoTaxis === 'function') {
+            window.findAsiyeGoTaxis();
+        }
+    } else if (typeof window.openLiveClubPools === 'function') {
+        window.openLiveClubPools();
+    }
 };
 
 function resetBookingUI() {
