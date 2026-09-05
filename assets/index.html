@@ -15795,7 +15795,12 @@ map.on('load', () => {
     }, 150);
 });    map.on('error', (e) => {
           console.error("Mapbox GL Error:", e);
-          showGenericMessage("Map Error", "Could not load map data. Please check your connection.", "fa-map", "icon-danger");
+          // Non-fatal source/tile errors happen routinely (e.g. route redraws) and
+          // shouldn't interrupt the user with a popup. Only surface real style load failures.
+          const isStyleFailure = !map.isStyleLoaded() && !e.sourceId;
+          if (isStyleFailure) {
+              showGenericMessage("Map Error", "Could not load map data. Please check your connection.", "fa-map", "icon-danger");
+          }
       });
   }
 // =================================================================
@@ -18281,6 +18286,15 @@ function closeChat() {
     function drawRouteToTaxi(geometry) {
       if (!map) return;
 
+      // Guard against malformed/NaN geometry so we never feed the GL worker bad data.
+      const coords = geometry && geometry.coordinates;
+      const isValidLine = Array.isArray(coords) && coords.length > 0 &&
+          coords.every(pt => Array.isArray(pt) && pt.length === 2 && Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+      if (!isValidLine) {
+          console.warn("drawRouteToTaxi: skipped invalid route geometry", geometry);
+          return;
+      }
+
       if (!map.isStyleLoaded()) {
           map.once('style.load', () => drawRouteToTaxi(geometry));
           return;
@@ -18295,34 +18309,38 @@ function closeChat() {
           console.warn("Cleanup error (safe to ignore):", e);
       }
 
-      map.addSource('taxi-route', {
-          type: 'geojson',
-          data: { type: 'Feature', geometry: geometry }
-      });
+      try {
+          map.addSource('taxi-route', {
+              type: 'geojson',
+              data: { type: 'Feature', geometry: geometry }
+          });
 
-      map.addLayer({
-          id: 'taxi-route-casing',
-          type: 'line',
-          source: 'taxi-route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-              'line-color': '#1a3a5c',
-              'line-width': 8,
-              'line-opacity': 0.3
-          }
-      });
+          map.addLayer({
+              id: 'taxi-route-casing',
+              type: 'line',
+              source: 'taxi-route',
+              layout: { 'line-join': 'round', 'line-cap': 'round' },
+              paint: {
+                  'line-color': '#1a3a5c',
+                  'line-width': 8,
+                  'line-opacity': 0.3
+              }
+          });
 
-      map.addLayer({
-          id: 'taxi-route-line',
-          type: 'line',
-          source: 'taxi-route',
-          layout: { 'line-join': 'round', 'line-cap': 'round' },
-          paint: {
-              'line-color': '#276EF1',
-              'line-width': 5,
-              'line-opacity': 1.0
-          }
-      });
+          map.addLayer({
+              id: 'taxi-route-line',
+              type: 'line',
+              source: 'taxi-route',
+              layout: { 'line-join': 'round', 'line-cap': 'round' },
+              paint: {
+                  'line-color': '#276EF1',
+                  'line-width': 5,
+                  'line-opacity': 1.0
+              }
+          });
+      } catch (e) {
+          console.warn("drawRouteToTaxi: failed to add route layer", e);
+      }
   }
      function updateTaxiPositionOnMap(taxiId) {
       // Note: Made the callback async
@@ -47867,6 +47885,13 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
 async function showRideSelectionView(destName, destLat, destLng) {
     const pickupLat = window.commuterLat;
     const pickupLng = window.commuterLng;
+
+    // Bail out early if any coordinate is missing/NaN instead of crashing later on fitBounds.
+    if (![pickupLat, pickupLng, destLat, destLng].every(Number.isFinite)) {
+        console.warn("showRideSelectionView: invalid coordinates, aborting", { pickupLat, pickupLng, destLat, destLng });
+        showGenericMessage("Location Error", "Could not determine your location or destination. Please try again.", "fa-map-marker-alt", "icon-danger");
+        return;
+    }
 
     // 1. Calculate Distance and Pricing
     const dist = calculateDistance(pickupLat, pickupLng, destLat, destLng) * 1.2; // 20% road curve buffer
