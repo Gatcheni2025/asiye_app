@@ -19,13 +19,11 @@ jobs:
         with:
           channel: 'stable'
 
-      # FIX 1: We DO need a working directory because the code is inside the asiye_app folder!
       - name: Install Flutter Dependencies
-        working-directory: ./asiye_app
         run: flutter pub get
 
       - name: Build and Upload to TestFlight 
-        working-directory: ./asiye_app/ios
+        working-directory: ./ios
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           # Mapping GH_PAT secret to the variable Fastlane expects
