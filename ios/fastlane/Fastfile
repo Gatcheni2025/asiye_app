@@ -43,7 +43,6 @@ platform :ios do
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
-      build_number: build_number.to_s,
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
       xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye'",
