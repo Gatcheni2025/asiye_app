@@ -28,13 +28,22 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 3. Build Flutter (No Signing)
-    sh("cd ../.. && flutter build ios --release --no-codesign")
+    # 3. Generate a unique build number for every CI run and rerun.
+    version_line = File.read("../../pubspec.yaml").match(/^version:\s+[^+]+\+(\d+)/)
+    current_build_number = version_line ? version_line[1].to_i : 1
+    run_number = ENV.fetch("GITHUB_RUN_NUMBER", "0").to_i
+    run_attempt = ENV.fetch("GITHUB_RUN_ATTEMPT", "1").to_i
+    build_number = [current_build_number + 1, current_build_number + (run_number * 100) + run_attempt].max
+    UI.message("Building iOS version #{build_number}")
 
-    # 4. Build and Sign IPA (Workspace)
+    # 4. Build Flutter (No Signing)
+    sh("cd ../.. && flutter build ios --release --no-codesign --build-number=#{build_number}")
+
+    # 5. Build and Sign IPA (Workspace)
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
+      build_number: build_number.to_s,
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
       xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye'",
@@ -45,7 +54,7 @@ platform :ios do
       }
     )
 
-    # 5. SMART AUTHENTICATION (Fixes the nil error and Bearer Token error)
+    # 6. SMART AUTHENTICATION (Fixes the nil error and Bearer Token error)
     key_secret = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].to_s.strip
 
     # If the secret doesn't have the "BEGIN" header, it's Base64. Decode it.
@@ -67,7 +76,7 @@ platform :ios do
       in_house: false
     )
 
-    # 6. Upload to TestFlight
+    # 7. Upload to TestFlight
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
