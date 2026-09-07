@@ -8917,20 +8917,24 @@ function escapeHtml(text) {
     }
         async function updatePassengerLocationNames() {
             for (const passenger of acceptedPassengers) {
-                if (!passengerLocations.has(passenger.key)) {
+                const latitude = Number(passenger.commuterLocation?.latitude || passenger.pickupLat);
+                const longitude = Number(passenger.commuterLocation?.longitude || passenger.pickupLng);
+
+                if (!passengerLocations.has(passenger.key) && !isNaN(latitude) && !isNaN(longitude)) {
                     try {
                         const locationName = await getLocationName(
-                            passenger.commuterLocation.latitude,
-                            passenger.commuterLocation.longitude
+                            latitude,
+                            longitude
                         );
                         passengerLocations.set(passenger.key, locationName);
                     } catch (error) {
                         passengerLocations.set(passenger.key,
-                            `Location: ${passenger.commuterLocation.latitude.toFixed(4)}, ${passenger.commuterLocation.longitude.toFixed(4)}`);
+                            `Location: ${latitude.toFixed(4)}, ${longitude.toFixed(4)}`);
                     }
                 }
             }
-            if (document.getElementById('passengerListPopup').classList.contains('open')) {
+            const passengerListPopup = document.getElementById('passengersListPopup');
+            if (passengerListPopup && passengerListPopup.classList.contains('open')) {
                 showPassengerList();
             }
         }
@@ -9410,7 +9414,10 @@ function escapeHtml(text) {
         locationResolved = true;
         const coords = [position.coords.longitude, position.coords.latitude];
         console.log("✅ Location acquired:", coords);
+        localStorage.setItem('lastLat', String(position.coords.latitude));
+        localStorage.setItem('lastLng', String(position.coords.longitude));
         taxiLngLat = coords;
+        updateLocationName(position.coords.latitude, position.coords.longitude);
         startMap(coords);
     };
 
@@ -9425,17 +9432,29 @@ function escapeHtml(text) {
             if (fallbackResolved) return;
             fallbackResolved = true;
             const coords = [pos.coords.longitude, pos.coords.latitude];
+            localStorage.setItem('lastLat', String(pos.coords.latitude));
+            localStorage.setItem('lastLng', String(pos.coords.longitude));
             taxiLngLat = coords;
+            updateLocationName(pos.coords.latitude, pos.coords.longitude);
             startMap(coords);
         };
 
         const fallbackError = () => {
             if (fallbackResolved) return;
             fallbackResolved = true;
-            console.error("❌ Total Location Failure. Using default JHB.");
-            taxiLngLat = defaultLocation;
-            startMap(defaultLocation);
-            setTimeout(() => showGenericMessage("GPS Signal Lost", "Could not find your exact location. Please check your GPS settings.", "bx-error", "danger"), 2000);
+            const cachedLat = parseFloat(localStorage.getItem('lastLat'));
+            const cachedLng = parseFloat(localStorage.getItem('lastLng'));
+            const hasCachedLocation = !isNaN(cachedLat) && !isNaN(cachedLng);
+            const fallbackCoords = hasCachedLocation ? [cachedLng, cachedLat] : defaultLocation;
+
+            console.warn(`GPS unavailable. Using ${hasCachedLocation ? 'the last known location' : 'the default location'}.`);
+            taxiLngLat = fallbackCoords;
+            updateLocationName(fallbackCoords[1], fallbackCoords[0]);
+            startMap(fallbackCoords);
+            showCommunicationBanner(
+                hasCachedLocation ? 'Using your last known location while GPS reconnects.' : 'Using a temporary location while GPS reconnects.',
+                'warning'
+            );
         };
 
         // SAFARI BUG FIX: Manual fallback timeout for the low-accuracy request
@@ -15207,9 +15226,18 @@ window.updateUIWithTaxiData = function() {
     const navMenu = document.getElementById('nav-menu');
     const sideControls = document.getElementById('side-controls-container');
     const indicator = document.getElementById('ehailingOnlineIndicator');
+    const mapElement = document.getElementById('map');
 
     if (isOnline) {
         if (dashOverlay) dashOverlay.style.setProperty('display', 'none', 'important');
+        if (mapElement) {
+            mapElement.style.setProperty('display', 'block', 'important');
+            mapElement.style.setProperty('visibility', 'visible', 'important');
+            mapElement.style.setProperty('z-index', '1', 'important');
+            if (window.map && typeof window.map.resize === 'function') {
+                setTimeout(() => window.map.resize(), 0);
+            }
+        }
         if (navMenu) navMenu.style.setProperty('display', 'flex', 'important');
         if (sideControls) sideControls.style.setProperty('display', 'flex', 'important');
         if (indicator) indicator.style.display = 'flex';
@@ -16851,7 +16879,7 @@ function startMap(coords) {
     try {
         const map = new mapboxgl.Map({
             container: 'map',
-            style: 'mapbox://styles/mapbox/standard',
+            style: 'mapbox://styles/mapbox/streets-v12',
             center: coords,
             zoom: 17.5,
             pitch: 0,
@@ -27662,10 +27690,12 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
         `;
     }
     
-    // Build the navigation UI
-    navMapContainer.innerHTML = `
-        <div id="mapContainerWrapper" style="width:100%; height:100%;"></div>
-        
+    // Build the navigation controls without replacing the initialized map container.
+    const existingControls = navMapContainer.querySelector('.navigation-controls');
+    if (existingControls) existingControls.remove();
+    const navigationControls = document.createElement('div');
+    navigationControls.className = 'navigation-controls';
+    navigationControls.innerHTML = `
         <div class="mb-guidance-banner">
             <div id="wazeTurnIcon" class="mb-turn-icon"><i class="fas fa-arrow-up"></i></div>
             <div class="mb-turn-details">
@@ -27704,9 +27734,7 @@ window.showDirectionsOnMap = function(targetLat, targetLng, guidanceText, passen
             ${actionBtnHtml}
         </div>
     `;
-    
-    // Move the map to the nav container
-    document.getElementById('mapContainerWrapper').appendChild(mapDiv);
+    navMapContainer.appendChild(navigationControls);
     
     if (typeof toggleTaxiNavigationMarker === 'function') {
         toggleTaxiNavigationMarker(true);
@@ -28621,7 +28649,7 @@ window.showPassengerListUI = function() {
 
     activePassengers.forEach((passenger, index) => {
         const passengerKey = passenger.key || passenger.requestId || 'unknown';
-        const locationName = passenger.pickupAddress || 'Waiting...';
+        const locationName = window.passengerLocations?.get(passengerKey) || passenger.pickupAddress || 'Waiting...';
         const isClub = passenger.type === 'club';
         
         let dest = "Route";
@@ -29162,6 +29190,10 @@ window.loadAcceptedPassengersAndParcels = function() {
         // UPDATE THE GLOBAL VARIABLE
         window.acceptedPassengers = tempPaxList;
         console.log(`✅ Sync complete. ${window.acceptedPassengers.length} active passengers.`);
+
+        if (typeof updatePassengerLocationNames === 'function') {
+            updatePassengerLocationNames();
+        }
 
         // Update the UI Banners and Counters
         if (typeof window.updatePassengerCounter === 'function') {
@@ -31297,7 +31329,6 @@ window.showClubRequestPopup = function(request) {
 window.acceptRequest = function() {
     if (!window.activeRequest) return;
     const reqKey = window.activeRequest.key;
-    const commuterId = window.activeRequest.commuterId;
 
     // Get Vehicle Info
     const vInfo = {
@@ -31308,32 +31339,56 @@ window.acceptRequest = function() {
         rating: window.taxiData.averageRating || "5.0"
     };
 
-    database.ref(`requests/${reqKey}`).update({
-        status: 'accepted',
-        taxiId: window.userId,
-        driverName: (window.taxiData.name + " " + (window.taxiData.surname || "")).trim(),
-        driverPhone: window.taxiData.phone,
-        vehicleInfo: `${vInfo.color} ${vInfo.make} ${vInfo.model}`,
-        vehicleReg: vInfo.reg,
-        driverRating: vInfo.rating,
-        acceptedAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        // Send notification to Passenger
-        database.ref(`notifications/commuters/${commuterId}`).push({
-            type: 'request_accepted',
-            requestId: reqKey,
-            driverId: window.userId,
-            driverName: window.taxiData.name,
-            driverRating: vInfo.rating,
-            vehicleInfo: `${vInfo.make} ${vInfo.model}`,
-            vehicleColor: vInfo.color,
-            vehicleReg: vInfo.reg,
-            price: window.activeRequest.calculatedPrice || 25,
-            timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
+    const driverName = `${window.taxiData.name || 'Driver'} ${window.taxiData.surname || ''}`.trim();
+    database.ref(`requests/${reqKey}`).transaction((request) => {
+        if (!request || (request.taxiId && request.taxiId !== window.userId)) return;
+        if (!['pending', 'pooling', 'waiting_pool'].includes(request.status)) return;
 
+        request.status = 'accepted';
+        request.taxiId = window.userId;
+        request.driverName = driverName;
+        request.driverPhone = window.taxiData.phone || '';
+        request.vehicleInfo = `${vInfo.color} ${vInfo.make} ${vInfo.model}`;
+        request.vehicleReg = vInfo.reg;
+        request.driverRating = vInfo.rating;
+        request.acceptedAt = firebase.database.ServerValue.TIMESTAMP;
+        return request;
+    }).then(async (result) => {
+        if (!result.committed) {
+            showCommunicationBanner('This request was already accepted by another driver.', 'warning');
+            window.closeRequestPopupNow();
+            return;
+        }
+
+        const acceptedRequest = result.snapshot.val();
+        const passengerIds = Object.keys(acceptedRequest.passengers || {});
+        if (passengerIds.length === 0 && acceptedRequest.commuterId) {
+            passengerIds.push(acceptedRequest.commuterId);
+        }
+
+        await Promise.all(passengerIds.map((commuterId) =>
+            database.ref(`notifications/commuters/${commuterId}`).push({
+                type: 'request_accepted',
+                requestId: reqKey,
+                driverId: window.userId,
+                driverName: driverName,
+                driverRating: vInfo.rating,
+                vehicleInfo: `${vInfo.make} ${vInfo.model}`,
+                vehicleColor: vInfo.color,
+                vehicleReg: vInfo.reg,
+                price: acceptedRequest.calculatedPrice || 25,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            })
+        ));
+
+        window.currentRequestId = reqKey;
+        localStorage.setItem('currentRequestId', reqKey);
+        await database.ref(`taxis/${window.userId}`).update({ currentRequest: reqKey });
         window.closeRequestPopupNow();
         window.showDriverAcceptedPopup(window.userId, { requestKey: reqKey });
+    }).catch((error) => {
+        console.error('Could not accept request:', error);
+        showCommunicationBanner('Could not accept the request. Please try again.', 'danger');
     });
 };
 

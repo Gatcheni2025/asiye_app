@@ -1105,23 +1105,8 @@ body, html {
     filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Bouncy movement */
 }
-    .user-location-marker::after {
-        content: "You";
-        position: absolute;
-        top: -30px;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: white;
-        color: black;
-        padding: 4px 8px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 600;
-        white-space: nowrap;
-        z-index: 10;
-        border: 1px solid var(--border-color);
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
+    /* Note: the "You are here" label is rendered by JS inside the marker element
+       itself (setupUserMarker) to avoid a duplicate label being shown here. */
 
     /* Enhanced Floating Action Button */
     .fab-container {
@@ -2636,6 +2621,81 @@ input:focus {
     align-items: center;
     cursor: pointer;
     margin-bottom: 20px;
+}
+
+/* Premium home-screen service tiles (Bolt-style) */
+.asiye-service-tile {
+    background: #ffffff;
+    border: 1px solid #EEEEF0;
+    border-radius: 18px;
+    padding: 14px 8px 12px 8px;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.05);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.asiye-service-tile:active {
+    transform: scale(0.96);
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+}
+.asiye-service-tile-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 8px auto;
+    font-size: 1.15rem;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+}
+.asiye-service-tile-label {
+    font-weight: 800;
+    font-size: 0.85rem;
+    color: #0A0A0A;
+}
+.asiye-service-tile-sub {
+    font-weight: 500;
+    font-size: 0.68rem;
+    color: #888;
+    margin-top: 1px;
+}
+
+/* Quick access saved-place rows */
+.asiye-quick-place {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 4px;
+    border-bottom: 1px solid #F2F2F4;
+    cursor: pointer;
+}
+.asiye-quick-place:last-child { border-bottom: none; }
+.asiye-quick-place-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: #F2F4F6;
+    color: #555;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+.asiye-quick-place-title {
+    font-weight: 800;
+    font-size: 0.95rem;
+    color: #111;
+}
+.asiye-quick-place-sub {
+    font-weight: 500;
+    font-size: 0.78rem;
+    color: #888;
+    margin-top: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .search-icon {
@@ -11203,27 +11263,42 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     <div id="booking-flow-container" style="flex: 1; overflow-y: auto; padding: 0 5px 20px 5px;">
         <!-- VIEW 1: INITIAL SEARCH -->
         <div id="view-initial-search">
-            <h3 style="color: #111; margin: 0 0 20px 0; font-weight: 800; font-size: 1.5rem;">Where to?</h3>
-            
-            <!-- Modern Search Input Trigger -->
-            <div onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #F2F4F6; border-radius: 16px; padding: 18px; display: flex; align-items: center; gap: 15px; cursor: pointer; border: 1px solid #eee;">
-                <i class="fas fa-search" style="color: #007BFF; font-size: 1.2rem;"></i>
-                <span style="color: #888; font-weight: 600; font-size: 1.1rem;">Enter destination...</span>
-            </div>
+            <h2 style="color: #0A0A0A; margin: 0 0 18px 0; font-weight: 900; font-size: 1.65rem; letter-spacing: -0.5px; line-height: 1.2;">Let us get<br>you going.</h2>
 
-            <div style="margin-top: 25px;">
-                <p style="color: #888; font-size: 0.8rem; font-weight: 800; text-transform: uppercase; margin-bottom: 15px;">Other Services</p>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-                    <div onclick="openAsiyeDelivery()" style="background: #F2F4F6; border-radius: 18px; padding: 15px; text-align: center;">
-                        <i class="fas fa-box" style="color: #FF9F0A; font-size: 1.5rem; margin-bottom: 5px;"></i>
-                        <div style="font-weight: 800; font-size: 0.9rem;">Parcels</div>
+            <!-- Premium Service Tiles -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                <div onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();" class="asiye-service-tile">
+                    <div class="asiye-service-tile-icon" style="background: linear-gradient(145deg, #111 0%, #333 100%);">
+                        <i class="fas fa-car-side" style="color: #30D158;"></i>
                     </div>
-                    <div onclick="openSafetyCenter()" style="background: #F2F4F6; border-radius: 18px; padding: 15px; text-align: center;">
-                        <i class="fas fa-shield-alt" style="color: #FF3B30; font-size: 1.5rem; margin-bottom: 5px;"></i>
-                        <div style="font-weight: 800; font-size: 0.9rem;">Safety</div>
+                    <div class="asiye-service-tile-label">Rides</div>
+                    <div class="asiye-service-tile-sub">Let's get moving</div>
+                </div>
+                <div onclick="window.openAsiyeClubGateway()" class="asiye-service-tile">
+                    <div class="asiye-service-tile-icon" style="background: linear-gradient(145deg, #FF9F0A 0%, #FFC04D 100%);">
+                        <i class="fas fa-users" style="color: #fff;"></i>
                     </div>
+                    <div class="asiye-service-tile-label">Club</div>
+                    <div class="asiye-service-tile-sub">Ride & save</div>
+                </div>
+                <div onclick="openAsiyeDelivery()" class="asiye-service-tile">
+                    <div class="asiye-service-tile-icon" style="background: linear-gradient(145deg, #007BFF 0%, #4DA3FF 100%);">
+                        <i class="fas fa-box" style="color: #fff;"></i>
+                    </div>
+                    <div class="asiye-service-tile-label">Send</div>
+                    <div class="asiye-service-tile-sub">Send or receive</div>
                 </div>
             </div>
+
+            <!-- Premium "Where to?" Search Bar -->
+            <div onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();" style="background: #F2F4F6; border-radius: 18px; padding: 16px 18px; display: flex; align-items: center; gap: 14px; cursor: pointer; border: 1px solid #ECECEE; box-shadow: 0 2px 10px rgba(0,0,0,0.03);">
+                <i class="fas fa-search" style="color: #111; font-size: 1.05rem;"></i>
+                <span style="color: #111; font-weight: 700; font-size: 1.05rem; flex: 1;">Where to?</span>
+                <i class="fas fa-shield-alt" onclick="event.stopPropagation(); openSafetyCenter();" style="color: #888; font-size: 1rem;" title="Safety"></i>
+            </div>
+
+            <!-- Quick Access: Saved Places -->
+            <div id="asiyeQuickPlaces" style="margin-top: 22px; display: flex; flex-direction: column; gap: 2px;"></div>
         </div>
 
         <!-- VIEW 2: CONFIRMATION (Hidden by default) -->
@@ -13136,10 +13211,10 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 </div>
 
 <!-- NEW: "You are here" Location Indicator -->
-<div id="youAreHereBubble" style="display: none; position: fixed; top: max(15px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); color: #111; padding: 10px 20px; border-radius: 30px; z-index: 9000; box-shadow: 0 4px 15px rgba(0,0,0,0.1); align-items: center; gap: 8px; pointer-events: none; border: 1px solid #eee;">
+<div id="youAreHereBubble" style="display: none; position: fixed; top: max(15px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); color: #111; padding: 9px 16px; border-radius: 30px; z-index: 9000; box-shadow: 0 4px 15px rgba(0,0,0,0.1); align-items: center; gap: 7px; pointer-events: none; border: 1px solid #eee; max-width: calc(100vw - 32px);">
     <div style="width: 8px; height: 8px; background: #28a745; border-radius: 50%; box-shadow: 0 0 8px #28a745; animation: blink 1.5s infinite;"></div>
-    <span style="font-size: 0.7rem; font-weight: 800; text-transform: uppercase; color: #888;">You are here:</span>
-    <span id="homeCurrentAddress" style="font-weight: 800; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">Fetching...</span>
+    <span style="font-size: 0.62rem; font-weight: 800; text-transform: uppercase; color: #888; white-space: nowrap;">You are here:</span>
+    <span id="homeCurrentAddress" style="font-weight: 800; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 125px;">Fetching...</span>
 </div>
 <script>
     function launchNativeNav(lat, lng) {
@@ -13558,6 +13633,9 @@ window.showDriverAcceptedPopup = function(taxiId, restoredState) {
     const oldPopup = document.getElementById('driverAcceptedPopup');
     if (oldPopup) oldPopup.remove(); // Remove the old small-card style popup
 
+    // Driver matched - remove the temporary "searching" destination pin from the home map
+    if (typeof window.clearSearchingMapView === 'function') window.clearSearchingMapView();
+
     // 2. Hide Dashboard
     if (typeof hideModernDashboard === 'function') hideModernDashboard();
 
@@ -13655,32 +13733,22 @@ window.showDriverTrackingPage = function(taxiId, requestKey, requestData) {
 // ================================================================
 
 function setupUserMarker(coords) {
-    if (!window.map || typeof window.map.loaded !== 'function' || !window.map.loaded()) {
-        console.warn('User marker deferred until map is fully loaded.');
-        if (window.map && typeof window.map.once === 'function') {
-            window.map.once('load', function() {
-                setupUserMarker(coords);
-            });
-        } else if (window.map && typeof window.map.on === 'function') {
-            window.map.on('load', function() {
-                setupUserMarker(coords);
-            });
-        }
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    const longitude = Number(coords && coords[0]);
+    const latitude = Number(coords && coords[1]);
+    if (!activeMap || !Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+        console.warn('User marker skipped: map or coordinates are unavailable.');
         return;
     }
 
-    // Check if map has style loaded
-    if (!window.map.isStyleLoaded()) {
-        console.warn('User marker deferred until style is loaded.');
-        window.map.once('style.load', function() {
-            setupUserMarker(coords);
-        });
+    if (typeof activeMap.loaded === 'function' && !activeMap.loaded()) {
+        activeMap.once('load', () => setupUserMarker([longitude, latitude]));
         return;
     }
 
     try {
         if (window.userMarker) {
-            window.userMarker.setLngLat(coords);
+            window.userMarker.setLngLat([longitude, latitude]);
             return;
         }
 
@@ -13688,26 +13756,102 @@ function setupUserMarker(coords) {
         const el = document.createElement('div');
         el.className = 'user-location-marker';
         el.style.cssText = `
-            width: 20px;
-            height: 20px;
-            background: #007BFF;
-            border-radius: 50%;
-            border: 3px solid white;
-            box-shadow: 0 0 20px rgba(0,123,255,0.4);
+            width: 120px;
+            height: 74px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-end;
+            pointer-events: none;
         `;
+        el.innerHTML = `
+            <span style="padding: 5px 10px; border-radius: 9px; background: #fff; color: #172235; font: 800 9px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 4px 14px rgba(22,47,82,.18); border: 1px solid #eee;">You are here</span>
+            <span style="width: 2px; height: 22px; background: linear-gradient(#c7c7c7, #1769d2); margin: 0 auto;"></span>
+            <span style="position:relative; width: 18px; height: 18px; display:flex; align-items:center; justify-content:center;">
+                <span class="user-marker-pulse" style="position:absolute; width: 18px; height: 18px; border-radius: 50%; background: rgba(23,105,210,.35); animation: userMarkerHeartbeat 2.4s ease-out infinite;"></span>
+                <span style="position:relative; width: 18px; height: 18px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 0 7px rgba(23,105,210,.16), 0 4px 12px rgba(23,105,210,.35); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
+            </span>
+        `;
+
+        if (!document.getElementById('userMarkerPulseStyle')) {
+            const styleTag = document.createElement('style');
+            styleTag.id = 'userMarkerPulseStyle';
+            styleTag.textContent = `
+                @keyframes userMarkerHeartbeat {
+                    0% { transform: scale(1); opacity: 0.7; }
+                    20% { transform: scale(1.9); opacity: 0; }
+                    35% { transform: scale(1); opacity: 0.7; }
+                    55% { transform: scale(2.6); opacity: 0; }
+                    100% { transform: scale(2.6); opacity: 0; }
+                }
+                @keyframes userMarkerBeat {
+                    0%, 100% { transform: scale(1); }
+                    18% { transform: scale(1.25); }
+                    32% { transform: scale(1); }
+                    45% { transform: scale(1.15); }
+                    60% { transform: scale(1); }
+                }
+            `;
+            document.head.appendChild(styleTag);
+        }
         
         window.userMarker = new mapboxgl.Marker({
             element: el,
-            anchor: 'center'
+            anchor: 'bottom'
         })
-        .setLngLat(coords)
-        .addTo(window.map);
+        .setLngLat([longitude, latitude])
+        .addTo(activeMap);
         
         console.log("✅ User marker added successfully");
     } catch (err) {
         console.warn('Failed to create user location marker:', err);
     }
 }
+
+// ================================================================
+// SHOW SEARCHING MAP VIEW - pickup + destination while finding a driver
+// ================================================================
+window.showSearchingMapView = function(destLat, destLng) {
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap) return;
+
+    const pickupLat = window.commuterLat;
+    const pickupLng = window.commuterLng;
+    if (!Number.isFinite(pickupLat) || !Number.isFinite(pickupLng)) return;
+
+    if (typeof setupUserMarker === 'function') setupUserMarker([pickupLng, pickupLat]);
+
+    if (Number.isFinite(destLat) && Number.isFinite(destLng)) {
+        if (window.searchDestMarker) {
+            window.searchDestMarker.setLngLat([destLng, destLat]);
+        } else {
+            const el = document.createElement('div');
+            el.style.cssText = 'width: 30px; height: 30px; display:flex; align-items:center; justify-content:center;';
+            el.innerHTML = '<i class="fas fa-map-marker-alt" style="color:#111; font-size: 1.7rem; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));"></i>';
+            window.searchDestMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+                .setLngLat([destLng, destLat])
+                .addTo(activeMap);
+        }
+
+        try {
+            const bounds = new mapboxgl.LngLatBounds()
+                .extend([pickupLng, pickupLat])
+                .extend([destLng, destLat]);
+            activeMap.fitBounds(bounds, { padding: { top: 120, bottom: 260, left: 60, right: 60 }, maxZoom: 15, duration: 900 });
+        } catch (e) { console.warn('Could not fit searching bounds:', e); }
+    } else {
+        activeMap.flyTo({ center: [pickupLng, pickupLat], zoom: 15, duration: 800 });
+    }
+};
+
+// Removes the destination pin used while searching once a driver is matched or the request ends
+window.clearSearchingMapView = function() {
+    if (window.searchDestMarker) {
+        try { window.searchDestMarker.remove(); } catch (e) {}
+        window.searchDestMarker = null;
+    }
+};
 // ================================================================
 // COMPLETE FIX: showDriverAcceptedUI - index.html
 // ================================================================
@@ -14789,9 +14933,12 @@ window.requestTaxi = function(taxiId) {
         });
     }
     
-    // Call the original function
+    // Call the original function (falls back to the real booking function since
+    // no prior window.requestTaxi definition ever existed for originalRequestTaxi to capture)
     if (typeof originalRequestTaxi === 'function') {
         originalRequestTaxi(taxiId);
+    } else if (typeof window.requestAsiyeGoRide === 'function') {
+        window.requestAsiyeGoRide(taxiId);
     }
     
     // After making the request, set up the listener for the new request ID
@@ -15757,7 +15904,11 @@ map.on('style.load', () => {
           showAccuracyCircle: false // Hides the big blue circle for a cleaner look
       });
 
-      map.addControl(geolocateControl, 'bottom-right');
+      if (navigator.geolocation) {
+          map.addControl(geolocateControl, 'bottom-right');
+      } else {
+          console.info('Browser geolocation is unavailable; using cached passenger location.');
+      }
 
       // Sync the mapbox control with our custom variables
      // Update the geolocate handler inside startMap function in index.html
@@ -15782,6 +15933,12 @@ map.on('load', () => {
 
     const webPreloader = document.getElementById('solidPreloader');
     if (webPreloader) webPreloader.style.display = 'none';
+
+    // Drop the "You are here" marker immediately using the best-known coords,
+    // instead of waiting on the async geolocation callback to place it.
+    if (typeof setupUserMarker === 'function') {
+        setupUserMarker([commuterLng || coords[0], commuterLat || coords[1]]);
+    }
 
     // The newly fixed active trip checker will safely decide whether 
     // to show the dashboard or the tracking screen.
@@ -24177,6 +24334,37 @@ function completePassengerCleanup(reqId) {
   // ========================================================
   // REPAIRED ZOOM-TO-FIT (Fixes the NaN Mapbox crash perfectly)
   // ========================================================
+  window.routeCarMarkers = window.routeCarMarkers || {};
+  window.showRouteMapMarkers = function(taxis) {
+      if (!map || !map.isStyleLoaded || !map.isStyleLoaded()) return;
+      const passengerLat = Number(commuterLat);
+      const passengerLng = Number(commuterLng);
+      if (!Number.isFinite(passengerLat) || !Number.isFinite(passengerLng)) return;
+      if (typeof setupUserMarker === 'function') setupUserMarker([passengerLng, passengerLat]);
+
+      const validTaxis = (Array.isArray(taxis) ? taxis : []).filter(t => Number.isFinite(Number(t.latitude)) && Number.isFinite(Number(t.longitude)));
+      const activeIds = new Set(validTaxis.map(t => String(t.taxiId || t.id || '')));
+      Object.keys(window.routeCarMarkers).forEach(id => {
+          if (!activeIds.has(id)) {
+              window.routeCarMarkers[id].remove();
+              delete window.routeCarMarkers[id];
+          }
+      });
+      validTaxis.forEach(taxi => {
+          const id = String(taxi.taxiId || taxi.id || '');
+          if (!id) return;
+          let marker = window.routeCarMarkers[id];
+          if (!marker) {
+              const element = document.createElement('div');
+              element.style.cssText = 'width:36px;height:36px;border-radius:50%;background:#fff;border:3px solid #1769d2;box-shadow:0 5px 16px rgba(23,105,210,.3);display:flex;align-items:center;justify-content:center;color:#1769d2;font-size:15px;';
+              element.innerHTML = '<i class="fas fa-car-side" aria-hidden="true"></i>';
+              marker = new mapboxgl.Marker({ element, anchor: 'center' }).addTo(map);
+              window.routeCarMarkers[id] = marker;
+          }
+          marker.setLngLat([Number(taxi.longitude), Number(taxi.latitude)]);
+      });
+  };
+
   window.zoomToFitTaxis = function(taxis) {
       if (!map || !commuterLat || !commuterLng) return;
 
@@ -24201,8 +24389,8 @@ function completePassengerCleanup(reqId) {
               try {
                   if (taxis && taxis.length > 0) {
                       const bounds = new mapboxgl.LngLatBounds().extend([uLng, uLat]);
-                      const nearestTaxis = taxis.slice(0, 3);
-                      nearestTaxis.forEach(t => bounds.extend([t.longitude, t.latitude]));
+                      const nearestTaxis = taxis.slice(0, 3).filter(t => Number.isFinite(Number(t.longitude)) && Number.isFinite(Number(t.latitude)));
+                      nearestTaxis.forEach(t => bounds.extend([Number(t.longitude), Number(t.latitude)]));
 
                       map.fitBounds(bounds, {
                           padding: { top: 70, bottom: dynamicBottomPadding, left: 40, right: 40 },
@@ -27848,7 +28036,14 @@ function initializeMapAndLocation() {
 
                 if (typeof setupEnhancedSearch === 'function') setupEnhancedSearch();
             },
-            (err) => { console.warn(`GPS Watch Error: ${err.message}`); },
+            (err) => {
+                console.warn(`GPS Watch Error: ${err.message}`);
+                if (err && err.code === 1 && window.locationWatchId) {
+                    navigator.geolocation.clearWatch(window.locationWatchId);
+                    window.locationWatchId = null;
+                    console.info('Location permission denied; continuing with cached passenger location.');
+                }
+            },
             { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
         );
     }
@@ -30558,15 +30753,16 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
     }
     
     // 2. Check if map exists
-    if (!window.map) {
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap) {
         console.warn("⚠️ Map not available for confirmed taxi");
         return;
     }
     
-    // 3. IMPORTANT FIX: Wait for the map style to be fully loaded
-    if (!window.map.isStyleLoaded()) {
-        console.log("⏳ Map style not loaded yet, waiting...");
-        window.map.once('style.load', () => {
+    // 3. Wait for the map to finish loading
+    if (typeof activeMap.loaded === 'function' && !activeMap.loaded()) {
+        console.log("⏳ Map is not loaded yet, waiting...");
+        activeMap.once('load', () => {
             console.log("✅ Style loaded, now showing confirmed taxi");
             window.showConfirmedTaxi(taxiId, requestKey);
         });
@@ -30576,7 +30772,10 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
     // 4. Fetch taxi data to get live location
     firebase.database().ref('taxis/' + taxiId).once('value').then(snapshot => {
         const taxi = snapshot.val();
-        if (!taxi || !taxi.latitude || !taxi.longitude) {
+        const taxiLocation = taxi && taxi.location ? taxi.location : taxi;
+        const taxiLat = Number(taxiLocation && (taxiLocation.latitude ?? taxiLocation.lat));
+        const taxiLng = Number(taxiLocation && (taxiLocation.longitude ?? taxiLocation.lng));
+        if (!taxi || !Number.isFinite(taxiLat) || !Number.isFinite(taxiLng)) {
             console.warn("⚠️ Taxi location not available yet, will retry...");
             // Retry after a short delay if location is missing
             setTimeout(() => {
@@ -30585,7 +30784,7 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
             return;
         }
         
-        const coords = [taxi.longitude, taxi.latitude];
+        const coords = [taxiLng, taxiLat];
         console.log("📍 Showing confirmed taxi at:", coords);
         
         // 5. Create the marker element
@@ -30617,16 +30816,19 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
                 anchor: 'center'
             });
             
-            window.confirmedTaxiMarker.setLngLat(coords).addTo(window.map);
+            window.confirmedTaxiMarker.setLngLat(coords).addTo(activeMap);
             console.log("✅ Confirmed taxi marker added at:", coords);
             
             // 7. Start real-time tracking
             const taxiRef = firebase.database().ref('taxis/' + taxiId);
             taxiRef.on('value', (snapshot) => {
                 const updatedTaxi = snapshot.val();
-                if (!window.confirmedTaxiMarker || !updatedTaxi || !updatedTaxi.latitude || !updatedTaxi.longitude) return;
+                const updatedLocation = updatedTaxi && updatedTaxi.location ? updatedTaxi.location : updatedTaxi;
+                const updatedLat = Number(updatedLocation && (updatedLocation.latitude ?? updatedLocation.lat));
+                const updatedLng = Number(updatedLocation && (updatedLocation.longitude ?? updatedLocation.lng));
+                if (!window.confirmedTaxiMarker || !Number.isFinite(updatedLat) || !Number.isFinite(updatedLng)) return;
                 
-                const newCoords = [updatedTaxi.longitude, updatedTaxi.latitude];
+                const newCoords = [updatedLng, updatedLat];
                 window.confirmedTaxiMarker.setLngLat(newCoords);
 
                 const updatedHeading = Number(updatedTaxi.heading || 0);
@@ -30636,7 +30838,7 @@ window.showConfirmedTaxi = function(taxiId, requestKey = null) {
                 }
 
                 if (window.map && Number.isFinite(window.commuterLat) && Number.isFinite(window.commuterLng)) {
-                    const dist = calculateDistance(window.commuterLat, window.commuterLng, updatedTaxi.latitude, updatedTaxi.longitude);
+                    const dist = calculateDistance(window.commuterLat, window.commuterLng, updatedLat, updatedLng);
 
                     if (dist < 0.5) {
                         window.map.flyTo({
@@ -35707,6 +35909,11 @@ window.requestAsiyeGoRide = async function(taxiId) {
         if (cancelBtn) cancelBtn.style.display = 'block';
         openModal('pendingRequestPopup');
 
+        // Show pickup + destination on the map while we search for a driver
+        if (typeof window.showSearchingMapView === 'function') {
+            window.showSearchingMapView(window.ehailingDestLat, window.ehailingDestLng);
+        }
+
         const isPooling = (window.selectedRideCategory === 'club');
         const rideType = isPooling ? 'club' : 'ehailing';
         const rideStatus = isPooling ? 'pooling' : 'pending';
@@ -35786,7 +35993,7 @@ window.requestAsiyeGoRide = async function(taxiId) {
             const poolData = poolSnap.val();
             
             if (poolData && Object.keys(poolData.passengers).length >= 2) {
-                await notifyDriversAboutClubPool(requestId, poolData);
+                await notifyDriversAboutClubPool(requestId, poolData, poolData.taxiId);
             }
             
             closeModal('pendingRequestPopup');
@@ -35823,14 +36030,18 @@ window.requestAsiyeGoRide = async function(taxiId) {
 
             await requestNode.set(requestData);
 
-            // 6. Notify Driver Directly
+            // 6. Notify the selected driver or broadcast to eligible nearby drivers
             if (taxiId) {
-                database.ref(`notifications/taxis/${taxiId}`).push({
+                await database.ref(`notifications/taxis/${taxiId}`).push({
                     type: isPooling ? 'club' : 'passenger',
                     requestId: requestId,
                     commuterName: requestData.commuterName,
                     timestamp: firebase.database.ServerValue.TIMESTAMP
                 });
+            } else if (isPooling) {
+                await notifyDriversAboutClubPool(requestId, requestData);
+            } else {
+                await notifyDriversAboutEHailing(requestId, requestData);
             }
         }
 
@@ -35864,7 +36075,7 @@ async function notifyDriversAboutEHailing(requestId, requestData) {
                 // Only notify e-hailing drivers (vehicleType === 'ehailing')
                 if (driver.vehicleType === 'ehailing' && 
                     driver.isOnline && 
-                    driver.verificationStatus === 'verified' && 
+                    (driver.verificationStatus === 'verified' || driver.provisionalActivation === true || driver.isVerified === true) && 
                     !driver.isFull && 
                     driver.latitude) {
                     
@@ -35895,6 +36106,53 @@ async function notifyDriversAboutEHailing(requestId, requestData) {
         }
     } catch (error) {
         console.error("Error notifying e-hailing drivers:", error);
+    }
+}
+
+async function notifyDriversAboutClubPool(requestId, requestData, excludedTaxiId = null) {
+    console.log("Notifying drivers about Asiye Club request:", requestId);
+
+    try {
+        const snap = await database.ref('taxis').once('value');
+        if (!snap.exists()) return;
+
+        const notifications = [];
+        snap.forEach(child => {
+            const driver = child.val() || {};
+            const isClubDriver = driver.vehicleType !== 'ehailing';
+            const hasLocation = Number.isFinite(Number(driver.latitude)) && Number.isFinite(Number(driver.longitude));
+
+            if (child.key === excludedTaxiId || !isClubDriver || !driver.isOnline ||
+                !(driver.verificationStatus === 'verified' || driver.provisionalActivation === true || driver.isVerified === true) || driver.isFull || !hasLocation) {
+                return;
+            }
+
+            const distance = calculateDistance(
+                requestData.commuterLocation.latitude,
+                requestData.commuterLocation.longitude,
+                Number(driver.latitude),
+                Number(driver.longitude)
+            );
+
+            if (distance <= 10) {
+                notifications.push(database.ref(`notifications/taxis/${child.key}`).push({
+                    type: 'club',
+                    title: 'New Asiye Club Request',
+                    message: `${requestData.commuterName || 'Passenger'} needs a shared ride to ${(requestData.destination || 'their destination').split(',')[0]}`,
+                    requestId: requestId,
+                    commuterName: requestData.commuterName || 'Passenger',
+                    pickupAddress: requestData.pickupAddress || '',
+                    destination: requestData.destination || '',
+                    calculatedPrice: requestData.calculatedPrice || requestData.price || 0,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                }));
+            }
+        });
+
+        await Promise.all(notifications);
+        console.log(`Notified ${notifications.length} Club drivers`);
+    } catch (error) {
+        console.error("Error notifying Club drivers:", error);
     }
 }
 
@@ -39790,30 +40048,54 @@ window.showEmptyClubState = function(from, to) {
     const displaySuburb = suburb || "your suburb";
 
     container.innerHTML = `
-        <div style="padding: 40px 20px; text-align: center;">
-            <div style="width: 80px; height: 80px; background: rgba(255, 159, 10, 0.1); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px;">
-                <i class="fas fa-route" style="font-size: 3rem; color: #FF9F0A;"></i>
-            </div>
-            <h4 style="color: #111; font-weight: 900; font-size: 1.3rem;">No cars on this route yet</h4>
-            
-            <p style="color: #666; font-size: 0.95rem; margin-bottom: 25px; line-height: 1.5;">
-                We don't have drivers going from <b>${displayStreet}</b> to <b>${cleanTo}</b> right now.
-            </p>
-            
-            <div style="background: #f8f9fa; border: 1px solid #eee; padding: 15px; border-radius: 16px; margin: 25px 0; text-align: left;">
-                <p style="margin: 0; color: #333; font-weight: bold; font-size: 0.9rem;"><i class="fas fa-clipboard-list" style="color: #007BFF;"></i> Join the Waiting List</p>
-                <p style="margin: 5px 0 0 0; color: #888; font-size: 0.8rem;">We will broadcast this request to all drivers in <b>${displaySuburb}</b>. You will be notified as soon as a driver accepts your daily commute.</p>
+        <div style="padding: 18px 20px 22px; text-align: center; background: linear-gradient(145deg, #ffffff 0%, #f4f8ff 100%); border: 1px solid #e5ebf5; border-radius: 24px; box-shadow: 0 12px 30px rgba(22, 47, 82, 0.08); position: relative;">
+            <button onclick="closeModal('taxiListSheet'); showModernDashboard();" aria-label="Close route results" title="Close" style="position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border: 1px solid #e1e8f2; border-radius: 50%; background: #ffffff; color: #516174; cursor: pointer; box-shadow: 0 4px 12px rgba(22, 47, 82, 0.1);">
+                <i class="fas fa-times"></i>
+            </button>
+            <div style="display: inline-flex; align-items: center; gap: 7px; padding: 7px 11px; background: #eaf2ff; border: 1px solid #d7e6ff; border-radius: 999px; color: #1769d2; font-size: 0.7rem; font-weight: 900; letter-spacing: 0.04em; text-transform: uppercase;">
+                <span style="width: 7px; height: 7px; background: #ff9f0a; border-radius: 50%; box-shadow: 0 0 0 4px rgba(255, 159, 10, 0.14);"></span>
+                Route search
             </div>
 
-            <button id="waitlistBtn" onclick="window.joinCommuteWaitlist()" style="width: 100%; padding: 16px; background: #FF9F0A; color: black; border-radius: 16px; font-weight: 900; font-size: 1.05rem; border: none; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 159, 10, 0.3);">
-                Request Route Allocation
+            <div style="width: 68px; height: 68px; background: #111827; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 18px auto 16px; transform: rotate(-4deg); box-shadow: 0 10px 20px rgba(17, 24, 39, 0.18);">
+                <i class="fas fa-route" style="font-size: 1.8rem; color: #ffb52e; transform: rotate(4deg);"></i>
+            </div>
+            <h4 style="color: #111827; margin: 0; font-weight: 900; font-size: 1.35rem; letter-spacing: -0.01em;">No cars on this route yet</h4>
+            <p style="color: #68758a; font-size: 0.9rem; margin: 9px auto 20px; line-height: 1.5; max-width: 310px;">We’re still building this commute. Add your request and we’ll help match you with a driver.</p>
+
+            <div style="display: flex; align-items: stretch; text-align: left; background: #ffffff; border: 1px solid #e5ebf5; border-radius: 16px; padding: 13px 14px; margin: 0 0 18px; box-shadow: 0 5px 16px rgba(22, 47, 82, 0.05);">
+                <div style="display: flex; flex-direction: column; align-items: center; width: 20px; padding-top: 3px;">
+                    <span style="width: 9px; height: 9px; border: 3px solid #1769d2; border-radius: 50%;"></span>
+                    <span style="width: 1px; flex: 1; min-height: 19px; border-left: 1px dashed #b7c9e4; margin: 3px 0;"></span>
+                    <span style="width: 9px; height: 9px; background: #ff9f0a; border-radius: 50%;"></span>
+                </div>
+                <div style="padding-left: 11px; min-width: 0; flex: 1;">
+                    <div style="color: #8a96a8; font-size: 0.63rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em;">From</div>
+                    <div style="color: #1b2738; font-size: 0.88rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${displayStreet}</div>
+                    <div style="height: 10px;"></div>
+                    <div style="color: #8a96a8; font-size: 0.63rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em;">To</div>
+                    <div style="color: #1b2738; font-size: 0.88rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${cleanTo}</div>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: flex-start; gap: 10px; text-align: left; background: #fff8e9; border: 1px solid #ffe5aa; padding: 12px 13px; border-radius: 14px; margin-bottom: 16px;">
+                <i class="fas fa-bell" style="color: #d98300; font-size: 0.95rem; margin-top: 2px;"></i>
+                <div>
+                    <p style="margin: 0; color: #654400; font-weight: 900; font-size: 0.84rem;">Get notified when a driver joins</p>
+                    <p style="margin: 4px 0 0; color: #92713a; font-size: 0.76rem; line-height: 1.4;">We’ll share your request with verified drivers around ${displaySuburb}.</p>
+                </div>
+            </div>
+
+            <button id="waitlistBtn" onclick="window.joinCommuteWaitlist()" style="width: 100%; padding: 15px 16px; background: #1769d2; color: #fff; border-radius: 14px; font-weight: 900; font-size: 0.95rem; border: none; cursor: pointer; box-shadow: 0 8px 18px rgba(23, 105, 210, 0.24);">
+                <i class="fas fa-plus-circle" style="margin-right: 7px;"></i> Request this route
             </button>
             
-            <button onclick="window.showAllNearbyTaxis()" style="width: 100%; background: transparent; border: none; color: #007BFF; font-weight: 700; margin-top: 15px; cursor: pointer;">
-                See drivers in ${displaySuburb}
+            <button onclick="window.showAllNearbyTaxis()" style="width: 100%; background: transparent; border: none; color: #1769d2; font-weight: 800; font-size: 0.84rem; margin-top: 14px; cursor: pointer;">
+                <i class="fas fa-map-marker-alt" style="margin-right: 5px;"></i> Browse drivers near ${displaySuburb}
             </button>
         </div>
     `;
+    if (typeof window.showRouteMapMarkers === 'function') window.showRouteMapMarkers([]);
 };
 
 // 2. Update showAllNearbyTaxis to use the force flag
@@ -40018,6 +40300,25 @@ window.openModal = function(modalId) {
         el.style.setProperty('visibility', 'visible', 'important');
         el.style.setProperty('opacity', '1', 'important');
         el.classList.add('open');
+    }
+};
+
+window.closeModal = function(modalId) {
+    if (!modalId) return;
+
+    const element = document.getElementById(modalId);
+    if (!element) return;
+
+    element.classList.remove('open');
+    element.style.setProperty('display', 'none', 'important');
+    element.style.setProperty('visibility', 'hidden', 'important');
+    element.style.setProperty('opacity', '0', 'important');
+    if (modalId === 'taxiListSheet') {
+        element.style.setProperty('transform', 'translateY(110%)', 'important');
+        if (typeof localMarketInterval !== 'undefined' && localMarketInterval) {
+            clearInterval(localMarketInterval);
+            localMarketInterval = null;
+        }
     }
 };
 
@@ -40965,6 +41266,15 @@ async function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat,
                     commuterName: passengerName.trim() || 'Passenger',
                     timestamp: firebase.database.ServerValue.TIMESTAMP
                 });
+            } else {
+                await notifyDriversAboutClubPool(joinablePool.requestId, {
+                    ...joinablePool.request,
+                    commuterName: passengerName.trim() || 'Passenger',
+                    commuterLocation: { latitude: pLat, longitude: pLng },
+                    pickupAddress: pickupText,
+                    destination: destText,
+                    calculatedPrice: price
+                });
             }
 
             const requestId = joinablePool.requestId;
@@ -41048,6 +41358,8 @@ async function completeClubBooking(pickupText, destText, dateVal, timeVal, pLat,
                 passengerCount: 1,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             });
+        } else {
+            await notifyDriversAboutClubPool(requestId, requestData);
         }
 
         console.log("✅ Driver notification sent");
@@ -46295,11 +46607,11 @@ window.confirmCarCall = function(taxiId) {
     console.log(`✅ Confirming car call for taxi: ${taxiId}`);
     closeModal('genericMessagePopup');
     
-    // Call the existing request function
-    if (typeof window.requestTaxi === 'function') {
-        window.requestTaxi(taxiId);
-    } else if (typeof window.requestAsiyeGoRide === 'function') {
+    // Call the actual booking function (requestTaxi is a broken no-op wrapper)
+    if (typeof window.requestAsiyeGoRide === 'function') {
         window.requestAsiyeGoRide(taxiId);
+    } else if (typeof window.requestTaxi === 'function') {
+        window.requestTaxi(taxiId);
     } else {
         // Fallback: open the club booking popup
         firebase.database().ref(`taxis/${taxiId}`).once('value').then(snap => {
@@ -46485,6 +46797,51 @@ window.showModernDashboard = function() {
     
     if (typeof window.refreshLocationDisplay === 'function') window.refreshLocationDisplay();
     if (typeof window.initHomeSheetDrag === 'function') window.initHomeSheetDrag();
+    if (typeof window.renderQuickPlaces === 'function') window.renderQuickPlaces();
+};
+
+// Renders the Bolt-style "saved places" quick access list under the search bar
+window.renderQuickPlaces = function() {
+    const container = document.getElementById('asiyeQuickPlaces');
+    if (!container) return;
+
+    const home = window.commuterData && window.commuterData.homeAddress;
+    const work = window.commuterData && window.commuterData.workAddress;
+
+    let rows = '';
+    if (home) {
+        rows += `
+            <div class="asiye-quick-place" onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();">
+                <div class="asiye-quick-place-icon"><i class="fas fa-home"></i></div>
+                <div style="flex:1; min-width:0;">
+                    <div class="asiye-quick-place-title">Home</div>
+                    <div class="asiye-quick-place-sub">${escapeHtml(home.split(',')[0])}</div>
+                </div>
+            </div>`;
+    }
+    if (work) {
+        rows += `
+            <div class="asiye-quick-place" onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();">
+                <div class="asiye-quick-place-icon"><i class="fas fa-briefcase"></i></div>
+                <div style="flex:1; min-width:0;">
+                    <div class="asiye-quick-place-title">Work</div>
+                    <div class="asiye-quick-place-sub">${escapeHtml(work.split(',')[0])}</div>
+                </div>
+            </div>`;
+    }
+
+    if (!rows) {
+        rows = `
+            <div class="asiye-quick-place" onclick="if(typeof window.openCommuteSetupModal === 'function'){window.openCommuteSetupModal();}else{openModal('setupCommuteModal');}">
+                <div class="asiye-quick-place-icon"><i class="fas fa-map-marker-alt"></i></div>
+                <div style="flex:1; min-width:0;">
+                    <div class="asiye-quick-place-title">Set up your commute</div>
+                    <div class="asiye-quick-place-sub">Add Home & Work for quicker bookings</div>
+                </div>
+            </div>`;
+    }
+
+    container.innerHTML = rows;
 };
 
 window.hideModernDashboard = function() {
@@ -47741,10 +48098,11 @@ window.confirmCarCall = function(taxiId) {
     console.log("✅ Confirming car call for taxi: " + taxiId);
     closeModal('genericMessagePopup');
     
-    if (typeof window.requestTaxi === 'function') {
-        window.requestTaxi(taxiId);
-    } else if (typeof window.requestAsiyeGoRide === 'function') {
+    // Call the actual booking function (requestTaxi is a broken no-op wrapper)
+    if (typeof window.requestAsiyeGoRide === 'function') {
         window.requestAsiyeGoRide(taxiId);
+    } else if (typeof window.requestTaxi === 'function') {
+        window.requestTaxi(taxiId);
     } else {
         firebase.database().ref('taxis/' + taxiId).once('value').then(function(snap) {
             var taxi = snap.val();
@@ -47883,18 +48241,26 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
 };
 
 async function showRideSelectionView(destName, destLat, destLng) {
-    const pickupLat = window.commuterLat;
-    const pickupLng = window.commuterLng;
+    const pickupLat = Number.parseFloat(window.commuterLat);
+    const pickupLng = Number.parseFloat(window.commuterLng);
+    const destinationLat = Number.parseFloat(destLat);
+    const destinationLng = Number.parseFloat(destLng);
 
     // Bail out early if any coordinate is missing/NaN instead of crashing later on fitBounds.
-    if (![pickupLat, pickupLng, destLat, destLng].every(Number.isFinite)) {
-        console.warn("showRideSelectionView: invalid coordinates, aborting", { pickupLat, pickupLng, destLat, destLng });
+    if (![pickupLat, pickupLng, destinationLat, destinationLng].every(Number.isFinite)) {
+        console.warn("showRideSelectionView: invalid coordinates, aborting", { pickupLat, pickupLng, destinationLat, destinationLng });
         showGenericMessage("Location Error", "Could not determine your location or destination. Please try again.", "fa-map-marker-alt", "icon-danger");
         return;
     }
 
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap) {
+        showGenericMessage("Map Unavailable", "The map is still loading. Please try again in a moment.", "fa-map", "icon-danger");
+        return;
+    }
+
     // 1. Calculate Distance and Pricing
-    const dist = calculateDistance(pickupLat, pickupLng, destLat, destLng) * 1.2; // 20% road curve buffer
+    const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2; // 20% road curve buffer
     window.currentTripDistance = dist;
 
     const baseGoPrice = Math.max(30, Math.round(30 + (dist * 9.50))); // R30 base + R9.5/km
@@ -47908,7 +48274,7 @@ async function showRideSelectionView(destName, destLat, destLng) {
     document.getElementById('price-club6').textContent = `R${club6Price}`;
     
     // 3. Fetch ETA and Duration from Mapbox
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destLng},${destLat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.routes && data.routes[0]) {
@@ -47927,8 +48293,8 @@ async function showRideSelectionView(destName, destLat, destLng) {
     
     // Fit map to show both points
     try {
-        const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destLng, destLat]);
-        map.fitBounds(bounds, { padding: { top: 50, bottom: 450, left: 50, right: 50 } });
+        const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destinationLng, destinationLat]);
+        activeMap.fitBounds(bounds, { padding: { top: 50, bottom: 450, left: 50, right: 50 } });
     } catch (e) {
         console.warn("showRideSelectionView: fitBounds failed", e);
     }
