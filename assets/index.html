@@ -11263,7 +11263,7 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     <div id="booking-flow-container" style="flex: 1; overflow-y: auto; padding: 0 5px 20px 5px;">
         <!-- VIEW 1: INITIAL SEARCH -->
         <div id="view-initial-search">
-            <h2 style="color: #0A0A0A; margin: 0 0 18px 0; font-weight: 900; font-size: 1.65rem; letter-spacing: -0.5px; line-height: 1.2;">Let us get<br>you going.</h2>
+            <h2 style="color: #0A0A0A; margin: 0 0 18px 0; font-weight: 900; font-size: 1.3rem; letter-spacing: -0.3px; line-height: 1.2; white-space: nowrap;">Let us get you going.</h2>
 
             <!-- Premium Service Tiles -->
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
@@ -13768,23 +13768,13 @@ function setupUserMarker(coords) {
         el.innerHTML = `
             <span style="padding: 5px 10px; border-radius: 9px; background: #fff; color: #172235; font: 800 9px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 4px 14px rgba(22,47,82,.18); border: 1px solid #eee;">You are here</span>
             <span style="width: 2px; height: 22px; background: linear-gradient(#c7c7c7, #1769d2); margin: 0 auto;"></span>
-            <span style="position:relative; width: 18px; height: 18px; display:flex; align-items:center; justify-content:center;">
-                <span class="user-marker-pulse" style="position:absolute; width: 18px; height: 18px; border-radius: 50%; background: rgba(23,105,210,.35); animation: userMarkerHeartbeat 2.4s ease-out infinite;"></span>
-                <span style="position:relative; width: 18px; height: 18px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 0 7px rgba(23,105,210,.16), 0 4px 12px rgba(23,105,210,.35); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
-            </span>
+            <span style="position:relative; width: 14px; height: 14px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 4px 10px rgba(23,105,210,.35); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
         `;
 
         if (!document.getElementById('userMarkerPulseStyle')) {
             const styleTag = document.createElement('style');
             styleTag.id = 'userMarkerPulseStyle';
             styleTag.textContent = `
-                @keyframes userMarkerHeartbeat {
-                    0% { transform: scale(1); opacity: 0.7; }
-                    20% { transform: scale(1.9); opacity: 0; }
-                    35% { transform: scale(1); opacity: 0.7; }
-                    55% { transform: scale(2.6); opacity: 0; }
-                    100% { transform: scale(2.6); opacity: 0; }
-                }
                 @keyframes userMarkerBeat {
                     0%, 100% { transform: scale(1); }
                     18% { transform: scale(1.25); }
@@ -13812,6 +13802,40 @@ function setupUserMarker(coords) {
 // ================================================================
 // SHOW SEARCHING MAP VIEW - pickup + destination while finding a driver
 // ================================================================
+
+// Drops/updates a "Drop-off" tag-on-a-pole marker at the given coordinates,
+// styled to match the "You are here" pickup marker.
+window.setDropoffMarker = function(destLat, destLng) {
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap || !Number.isFinite(destLat) || !Number.isFinite(destLng)) return null;
+
+    if (window.searchDestMarker) {
+        window.searchDestMarker.setLngLat([destLng, destLat]);
+        return window.searchDestMarker;
+    }
+
+    const el = document.createElement('div');
+    el.style.cssText = `
+        width: 120px;
+        height: 62px;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        pointer-events: none;
+    `;
+    el.innerHTML = `
+        <span style="padding: 5px 10px; border-radius: 9px; background: #111; color: #fff; font: 800 9px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 4px 14px rgba(22,47,82,.25);">Drop-off</span>
+        <span style="width: 2px; height: 20px; background: linear-gradient(#c7c7c7, #111); margin: 0 auto;"></span>
+        <i class="fas fa-map-marker-alt" style="color:#111; font-size: 1.7rem; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));"></i>
+    `;
+    window.searchDestMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
+        .setLngLat([destLng, destLat])
+        .addTo(activeMap);
+    return window.searchDestMarker;
+};
+
 window.showSearchingMapView = function(destLat, destLng) {
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!activeMap) return;
@@ -13823,16 +13847,7 @@ window.showSearchingMapView = function(destLat, destLng) {
     if (typeof setupUserMarker === 'function') setupUserMarker([pickupLng, pickupLat]);
 
     if (Number.isFinite(destLat) && Number.isFinite(destLng)) {
-        if (window.searchDestMarker) {
-            window.searchDestMarker.setLngLat([destLng, destLat]);
-        } else {
-            const el = document.createElement('div');
-            el.style.cssText = 'width: 30px; height: 30px; display:flex; align-items:center; justify-content:center;';
-            el.innerHTML = '<i class="fas fa-map-marker-alt" style="color:#111; font-size: 1.7rem; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));"></i>';
-            window.searchDestMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
-                .setLngLat([destLng, destLat])
-                .addTo(activeMap);
-        }
+        window.setDropoffMarker(destLat, destLng);
 
         try {
             const bounds = new mapboxgl.LngLatBounds()
@@ -44499,6 +44514,11 @@ function drawTaxiCar(ctx, width, height, isFull) {
     ctx.quadraticCurveTo(0, y + carHeight + 2, x + 3, y + carHeight);
     ctx.bezierCurveTo(x - 1, y + carHeight - 10, x, y + 10, x + 4, y);
     ctx.fill();
+    // Outline so a white/light body still reads clearly against light map tiles
+    ctx.shadowColor = 'transparent';
+    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = 'rgba(17,17,17,0.55)';
+    ctx.stroke();
     
     ctx.shadowColor = 'transparent';
     
@@ -48342,6 +48362,9 @@ async function showRideSelectionView(destName, destLat, destLng) {
     // Fit map to show both points, leaving room for the confirm-ride sheet so the
     // route isn't hidden behind it (sheet height varies by device, so measure it live)
     try {
+        if (typeof setupUserMarker === 'function') setupUserMarker([pickupLng, pickupLat]);
+        if (typeof window.setDropoffMarker === 'function') window.setDropoffMarker(destinationLat, destinationLng);
+
         const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destinationLng, destinationLat]);
         const bottomPad = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 450;
         activeMap.fitBounds(bounds, { padding: { top: 80, bottom: bottomPad, left: 60, right: 60 }, maxZoom: 16, duration: 900 });
