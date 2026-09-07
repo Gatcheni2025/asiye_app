@@ -456,6 +456,70 @@ body, html {
     justify-content: center;
 }
 
+.premium-car-marker {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.premium-car-marker::before {
+    content: '';
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border: 1px solid rgba(0, 200, 83, .32);
+    border-radius: 50%;
+    background: rgba(0, 200, 83, .13);
+    animation: vehiclePulse 2.2s ease-out infinite;
+}
+
+.premium-car-shadow {
+    position: absolute;
+    bottom: 4px;
+    width: 24px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, .2);
+    filter: blur(4px);
+}
+
+.premium-car {
+    position: relative;
+    z-index: 3;
+    width: 48px;
+    height: 48px;
+    filter: drop-shadow(0 4px 3px rgba(0,0,0,.2)) drop-shadow(0 1px 1px rgba(0,0,0,.25));
+    transform-origin: center;
+    transition: transform .25s ease;
+}
+
+.premium-car-marker .car-canvas {
+    position: relative;
+    z-index: 3;
+    width: 36px;
+    height: 36px;
+    display: block;
+    transform-origin: center;
+}
+
+.premium-car-body { fill: #fff; stroke: #151515; stroke-width: 2.2; }
+.premium-car-roof { fill: #f8fafc; stroke: #151515; stroke-width: 2; }
+.premium-car-window { fill: #17202a; stroke: #0b0f12; stroke-width: 1.5; }
+.premium-car-stripe, .premium-badge { fill: #00c853; }
+.premium-wheel { fill: #101214; stroke: #050505; stroke-width: 1; }
+.premium-wheel-inner { fill: #9ca3af; }
+.premium-headlight { fill: #fff; stroke: #d1d5db; stroke-width: 1; }
+.premium-taillight { fill: #ef4444; }
+
+@keyframes vehiclePulse {
+    0% { transform: scale(.65); opacity: .85; }
+    70% { transform: scale(1.35); opacity: 0; }
+    100% { transform: scale(.65); opacity: 0; }
+}
+
 /* Styling for the new tracking card */
 .tracking-header-visuals {
     display: flex;
@@ -1087,19 +1151,19 @@ body, html {
    .communication-banner.danger {
     border-left: 5px solid var(--danger-color);
 }
-    /* Enhanced User Location Marker */
+    /* Custom user-location marker uses this element as a transparent positioning canvas. */
     .user-location-marker {
         position: relative;
-        width: 24px;
-        height: 24px;
-
-        border-radius: 50%;
-        background: var(--accent) !important;
-    border: 4px solid white !important;
-    box-shadow: 0 4px 10px rgba(39, 110, 241, 0.4) !important;
+        width: 132px;
+        height: 76px;
+        background: transparent !important;
+        border: 0 !important;
+        border-radius: 0;
+        box-shadow: none !important;
         display: flex;
+        flex-direction: column;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-end;
     }
 .taxi-map-marker img {
     filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));
@@ -11269,7 +11333,7 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
                 <div onclick="openModal('destinationPromptPopup'); showDestinationSearchMode();" class="asiye-service-tile">
                     <div class="asiye-service-tile-icon" style="background: linear-gradient(145deg, #111 0%, #333 100%);">
-                        <i class="fas fa-car-side" style="color: #30D158;"></i>
+                        <img src="data/car.svg" alt="Ride" style="width: 32px; height: 32px; object-fit: contain;">
                     </div>
                     <div class="asiye-service-tile-label">Rides</div>
                     <div class="asiye-service-tile-sub">Let's get moving</div>
@@ -13211,7 +13275,7 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
 </div>
 
 <!-- NEW: "You are here" Location Indicator -->
-<div id="youAreHereBubble" style="display: none; position: fixed; top: max(15px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); background: rgba(255,255,255,0.95); backdrop-filter: blur(10px); color: #111; padding: 9px 16px; border-radius: 30px; z-index: 9000; box-shadow: 0 4px 15px rgba(0,0,0,0.1); align-items: center; gap: 7px; pointer-events: none; border: 1px solid #eee; max-width: calc(100vw - 32px);">
+<div>
     <div style="width: 8px; height: 8px; background: #28a745; border-radius: 50%; box-shadow: 0 0 8px #28a745; animation: blink 1.5s infinite;"></div>
     <span style="font-size: 0.62rem; font-weight: 800; text-transform: uppercase; color: #888; white-space: nowrap;">You are here:</span>
     <span id="homeCurrentAddress" style="font-weight: 800; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 125px;">Fetching...</span>
@@ -13376,6 +13440,7 @@ var requestStatusListener = null;
 
           var commuterLat, commuterLng;
           var userDropOffDestination = '';
+          window.taxiMarkers = window.taxiMarkers || {};
 
           var activeRequestRef = null;
           var confirmedTaxiMarker = null;
@@ -13756,8 +13821,8 @@ function setupUserMarker(coords) {
         const el = document.createElement('div');
         el.className = 'user-location-marker';
         el.style.cssText = `
-            width: 120px;
-            height: 74px;
+            width: 132px;
+            height: 76px;
             position: relative;
             display: flex;
             flex-direction: column;
@@ -13766,9 +13831,9 @@ function setupUserMarker(coords) {
             pointer-events: none;
         `;
         el.innerHTML = `
-            <span style="padding: 5px 10px; border-radius: 9px; background: #fff; color: #172235; font: 800 9px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 4px 14px rgba(22,47,82,.18); border: 1px solid #eee;">You are here</span>
-            <span style="width: 2px; height: 22px; background: linear-gradient(#c7c7c7, #1769d2); margin: 0 auto;"></span>
-            <span style="position:relative; width: 14px; height: 14px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 4px 10px rgba(23,105,210,.35); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
+            <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
+            <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
+            <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
         `;
 
         if (!document.getElementById('userMarkerPulseStyle')) {
@@ -13836,6 +13901,56 @@ window.setDropoffMarker = function(destLat, destLng) {
     return window.searchDestMarker;
 };
 
+window.drawSearchingRoute = function(pickupLng, pickupLat, destLng, destLat) {
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap || ![pickupLng, pickupLat, destLng, destLat].every(Number.isFinite)) return;
+
+    const routeId = 'searching-trip-route';
+    const requestKey = `${pickupLng},${pickupLat};${destLng},${destLat}`;
+    window.searchingRouteRequestKey = requestKey;
+
+    const addRoute = (routeData) => {
+        if (activeMap.getSource(routeId)) {
+            activeMap.getSource(routeId).setData(routeData);
+            return;
+        }
+        activeMap.addSource(routeId, { type: 'geojson', data: routeData });
+        activeMap.addLayer({
+            id: routeId,
+            type: 'line',
+            source: routeId,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+                'line-color': '#276EF1',
+                'line-width': 5,
+                'line-opacity': 0.85,
+                'line-dasharray': [1.2, 1.2]
+            }
+        });
+    };
+
+    const loadRoadRoute = async () => {
+        try {
+            const response = await fetch(
+                `https://api.mapbox.com/directions/v5/mapbox/driving/${requestKey}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`
+            );
+            if (!response.ok) throw new Error(`Directions request failed (${response.status})`);
+
+            const result = await response.json();
+            const geometry = result.routes?.[0]?.geometry;
+            if (window.searchingRouteRequestKey !== requestKey || !Array.isArray(geometry?.coordinates)) return;
+            const routeData = { type: 'Feature', properties: {}, geometry };
+
+            if (activeMap.isStyleLoaded()) addRoute(routeData);
+            else activeMap.once('style.load', () => addRoute(routeData));
+        } catch (error) {
+            console.warn('Could not draw road route to drop-off:', error);
+        }
+    };
+
+    loadRoadRoute();
+};
+
 window.showSearchingMapView = function(destLat, destLng) {
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!activeMap) return;
@@ -13848,6 +13963,7 @@ window.showSearchingMapView = function(destLat, destLng) {
 
     if (Number.isFinite(destLat) && Number.isFinite(destLng)) {
         window.setDropoffMarker(destLat, destLng);
+        window.drawSearchingRoute(pickupLng, pickupLat, destLng, destLat);
 
         try {
             const bounds = new mapboxgl.LngLatBounds()
@@ -13865,6 +13981,13 @@ window.clearSearchingMapView = function() {
     if (window.searchDestMarker) {
         try { window.searchDestMarker.remove(); } catch (e) {}
         window.searchDestMarker = null;
+    }
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (activeMap && activeMap.isStyleLoaded()) {
+        try {
+            if (activeMap.getLayer('searching-trip-route')) activeMap.removeLayer('searching-trip-route');
+            if (activeMap.getSource('searching-trip-route')) activeMap.removeSource('searching-trip-route');
+        } catch (e) { console.warn('Could not clear searching route:', e); }
     }
 };
 // ================================================================
@@ -15910,13 +16033,15 @@ map.on('style.load', () => {
 });
 
       // Add native Mapbox Geolocate Control (The target icon button)
+      // trackUserLocation stays off since our custom "You are here" pole marker
+      // already renders the live position - avoids a duplicate native blue pulse dot.
       const geolocateControl = new mapboxgl.GeolocateControl({
           positionOptions: {
               enableHighAccuracy: true
           },
-          trackUserLocation: true, // Automatically tracks user
-          showUserHeading: true,   // Shows the direction they are facing
-          showAccuracyCircle: false // Hides the big blue circle for a cleaner look
+          trackUserLocation: false,
+          showUserHeading: false,
+          showAccuracyCircle: false
       });
 
       if (navigator.geolocation) {
@@ -15953,6 +16078,11 @@ map.on('load', () => {
     // instead of waiting on the async geolocation callback to place it.
     if (typeof setupUserMarker === 'function') {
         setupUserMarker([commuterLng || coords[0], commuterLat || coords[1]]);
+    }
+
+    // Start the live taxi feed only after Mapbox can accept marker additions.
+    if (typeof loadAndDisplayTaxisOnMap === 'function') {
+        loadAndDisplayTaxisOnMap();
     }
 
     // The newly fixed active trip checker will safely decide whether 
@@ -23862,8 +23992,8 @@ function completePassengerCleanup(reqId) {
       const startPos = { lng: startLngLat.lng, lat: startLngLat.lat };
       const endPos = { lng: newLngLat[0], lat: newLngLat[1] };
 
-      const canvas = marker.getElement().querySelector('.car-canvas');
-      var startHeading = parseFloat(canvas?.dataset?.heading || marker.currentHeading || 0);
+    const canvas = marker.getElement().querySelector('.car-canvas');
+    var startHeading = parseFloat(canvas?.dataset?.heading || marker.currentHeading || 0);
       var endHeading = targetHeading !== undefined ? targetHeading : startHeading;
 
       // Normalize angle difference
@@ -23936,60 +24066,9 @@ function completePassengerCleanup(reqId) {
     var lng = parseFloat(taxi.longitude);
     if (isNaN(lat) || isNaN(lng)) return false;
 
-    const isFull = taxi.isFull === true;
-    const isBroadcasting = taxi.isBroadcasting === true;
-    
-    // NEW: Check if this driver has a locked/scheduled Club booking
-    const isScheduled = taxi.scheduledTime && taxi.scheduledDestination;
-
-    // ========== COLOR & STATUS LOGIC ==========
-    var statusColor;
-    var statusText;
-    var labelTextColor = 'white';
-
-    if (isFull) {
-        statusColor = '#f72585';  // Pink/Purple for full
-        statusText = "FULL";
-    } else if (isScheduled) {
-        statusColor = '#FF9F0A';  // ORANGE for Scheduled Club Rides
-        statusText = "SCHEDULED";
-        labelTextColor = 'black'; // Dark text looks better on orange
-    } else if (isBroadcasting && !isFull) {
-        statusColor = '#28a745';  // BRIGHT GREEN for available
-        statusText = "LOADING";
-    } else {
-        statusColor = '#6c757d';  // Gray for offline
-        statusText = "OFFLINE";
-    }
-
-    // ========== DYNAMIC LABEL CONSTRUCTION ==========
-    const rawDest = taxi.destination ? taxi.destination.split(',')[0] : "Nearby";
-    var destLabel;
-
-    if (isScheduled) {
-        // Format: TO Sandton @ 07:30 (R25)
-        const scheduledArea = taxi.scheduledDestination.split(',')[0];
-        const price = taxi.rate || "25";
-        destLabel = `TO ${scheduledArea} @ ${taxi.scheduledTime} (R${price})`;
-    } else {
-        destLabel = isDummy ? `To ${rawDest}` : (isBroadcasting ? `LOADING â†’ ${rawDest}` : `To ${rawDest}`);
-    }
-
     // Update existing marker or create new one
     if (taxiMarkers[taxiId]) {
         const marker = taxiMarkers[taxiId];
-        const tag = marker.getElement().querySelector('.taxi-marker-label');
-        if (tag) {
-            tag.querySelector('.status-badge').textContent = statusText;
-            const destSpan = tag.querySelector('.dest-text');
-            if (destSpan) {
-                destSpan.textContent = destLabel;
-                destSpan.style.color = isScheduled ? '#111' : '#ffd700'; // Darker text for scheduled
-            }
-            tag.style.background = statusColor;
-            tag.style.color = labelTextColor;
-        }
-
         // Update marker position with smooth animation
         if (!isDummy && (lat && lng)) {
             const oldLngLat = marker.getLngLat();
@@ -24015,20 +24094,13 @@ function completePassengerCleanup(reqId) {
     else {
         const el = document.createElement('div');
         el.className = 'taxi-marker';
-        el.style.cssText = 'display:flex; flex-direction:column; align-items:center; position:relative; width:38px; height:38px; pointer-events:auto; cursor:pointer; z-index:10;';
+        el.style.cssText = 'display:flex; flex-direction:column; align-items:center; position:relative; width:42px; height:42px; pointer-events:auto; cursor:pointer; z-index:10;';
 
         el.innerHTML = `
-            <div class="taxi-marker-label" style="
-                position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-                background: ${statusColor}; color: ${labelTextColor}; padding: 4px 10px;
-                border-radius: 14px; font-size: 8px; font-weight: 800;
-                white-space: nowrap; border: 1.5px solid white;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-                display: flex; flex-direction: column; align-items: center; z-index: 100;">
-                <span class="status-badge" style="background: rgba(0,0,0,0.2); padding: 1px 6px; border-radius: 10px; font-size: 7px; margin-bottom: 2px;">${statusText}</span>
-                <span class="dest-text" style="color: ${isScheduled ? '#111' : '#ffd700'}; font-size: 7px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; font-weight: bold;">${destLabel}</span>
+            <div class="premium-car-marker">
+                <div class="premium-car-shadow"></div>
+                <canvas class="car-canvas" width="60" height="60" data-heading="${Number.isFinite(Number(taxi.heading)) ? Number(taxi.heading) : 0}" aria-label="Taxi vehicle" role="img"></canvas>
             </div>
-            <canvas class="car-canvas" id="taxi-canvas-${taxiId}" width="38" height="38" data-heading="${taxi.heading || Math.random() * 360}" style="width: 38px; height: 38px; display: block;"></canvas>
         `;
 
         el.addEventListener('click', (e) => {
@@ -24045,51 +24117,72 @@ function completePassengerCleanup(reqId) {
             rotationAlignment: 'viewport'
         }).setLngLat([lng, lat]).addTo(map);
 
-        const canvas = el.querySelector(`#taxi-canvas-${taxiId}`);
-        if (canvas) {
-            // Draw the visual car icon on the canvas
-            drawColoredTaxi(canvas.getContext('2d'), 38, 38, isFull, false, statusColor);
+        const vehicle = el.querySelector('.car-canvas');
+        if (vehicle) {
+            const heading = Number(vehicle.dataset.heading) || 0;
+            taxiMarkers[taxiId].currentHeading = heading;
+            drawBoltStyleTaxi(vehicle.getContext('2d'), 60, 60);
+            vehicle.style.transform = `rotate(${heading - map.getBearing()}deg)`;
         }
+
     }
 
     return true;
-};  function drawColoredTaxi(ctx, width, height, isFull, isYourTaxi, color) {
+};  function drawBoltStyleTaxi(ctx, width, height) {
       if (!ctx) return;
       ctx.clearRect(0, 0, width, height);
       ctx.save();
-      ctx.translate(width / 2, height / 2);
+      const carW = 28;
+      const carH = 46;
+      const carX = (width - carW) / 2;
+      const carY = (height - carH) / 2;
 
-      const carW = 18;
-      const carH = 30;
-      const carX = -carW / 2;
-      const carY = -carH / 2;
-
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
-      ctx.shadowBlur = 4;
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.roundRect(carX, carY, carW, carH, 5);
-      ctx.fill();
-
-      ctx.shadowColor = 'transparent';
+      // The front of this top-down car points upward, matching a GPS heading of 0 degrees.
+      ctx.shadowColor = 'rgba(0, 0, 0, .24)';
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 3;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.roundRect(carX + 2, carY + 5, carW - 4, 6, 2);
+      ctx.roundRect(carX, carY, carW, carH, 9);
+      ctx.fill();
+      ctx.strokeStyle = '#17202a';
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+
+      ctx.shadowColor = 'transparent';
+      const cabinGradient = ctx.createLinearGradient(0, carY + 9, 0, carY + carH - 10);
+      cabinGradient.addColorStop(0, '#263746');
+      cabinGradient.addColorStop(1, '#111a22');
+      ctx.fillStyle = cabinGradient;
+      ctx.beginPath();
+      ctx.roundRect(carX + 5, carY + 10, carW - 10, carH - 21, 5);
       ctx.fill();
 
-      // Yellow stripe (SA taxi style)
-      ctx.fillStyle = '#ffcc00';
-      ctx.fillRect(carX + 2, carY + carH - 9, carW - 4, 3);
+      ctx.fillStyle = '#00c853';
+      ctx.fillRect(carX + 2, carY + 29, carW - 4, 3);
 
-      // Windows
-      ctx.fillStyle = '#1e2a36';
-      ctx.fillRect(carX + 3, carY + 2, 3, 5);
-      ctx.fillRect(carX + carW - 6, carY + 2, 3, 5);
+      ctx.fillStyle = '#101214';
+      [[carX - 2, carY + 7], [carX + carW - 3, carY + 7], [carX - 2, carY + 30], [carX + carW - 3, carY + 30]].forEach(([x, y]) => {
+          ctx.beginPath();
+          ctx.roundRect(x, y, 5, 10, 2);
+          ctx.fill();
+      });
 
-      // Headlights
-      ctx.fillStyle = '#ffaa33';
-      ctx.fillRect(carX + 1, carY + carH - 4, 3, 2);
-      ctx.fillRect(carX + carW - 4, carY + carH - 4, 3, 2);
+      ctx.fillStyle = '#ffe581';
+      ctx.fillRect(carX + 4, carY + 2, 6, 3);
+      ctx.fillRect(carX + carW - 10, carY + 2, 6, 3);
+      ctx.fillStyle = '#ef4444';
+      ctx.fillRect(carX + 4, carY + carH - 5, 6, 3);
+      ctx.fillRect(carX + carW - 10, carY + carH - 5, 6, 3);
+
+      ctx.fillStyle = '#00c853';
+      ctx.beginPath();
+      ctx.arc(width / 2, height / 2, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(width / 2, height / 2, 1.5, 0, Math.PI * 2);
+      ctx.fill();
 
       ctx.restore();
   }
@@ -24101,7 +24194,7 @@ function completePassengerCleanup(reqId) {
 
   window.dummyRoamers = window.dummyRoamers || {};
   window.localDummyTaxisSpawned = false;
-  const taxiMarkers = window.taxiMarkers || {};
+    const taxiMarkers = window.taxiMarkers || (window.taxiMarkers = {});
   window.dummyTaxisList = window.dummyTaxisList || [];
 
 
@@ -31016,29 +31109,35 @@ function getValidImageUrl(url) {
     if (!url || url === 'undefined' || url === 'null' || url === '') {
         return 'data/AsiyeNew.png';
     }
-    if (url.startsWith('http') || url.startsWith('https')) {
-        return url;
-    }
-    if (url.includes('firebasestorage.googleapis.com')) {
-        if (!url.includes('alt=media')) {
-            return url + (url.includes('?') ? '&' : '?') + 'alt=media';
+    const imageUrl = String(url).trim();
+    if (imageUrl.startsWith('gs://')) {
+        const storagePath = imageUrl.slice(5);
+        const pathStart = storagePath.indexOf('/');
+        if (pathStart > 0) {
+            const bucket = storagePath.slice(0, pathStart);
+            const objectPath = encodeURIComponent(storagePath.slice(pathStart + 1));
+            return `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${objectPath}?alt=media`;
         }
-        return url;
     }
-    return 'data/AsiyeNew.png';
+    // Preserve Firebase download URLs, data URLs, and relative uploaded paths.
+    return imageUrl;
 }
 
 // Resolves a driver's real uploaded selfie/vehicle photo, falling back to the
 // verification "documents" bundle (same fallback admin.html uses) before any placeholder.
 window.getDriverPhotoUrl = function(taxi, fallbackName) {
-    const raw = (taxi && (taxi.profile_picture_url || (taxi.documents && taxi.documents.FACE))) || '';
+    const raw = (taxi && (taxi.profile_picture_url || taxi.profilePicUrl || taxi.driverProfilePic || (taxi.documents && taxi.documents.FACE))) || '';
     if (raw) return getValidImageUrl(raw);
     return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(fallbackName || 'Asiye Driver') + '&background=FF9F0A&color=fff';
 };
 
 window.getDriverVehiclePhotoUrl = function(taxi) {
     const raw = (taxi && (taxi.vehiclePhoto || taxi.carImage || (taxi.documents && taxi.documents.CAR_FRONT))) || '';
-    return raw ? getValidImageUrl(raw) : 'data/quantum.png';
+    return raw ? getValidImageUrl(raw) : '';
+};
+
+window.getVehicleMediaHtml = function(photoUrl) {
+    return '<img src="data/car.svg" alt="Vehicle" style="width:58px; height:42px; padding:3px; border-radius:10px; object-fit:contain; border:1px solid #E5E5E8; background:#fff;">';
 };
 
 function getVehicleDisplayInfo(taxi) {
@@ -44483,112 +44582,76 @@ function updateDriverCarRotation(heading) {
 }
 
 // ================================================================
-// DRAW TAXI CAR
+// DRAW TAXI CAR - matches taxi.html's drawCarOnCanvas for visual consistency
 // ================================================================
 
 function drawTaxiCar(ctx, width, height, isFull) {
     if (!ctx) return;
-    
+
     ctx.clearRect(0, 0, width, height);
     ctx.save();
-    
     ctx.translate(width / 2, height / 2);
-    
-    const carWidth = 22;
-    const carHeight = 42;
-    const x = -carWidth / 2;
-    const y = -carHeight / 2;
-    
+
+    const w = 20;
+    const h = 44;
+    const x = -w / 2;
+    const y = -h / 2;
+
     const bodyColor = isFull ? '#f72585' : '#ffffff';
-    
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+
+    // Shadow
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
     ctx.shadowBlur = 8;
     ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 3;
-    
+    ctx.shadowOffsetY = 4;
+
+    // Main body
     ctx.fillStyle = bodyColor;
     ctx.beginPath();
     ctx.moveTo(x + 4, y);
-    ctx.quadraticCurveTo(0, y - 2, x + carWidth - 4, y);
-    ctx.bezierCurveTo(x + carWidth, y + 10, x + carWidth + 1, y + carHeight - 10, x + carWidth - 3, y + carHeight);
-    ctx.quadraticCurveTo(0, y + carHeight + 2, x + 3, y + carHeight);
-    ctx.bezierCurveTo(x - 1, y + carHeight - 10, x, y + 10, x + 4, y);
+    ctx.quadraticCurveTo(0, y - 2, x + w - 4, y);
+    ctx.bezierCurveTo(x + w, y + 10, x + w + 1, y + h - 10, x + w - 3, y + h);
+    ctx.quadraticCurveTo(0, y + h + 2, x + 3, y + h);
+    ctx.bezierCurveTo(x - 1, y + h - 10, x, y + 10, x + 4, y);
     ctx.fill();
     // Outline so a white/light body still reads clearly against light map tiles
     ctx.shadowColor = 'transparent';
     ctx.lineWidth = 1.4;
     ctx.strokeStyle = 'rgba(17,17,17,0.55)';
     ctx.stroke();
-    
-    ctx.shadowColor = 'transparent';
-    
-    ctx.fillStyle = bodyColor;
-    ctx.beginPath();
-    ctx.arc(x - 1, y + 14, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + carWidth + 1, y + 14, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath();
-    ctx.arc(x - 1, y + 15, 2.5, 0, Math.PI);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + carWidth + 1, y + 15, 2.5, 0, Math.PI);
-    ctx.fill();
-    
-    ctx.fillStyle = '#1a1a24';
+
+    // Windows
+    ctx.fillStyle = '#11141a';
     ctx.beginPath();
     ctx.moveTo(x + 3, y + 10);
-    ctx.quadraticCurveTo(0, y + 8, x + carWidth - 3, y + 10);
-    ctx.bezierCurveTo(x + carWidth - 1, y + 20, x + carWidth - 2, y + 32, x + carWidth - 4, y + 37);
+    ctx.quadraticCurveTo(0, y + 8, x + w - 3, y + 10);
+    ctx.bezierCurveTo(x + w - 1, y + 20, x + w - 2, y + 32, x + w - 4, y + 37);
     ctx.quadraticCurveTo(0, y + 41, x + 4, y + 37);
     ctx.bezierCurveTo(x + 2, y + 32, x + 1, y + 20, x + 3, y + 10);
     ctx.fill();
-    
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
-    ctx.beginPath();
-    ctx.moveTo(x + 5, y + 10);
-    ctx.lineTo(x + 8, y + 10);
-    ctx.lineTo(x + 6, y + 37);
-    ctx.lineTo(x + 4, y + 37);
-    ctx.fill();
-    
+
+    // Tail lights
     ctx.fillStyle = '#ff2a2a';
     ctx.beginPath();
-    ctx.moveTo(x + 1, y + carHeight - 5);
-    ctx.lineTo(x + 6, y + carHeight - 2);
-    ctx.lineTo(x + 2, y + carHeight - 0.5);
+    ctx.moveTo(x + 1, y + h - 5);
+    ctx.lineTo(x + 6, y + h - 2);
+    ctx.lineTo(x + 2, y + h - 0.5);
     ctx.fill();
     ctx.beginPath();
-    ctx.moveTo(x + carWidth - 1, y + carHeight - 5);
-    ctx.lineTo(x + carWidth - 6, y + carHeight - 2);
-    ctx.lineTo(x + carWidth - 2, y + carHeight - 0.5);
+    ctx.moveTo(x + w - 1, y + h - 5);
+    ctx.lineTo(x + w - 6, y + h - 2);
+    ctx.lineTo(x + w - 2, y + h - 0.5);
     ctx.fill();
-    
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+
+    // Headlights
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
     ctx.beginPath();
-    ctx.arc(x + 3, y + 1.5, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x + carWidth - 3, y + 1.5, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-    
-    ctx.fillStyle = 'rgba(255, 255, 200, 0.15)';
-    ctx.beginPath();
-    ctx.arc(x + 3, y + 1.5, 5, 0, Math.PI * 2);
+    ctx.arc(x + 3, y + 1.5, 1.5, 0, Math.PI * 2);
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(x + carWidth - 3, y + 1.5, 5, 0, Math.PI * 2);
+    ctx.arc(x + w - 3, y + 1.5, 1.5, 0, Math.PI * 2);
     ctx.fill();
-    
-    ctx.fillStyle = '#febd11';
-    ctx.font = 'bold 7px "Manrope", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('A', 0, y + carHeight - 5);
-    
+
     ctx.restore();
 }
 
@@ -48028,7 +48091,7 @@ function renderTaxiCards(container, taxis, clubPools, forceShowAll, selectedArea
                 
                 '<div style="background: #F8F9FB; border-radius: 16px; padding: 12px 14px; font-size: 0.85rem; margin-bottom: 14px;">' +
                     '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">' +
-                        '<img src="' + carImg + '" style="width: 58px; height: 42px; border-radius: 10px; object-fit: cover; border: 1px solid #E5E5E8;" onerror="this.src=\'data/quantum.png\'">' +
+                        window.getVehicleMediaHtml(carImg) +
                         '<div>' +
                             '<div style="font-weight: 800; color: #222;">' + escapeHtml(vInfo.fullString) + '</div>' +
                             '<div style="font-family: monospace; background: #111; padding: 3px 9px; border-radius: 6px; display: inline-block; font-weight: 900; color: #fff; font-size: 0.78rem; letter-spacing:1px; margin-top: 3px;">' +
@@ -48223,15 +48286,40 @@ window.showAllNearbyTaxis = function() {
             '<p style="color: #888; font-weight: 500;">Finding all taxis near you...</p>' +
         '</div>';
 
-    firebase.database().ref('taxis').once('value').then(function(snapshot) {
+    Promise.all([
+        firebase.database().ref('taxis').once('value'),
+        firebase.database().ref('driver_applications').once('value')
+    ]).then(function([snapshot, applicationsSnapshot]) {
         var taxis = [];
+        var applicationsByDriver = {};
+        if (applicationsSnapshot.exists()) {
+            applicationsSnapshot.forEach(function(child) {
+                var application = child.val() || {};
+                var applicationKey = String(child.key);
+                var applicationEmail = String(application.email || '').toLowerCase();
+                [applicationKey, application.driverId, application.userUid, applicationEmail].filter(Boolean).forEach(function(identifier) {
+                    applicationsByDriver[String(identifier).toLowerCase()] = application;
+                });
+            });
+        }
         if (snapshot.exists()) {
             snapshot.forEach(function(child) {
-                var taxi = child.val();
+                var taxi = child.val() || {};
                 var isVerified = taxi.verificationStatus === 'verified' || taxi.provisionalActivation === true;
                 var isOnline = taxi.isOnline === true;
                 
                 if (isVerified && isOnline && taxi.latitude && taxi.longitude && !taxi.isFull) {
+                    var matchingApplication = applicationsByDriver[String(child.key).toLowerCase()] ||
+                        applicationsByDriver[String(taxi.driverId || '').toLowerCase()] ||
+                        applicationsByDriver[String(taxi.userUid || '').toLowerCase()] ||
+                        applicationsByDriver[String(taxi.email || '').toLowerCase()];
+                    if (matchingApplication) {
+                        taxi.documents = Object.assign({}, matchingApplication.documents || {}, taxi.documents || {});
+                        taxi.profile_picture_url = taxi.profile_picture_url || taxi.profilePicUrl || matchingApplication.profile_picture_url || matchingApplication.profilePicUrl || matchingApplication.documents?.FACE || '';
+                        taxi.vehiclePhoto = taxi.vehiclePhoto || taxi.carImage || matchingApplication.vehiclePhoto || matchingApplication.carImage || matchingApplication.documents?.CAR_FRONT || '';
+                        taxi.vehicleMake = taxi.vehicleMake || matchingApplication.vehicleMake || '';
+                        taxi.vehicleModel = taxi.vehicleModel || matchingApplication.vehicleModel || '';
+                    }
                     var dist = calculateDistance(uLat, uLng, taxi.latitude, taxi.longitude);
                     if (dist <= 10) {
                         taxi.taxiId = child.key;
