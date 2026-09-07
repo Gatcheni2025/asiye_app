@@ -31013,6 +31013,19 @@ function getValidImageUrl(url) {
     return 'data/AsiyeNew.png';
 }
 
+// Resolves a driver's real uploaded selfie/vehicle photo, falling back to the
+// verification "documents" bundle (same fallback admin.html uses) before any placeholder.
+window.getDriverPhotoUrl = function(taxi, fallbackName) {
+    const raw = (taxi && (taxi.profile_picture_url || (taxi.documents && taxi.documents.FACE))) || '';
+    if (raw) return getValidImageUrl(raw);
+    return 'https://ui-avatars.com/api/?name=' + encodeURIComponent(fallbackName || 'Asiye Driver') + '&background=FF9F0A&color=fff';
+};
+
+window.getDriverVehiclePhotoUrl = function(taxi) {
+    const raw = (taxi && (taxi.vehiclePhoto || taxi.carImage || (taxi.documents && taxi.documents.CAR_FRONT))) || '';
+    return raw ? getValidImageUrl(raw) : 'data/quantum.png';
+};
+
 function getVehicleDisplayInfo(taxi) {
     if (!taxi) return { reg: 'N/A', fullString: 'Vehicle', typeLabel: 'e-Hailing', makeModel: 'Vehicle', color: '' };
     const isEhailing = taxi.vehicleType === 'ehailing' || (!taxi.vehicleType && taxi.assignedRank === '' && taxi.name === 'Asiye Go');
@@ -32132,38 +32145,47 @@ window.getRealTimeCommuterAddress = async function() {
 
 window.initHomeSheetDrag = function() {
     const sheetContent = document.getElementById('homeSheetContent');
-    if (!sheetContent) return;
-    let startY = 0, startHeight = 0, isDragging = false;
+    const cleanHandle = document.getElementById('homeSheetDragHandle');
+    if (!sheetContent || !cleanHandle) return;
 
-    const onTouchStart = (e) => {
-        startY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+    // Avoid double-binding if the dashboard is re-opened multiple times
+    if (cleanHandle._dragBound) return;
+    cleanHandle._dragBound = true;
+
+    let startY = 0, startHeight = 0, isDragging = false;
+    const MIN_VH = 0.16; // Drag down far enough to see almost the entire map
+    const MAX_VH = 0.85; // Hard limit so dragging up can't cover the whole screen
+
+    const onDragStart = (e) => {
+        startY = e.clientY;
         startHeight = sheetContent.offsetHeight;
         isDragging = true;
-        sheetContent.style.transition = 'none'; 
+        sheetContent.style.transition = 'none';
+        try { cleanHandle.setPointerCapture(e.pointerId); } catch (err) {}
     };
 
-    const onTouchMove = (e) => {
+    const onDragMove = (e) => {
         if (!isDragging) return;
-        e.preventDefault(); 
-        const currentY = e.type.includes('mouse') ? e.clientY : e.touches[0].clientY;
+        e.preventDefault();
+        const currentY = e.clientY;
         let newHeight = startHeight + (startY - currentY);
         const vh = window.innerHeight;
-        if (newHeight > vh * 0.85) newHeight = vh * 0.85;
-        if (newHeight < vh * 0.25) newHeight = vh * 0.25;
+        if (newHeight > vh * MAX_VH) newHeight = vh * MAX_VH;
+        if (newHeight < vh * MIN_VH) newHeight = vh * MIN_VH;
         sheetContent.style.height = `${newHeight}px`;
     };
 
-    const onTouchEnd = () => {
+    const onDragEnd = () => {
         if (!isDragging) return;
         isDragging = false;
         sheetContent.style.transition = 'transform 0.4s cubic-bezier(0.19, 1, 0.22, 1), height 0.3s ease-out';
         const vh = window.innerHeight;
         const currentHeight = sheetContent.offsetHeight;
-        
-        // ADJUSTED SNAP THRESHOLDS FOR THE TALLER 65VH DASHBOARD
-        if (currentHeight > vh * 0.75) sheetContent.style.height = '85vh'; 
-        else if (currentHeight < vh * 0.45) sheetContent.style.height = '25vh'; 
-        else sheetContent.style.height = '65vh'; 
+
+        // Snap to the nearest of three resting positions
+        if (currentHeight > vh * 0.75) sheetContent.style.height = '85vh';
+        else if (currentHeight < vh * 0.4) sheetContent.style.height = `${MIN_VH * 100}vh`;
+        else sheetContent.style.height = '65vh';
 
         setTimeout(() => {
             if (map && commuterLat && commuterLng && followModeActive) {
@@ -32174,13 +32196,13 @@ window.initHomeSheetDrag = function() {
                     essential: true
                 });
             }
-        }, 350); 
+        }, 350);
     };
 
-    const cleanHandle = document.getElementById('homeSheetDragHandle');
-    cleanHandle.addEventListener('touchstart', onTouchStart, { passive: false });
-    document.addEventListener('touchmove', onTouchMove, { passive: false });
-    document.addEventListener('touchend', onTouchEnd);
+    cleanHandle.addEventListener('pointerdown', onDragStart);
+    cleanHandle.addEventListener('pointermove', onDragMove, { passive: false });
+    cleanHandle.addEventListener('pointerup', onDragEnd);
+    cleanHandle.addEventListener('pointercancel', onDragEnd);
 };
 
 
@@ -40025,7 +40047,7 @@ async function fetchAndDisplayClubTaxis() {
 // ================================================================
 // DISPLAY CLUB TAXIS AS CARDS
 // ================================================================
-window.showEmptyClubState = function(from, to) {
+window.showEmptyClubState = async function(from, to) {
     const container = document.getElementById('taxiListContainer');
     
     // --- DESTINATION LOGIC ---
@@ -40042,6 +40064,19 @@ window.showEmptyClubState = function(from, to) {
         const profileParts = window.commuterData.homeAddress.split(',');
         street = profileParts[0].trim();
         suburb = profileParts.length > 1 ? profileParts[1].trim().replace(/[0-9]/g, '') : street;
+    }
+
+    // Still nothing cached - reverse-geocode the passenger's live coordinates directly
+    // instead of falling back to the static "your street" placeholder.
+    if ((!street || street === "") && Number.isFinite(window.commuterLat) && Number.isFinite(window.commuterLng) && typeof window.getAddressFromCoordsPromise === 'function') {
+        try {
+            const liveAddr = await window.getAddressFromCoordsPromise(window.commuterLng, window.commuterLat);
+            if (liveAddr) {
+                const liveParts = liveAddr.split(',');
+                street = liveParts[0].trim();
+                suburb = suburb || (liveParts.length > 1 ? liveParts[1].trim().replace(/[0-9]/g, '') : street);
+            }
+        } catch (e) { console.warn('Live pickup geocode failed:', e); }
     }
 
     const displayStreet = street || "your street";
@@ -47736,10 +47771,8 @@ function renderTaxiCardsWithQueue(container, taxis, queueCount, selectedArea) {
                       (taxi.rating ? parseFloat(taxi.rating).toFixed(1) : '5.0');
         var vInfo = getVehicleDisplayInfo(taxi);
         
-        var picUrl = taxi.profile_picture_url ? getValidImageUrl(taxi.profile_picture_url) : 
-                      'https://ui-avatars.com/api/?name=' + encodeURIComponent(driverName) + '&background=FF9F0A&color=fff';
-        var carImg = taxi.vehiclePhoto ? getValidImageUrl(taxi.vehiclePhoto) : 
-                      (taxi.carImage ? getValidImageUrl(taxi.carImage) : 'data/quantum.png');
+        var picUrl = window.getDriverPhotoUrl(taxi, driverName);
+        var carImg = window.getDriverVehiclePhotoUrl(taxi);
 
         var isFull = taxi.isFull === true;
         var passCount = taxi.passengerCount || 0;
@@ -47897,25 +47930,25 @@ function renderTaxiCards(container, taxis, clubPools, forceShowAll, selectedArea
 
     var html = 
         '<div style="padding: 10px 0 20px 0;">' +
-            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">' +
+            '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px;">' +
                 '<div>' +
                     '<div style="display: flex; align-items: center; gap: 10px;">' +
-                        '<i class="fas fa-arrow-left" style="color: #007BFF; font-size: 1.1rem; cursor: pointer; padding: 8px;" onclick="window.openLiveClubPools()" title="Back to destinations"></i>' +
+                        '<i class="fas fa-arrow-left" style="color: #111; font-size: 1.1rem; cursor: pointer; padding: 8px; background:#F2F4F6; border-radius:50%;" onclick="window.openLiveClubPools()" title="Back to destinations"></i>' +
                         '<div>' +
-                            '<h4 style="color: #111; margin: 0; font-weight: 900; font-size: 1.1rem;">' +
-                                '<i class="fas fa-flag-checkered" style="color: #007BFF;"></i> ' +
+                            '<h4 style="color: #0A0A0A; margin: 0; font-weight: 900; font-size: 1.15rem; letter-spacing:-0.3px;">' +
                                 escapeHtml(areaName) +
                             '</h4>' +
-                            '<p style="color: #888; font-size: 0.75rem; margin: 2px 0 0 0; font-weight: 500;">' +
-                                totalTaxis + ' ' + (totalTaxis === 1 ? 'car' : 'cars') + ' available' +
+                            '<p style="color: #888; font-size: 0.78rem; margin: 2px 0 0 0; font-weight: 600;">' +
+                                '<i class="fas fa-circle" style="color:#30D158; font-size:0.5rem; margin-right:4px;"></i>' +
+                                totalTaxis + ' ' + (totalTaxis === 1 ? 'car' : 'cars') + ' available nearby' +
                             '</p>' +
                         '</div>' +
                     '</div>' +
                 '</div>' +
-                '<button onclick="closeClubTaxisList()" style="background: #f1f3f5; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer;">&times;</button>' +
+                '<button onclick="closeClubTaxisList()" style="background: #F2F4F6; border: none; width: 36px; height: 36px; border-radius: 50%; color: #333; font-size: 1.2rem; cursor: pointer;">&times;</button>' +
             '</div>' +
             
-            '<div style="display: flex; flex-direction: column; gap: 14px; padding: 5px 0 20px 0;">';
+            '<div style="display: flex; flex-direction: column; gap: 16px; padding: 5px 0 20px 0;">';
 
     taxis.forEach(function(taxi) {
         var driverName = (taxi.name || '') + ' ' + (taxi.surname || '');
@@ -47923,11 +47956,11 @@ function renderTaxiCards(container, taxis, clubPools, forceShowAll, selectedArea
         var rating = taxi.averageRating ? parseFloat(taxi.averageRating).toFixed(1) : 
                       (taxi.rating ? parseFloat(taxi.rating).toFixed(1) : '5.0');
         var vInfo = getVehicleDisplayInfo(taxi);
-        
-        var picUrl = taxi.profile_picture_url ? getValidImageUrl(taxi.profile_picture_url) : 
-                      'https://ui-avatars.com/api/?name=' + encodeURIComponent(driverName) + '&background=FF9F0A&color=fff';
-        var carImg = taxi.vehiclePhoto ? getValidImageUrl(taxi.vehiclePhoto) : 
-                      (taxi.carImage ? getValidImageUrl(taxi.carImage) : 'data/quantum.png');
+
+        // Real uploaded driver/vehicle photos, with the same verification-document
+        // fallback admin.html uses, so drivers approved via documents still show up.
+        var picUrl = window.getDriverPhotoUrl(taxi, driverName);
+        var carImg = window.getDriverVehiclePhotoUrl(taxi);
 
         var isFull = taxi.isFull === true;
         var passCount = taxi.passengerCount || 0;
@@ -47938,9 +47971,9 @@ function renderTaxiCards(container, taxis, clubPools, forceShowAll, selectedArea
 
         var statusBadge = '';
         if (isFull || passCount >= maxCap) {
-            statusBadge = '<span style="background: #dc3545; color: white; padding: 2px 10px; border-radius: 10px; font-size: 0.65rem; font-weight: 700;">FULL</span>';
+            statusBadge = '<span style="background: rgba(220,53,69,0.1); color: #dc3545; padding: 4px 11px; border-radius: 20px; font-size: 0.65rem; font-weight: 800;">FULL</span>';
         } else if (taxi.isOnline) {
-            statusBadge = '<span style="background: #28a745; color: white; padding: 2px 10px; border-radius: 10px; font-size: 0.65rem; font-weight: 700;">AVAILABLE</span>';
+            statusBadge = '<span style="background: rgba(48,209,88,0.12); color: #1a9e46; padding: 4px 11px; border-radius: 20px; font-size: 0.65rem; font-weight: 800;">AVAILABLE</span>';
         }
 
         var destDisplay = (taxi.destination || taxi.scheduledDestination || 'Local Route').split(',')[0];
@@ -47948,52 +47981,54 @@ function renderTaxiCards(container, taxis, clubPools, forceShowAll, selectedArea
         destDisplay = destDisplay.replace(/^To\s+/i, '').replace(/^Going\s+to\s+/i, '');
 
         html += 
-            '<div style="background: #ffffff; border-radius: 20px; padding: 16px 18px; border: 1px solid ' + (isFull ? '#ffcdd2' : '#eee') + '; box-shadow: 0 2px 10px rgba(0,0,0,0.04);">' +
+            '<div style="background: #ffffff; border-radius: 22px; padding: 18px; border: 1px solid ' + (isFull ? '#ffd9dc' : '#F0F0F2') + '; box-shadow: 0 6px 24px rgba(17,17,17,0.06);">' +
                 
-                '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">' +
+                '<div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">' +
                     '<div style="display: flex; gap: 12px; align-items: center;">' +
-                        '<img src="' + picUrl + '" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid ' + (isFull ? '#dc3545' : '#FF9F0A') + ';" onerror="this.src=\'data/AsiyeNew.png\'">' +
+                        '<div style="position:relative; flex-shrink:0;">' +
+                            '<img src="' + picUrl + '" style="width: 54px; height: 54px; border-radius: 50%; object-fit: cover; border: 2.5px solid ' + (isFull ? '#dc3545' : '#30D158') + ';" onerror="this.src=\'https://ui-avatars.com/api/?name=' + encodeURIComponent(driverName) + '&background=FF9F0A&color=fff\'">' +
+                        '</div>' +
                         '<div>' +
-                            '<div style="font-weight: 800; color: #111; font-size: 1rem;">' + escapeHtml(driverName) + '</div>' +
-                            '<div style="display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: #888;">' +
+                            '<div style="font-weight: 800; color: #0A0A0A; font-size: 1.02rem;">' + escapeHtml(driverName) + '</div>' +
+                            '<div style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #888; margin-top:2px; font-weight:600;">' +
                                 '<span style="color: #FFC107;"><i class="fas fa-star"></i> ' + rating + '</span>' +
-                                '<span>•</span>' +
-                                '<span>' + distanceStr + ' km</span>' +
-                                '<span>•</span>' +
-                                '<span>~' + etaMins + ' min</span>' +
+                                '<span style="color:#ddd;">|</span>' +
+                                '<span><i class="fas fa-location-arrow" style="color:#007BFF;"></i> ' + distanceStr + ' km</span>' +
+                                '<span style="color:#ddd;">|</span>' +
+                                '<span><i class="fas fa-clock" style="color:#888;"></i> ~' + etaMins + ' min</span>' +
                             '</div>' +
                         '</div>' +
                     '</div>' +
-                    '<div style="text-align: right;">' +
-                        '<div style="font-weight: 900; color: #28a745; font-size: 1.3rem;">R' + price + '</div>' +
-                        '<div style="font-size: 0.65rem; color: #888; font-weight: 600;">per seat</div>' +
+                    '<div style="text-align: right; flex-shrink:0;">' +
+                        '<div style="font-weight: 900; color: #0A0A0A; font-size: 1.35rem; letter-spacing:-0.3px;">R' + price + '</div>' +
+                        '<div style="font-size: 0.62rem; color: #888; font-weight: 700; margin-bottom:4px;">per seat</div>' +
                         statusBadge +
                     '</div>' +
                 '</div>' +
                 
-                '<div style="background: #f8f9fa; border-radius: 12px; padding: 12px; font-size: 0.85rem; margin-bottom: 14px;">' +
-                    '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">' +
-                        '<img src="' + carImg + '" style="width: 60px; height: 40px; border-radius: 6px; object-fit: cover; border: 1px solid #ddd;" onerror="this.src=\'data/quantum.png\'">' +
+                '<div style="background: #F8F9FB; border-radius: 16px; padding: 12px 14px; font-size: 0.85rem; margin-bottom: 14px;">' +
+                    '<div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">' +
+                        '<img src="' + carImg + '" style="width: 58px; height: 42px; border-radius: 10px; object-fit: cover; border: 1px solid #E5E5E8;" onerror="this.src=\'data/quantum.png\'">' +
                         '<div>' +
-                            '<div style="font-weight: 700; color: #333;">' + escapeHtml(vInfo.fullString) + '</div>' +
-                            '<div style="font-family: monospace; background: #e9ecef; padding: 2px 8px; border-radius: 6px; display: inline-block; font-weight: 900; color: #111; font-size: 0.8rem; border: 1px solid #ccc; margin-top: 2px;">' +
+                            '<div style="font-weight: 800; color: #222;">' + escapeHtml(vInfo.fullString) + '</div>' +
+                            '<div style="font-family: monospace; background: #111; padding: 3px 9px; border-radius: 6px; display: inline-block; font-weight: 900; color: #fff; font-size: 0.78rem; letter-spacing:1px; margin-top: 3px;">' +
                                 escapeHtml(vInfo.reg) +
                             '</div>' +
                         '</div>' +
                     '</div>' +
-                    '<div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: #555; border-top: 1px solid #eee; padding-top: 8px; margin-top: 8px;">' +
+                    '<div style="display: flex; justify-content: space-between; align-items:center; font-size: 0.8rem; color: #555; border-top: 1px solid #ECECEE; padding-top: 9px; margin-top: 2px;">' +
                         '<span><i class="fas fa-flag-checkered" style="color:#007BFF;"></i> To: <strong style="color:#111;">' + escapeHtml(destDisplay || 'Local Route') + '</strong></span>' +
-                        '<span>' + passCount + '/' + maxCap + ' <i class="fas fa-user" style="color:#888;"></i></span>' +
+                        '<span style="background:#fff; border:1px solid #ECECEE; padding:3px 9px; border-radius:20px; font-weight:700;">' + passCount + '/' + maxCap + ' <i class="fas fa-user" style="color:#888;"></i></span>' +
                     '</div>' +
                 '</div>' +
                 
                 '<button onclick="window.callThisCar(\'' + taxi.taxiId + '\', \'' + escapeHtml(driverName) + '\', \'' + escapeHtml(destDisplay || 'Local Route') + '\', ' + price + ')" ' +
-                        'style="width: 100%; padding: 16px; border-radius: 14px; border: none; background: ' + (isFull ? '#dc3545' : '#111') + '; color: white; font-weight: 900; font-size: 1rem; cursor: ' + (isFull ? 'not-allowed' : 'pointer') + '; transition: all 0.2s; box-shadow: ' + (isFull ? 'none' : '0 4px 15px rgba(0,0,0,0.15)') + ';" ' +
+                        'style="width: 100%; padding: 15px; border-radius: 16px; border: none; background: ' + (isFull ? '#dc3545' : 'linear-gradient(135deg, #111 0%, #2b2b2b 100%)') + '; color: white; font-weight: 800; font-size: 0.98rem; cursor: ' + (isFull ? 'not-allowed' : 'pointer') + '; transition: all 0.2s; box-shadow: ' + (isFull ? 'none' : '0 6px 16px rgba(17,17,17,0.2)') + ';" ' +
                         (isFull ? 'disabled' : '') +
                         'onmouseover="if(!this.disabled){this.style.background=\'#28a745\'; this.style.transform=\'scale(1.01)\';}" ' +
-                        'onmouseout="if(!this.disabled){this.style.background=\'#111\'; this.style.transform=\'scale(1)\';}">' +
+                        'onmouseout="if(!this.disabled){this.style.background=\'linear-gradient(135deg, #111 0%, #2b2b2b 100%)\'; this.style.transform=\'scale(1)\';}">' +
                     '<i class="fas fa-phone-alt" style="margin-right: 8px;"></i> ' +
-                    (isFull ? '🚫 Car Full' : '📞 Call a car') +
+                    (isFull ? 'Car Full' : 'Call a car') +
                 '</button>' +
             '</div>';
     });
@@ -48272,6 +48307,19 @@ async function showRideSelectionView(destName, destLat, destLng) {
     document.getElementById('price-go').textContent = `R${baseGoPrice}`;
     document.getElementById('price-club4').textContent = `R${club4Price}`;
     document.getElementById('price-club6').textContent = `R${club6Price}`;
+
+    // Show the passenger's real pickup address instead of the "Current Location" placeholder
+    const pickupAddrEl = document.getElementById('confirm-pickup-addr');
+    if (pickupAddrEl) {
+        const typedPickup = document.getElementById('uberPickupInput')?.value;
+        if (typedPickup && typedPickup.trim() && typedPickup.trim() !== 'Current Location') {
+            pickupAddrEl.textContent = typedPickup.split(',')[0].trim();
+        } else if (typeof window.getAddressFromCoordsPromise === 'function') {
+            window.getAddressFromCoordsPromise(pickupLng, pickupLat)
+                .then(addr => { if (addr) pickupAddrEl.textContent = addr.split(',')[0].trim(); })
+                .catch(() => {});
+        }
+    }
     
     // 3. Fetch ETA and Duration from Mapbox
     const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
@@ -48291,10 +48339,12 @@ async function showRideSelectionView(destName, destLat, destLng) {
     document.getElementById('view-confirm-ride').style.display = 'block';
     document.getElementById('homeSheetContent').style.height = '85vh';
     
-    // Fit map to show both points
+    // Fit map to show both points, leaving room for the confirm-ride sheet so the
+    // route isn't hidden behind it (sheet height varies by device, so measure it live)
     try {
         const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destinationLng, destinationLat]);
-        activeMap.fitBounds(bounds, { padding: { top: 50, bottom: 450, left: 50, right: 50 } });
+        const bottomPad = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 450;
+        activeMap.fitBounds(bounds, { padding: { top: 80, bottom: bottomPad, left: 60, right: 60 }, maxZoom: 16, duration: 900 });
     } catch (e) {
         console.warn("showRideSelectionView: fitBounds failed", e);
     }
