@@ -48855,19 +48855,20 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
 };
 
 // =================================================================
-// showRideSelectionView - COMPLETE FIXED VERSION
+// showRideSelectionView — COMPLETE, with 65% map visibility
 // =================================================================
-// Called after the user selects a destination from Google Places.
-// Handles: coordinate validation, pricing, ETA fetch, map fit, UI switch
-// =================================================================
-// =================================================================
-// showRideSelectionView — ZOOMS OUT TO SHOW FULL ROUTE
+// - Map occupies at least 60% of the viewport
+// - Both markers (You are here + Destination flag) visible
+// - Dashed blue route drawn between them
+// - Confirm sheet sits compactly below with the pricing options
 // =================================================================
 
 async function showRideSelectionView(destName, destLat, destLng) {
     console.log("🚗 showRideSelectionView:", { destName, destLat, destLng });
 
-    // ---------- 1. VALIDATE COORDINATES ----------
+    // ============================================================
+    // 1. VALIDATE COORDINATES
+    // ============================================================
     const pickupLat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat')) || -29.8587;
     const pickupLng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng')) || 31.0218;
     const destinationLat = Number(destLat);
@@ -48877,39 +48878,59 @@ async function showRideSelectionView(destName, destLat, destLng) {
     window.commuterLng = pickupLng;
 
     if (![pickupLat, pickupLng, destinationLat, destinationLng].every(Number.isFinite)) {
-        console.warn("❌ Invalid coords");
+        console.warn("❌ showRideSelectionView: invalid coords", {
+            pickupLat, pickupLng, destinationLat, destinationLng
+        });
         if (typeof showGenericMessage === 'function') {
-            showGenericMessage("Location Error", "Could not determine location.", "fa-map-marker-alt", "icon-danger");
+            showGenericMessage(
+                "Location Error",
+                "Could not determine your location or destination. Please try again.",
+                "fa-map-marker-alt",
+                "icon-danger"
+            );
         }
         return;
     }
 
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
-    if (!activeMap) return;
+    if (!activeMap) {
+        console.warn("❌ Mapbox not ready");
+        return;
+    }
 
-    // ---------- 2. CALCULATE DISTANCE & PRICING ----------
+    // ============================================================
+    // 2. CALCULATE DISTANCE & PRICING
+    // ============================================================
     const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2;
     window.currentTripDistance = dist;
 
     const baseGoPrice = Math.max(30, Math.round(30 + (dist * 9.50)));
-    const club4Price = Math.max(15, Math.round(baseGoPrice / 4));
-    const club6Price = Math.max(12, Math.round(baseGoPrice / 6));
+    const club4Price  = Math.max(15, Math.round(baseGoPrice / 4));
+    const club6Price  = Math.max(12, Math.round(baseGoPrice / 6));
 
     window.ridePrices = { go: baseGoPrice, club4: club4Price, club6: club6Price };
 
-    // ---------- 3. UPDATE UI TEXT ----------
-    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    console.log(`💰 Distance: ${dist.toFixed(2)}km | Go: R${baseGoPrice} | Club4: R${club4Price} | Club6: R${club6Price}`);
+
+    // ============================================================
+    // 3. UPDATE UI TEXT
+    // ============================================================
+    const setText = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    };
+
     setText('confirm-dest-addr', (destName || 'Destination').split(',')[0]);
-    setText('price-go', `R${baseGoPrice}`);
+    setText('price-go',    `R${baseGoPrice}`);
     setText('price-club4', `R${club4Price}`);
     setText('price-club6', `R${club6Price}`);
 
-    // Pickup address
+    // Pickup address display
     const pickupAddrEl = document.getElementById('confirm-pickup-addr');
     if (pickupAddrEl) {
         const typed = document.getElementById('uberPickupInput')?.value?.trim();
         if (typed && typed !== 'Current Location' && typed.length > 2) {
-            pickupAddrEl.textContent = typed.split(',')[0];
+            pickupAddrEl.textContent = typed.split(',')[0].trim();
         } else {
             pickupAddrEl.textContent = 'Fetching...';
             if (typeof window.getAddressFromCoordsPromise === 'function') {
@@ -48924,19 +48945,26 @@ async function showRideSelectionView(destName, destLat, destLng) {
         }
     }
 
-    // ---------- 4. FETCH ROUTE ----------
+    // ============================================================
+    // 4. FETCH ROUTE FROM MAPBOX
+    // ============================================================
     let routeGeometry = null;
     try {
         const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`;
         const res = await fetch(url);
-        const data = await res.json();
-        if (data.routes && data.routes[0]) {
-            const route = data.routes[0];
-            routeGeometry = route.geometry;
 
-            const etaMinutes = Math.round(route.duration / 60);
-            setText('trip-duration-tag', `${etaMinutes} min trip`);
-            setText('driver-eta-tag', `Driver ~4 min away`);
+        if (res.ok) {
+            const data = await res.json();
+            if (data.routes && data.routes[0]) {
+                const route = data.routes[0];
+                routeGeometry = route.geometry;
+
+                const etaMinutes = Math.round(route.duration / 60);
+                setText('trip-duration-tag', `${etaMinutes} min trip`);
+                setText('driver-eta-tag', `Driver ~4 min away`);
+
+                console.log(`🛣️ Route: ${(route.distance / 1000).toFixed(1)}km | ${etaMinutes} min`);
+            }
         }
     } catch (e) {
         console.warn("Route fetch failed:", e);
@@ -48944,7 +48972,9 @@ async function showRideSelectionView(destName, destLat, destLng) {
         setText('driver-eta-tag', `Driver ~4 min away`);
     }
 
-    // ---------- 5. ADD MARKERS ----------
+    // ============================================================
+    // 5. ADD MARKERS (pickup pill + destination flag)
+    // ============================================================
     if (typeof setupUserMarker === 'function') {
         setupUserMarker([pickupLng, pickupLat]);
     }
@@ -48952,48 +48982,21 @@ async function showRideSelectionView(destName, destLat, destLng) {
         window.setDropoffMarker(destinationLat, destinationLng);
     }
 
-    // ---------- 6. DRAW ROUTE LINE ----------
-    if (routeGeometry && activeMap.isStyleLoaded()) {
-        drawSearchRoute(routeGeometry);
-    } else if (routeGeometry) {
-        activeMap.once('style.load', () => drawSearchRoute(routeGeometry));
+    // ============================================================
+    // 6. DRAW ROUTE LINE
+    // ============================================================
+    if (routeGeometry) {
+        if (activeMap.isStyleLoaded()) {
+            drawSearchRoute(routeGeometry);
+        } else {
+            activeMap.once('style.load', () => drawSearchRoute(routeGeometry));
+        }
     }
 
-    // ---------- 7. ZOOM OUT TO SHOW FULL ROUTE ----------
-    try {
-        const bounds = new mapboxgl.LngLatBounds()
-            .extend([pickupLng, pickupLat])
-            .extend([destinationLng, destinationLat]);
-
-        // Dynamic padding — taller sheet needs more bottom room
-        const bottomPad = typeof window.getMapBottomPadding === 'function'
-            ? window.getMapBottomPadding()
-            : 420;
-
-        activeMap.fitBounds(bounds, {
-            padding: {
-                top: 120,         // room for the top toolbar
-                bottom: bottomPad, // room for the confirm sheet
-                left: 60,
-                right: 60
-            },
-            maxZoom: 15,           // don't over-zoom on short trips
-            duration: 1000,
-            essential: true
-        });
-
-        console.log("🗺️ Map fitted to route");
-    } catch (e) {
-        console.warn("fitBounds failed:", e);
-        // Midpoint fallback
-        try {
-            const midLat = (pickupLat + destinationLat) / 2;
-            const midLng = (pickupLng + destinationLng) / 2;
-            activeMap.flyTo({ center: [midLng, midLat], zoom: 12, duration: 800, essential: true });
-        } catch (e2) {}
-    }
-
-    // ---------- 8. SHOW CONFIRM VIEW ----------
+    // ============================================================
+    // 7. SHOW CONFIRM VIEW & SHRINK SHEET TO 35vh
+    //    ↳ This gives the map ~65% of the viewport height
+    // ============================================================
     const initialView = document.getElementById('view-initial-search');
     const confirmView = document.getElementById('view-confirm-ride');
     const sheetContent = document.getElementById('homeSheetContent');
@@ -49007,23 +49010,197 @@ async function showRideSelectionView(destName, destLat, destLng) {
         confirmView.style.setProperty('display', 'block', 'important');
     }
     if (sheetContent) {
-        // Keep sheet at 65vh so map stays visible above it
-        sheetContent.style.height = '65vh';
+        // ===== CRITICAL: 35vh sheet = 65% map on screen =====
+        sheetContent.style.setProperty('height', '35vh', 'important');
+        sheetContent.style.setProperty('max-height', '35vh', 'important');
+        sheetContent.style.setProperty('overflow-y', 'auto', 'important');
     }
 
-    // Reset ride selection state
+    // ============================================================
+    // 8. WAIT FOR SHEET LAYOUT TO SETTLE, THEN FIT MAP
+    //    (Uses requestAnimationFrame so padding accounts for new sheet height)
+    // ============================================================
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            fitMapToRoute(activeMap, pickupLat, pickupLng, destinationLat, destinationLng);
+        }, 350); // brief delay so CSS height transition completes
+    });
+
+    // ============================================================
+    // 9. RESET RIDE SELECTION STATE
+    // ============================================================
     window.selectedRideType = null;
+
     ['private', 'club4', 'club6'].forEach(id => {
         const el = document.getElementById('opt-' + id);
         if (el) el.style.borderColor = '#eee';
     });
+
     const finalBtn = document.getElementById('final-booking-btn');
     if (finalBtn) {
         finalBtn.textContent = 'Select a Ride';
         finalBtn.disabled = false;
     }
 
-    console.log("✅ showRideSelectionView complete");
+    console.log("✅ showRideSelectionView complete — map at ~65% viewport");
+} 
+
+// =================================================================
+// fitMapToRoute — Computes bounds & fits map with proper padding
+// =================================================================
+
+function fitMapToRoute(activeMap, pickupLat, pickupLng, destinationLat, destinationLng) {
+    try {
+        // ---- Explicit coercion & logging ----
+        const pLng = Number(pickupLng);
+        const pLat = Number(pickupLat);
+        const dLng = Number(destinationLng);
+        const dLat = Number(destinationLat);
+
+        console.log("🗺️ fitMapToRoute inputs:", {
+            pickup: [pLng, pLat],
+            destination: [dLng, dLat],
+            allFinite: [pLng, pLat, dLng, dLat].every(Number.isFinite)
+        });
+
+        if (![pLng, pLat, dLng, dLat].every(Number.isFinite)) {
+            throw new Error(`Invalid coords — pickup: [${pLng}, ${pLat}], destination: [${dLng}, ${dLat}]`);
+        }
+
+        // ---- Explicit SW/NE corners ----
+        const swLng = Math.min(pLng, dLng);
+        const swLat = Math.min(pLat, dLat);
+        const neLng = Math.max(pLng, dLng);
+        const neLat = Math.max(pLat, dLat);
+
+        const bounds = new mapboxgl.LngLatBounds(
+            [swLng, swLat],   // south-west
+            [neLng, neLat]    // north-east
+        );
+
+        if (!bounds || bounds.isEmpty()) {
+            throw new Error("Bounds object invalid or empty");
+        }
+
+        // ---- Padding: TOP for marker pill, BOTTOM for the 35vh sheet ----
+        const topPad    = 130;                        // "You are here" pill height + breathing room
+        const bottomPad = Math.round(window.innerHeight * 0.35) + 40; // 35vh sheet + buffer
+        const sidePad   = 60;
+
+        console.log("🗺️ fitMapToRoute padding:", { topPad, bottomPad, sidePad });
+
+        // ---- Apply ----
+        activeMap.fitBounds(bounds, {
+            padding: {
+                top: topPad,
+                bottom: bottomPad,
+                left: sidePad,
+                right: sidePad
+            },
+            maxZoom: 15,
+            duration: 1000,
+            essential: true
+        });
+
+        console.log("✅ Map zoomed to route");
+    } catch (e) {
+        console.warn("⚠️ fitBounds failed, using manual fallback:", e);
+
+        // ============ MANUAL FALLBACK ============
+        try {
+            const pLng = Number(pickupLng);
+            const pLat = Number(pickupLat);
+            const dLng = Number(destinationLng);
+            const dLat = Number(destinationLat);
+
+            if ([pLng, pLat, dLng, dLat].every(Number.isFinite)) {
+                const midLng = (pLng + dLng) / 2;
+                const midLat = (pLat + dLat) / 2;
+
+                // Approximate zoom from span
+                const maxSpan = Math.max(Math.abs(dLng - pLng), Math.abs(dLat - pLat));
+
+                let zoom = 14;
+                if      (maxSpan > 0.5)  zoom = 9;
+                else if (maxSpan > 0.3)  zoom = 10;
+                else if (maxSpan > 0.15) zoom = 11;
+                else if (maxSpan > 0.08) zoom = 12;
+                else if (maxSpan > 0.04) zoom = 13;
+                else if (maxSpan > 0.02) zoom = 13.5;
+                else if (maxSpan > 0.01) zoom = 14;
+                else                     zoom = 15;
+
+                activeMap.flyTo({
+                    center: [midLng, midLat],
+                    zoom: zoom,
+                    duration: 1000,
+                    essential: true
+                });
+
+                console.log("🗺️ Manual fallback applied:", { midLng, midLat, zoom, maxSpan });
+            }
+        } catch (e2) {
+            console.error("❌ Total map positioning failure:", e2);
+        }
+    }
+}
+
+// =================================================================
+// drawSearchRoute — Draws the dashed blue route with a glow
+// =================================================================
+
+function drawSearchRoute(geometry) {
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap || !geometry || !geometry.coordinates) return;
+
+    const sourceId     = 'search-trip-route';
+    const glowLayerId  = 'search-trip-route-glow';
+    const lineLayerId  = 'search-trip-route-line';
+
+    try {
+        // Clean up any existing layers/sources
+        [glowLayerId, lineLayerId].forEach(id => {
+            try { if (activeMap.getLayer(id)) activeMap.removeLayer(id); } catch (e) {}
+        });
+        try { if (activeMap.getSource(sourceId)) activeMap.removeSource(sourceId); } catch (e) {}
+
+        // Add source
+        activeMap.addSource(sourceId, {
+            type: 'geojson',
+            data: { type: 'Feature', properties: {}, geometry }
+        });
+
+        // Soft glow halo
+        activeMap.addLayer({
+            id: glowLayerId,
+            type: 'line',
+            source: sourceId,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+                'line-color': '#007BFF',
+                'line-width': 12,
+                'line-opacity': 0.15
+            }
+        });
+
+        // Solid dashed line
+        activeMap.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+                'line-color': '#007BFF',
+                'line-width': 4,
+                'line-opacity': 0.9,
+                'line-dasharray': [2, 1.5]
+            }
+        });
+
+        console.log("✅ Search route drawn");
+    } catch (e) {
+        console.warn("drawSearchRoute failed:", e);
+    }
 }
 // =================================================================
 // DRAW SEARCH ROUTE (between pickup & destination)
