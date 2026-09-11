@@ -75,7 +75,43 @@ ASIYE.state = {
             null,
 
         request:
-            null
+            null,
+
+        club: {
+
+            mode:
+                null,              // club4 | club7
+
+            capacity:
+                0,
+
+            confirmedPassengers:
+                0,
+
+            remainingSeats:
+                0,
+
+            totalFare:
+                0,
+
+            pricePerPassenger:
+                0,
+
+            departureTime:
+                null,
+
+            pickupWindowMinutes:
+                10,
+
+            maxWaitMinutes:
+                20,
+
+            poolId:
+                null,
+
+            poolReady:
+                false
+        }
     },
 
 

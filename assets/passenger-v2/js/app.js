@@ -679,7 +679,7 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'go',
                 'Asiye Go',
-                'Private ride',
+                'Private ride · Leave immediately',
                 prices.go,
                 'fa-car-side'
             )}
@@ -688,18 +688,18 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'club4',
                 'Asiye Club 4',
-                'Share with up to 3 others',
+                '4 passengers · Fare split between everyone',
                 prices.club4,
                 'fa-users'
             )}
 
 
             ${this.renderRideCard(
-                'club6',
-                'Asiye Club 6',
-                'Lowest shared fare',
-                prices.club6,
-                'fa-people-group'
+                'club7',
+                'Asiye Club 7',
+                '7 passengers · Lowest daily commuter fare',
+                prices.club7,
+                'fa-van-shuttle'
             )}
 
 
@@ -708,7 +708,7 @@ ASIYE.ui = {
                 class="primary-button"
                 style="margin-top:14px;"
             >
-                Confirm Asiye Go
+                Continue with Asiye Go
             </button>
 
         `;
@@ -759,6 +759,26 @@ ASIYE.ui = {
             ?.addEventListener(
                 'click',
                 () => {
+
+                    const type =
+                        ASIYE.state.booking.rideType;
+
+
+                    if (
+                        type === 'club4' ||
+                        type === 'club7'
+                    ) {
+
+                        this.renderClubSchedule();
+
+                        return;
+                    }
+
+
+                    /*
+                     * Asiye Go flow — booking
+                     * will be wired next.
+                     */
 
                     ASIYE.ui.toast(
                         'Next: payment and booking request.'
@@ -850,19 +870,840 @@ ASIYE.ui = {
         const labels = {
 
             go:
-                'Confirm Asiye Go',
+                'Continue with Asiye Go',
 
             club4:
-                'Confirm Asiye Club 4',
+                'Continue with Club 4',
 
-            club6:
-                'Confirm Asiye Club 6'
+            club7:
+                'Continue with Club 7'
         };
 
 
         button.textContent =
             labels[selected] ||
-            'Confirm ride';
+            'Continue';
+    },
+
+
+    /* ========================================================
+       CLUB SCHEDULE
+       ======================================================== */
+
+    renderClubSchedule() {
+
+        const container =
+            document.getElementById('sheetContent');
+
+
+        if (!container) return;
+
+
+        const type =
+            ASIYE.state.booking.rideType;
+
+
+        const config =
+            ASIYE.club.getConfig(type);
+
+
+        const prices =
+            ASIYE.pricing.calculate();
+
+
+        const price =
+
+            type === 'club7'
+
+            ? prices.club7
+
+            : prices.club4;
+
+
+        container.innerHTML = `
+
+            <div class="sheet-page-header">
+
+                <button
+                    id="clubScheduleBack"
+                    class="sheet-back-button"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+
+
+                <div>
+
+                    <h2 class="sheet-page-title">
+
+                        ${config.name}
+
+                    </h2>
+
+                    <div
+                        style="
+                            color:#888;
+                            font-size:10px;
+                            margin-top:2px;
+                        "
+                    >
+                        Daily shared commute
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="club-price-hero">
+
+                <div>
+
+                    <span class="club-price-label">
+                        Your seat
+                    </span>
+
+                    <strong>
+                        R${price}
+                    </strong>
+
+                </div>
+
+
+                <div class="club-seat-count">
+
+                    <i class="fas fa-users"></i>
+
+                    ${config.capacity}
+                    passengers
+
+                </div>
+
+            </div>
+
+
+            <div class="club-info-box">
+
+                <i class="fas fa-circle-info"></i>
+
+                <div>
+
+                    <strong>
+                        How Club works
+                    </strong>
+
+                    <p>
+                        Your fare is shared equally
+                        between ${config.capacity}
+                        passengers. The driver begins
+                        collection once all
+                        ${config.capacity} Club members
+                        have joined.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <label
+                class="club-field-label"
+                for="clubDepartureTime"
+            >
+                What time do you leave?
+            </label>
+
+
+            <input
+                id="clubDepartureTime"
+                class="club-time-input"
+                type="time"
+                required
+            >
+
+
+            <div class="club-wait-details">
+
+                <div>
+
+                    <i class="fas fa-clock"></i>
+
+                    <span>
+                        Pickup window
+                    </span>
+
+                    <strong>
+                        ±${config.pickupWindowMinutes} min
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <i class="fas fa-hourglass-half"></i>
+
+                    <span>
+                        Pool size
+                    </span>
+
+                    <strong>
+                        ${config.capacity}/${config.capacity}
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="confirmClubSchedule"
+                class="primary-button"
+                style="margin-top:16px;"
+            >
+
+                Find my Club
+
+            </button>
+
+        `;
+
+
+        document
+            .getElementById('clubScheduleBack')
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    this.renderRideSelection();
+                }
+            );
+
+
+        document
+            .getElementById('confirmClubSchedule')
+            ?.addEventListener(
+                'click',
+                async () => {
+
+                    const time =
+
+                        document
+                            .getElementById(
+                                'clubDepartureTime'
+                            )
+                            ?.value;
+
+
+                    if (!time) {
+
+                        this.toast(
+                            'Choose your departure time.'
+                        );
+
+                        return;
+                    }
+
+
+                    ASIYE.state.booking.club
+                        .departureTime =
+                        time;
+
+
+                    /*
+                     * Next step will create/join pool.
+                     */
+
+                    this.renderClubConfirmation();
+                }
+            );
+    },
+
+
+    /* ========================================================
+       CLUB CONFIRMATION
+       ======================================================== */
+
+    renderClubConfirmation() {
+
+        const container =
+            document.getElementById('sheetContent');
+
+
+        if (!container) return;
+
+
+        const type =
+            ASIYE.state.booking.rideType;
+
+
+        const config =
+            ASIYE.club.getConfig(type);
+
+
+        const prices =
+            ASIYE.pricing.calculate();
+
+
+        const price =
+
+            type === 'club7'
+
+            ? prices.club7
+
+            : prices.club4;
+
+
+        const time =
+            ASIYE.state.booking
+                .club
+                .departureTime;
+
+
+        container.innerHTML = `
+
+            <div class="sheet-page-header">
+
+                <button
+                    id="clubConfirmBack"
+                    class="sheet-back-button"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+
+
+                <h2 class="sheet-page-title">
+                    Confirm Club
+                </h2>
+
+            </div>
+
+
+            <div class="club-confirm-route">
+
+                <div class="club-confirm-point">
+
+                    <span class="club-origin-dot"></span>
+
+                    <div>
+
+                        <small>Pickup</small>
+
+                        <strong>
+                            ${
+                                this.escape(
+                                    ASIYE.state
+                                        .location
+                                        .address ||
+                                    'Current location'
+                                )
+                            }
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="club-route-connector"></div>
+
+
+                <div class="club-confirm-point">
+
+                    <span class="club-dest-dot"></span>
+
+                    <div>
+
+                        <small>Destination</small>
+
+                        <strong>
+                            ${
+                                this.escape(
+                                    ASIYE.state
+                                        .destination
+                                        .name ||
+                                    ASIYE.state
+                                        .destination
+                                        .address
+                                )
+                            }
+                        </strong>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="club-summary-grid">
+
+                <div>
+
+                    <span>Club</span>
+
+                    <strong>
+                        ${config.capacity}
+                        passengers
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>Departure</span>
+
+                    <strong>
+                        ${time}
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>Distance</span>
+
+                    <strong>
+                        ${
+                            ASIYE.state.route
+                                .distanceKm
+                                .toFixed(1)
+                        } km
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>Your price</span>
+
+                    <strong>
+                        R${price}
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="club-driver-rule">
+
+                <i class="fas fa-car-side"></i>
+
+                <div>
+
+                    <strong>
+                        Driver waits for the Club
+                    </strong>
+
+                    <p>
+                        Collection only starts once
+                        all ${config.capacity}
+                        passenger seats are confirmed.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="bookClubNow"
+                class="primary-button"
+                style="margin-top:16px;"
+            >
+                Join Club · R${price}
+            </button>
+
+        `;
+
+
+        document
+            .getElementById('clubConfirmBack')
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    this.renderClubSchedule();
+                }
+            );
+
+
+        document
+            .getElementById('bookClubNow')
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    this.bookClub();
+                }
+            );
+    },
+
+
+    /* ========================================================
+       CLUB BOOKING
+       ======================================================== */
+
+    async bookClub() {
+
+        const type =
+            ASIYE.state.booking
+                .rideType;
+
+
+        const time =
+            ASIYE.state.booking
+                .club
+                .departureTime;
+
+
+        const button =
+            document.getElementById(
+                'bookClubNow'
+            );
+
+
+        if (
+            !type ||
+            !time
+        ) {
+
+            return;
+        }
+
+
+        if (button) {
+
+            button.disabled =
+                true;
+
+            button.innerHTML = `
+                <i class="fas fa-circle-notch fa-spin"></i>
+                Finding your Club
+            `;
+        }
+
+
+        try {
+
+            const requestId =
+
+                await ASIYE.club.book(
+
+                    type,
+
+                    time
+                );
+
+
+            /*
+             * Begin unified ride controller.
+             */
+
+            if (
+                ASIYE.ride &&
+                typeof ASIYE.ride.start ===
+                    'function'
+            ) {
+
+                ASIYE.ride.start(
+                    requestId
+                );
+
+            } else {
+
+                this.renderClubWaiting(
+                    requestId
+                );
+            }
+
+
+        } catch (error) {
+
+            console.error(
+                'Club booking failed:',
+                error
+            );
+
+
+            this.toast(
+                'Could not create your Club ride.'
+            );
+
+
+            if (button) {
+
+                button.disabled =
+                    false;
+
+                button.textContent =
+                    'Join Club';
+            }
+        }
+    },
+
+
+    /* ========================================================
+       CLUB WAITING
+       ======================================================== */
+
+    renderClubWaiting(requestId) {
+
+        firebase
+            .database()
+            .ref(
+                `requests/${requestId}`
+            )
+            .on(
+                'value',
+                snapshot => {
+
+                    const request =
+                        snapshot.val();
+
+
+                    if (!request) return;
+
+
+                    const progress =
+                        ASIYE.club
+                            .getPoolProgress(
+                                request
+                            );
+
+
+                    const container =
+                        document.getElementById(
+                            'sheetContent'
+                        );
+
+
+                    if (!container) return;
+
+
+                    container.innerHTML = `
+
+                        <div class="club-waiting-header">
+
+                            <div>
+
+                                <div class="home-kicker">
+
+                                    ${
+                                        request.clubMode ===
+                                        'club7'
+                                        ?
+                                        'Asiye Club 7'
+                                        :
+                                        'Asiye Club 4'
+                                    }
+
+                                </div>
+
+                                <h2 class="home-title">
+
+                                    ${
+                                        progress.ready
+                                        ?
+                                        'Your Club is ready'
+                                        :
+                                        'Building your Club'
+                                    }
+
+                                </h2>
+
+                            </div>
+
+
+                            <div class="club-count-circle">
+
+                                ${progress.confirmed}
+                                <span>
+                                    /
+                                    ${progress.capacity}
+                                </span>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="club-progress-track">
+
+                            <div
+                                class="club-progress-fill"
+                                style="
+                                    width:
+                                    ${progress.percent}%;
+                                "
+                            ></div>
+
+                        </div>
+
+
+                        <div class="club-progress-copy">
+
+                            ${
+                                progress.ready
+
+                                ?
+
+                                'All passengers are confirmed.'
+
+                                :
+
+                                `${progress.remaining}
+                                 seat${
+                                    progress.remaining === 1
+                                    ? ''
+                                    : 's'
+                                 }
+                                 remaining`
+                            }
+
+                        </div>
+
+
+                        <div class="club-summary-grid">
+
+                            <div>
+
+                                <span>
+                                    Departure
+                                </span>
+
+                                <strong>
+                                    ${
+                                        request.departureTime ||
+                                        '—'
+                                    }
+                                </strong>
+
+                            </div>
+
+
+                            <div>
+
+                                <span>
+                                    Your seat
+                                </span>
+
+                                <strong>
+                                    R${
+                                        request.pricePerPassenger ||
+                                        0
+                                    }
+                                </strong>
+
+                            </div>
+
+                        </div>
+
+
+                        <div class="club-driver-rule">
+
+                            <i class="fas fa-car-side"></i>
+
+                            <div>
+
+                                <strong>
+
+                                    ${
+                                        progress.ready
+
+                                        ?
+
+                                        'Finding your Club driver'
+
+                                        :
+
+                                        'Driver collection has not started'
+                                    }
+
+                                </strong>
+
+                                <p>
+
+                                    ${
+                                        progress.ready
+
+                                        ?
+
+                                        'Your Club is complete. We are now preparing collection.'
+
+                                        :
+
+                                        `Collection begins once all ${progress.capacity} passengers are confirmed.`
+                                    }
+
+                                </p>
+
+                            </div>
+
+                        </div>
+
+
+                        ${
+                            !progress.ready
+
+                            ?
+
+                            `
+
+                            <button
+                                class="secondary-button"
+                                id="cancelClubRide"
+                                style="margin-top:12px;"
+                            >
+                                Cancel Club
+                            </button>
+
+                            `
+
+                            :
+
+                            ''
+                        }
+
+                    `;
+
+
+                    if (
+                        progress.ready
+                    ) {
+
+                        /*
+                         * IMPORTANT:
+                         *
+                         * Now we can move into the
+                         * driver assignment stage.
+                         */
+
+                        ASIYE.state.booking
+                            .club.poolReady =
+                            true;
+
+
+                        if (
+                            ASIYE.ride &&
+                            typeof ASIYE.ride
+                                .handleClubReady ===
+                                'function'
+                        ) {
+
+                            ASIYE.ride
+                                .handleClubReady(
+                                    requestId,
+                                    request
+                                );
+                        }
+                    }
+                }
+            );
     },
 
 

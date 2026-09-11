@@ -38,10 +38,10 @@ ASIYE.pricing = {
         },
 
 
-        club6: {
+        club7: {
 
             divisor:
-                6,
+                7,
 
             minimumFare:
                 15
@@ -54,9 +54,7 @@ ASIYE.pricing = {
 
         const distanceKm =
             Number(
-                ASIYE.state.route
-                    .distanceKm ||
-                0
+                ASIYE.state.route.distanceKm || 0
             );
 
 
@@ -74,14 +72,12 @@ ASIYE.pricing = {
             );
 
 
-        goFare =
+        goFare = Math.max(
 
-            Math.max(
+            goConfig.minimumFare,
 
-                goConfig.minimumFare,
-
-                goFare
-            );
+            goFare
+        );
 
 
         goFare =
@@ -90,37 +86,24 @@ ASIYE.pricing = {
             );
 
 
+        /*
+         * Club pricing:
+         *
+         * One total route fare,
+         * split across every paying passenger.
+         */
+
         const club4Fare =
 
-            Math.max(
-
-                this.rates
-                    .club4
-                    .minimumFare,
-
-                Math.round(
-                    goFare /
-                    this.rates
-                        .club4
-                        .divisor
-                )
+            Math.ceil(
+                goFare / 4
             );
 
 
-        const club6Fare =
+        const club7Fare =
 
-            Math.max(
-
-                this.rates
-                    .club6
-                    .minimumFare,
-
-                Math.round(
-                    goFare /
-                    this.rates
-                        .club6
-                        .divisor
-                )
+            Math.ceil(
+                goFare / 7
             );
 
 
@@ -132,8 +115,14 @@ ASIYE.pricing = {
             club4:
                 club4Fare,
 
-            club6:
-                club6Fare
+            club7:
+                club7Fare,
+
+            club4Total:
+                goFare,
+
+            club7Total:
+                goFare
         };
     }
 
