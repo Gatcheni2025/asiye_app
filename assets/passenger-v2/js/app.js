@@ -234,10 +234,6 @@ ASIYE.ui = {
         `;
 
 
-        /*
-         * Where to?
-         */
-
         document
             .getElementById('whereToButton')
             ?.addEventListener(
@@ -249,10 +245,6 @@ ASIYE.ui = {
             );
 
 
-        /*
-         * Ride button
-         */
-
         container
             .querySelector('[data-action="ride"]')
             ?.addEventListener(
@@ -263,10 +255,6 @@ ASIYE.ui = {
                 }
             );
 
-
-        /*
-         * Club
-         */
 
         container
             .querySelector('[data-action="club"]')
@@ -281,10 +269,6 @@ ASIYE.ui = {
             );
 
 
-        /*
-         * Parcel
-         */
-
         container
             .querySelector('[data-action="parcel"]')
             ?.addEventListener(
@@ -297,10 +281,6 @@ ASIYE.ui = {
                 }
             );
 
-
-        /*
-         * Wallet
-         */
 
         document
             .getElementById('walletStrip')
@@ -758,31 +738,48 @@ ASIYE.ui = {
             .getElementById('confirmRideSelection')
             ?.addEventListener(
                 'click',
-                () => {
+                async () => {
 
                     const type =
-                        ASIYE.state.booking.rideType;
+                        ASIYE.state.booking
+                            .rideType;
 
+
+                    /*
+                     * ASIYE CLUB
+                     */
 
                     if (
                         type === 'club4' ||
                         type === 'club7'
                     ) {
 
-                        this.renderClubSchedule();
+                        ASIYE.club.select(
+                            type
+                        );
+
+
+                        ASIYE.ui
+                            .renderClubSchedule();
+
 
                         return;
                     }
 
 
                     /*
-                     * Asiye Go flow — booking
-                     * will be wired next.
+                     * ASIYE GO
                      */
 
-                    ASIYE.ui.toast(
-                        'Next: payment and booking request.'
-                    );
+                    if (
+                        type === 'go'
+                    ) {
+
+                        ASIYE.ui
+                            .renderPaymentSelection();
+
+                        return;
+                    }
                 }
             );
     },
@@ -883,6 +880,287 @@ ASIYE.ui = {
         button.textContent =
             labels[selected] ||
             'Continue';
+    },
+
+
+    /* ========================================================
+       PAYMENT SELECTION (Asiye Go)
+       ======================================================== */
+
+    renderPaymentSelection() {
+
+        const container =
+            document.getElementById(
+                'sheetContent'
+            );
+
+
+        if (!container) {
+
+            return;
+        }
+
+
+        const prices =
+            ASIYE.pricing.calculate();
+
+
+        const fare =
+            prices.go;
+
+
+        ASIYE.state.booking.fare =
+            fare;
+
+
+        container.innerHTML = `
+
+            <div class="sheet-page-header">
+
+                <button
+                    id="paymentBackButton"
+                    class="sheet-back-button"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+
+
+                <div>
+
+                    <h2 class="sheet-page-title">
+
+                        Payment
+
+                    </h2>
+
+                    <div class="home-greeting">
+
+                        Choose how you want to pay
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="payment-fare-card">
+
+                <span>
+                    Asiye Go
+                </span>
+
+                <strong>
+                    R${fare.toFixed(2)}
+                </strong>
+
+            </div>
+
+
+            <button
+                class="payment-option selected"
+                data-payment="cash"
+            >
+
+                <div class="payment-icon">
+
+                    <i class="fas fa-money-bill-wave"></i>
+
+                </div>
+
+                <div class="payment-copy">
+
+                    <strong>
+                        Cash
+                    </strong>
+
+                    <span>
+                        Pay your driver after the trip
+                    </span>
+
+                </div>
+
+                <i
+                    class="fas fa-circle-check payment-check"
+                ></i>
+
+            </button>
+
+
+            <button
+                class="payment-option"
+                data-payment="wallet"
+            >
+
+                <div class="payment-icon">
+
+                    <i class="fas fa-wallet"></i>
+
+                </div>
+
+                <div class="payment-copy">
+
+                    <strong>
+                        Asiye Wallet
+                    </strong>
+
+                    <span>
+                        Pay using your Asiye balance
+                    </span>
+
+                </div>
+
+                <i
+                    class="fas fa-circle-check payment-check"
+                ></i>
+
+            </button>
+
+
+            <button
+                id="requestAsiyeGoButton"
+                class="primary-button"
+                style="margin-top:16px;"
+            >
+
+                Request Asiye Go ·
+                R${fare.toFixed(2)}
+
+            </button>
+
+        `;
+
+
+        ASIYE.state.booking
+            .paymentMethod =
+            'cash';
+
+
+        document
+            .getElementById(
+                'paymentBackButton'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    this.renderRideSelection();
+                }
+            );
+
+
+        container
+            .querySelectorAll(
+                '[data-payment]'
+            )
+            .forEach(
+                option => {
+
+                    option.addEventListener(
+                        'click',
+                        () => {
+
+                            const payment =
+
+                                option.dataset.payment;
+
+
+                            ASIYE.state.booking
+                                .paymentMethod =
+                                payment;
+
+
+                            container
+                                .querySelectorAll(
+                                    '[data-payment]'
+                                )
+                                .forEach(
+                                    item => {
+
+                                        item.classList
+                                            .toggle(
+
+                                                'selected',
+
+                                                item === option
+                                            );
+                                    }
+                                );
+                        }
+                    );
+                }
+            );
+
+
+        document
+            .getElementById(
+                'requestAsiyeGoButton'
+            )
+            ?.addEventListener(
+                'click',
+                async event => {
+
+                    const button =
+                        event.currentTarget;
+
+
+                    button.disabled =
+                        true;
+
+
+                    button.innerHTML = `
+
+                        <i
+                            class="
+                                fas
+                                fa-circle-notch
+                                fa-spin
+                            "
+                        ></i>
+
+                        Requesting driver...
+
+                    `;
+
+
+                    try {
+
+                        const requestId =
+
+                            await ASIYE.booking
+                                .createGoRide();
+
+
+                        await ASIYE.ride
+                            .start(
+                                requestId
+                            );
+
+
+                    } catch (error) {
+
+                        console.error(
+                            'Asiye Go booking failed:',
+                            error
+                        );
+
+
+                        this.toast(
+                            error.message ||
+                            'Could not request your ride.'
+                        );
+
+
+                        button.disabled =
+                            false;
+
+
+                        button.innerHTML =
+
+                            `Request Asiye Go · R${fare.toFixed(2)}`;
+                    }
+                }
+            );
     },
 
 
@@ -1109,10 +1387,6 @@ ASIYE.ui = {
                         .departureTime =
                         time;
 
-
-                    /*
-                     * Next step will create/join pool.
-                     */
 
                     this.renderClubConfirmation();
                 }
@@ -1676,13 +1950,6 @@ ASIYE.ui = {
                         progress.ready
                     ) {
 
-                        /*
-                         * IMPORTANT:
-                         *
-                         * Now we can move into the
-                         * driver assignment stage.
-                         */
-
                         ASIYE.state.booking
                             .club.poolReady =
                             true;
@@ -1826,12 +2093,6 @@ document.addEventListener(
         );
 
 
-        /*
-         * Temporary mock passenger.
-         *
-         * Firebase will replace this next.
-         */
-
         if (!ASIYE.state.user) {
 
             ASIYE.setUser(
@@ -1849,10 +2110,6 @@ document.addEventListener(
         }
 
 
-        /*
-         * Map
-         */
-
         if (
             ASIYE.map &&
             typeof ASIYE.map.init ===
@@ -1862,10 +2119,6 @@ document.addEventListener(
             ASIYE.map.init();
         }
 
-
-        /*
-         * Location
-         */
 
         if (
             ASIYE.location &&
@@ -1877,16 +2130,8 @@ document.addEventListener(
         }
 
 
-        /*
-         * Home
-         */
-
         ASIYE.ui.renderHome();
 
-
-        /*
-         * Menu controls
-         */
 
         document
             .getElementById('menuButton')
@@ -1921,10 +2166,6 @@ document.addEventListener(
             );
 
 
-        /*
-         * Current location
-         */
-
         document
             .getElementById('recenterButton')
             ?.addEventListener(
@@ -1935,10 +2176,6 @@ document.addEventListener(
                 }
             );
 
-
-        /*
-         * Menu navigation
-         */
 
         document
             .querySelectorAll('#sideMenu [data-page]')

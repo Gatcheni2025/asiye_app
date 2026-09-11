@@ -48,6 +48,40 @@ ASIYE.club = {
     },
 
 
+    /*
+     * Fail fast if Firebase hasn't loaded or
+     * hasn't been initialised. Called by every
+     * method that touches the database.
+     */
+
+    ensureFirebase() {
+
+        if (
+            typeof firebase ===
+            'undefined'
+        ) {
+
+            throw new Error(
+                'Firebase SDK is unavailable.'
+            );
+        }
+
+
+        if (
+            !firebase.apps ||
+            firebase.apps.length === 0
+        ) {
+
+            throw new Error(
+                'Firebase has not been initialized.'
+            );
+        }
+
+
+        return true;
+    },
+
+
     getConfig(type) {
 
         return (
@@ -193,6 +227,9 @@ ASIYE.club = {
         type,
         departureTime
     ) {
+
+        this.ensureFirebase();
+
 
         const pickup =
             ASIYE.state.location;
@@ -451,6 +488,9 @@ ASIYE.club = {
         poolId,
         departureTime
     ) {
+
+        this.ensureFirebase();
+
 
         const uid =
             ASIYE.state.userId;
@@ -736,6 +776,9 @@ ASIYE.club = {
         departureTime
     ) {
 
+        this.ensureFirebase();
+
+
         const uid =
             ASIYE.state.userId;
 
@@ -1015,6 +1058,8 @@ ASIYE.club = {
         type,
         departureTime
     ) {
+
+        this.ensureFirebase();
 
         this.select(type);
 

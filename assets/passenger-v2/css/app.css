@@ -2241,3 +2241,155 @@ button:disabled {
 
     font-weight: 700;
 }
+/* ============================================================
+   PAYMENT
+   ============================================================ */
+
+.payment-fare-card {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 12px;
+
+    padding: 16px;
+
+    margin-bottom: 12px;
+
+    border-radius: 17px;
+
+    background: #111;
+
+    color: white;
+}
+
+
+.payment-fare-card span {
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    color:
+        rgba(
+            255,
+            255,
+            255,
+            .65
+        );
+}
+
+
+.payment-fare-card strong {
+
+    font-size: 20px;
+
+    font-weight: 900;
+}
+
+
+.payment-option {
+
+    width: 100%;
+
+    min-height: 67px;
+
+    margin-top: 9px;
+
+    padding: 11px 13px;
+
+    border: 2px solid transparent;
+
+    border-radius: 16px;
+
+    background: #f5f5f5;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 12px;
+
+    text-align: left;
+}
+
+
+.payment-option.selected {
+
+    border-color: #111;
+
+    background: white;
+
+    box-shadow:
+        0 4px 16px
+        rgba(0,0,0,.06);
+}
+
+
+.payment-icon {
+
+    width: 42px;
+    height: 42px;
+
+    flex-shrink: 0;
+
+    border-radius: 13px;
+
+    background: white;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    color: #111;
+}
+
+
+.payment-copy {
+
+    min-width: 0;
+
+    flex: 1;
+}
+
+
+.payment-copy strong {
+
+    display: block;
+
+    font-size: 12px;
+
+    color: #111;
+}
+
+
+.payment-copy span {
+
+    display: block;
+
+    margin-top: 2px;
+
+    font-size: 9px;
+
+    color: #888;
+}
+
+
+.payment-check {
+
+    color: #111;
+
+    opacity: 0;
+}
+
+
+.payment-option.selected
+.payment-check {
+
+    opacity: 1;
+}

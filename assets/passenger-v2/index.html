@@ -28,31 +28,7 @@
         href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css"
         rel="stylesheet"
     >
-<script>
-    window.onGoogleMapsReady = function () {
 
-        window.__googleMapsReady = true;
-
-        console.log(
-            '✅ Google Maps Places ready'
-        );
-
-        if (
-            window.ASIYE &&
-            ASIYE.places &&
-            typeof ASIYE.places.init ===
-                'function'
-        ) {
-
-            ASIYE.places.init();
-        }
-    };
-</script>
-
-<script
-    async
-    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async&callback=onGoogleMapsReady">
-</script>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
     <!-- Firebase -->
@@ -60,6 +36,45 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+
+    <!--
+        Google Maps / Places
+        Async so it doesn't block paint. The callback only
+        flips a flag — places.js polls / reacts to it.
+    -->
+    <script>
+        window.onGoogleMapsReady = function () {
+
+            window.__googleMapsReady =
+                true;
+
+            console.log(
+                '✅ Google Maps Places ready'
+            );
+
+
+            /*
+             * If places.js has already loaded
+             * and exposes an onReady hook,
+             * let it initialise itself.
+             */
+
+            if (
+                window.ASIYE &&
+                ASIYE.places &&
+                typeof ASIYE.places.onGoogleReady ===
+                    'function'
+            ) {
+
+                ASIYE.places.onGoogleReady();
+            }
+        };
+    </script>
+
+    <script
+        async
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async&callback=onGoogleMapsReady">
+    </script>
 
     <!-- Main CSS -->
     <link rel="stylesheet" href="./css/app.css">
