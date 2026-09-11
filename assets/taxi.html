@@ -11682,7 +11682,51 @@ window.showCounterInput = function(reqKey, offer, normal) {
         window.currentRoute = null;
     };
 
+window.directionsRenderer = null;
+window.directionsService = null;
 
+// Replace calculateAndDisplayETA and drawRouteToTaxi combined
+window.calculateAndDisplayETA = function(taxiId) {
+    database.ref('taxis/' + taxiId).once('value', snapshot => {
+        const taxi = snapshot.val();
+        if (taxi && Number.isFinite(taxi.latitude) && Number.isFinite(taxi.longitude) && window.commuterLat && window.commuterLng) {
+            
+            if (!window.directionsService) window.directionsService = new google.maps.DirectionsService();
+            if (!window.directionsRenderer) {
+                window.directionsRenderer = new google.maps.DirectionsRenderer({
+                    map: window.map,
+                    suppressMarkers: true,
+                    polylineOptions: { strokeColor: "#007BFF", strokeWeight: 6, strokeOpacity: 0.8 }
+                });
+            }
+
+            const request = {
+                origin: { lat: taxi.latitude, lng: taxi.longitude },
+                destination: { lat: window.commuterLat, lng: window.commuterLng },
+                travelMode: google.maps.TravelMode.DRIVING
+            };
+
+            window.directionsService.route(request, (response, status) => {
+                if (status === "OK") {
+                    window.directionsRenderer.setDirections(response);
+                    
+                    const leg = response.routes[0].legs[0];
+                    const etaMinutes = Math.round(leg.duration.value / 60);
+                    const distanceKm = (leg.distance.value / 1000).toFixed(1);
+                    
+                    if (typeof updateETADisplay === 'function') updateETADisplay(etaMinutes, distanceKm);
+                }
+            });
+        }
+    });
+};
+
+// Replace clearRoute
+window.clearRoute = function() {
+    if (window.directionsRenderer) {
+        window.directionsRenderer.setDirections({routes: []});
+    }
+};
         function showRouteControls() {
             const el = document.getElementById('routeControls');
             if (el) el.classList.add('visible');

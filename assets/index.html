@@ -6,16 +6,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
-<!-- <script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script> -->
-<!-- <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' /> -->
+    
+    
+    <!-- Mapbox for the visual map -->
+<script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script>
+<link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
 
-<!-- Add Google Maps -->
-<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places,geometry"></script>
-    <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
-    <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/md5.min.js"></script>
+<!-- Google Maps for the Search Bar (Places API only) -->
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_API_KEY&libraries=places&loading=async"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
+<!-- Replace YOUR_ACTUAL_API_KEY with your real Google Cloud API Key -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/md5.min.js"></script>
     <!-- ADD TURF.JS HERE -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
     <!-- === START: ADDED LIBRARIES FOR ADVERT CAROUSEL === -->
@@ -13849,38 +13850,6 @@ window.createTaxiMarker = async function(lngLat, initialRotation = 0) {
     
     return window.taxiMarker;
 };
-
-// Replace setupUserMarker()
-window.setupUserMarker = async function(coords) {
-    if (!window.map || !coords) return;
-    const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-
-    if (window.userMarker) {
-        window.userMarker.position = { lat: coords[1], lng: coords[0] };
-        return;
-    }
-
-    const el = document.createElement('div');
-    el.className = 'user-location-marker';
-    el.style.cssText = 'width: 132px; height: 76px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; pointer-events: none;';
-    el.innerHTML = `
-        <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
-        <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
-        <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
-    `;
-
-    window.userMarker = new AdvancedMarkerElement({
-        map: window.map,
-        position: { lat: coords[1], lng: coords[0] },
-        content: el
-    });
-};
-// ================================================================
-// SHOW SEARCHING MAP VIEW - pickup + destination while finding a driver
-// ================================================================
-
-// Drops/updates a "Drop-off" tag-on-a-pole marker at the given coordinates,
-// styled to match the "You are here" pickup marker.
 window.setDropoffMarker = function(destLat, destLng) {
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!activeMap || !Number.isFinite(destLat) || !Number.isFinite(destLng)) return null;
@@ -16017,66 +15986,7 @@ window.lockPhoneModalOpen = function() {
       };
       document.body.appendChild(btn);
   }
-    
-   // Replace startMap()
-window.startMap = function(coords) {
-    console.log("🗺️ Initializing Google Map at:", coords);
-    const safeCoords = coords || [28.0473, -26.2041]; // Fallback to JHB
-    const centerLatLng = { lat: safeCoords[1], lng: safeCoords[0] };
-
-    try {
-        window.map = new google.maps.Map(document.getElementById('map'), {
-            center: centerLatLng,
-            zoom: 17.5,
-            disableDefaultUI: true, // Removes Google's default buttons for a clean look
-            mapId: "DEMO_MAP_ID", // Required for AdvancedMarkerElements (Custom HTML)
-            tilt: 0,
-            heading: 0
-        });
-
-        // Wait until map is fully loaded
-        google.maps.event.addListenerOnce(window.map, 'idle', () => {
-            console.log("✅ Google Map loaded.");
-            const preloader = document.getElementById('solidPreloader');
-            if (preloader) preloader.style.display = 'none';
-
-            // Start App Logic
-            if (typeof setupDriverMarker === 'function') setupDriverMarker(safeCoords);
-            if (typeof setupUserMarker === 'function') setupUserMarker(safeCoords);
-            if (typeof initDriverLocationSystem === 'function') initDriverLocationSystem();
-        });
-
-    } catch (e) {
-        console.error("Map initialization failed:", e);
-        document.getElementById('solidPreloader').style.display = 'none';
-    }
-};
-
-// Clean style load handler
-map.on('style.load', () => {
-    console.log("Map style loaded successfully.");
-});
-
-      // Add native Mapbox Geolocate Control (The target icon button)
-      // trackUserLocation stays off since our custom "You are here" pole marker
-      // already renders the live position - avoids a duplicate native blue pulse dot.
-      const geolocateControl = new mapboxgl.GeolocateControl({
-          positionOptions: {
-              enableHighAccuracy: true
-          },
-          trackUserLocation: false,
-          showUserHeading: false,
-          showAccuracyCircle: false
-      });
-
-      if (navigator.geolocation) {
-          map.addControl(geolocateControl, 'bottom-right');
-      } else {
-          console.info('Browser geolocation is unavailable; using cached passenger location.');
-      }
-
-      // Sync the mapbox control with our custom variables
-     // Update the geolocate handler inside startMap function in index.html
+      
 geolocateControl.on('geolocate', function(e) {
     commuterLat = e.coords.latitude;
     commuterLng = e.coords.longitude;
@@ -24413,89 +24323,118 @@ window.animateMarkerTo = function(marker, newLngLat, targetHeading, duration = 1
       });
   };
 
-  window.zoomToFitTaxis = function(taxis) {
-      if (!map || !commuterLat || !commuterLng) return;
+window.startMap = function(coords) {
+    console.log("🗺️ Initializing Mapbox Map at:", coords);
+    const safeCoords = coords || [28.0473, -26.2041];
 
-      window.lastTaxisFound = taxis;
+    try {
+        // 1. Initialize Mapbox (Visuals)
+        window.map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12', // or your custom style
+            center: [safeCoords[0], safeCoords[1]],
+            zoom: 15,
+            pitch: 45, // Gives the nice 3D look
+            attributionControl: false
+        });
 
-      const uLat = parseFloat(commuterLat);
-      const uLng = parseFloat(commuterLng);
+        window.map.on('load', function() {
+            console.log("✅ Mapbox loaded successfully.");
+            
+            const preloader = document.getElementById('solidPreloader');
+            if (preloader) preloader.style.display = 'none';
+            
+            // Drop the "You are here" marker
+            if (typeof setupUserMarker === 'function') {
+                setupUserMarker(safeCoords);
+            }
 
-      if (!isNaN(uLat) && !isNaN(uLng)) {
-          const menu = document.getElementById('mainActionSheet');
-          const taxiSheet = document.getElementById('taxiListSheet');
+            // Start the live taxi feed
+            if (typeof loadAndDisplayTaxisOnMap === 'function') {
+                loadAndDisplayTaxisOnMap();
+            }
 
-          var dynamicBottomPadding = 300;
+            if (typeof checkPassengerActiveTrip === 'function') {
+                checkPassengerActiveTrip();
+            }
+        });
+    } catch (e) {
+        console.error("Mapbox initialization failed:", e);
+    }
+};
+// ==========================================
+// 2. SETUP USER MARKER (GOOGLE MAPS)
+// ==========================================
 
-          if (taxiSheet && taxiSheet.classList.contains('open')) {
-              dynamicBottomPadding = taxiSheet.offsetHeight + 30;
-          } else if (menu && menu.style.display !== 'none') {
-              dynamicBottomPadding = menu.offsetHeight + 30;
-          }
+window.setupUserMarker = async function(coords) {
+    if (!window.map || !coords) return;
+    
+    try {
+        // Import the marker library for custom HTML markers
+        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
 
-          setTimeout(() => {
-              try {
-                  if (taxis && taxis.length > 0) {
-                      const bounds = new mapboxgl.LngLatBounds().extend([uLng, uLat]);
-                      const nearestTaxis = taxis.slice(0, 3).filter(t => Number.isFinite(Number(t.longitude)) && Number.isFinite(Number(t.latitude)));
-                      nearestTaxis.forEach(t => bounds.extend([Number(t.longitude), Number(t.latitude)]));
+        // If it already exists, just move it
+        if (window.userMarker) {
+            window.userMarker.position = { lat: coords[1], lng: coords[0] };
+            return;
+        }
 
-                      map.fitBounds(bounds, {
-                          padding: { top: 70, bottom: dynamicBottomPadding, left: 40, right: 40 },
-                          // CHANGED: Increased max zoom for a closer view
-                          maxZoom: 16,
-                          duration: 1500,
-                          essential: true
-                      });
-                  } else {
-                      // Just center tightly on user if no taxis
-                      map.flyTo({
-                          center: [uLng, uLat],
-                          // CHANGED: Tighter zoom even when no taxis are found
-                          zoom: 15.5,
-                          padding: { top: 50, bottom: dynamicBottomPadding, left: 0, right: 0 },
-                          duration: 1500,
-                          essential: true
-                      });
-                  }
-              } catch(e) {
-                  map.flyTo({ center: [uLng, uLat], zoom: 15.5 }); // Absolute failsafe
-              }
-          }, 100);
-      }
-  };
+        // Create the custom HTML element
+        const el = document.createElement('div');
+        el.className = 'user-location-marker';
+        el.style.cssText = 'width: 132px; height: 76px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; pointer-events: none;';
+        el.innerHTML = `
+            <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
+            <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
+            <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
+        `;
+
+        // Add to Google Map
+        window.userMarker = new AdvancedMarkerElement({
+            map: window.map,
+            position: { lat: coords[1], lng: coords[0] },
+            content: el
+        });
+        
+        console.log("✅ User marker added successfully");
+    } catch (err) {
+        console.warn('Failed to create user location marker:', err);
+    }
+};
+
+// ==========================================
+// 3. ZOOM TO FIT (GOOGLE MAPS BOUNDS)
+// ==========================================
 
 window.zoomToFitTaxis = function(taxis) {
     if (!window.map || !window.commuterLat || !window.commuterLng) return;
 
-    const bounds = new google.maps.LatLngBounds();
-    bounds.extend({ lat: parseFloat(window.commuterLat), lng: parseFloat(window.commuterLng) });
+    window.lastTaxisFound = taxis;
 
-    if (taxis && taxis.length > 0) {
-        const nearestTaxis = taxis.slice(0, 3).filter(t => Number.isFinite(Number(t.longitude)));
-        nearestTaxis.forEach(t => bounds.extend({ lat: Number(t.latitude), lng: Number(t.longitude) }));
+    try {
+        const bounds = new google.maps.LatLngBounds();
+        
+        // Add user location to bounds
+        bounds.extend({ lat: parseFloat(window.commuterLat), lng: parseFloat(window.commuterLng) });
+
+        // Add nearby taxis to bounds
+        if (taxis && taxis.length > 0) {
+            const nearestTaxis = taxis.slice(0, 3).filter(t => Number.isFinite(Number(t.longitude)));
+            nearestTaxis.forEach(t => {
+                bounds.extend({ lat: Number(t.latitude), lng: Number(t.longitude) });
+            });
+        }
+
+        // Google Maps automatically fits the bounds smoothly
+        window.map.fitBounds(bounds);
+        
+    } catch (e) {
+        console.warn("Failed to zoom to fit taxis:", e);
+        // Absolute failsafe
+        window.map.setCenter({ lat: parseFloat(window.commuterLat), lng: parseFloat(window.commuterLng) });
+        window.map.setZoom(15.5);
     }
-
-    // Google Maps fits the bounds automatically
-    window.map.fitBounds(bounds);
 };
-
-  // Start checking loop immediately
-  setTimeout(window.safelyStartDummyTaxis, 1000);
-  // =================================================================
-  // PRELOADER LOGO FIX: Force the correct logo on load
-  // =================================================================
-  document.addEventListener('DOMContentLoaded', function() {
-      const preloaderLogo = document.querySelector('#preloader .main-logo');
-      if (preloaderLogo) {
-          preloaderLogo.src = 'data/AsiyeNew.png';
-      }
-  });
-
-window.handleFindTaxisNearMe = window.findBroadcastingTaxis;
-window.findMinibusTaxis = window.findBroadcastingTaxis;
-
-
   window.checkVerificationMilestone = function(earningsArray) {
       if (!window.commuterData || window.commuterData.accountVerified) return;
 
@@ -32817,37 +32756,60 @@ window.rideNowPayFull = function(reqId, rideNowCost) {
         });
 };
 
-window.initDualGeocoders = async function() {
+window.initDualGeocoders = function() {
     const destContainer = document.getElementById('uber-dest-container');
     const pickupContainer = document.getElementById('uber-pickup-container');
 
     if (destContainer) {
-        destContainer.innerHTML = `<input type="text" id="uberDestInput" placeholder="Where to?" style="background:transparent; color:000000; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
+        destContainer.innerHTML = `<input type="text" id="uberDestInput" placeholder="Where to?" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
     }
     if (pickupContainer) {
-        pickupContainer.innerHTML = `<input type="text" id="uberPickupInput" placeholder="Current Location" style="background:transparent; color:#000000; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
+        pickupContainer.innerHTML = `<input type="text" id="uberPickupInput" placeholder="Current Location" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
     }
 
-    if (typeof window.setupDestAutocomplete === 'function') window.setupDestAutocomplete();
-
+    // 🚀 Activate Google Places for these inputs!
+    const destInput = document.getElementById('uberDestInput');
     const pickupInput = document.getElementById('uberPickupInput');
+
+    if (destInput) {
+        const destAutocomplete = new google.maps.places.Autocomplete(destInput, {
+            componentRestrictions: { country: "za" },
+            fields: ["geometry", "name", "formatted_address"]
+        });
+
+        destAutocomplete.addListener("place_changed", () => {
+            const place = destAutocomplete.getPlace();
+            if (!place.geometry) return;
+            
+            window.userDropOffDestination = place.name;
+            window.ehailingDestLat = place.geometry.location.lat();
+            window.ehailingDestLng = place.geometry.location.lng();
+            
+            // Mapbox visual reaction
+            window.map.flyTo({ center: [window.ehailingDestLng, window.ehailingDestLat], zoom: 16 });
+            window.findTaxisFlow();
+        });
+    }
+
     if (pickupInput) {
-        pickupInput.value = "Fetching location...";
-        try {
-            const lat = window.commuterLat || commuterLat;
-            const lng = window.commuterLng || commuterLng;
-            if (lat && lng) {
-                const addr = await getAddressFromCoordsPromise(lng, lat);
-                pickupInput.value = addr.split(',')[0].trim();
-            } else {
-                pickupInput.value = "Current Location";
-            }
-        } catch (e) {
-            pickupInput.value = "Current Location";
-        }
+        const pickAutocomplete = new google.maps.places.Autocomplete(pickupInput, {
+            componentRestrictions: { country: "za" },
+            fields: ["geometry", "name", "formatted_address"]
+        });
+
+        pickAutocomplete.addListener("place_changed", () => {
+            const place = pickAutocomplete.getPlace();
+            if (!place.geometry) return;
+            
+            window.commuterLat = place.geometry.location.lat();
+            window.commuterLng = place.geometry.location.lng();
+            
+            // Mapbox visual reaction
+            window.map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16 });
+            if (window.userMarker) window.userMarker.setLngLat([window.commuterLng, window.commuterLat]);
+        });
     }
 };
-
 // Handle incoming notifications (override pattern)
 const originalHandleIncomingNotification = window.handleIncomingNotification;
 
@@ -48468,6 +48430,48 @@ function resetBookingUI() {
     document.getElementById('view-confirm-ride').style.display = 'none';
     document.getElementById('homeSheetContent').style.height = '65vh';
     if (map) map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16 });
+}
+
+function setupHybridSearch() {
+    const destInput = document.getElementById('uberDestInput');
+    
+    // 1. Attach Google Places Autocomplete to your input
+    const googleAutocomplete = new google.maps.places.Autocomplete(destInput, {
+        componentRestrictions: { country: "za" }, // Restrict to South Africa
+        fields: ["geometry", "name", "formatted_address"] // What data we want back
+    });
+
+    // 2. When the user selects a place from Google's dropdown...
+    googleAutocomplete.addListener("place_changed", () => {
+        const place = googleAutocomplete.getPlace();
+        
+        if (!place.geometry) {
+            showToast("Please select an address from the dropdown", "warning");
+            return;
+        }
+
+        // 3. Extract the perfect coordinates from Google
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const addressName = place.name;
+
+        // 4. Update your global variables
+        window.userDropOffDestination = addressName;
+        window.ehailingDestLat = lat;
+        window.ehailingDestLng = lng;
+
+        // 5. Tell MAPBOX to fly to the location Google just found!
+        window.map.flyTo({
+            center: [lng, lat], // Mapbox uses [Lng, Lat]
+            zoom: 16,
+            essential: true
+        });
+
+        // 6. Proceed to pricing/booking
+        if (typeof window.findTaxisFlow === 'function') {
+            window.findTaxisFlow();
+        }
+    });
 }
 </script>
 </body>
