@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
+    <title>Asiye</title>
+
+    <!-- Manrope -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+    <!-- Font Awesome -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    >
+
+    <!-- Mapbox -->
+    <link
+        href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css"
+        rel="stylesheet"
+    >
+
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="./css/app.css">
+</head>
+
+
+<body>
+
+    <!-- ==========================================
+         MAP
+    =========================================== -->
+
+    <main id="app">
+
+        <div id="map"></div>
+
+
+        <!-- ======================================
+             TOP BAR
+        ======================================= -->
+
+        <header id="topBar">
+
+            <button
+                id="menuButton"
+                class="circle-button"
+                aria-label="Menu"
+            >
+                <i class="fas fa-bars"></i>
+            </button>
+
+
+            <button
+                id="locationPill"
+                class="location-pill"
+            >
+
+                <i class="fas fa-location-arrow"></i>
+
+                <div>
+
+                    <span class="location-label">
+                        Pickup
+                    </span>
+
+                    <strong id="currentLocationText">
+                        Finding your location...
+                    </strong>
+
+                </div>
+
+            </button>
+
+
+            <button
+                id="accountButton"
+                class="profile-button"
+                aria-label="Account"
+            >
+
+                <span id="profileInitial">
+                    A
+                </span>
+
+            </button>
+
+        </header>
+
+
+        <!-- ======================================
+             RECENTER MAP
+        ======================================= -->
+
+        <button
+            id="recenterButton"
+            class="map-control-button"
+            aria-label="Recenter map"
+        >
+            <i class="fas fa-location-crosshairs"></i>
+        </button>
+
+
+        <!-- ======================================
+             MAIN BOTTOM SHEET
+        ======================================= -->
+
+        <section
+            id="mainSheet"
+            class="bottom-sheet open"
+        >
+
+            <div class="sheet-handle"></div>
+
+            <div id="sheetContent">
+
+                <!-- Home content inserted by JS -->
+
+            </div>
+
+        </section>
+
+
+        <!-- ======================================
+             SIDE MENU
+        ======================================= -->
+
+        <div id="menuBackdrop"></div>
+
+        <aside id="sideMenu">
+
+            <div class="menu-header">
+
+                <div class="menu-profile">
+
+                    <div
+                        id="menuProfileAvatar"
+                        class="menu-avatar"
+                    >
+                        A
+                    </div>
+
+                    <div>
+
+                        <strong id="menuUserName">
+                            Passenger
+                        </strong>
+
+                        <span id="menuUserPhone">
+                            Asiye
+                        </span>
+
+                    </div>
+
+                </div>
+
+
+                <button
+                    id="closeMenuButton"
+                    class="small-circle-button"
+                >
+                    <i class="fas fa-times"></i>
+                </button>
+
+            </div>
+
+
+            <nav class="menu-list">
+
+                <button data-page="home">
+                    <i class="fas fa-house"></i>
+                    Home
+                </button>
+
+                <button data-page="trips">
+                    <i class="fas fa-clock-rotate-left"></i>
+                    My trips
+                </button>
+
+                <button data-page="wallet">
+                    <i class="fas fa-wallet"></i>
+                    Wallet
+                </button>
+
+                <button data-page="parcels">
+                    <i class="fas fa-box"></i>
+                    Parcels
+                </button>
+
+                <button data-page="safety">
+                    <i class="fas fa-shield-halved"></i>
+                    Safety
+                </button>
+
+                <button data-page="support">
+                    <i class="fas fa-headset"></i>
+                    Support
+                </button>
+
+                <button data-page="account">
+                    <i class="fas fa-user"></i>
+                    Account
+                </button>
+
+            </nav>
+
+        </aside>
+
+
+        <!-- ======================================
+             DIALOG
+        ======================================= -->
+
+        <div
+            id="dialogOverlay"
+            class="dialog-overlay"
+        >
+
+            <div class="dialog-card">
+
+                <div id="dialogContent"></div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ======================================
+             TOASTS
+        ======================================= -->
+
+        <div id="toastContainer"></div>
+
+    </main>
+
+
+    <!-- ==========================================
+         APPLICATION JS
+    =========================================== -->
+
+    <script src="./js/config.js"></script>
+    <script src="./js/state.js"></script>
+    <script src="./js/firebase.js"></script>
+
+    <script src="./js/auth.js"></script>
+
+    <script src="./js/location.js"></script>
+    <script src="./js/map.js"></script>
+    <script src="./js/places.js"></script>
+
+    <script src="./js/pricing.js"></script>
+    <script src="./js/booking.js"></script>
+    <script src="./js/club.js"></script>
+
+    <script src="./js/ride-controller.js"></script>
+
+    <script src="./js/wallet.js"></script>
+    <script src="./js/chat.js"></script>
+    <script src="./js/safety.js"></script>
+
+    <script src="./js/parcels.js"></script>
+
+    <script src="./js/notifications.js"></script>
+    <script src="./js/history.js"></script>
+    <script src="./js/profile.js"></script>
+
+    <!-- MUST ALWAYS BE LAST -->
+    <script src="./js/app.js"></script>
+
+</body>
+
+</html>
