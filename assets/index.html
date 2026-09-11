@@ -11340,6 +11340,70 @@ gmp-place-autocomplete {
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
+
+/* ============================================================
+   PENDING REQUEST — Animations
+   ============================================================ */
+
+@keyframes pendingRadarPulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(2.2);
+        opacity: 0;
+    }
+}
+
+#pendingRequestPopup.modal-overlay {
+    align-items: flex-end !important;
+    justify-content: center !important;
+    background: rgba(0, 0, 0, 0.15) !important;
+    backdrop-filter: blur(4px) !important;
+    -webkit-backdrop-filter: blur(4px) !important;
+    padding: 0 !important;
+}
+
+#pendingRequestPopup .modal-content,
+#pendingRequestSheet {
+    max-height: 15vh !important;
+    transform: translateY(0) !important;
+    animation: slideUpPendingSheet 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes slideUpPendingSheet {
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Live dots animation */
+.pending-dot {
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #007BFF;
+    animation: pendingDotBounce 1.4s infinite ease-in-out;
+}
+.pending-dot:nth-child(1) { animation-delay: 0s;   }
+.pending-dot:nth-child(2) { animation-delay: 0.2s; }
+.pending-dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pendingDotBounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40%           { transform: scale(1);   opacity: 1;   }
+}
+
+/* Force light text override for this popup's content */
+#pendingRequestPopup h3,
+#pendingRequestPopup #pendingTitle {
+    color: #111111 !important;
+}
+#pendingRequestPopup p,
+#pendingRequestPopup #requestingMessage {
+    color: #6B7280 !important;
+}
 </style>
 </head>
 <body>
@@ -12098,63 +12162,144 @@ gmp-place-autocomplete {
 </div><p style="font-size:0.9em; color:var(--text-muted);">The driver will receive a code to confirm pickup and drop-off.</p><div id="parcelCreditDeductionInfo" style="margin-top: 15px; font-weight: bold;"></div><div class="modal-buttons"><button class="btn btn-light" onclick="closeModal('parcelConfirmPopup');">Cancel</button><button id="confirmParcelSendBtn" class="btn btn-success">Confirm & Send</button></div></div></div>
 <div id="parcelCodePopup" class="modal-overlay"><div class="modal-content"><i class="fas fa-receipt modal-icon icon-success"></i><h3>Parcel Ready for Pickup!</h3><p>Share this code with the person receiving the parcel. The driver will use it for verification.</p><div id="parcelGeneratedCode" class="parcel-code"></div><p>You can view this code again under "My Parcels".</p><div class="modal-buttons"><button class="btn btn-primary" onclick="closeAllPopups()">OK</button></div></div></div>
 <!-- Pending Request Popup -->
-<div id="pendingRequestPopup" class="modal-overlay" style="align-items: flex-end !important; background: transparent !important; pointer-events: none !important;">
+<!-- ============================================================
+     PENDING REQUEST — Professional bottom sheet (85% map visible)
+     ============================================================ -->
+<div id="pendingRequestPopup" class="modal-overlay">
     <div class="modal-content" id="pendingRequestSheet" style="
-        background: rgba(20, 20, 22, 0.92) !important;
-        backdrop-filter: blur(20px) saturate(180%) !important;
-        -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+        background: #FFFFFF !important;
         border-radius: 28px 28px 0 0 !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-bottom: none !important;
         width: 100% !important;
         max-width: 100% !important;
         margin: 0 !important;
-        padding: 20px 20px max(20px, env(safe-area-inset-bottom)) 20px !important;
-        height: auto !important;
-        max-height: 15vh !important;
-        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.4) !important;
-        pointer-events: auto !important;
+        padding: 20px 22px max(22px, env(safe-area-inset-bottom)) 22px !important;
+        box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.15) !important;
+        border: none !important;
         display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
+        flex-direction: column !important;
         gap: 16px !important;
         text-align: left !important;
-        transform: translateY(0) !important;
+        max-height: 15vh !important;
+        overflow: hidden !important;
     ">
-        <!-- Spinner -->
-        <div style="position: relative; flex-shrink: 0;">
-            <div class="spinner" style="width: 42px; height: 42px; border-width: 3px; border-color: rgba(255,255,255,0.12); border-left-color: #0A84FF;"></div>
+
+        <!-- Row 1: Header + status -->
+        <div style="display: flex; align-items: center; gap: 14px;">
+
+            <!-- Animated radar/spinner -->
+            <div style="position: relative; width: 44px; height: 44px; flex-shrink: 0;">
+                <!-- Pulse rings -->
+                <div style="
+                    position: absolute;
+                    inset: 0;
+                    border-radius: 50%;
+                    border: 2px solid #007BFF;
+                    opacity: 0;
+                    animation: pendingRadarPulse 2s ease-out infinite;
+                "></div>
+                <div style="
+                    position: absolute;
+                    inset: 0;
+                    border-radius: 50%;
+                    border: 2px solid #007BFF;
+                    opacity: 0;
+                    animation: pendingRadarPulse 2s ease-out infinite;
+                    animation-delay: 0.6s;
+                "></div>
+
+                <!-- Center icon -->
+                <div style="
+                    position: absolute;
+                    inset: 0;
+                    border-radius: 50%;
+                    background: linear-gradient(135deg, #007BFF, #0056b3);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.35);
+                    z-index: 2;
+                ">
+                    <i class="fas fa-car-side" style="color: #ffffff; font-size: 16px;"></i>
+                </div>
+            </div>
+
+            <!-- Text -->
+            <div style="flex: 1; min-width: 0;">
+                <h3 id="pendingTitle" style="
+                    margin: 0 0 3px 0;
+                    color: #111111 !important;
+                    font-size: 1rem;
+                    font-weight: 800;
+                    letter-spacing: -0.2px;
+                    font-family: 'Manrope', sans-serif;
+                ">Finding Drivers...</h3>
+                <p id="requestingMessage" style="
+                    margin: 0;
+                    color: #6B7280 !important;
+                    font-size: 0.82rem;
+                    font-weight: 500;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    font-family: 'Manrope', sans-serif;
+                ">Pinging nearby drivers.</p>
+            </div>
+
+            <!-- Live dots -->
+            <div id="pendingLiveDots" style="
+                display: flex;
+                gap: 4px;
+                align-items: center;
+                flex-shrink: 0;
+            ">
+                <span class="pending-dot"></span>
+                <span class="pending-dot"></span>
+                <span class="pending-dot"></span>
+            </div>
+
         </div>
 
-        <!-- Text block -->
-        <div style="flex: 1; min-width: 0;">
-            <h3 style="margin: 0 0 3px 0; color: #ffffff !important; font-size: 1rem; font-weight: 800; letter-spacing: -0.2px;">Finding Drivers...</h3>
-            <p id="requestingMessage" style="margin: 0; color: #8E8E93 !important; font-size: 0.8rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Pinging nearby drivers.</p>
-        </div>
-
-        <!-- Cancel button -->
-        <button id="cancelRequestBtn" onclick="cancelPendingRequest()" style="
+        <!-- Row 2: Progress bar -->
+        <div style="
+            width: 100%;
+            height: 4px;
+            background: #F3F4F6;
+            border-radius: 2px;
+            overflow: hidden;
             flex-shrink: 0;
-            background: #FF3B30 !important;
-            color: #ffffff !important;
-            border: none !important;
-            padding: 10px 18px !important;
-            border-radius: 22px !important;
-            font-size: 0.85rem !important;
-            font-weight: 800 !important;
-            font-family: 'Manrope', sans-serif !important;
-            cursor: pointer !important;
-            box-shadow: 0 4px 14px rgba(255, 59, 48, 0.3) !important;
-            transition: transform 0.15s ease !important;
+        ">
+            <div id="pendingProgressFill" style="
+                height: 100%;
+                width: 0%;
+                background: linear-gradient(90deg, #007BFF, #0056b3);
+                border-radius: 2px;
+                transition: width 1s linear;
+            "></div>
+        </div>
+
+        <!-- Row 3: Cancel button (compact) -->
+        <button id="cancelRequestBtn" onclick="cancelPendingRequest()" style="
+            width: 100%;
+            background: #ffffff;
+            color: #DC2626;
+            border: 1.5px solid #FEE2E2;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 0.88rem;
+            font-weight: 800;
+            font-family: 'Manrope', sans-serif;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            flex-shrink: 0;
         "
-        onmouseover="this.style.transform='scale(1.03)'"
-        onmouseout="this.style.transform='scale(1)'"
+        onmouseover="this.style.background='#FEF2F2'; this.style.borderColor='#FCA5A5';"
+        onmouseout="this.style.background='#ffffff'; this.style.borderColor='#FEE2E2';"
         >
-            Cancel
+            Cancel Request
         </button>
+
     </div>
 </div>
-
 <div id="requestStatusPopup" class="modal-overlay"><div class="modal-content" id="requestStatusContent"></div></div>
 
 
@@ -19098,51 +19243,58 @@ function closeChat() {
 // FIXED: CANCEL PENDING REQUEST (Closes Popup correctly)
 // =========================================================
 window.cancelPendingRequest = function() {
-    if (!window.currentRequestId) {
-        closeModal('pendingRequestPopup');
+    console.log("🗑️ Cancelling pending request");
+
+    // Stop the progress bar animation
+    if (window._pendingProgressInterval) {
+        clearInterval(window._pendingProgressInterval);
+        window._pendingProgressInterval = null;
+    }
+
+    const reqId = window.currentRequestId || localStorage.getItem('currentRequestId');
+    if (!reqId) {
+        if (typeof closeModal === 'function') closeModal('pendingRequestPopup');
         if (typeof showModernDashboard === 'function') showModernDashboard();
         return;
     }
 
-    const btn = document.getElementById('cancelRequestBtn');
-    if(btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Cancelling...';
+    // Show confirmation
+    if (typeof showConfirmPopup === 'function') {
+        showConfirmPopup(
+            "Cancel Request?",
+            "Are you sure you want to cancel this request?",
+            function() {
+                if (typeof executeCancellation === 'function') {
+                    executeCancellation(reqId);
+                } else {
+                    // Fallback
+                    database.ref(`requests/${reqId}`).update({
+                        status: 'cancelled_by_commuter',
+                        cancelledAt: firebase.database.ServerValue.TIMESTAMP
+                    }).then(() => {
+                        closeModal('pendingRequestPopup');
+                        window.currentRequestId = null;
+                        localStorage.removeItem('currentRequestId');
+                        if (typeof showModernDashboard === 'function') showModernDashboard();
+                    });
+                }
+            },
+            "Yes, Cancel",
+            "Keep Waiting",
+            "danger"
+        );
+    } else if (confirm("Cancel this request?")) {
+        database.ref(`requests/${reqId}`).update({
+            status: 'cancelled_by_commuter',
+            cancelledAt: firebase.database.ServerValue.TIMESTAMP
+        }).then(() => {
+            closeModal('pendingRequestPopup');
+            window.currentRequestId = null;
+            localStorage.removeItem('currentRequestId');
+            if (typeof showModernDashboard === 'function') showModernDashboard();
+        });
     }
-
-    database.ref('requests/' + window.currentRequestId).update({
-        status: 'cancelled_by_commuter',
-        cancelledAt: firebase.database.ServerValue.TIMESTAMP
-    }).then(() => {
-        console.log("Pending request cancelled successfully");
-        
-        // Clean up variables
-        if (window.commuterData) window.commuterData.currentRequest = null;
-        window.currentRequestId = null;
-        localStorage.removeItem('currentRequestId');
-        
-        // Reset the button
-        if(btn) {
-            btn.disabled = false;
-            btn.innerHTML = "Cancel Request";
-        }
-        
-        // FORCE the popup to close immediately
-        closeModal('pendingRequestPopup');
-        
-        if (typeof window.cleanupTripData === 'function') window.cleanupTripData();
-        if (typeof showModernDashboard === 'function') showModernDashboard();
-        
-        showGenericMessage("Cancelled", "Your request has been cancelled.", "fa-check", "icon-info");
-    }).catch(err => {
-        console.error("Cancel failed", err);
-        if(btn) {
-            btn.disabled = false;
-            btn.innerHTML = "Try Again";
-        }
-    });
-};
-     function sanitizePhoneNumber(phone) {
+};     function sanitizePhoneNumber(phone) {
           if (!phone) return "Unknown";
           var p = phone.toString().replace(/\s+/g, '').replace(/-/g, ''); // Remove spaces/dashes
 
@@ -36381,8 +36533,24 @@ window.cancelPendingClubSubscription = function() {
 // =================================================================
 // requestAsiyeGoRide — COMPLETE (compact sheet + 85% map visible)
 // =================================================================
+// =================================================================
+// requestAsiyeGoRide — COMPLETE VERSION
+// =================================================================
+// - Compact 15vh bottom sheet (85% map visible)
+// - Animated progress bar
+// - Promo/wallet/pooling logic
+// - Clean interval management
+// =================================================================
 
 window.requestAsiyeGoRide = async function(taxiId) {
+    // Cleanup helper — clears progress interval if it exists
+    const clearProgressInterval = () => {
+        if (window._pendingProgressInterval) {
+            clearInterval(window._pendingProgressInterval);
+            window._pendingProgressInterval = null;
+        }
+    };
+
     try {
         // ============================================================
         // 1. CLOSE PREVIOUS SHEETS
@@ -36396,11 +36564,11 @@ window.requestAsiyeGoRide = async function(taxiId) {
         // 2. PRICING & PROMO LOGIC
         // ============================================================
         var fare = Number(window.calculatedTripPrice) || 25;
-        const promoRemaining = window.commuterData?.promoRemaining || 0;
-        const promoValue     = window.commuterData?.promoValue || 25;
+        const promoRemaining  = window.commuterData?.promoRemaining || 0;
+        const promoValue      = window.commuterData?.promoValue || 25;
         const availableCredit = parseFloat(window.commuterData?.credits || 0);
 
-        let promoDeduction = 0;
+        let promoDeduction  = 0;
         let walletDeduction = 0;
 
         if (promoRemaining > 0) {
@@ -36431,44 +36599,47 @@ window.requestAsiyeGoRide = async function(taxiId) {
         let totalAppliedCredit = promoDeduction + walletDeduction;
 
         // ============================================================
-        // 3. PREPARE THE PENDING POPUP (COMPACT BAR)
+        // 3. OPEN THE PENDING REQUEST POPUP (COMPACT BAR)
         // ============================================================
         const pendingPopup = document.getElementById('pendingRequestPopup');
         if (pendingPopup) {
-            // Force the compact bottom-sheet layout
+            pendingPopup.classList.add('open');
             pendingPopup.style.setProperty('display', 'flex', 'important');
             pendingPopup.style.setProperty('visibility', 'visible', 'important');
             pendingPopup.style.setProperty('opacity', '1', 'important');
             pendingPopup.style.setProperty('align-items', 'flex-end', 'important');
             pendingPopup.style.setProperty('justify-content', 'center', 'important');
-            pendingPopup.style.setProperty('background', 'transparent', 'important');
-            pendingPopup.style.setProperty('pointer-events', 'none', 'important');
-            pendingPopup.classList.add('open');
+            pendingPopup.style.setProperty('background', 'rgba(0,0,0,0.15)', 'important');
+            pendingPopup.style.setProperty('padding', '0', 'important');
 
-            // Handle both possible structures (old & new)
-            let sheetContent = document.getElementById('pendingRequestSheet')
-                            || pendingPopup.querySelector('.modal-content');
+            // Force sheet layout
+            const sheetContent = document.getElementById('pendingRequestSheet')
+                             || pendingPopup.querySelector('.modal-content');
             if (sheetContent) {
                 sheetContent.style.setProperty('max-height', '15vh', 'important');
                 sheetContent.style.setProperty('height', 'auto', 'important');
                 sheetContent.style.setProperty('width', '100%', 'important');
                 sheetContent.style.setProperty('border-radius', '28px 28px 0 0', 'important');
-                sheetContent.style.setProperty('background', 'rgba(20,20,22,0.92)', 'important');
-                sheetContent.style.setProperty('backdrop-filter', 'blur(20px) saturate(180%)', 'important');
-                sheetContent.style.setProperty('-webkit-backdrop-filter', 'blur(20px) saturate(180%)', 'important');
-                sheetContent.style.setProperty('pointer-events', 'auto', 'important');
+                sheetContent.style.setProperty('background', '#ffffff', 'important');
                 sheetContent.style.setProperty('transform', 'none', 'important');
             }
         }
 
-        // Cancel button visibility
+        // Cancel button visible
         const cancelBtn = document.getElementById('cancelRequestBtn');
         if (cancelBtn) cancelBtn.style.display = 'block';
 
         // ============================================================
-        // 4. COMPACT MESSAGE TEXT (no big brand pulse, no huge HTML)
+        // 4. UPDATE PENDING SHEET TEXT
         // ============================================================
         const isPooling = (window.selectedRideCategory === 'club');
+
+        const titleEl = document.getElementById('pendingTitle')
+                     || pendingPopup?.querySelector('h3');
+        if (titleEl) {
+            titleEl.textContent = isPooling ? 'Creating Club Pool...' : 'Finding Drivers...';
+        }
+
         const msgEl = document.getElementById('requestingMessage');
         if (msgEl) {
             msgEl.textContent = isPooling
@@ -36476,16 +36647,36 @@ window.requestAsiyeGoRide = async function(taxiId) {
                 : 'Pinging nearby drivers.';
         }
 
-        const titleEl = pendingPopup?.querySelector('h3');
-        if (titleEl) {
-            titleEl.textContent = isPooling ? 'Creating Club Pool...' : 'Finding Drivers...';
+        // ============================================================
+        // 5. ANIMATE PROGRESS BAR (0% → 90% over ~30 seconds)
+        // ============================================================
+        clearProgressInterval();
+        const progressFill = document.getElementById('pendingProgressFill');
+        if (progressFill) {
+            progressFill.style.width = '0%';
+            let progress = 0;
+            window._pendingProgressInterval = setInterval(() => {
+                progress = Math.min(90, progress + (Math.random() * 8 + 4));
+                progressFill.style.width = progress + '%';
+                if (progress >= 90) {
+                    clearProgressInterval();
+                }
+            }, 1500);
         }
 
         // ============================================================
-        // 5. SHOW SEARCHING MAP (85% view with markers + route)
+        // 6. SHOW SEARCHING MAP (85% view — NaN-safe)
         // ============================================================
         if (typeof window.showSearchingMapView === 'function') {
             try {
+                // Refresh globals from localStorage as a safety net
+                const safeLat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat'));
+                const safeLng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng'));
+                if (Number.isFinite(safeLat) && Number.isFinite(safeLng)) {
+                    window.commuterLat = safeLat;
+                    window.commuterLng = safeLng;
+                }
+
                 window.showSearchingMapView(window.ehailingDestLat, window.ehailingDestLng);
             } catch (mapErr) {
                 console.warn("⚠️ showSearchingMapView failed:", mapErr);
@@ -36493,13 +36684,13 @@ window.requestAsiyeGoRide = async function(taxiId) {
         }
 
         // ============================================================
-        // 6. DETERMINE RIDE TYPE & STATUS
+        // 7. DETERMINE RIDE TYPE & STATUS
         // ============================================================
         const rideType   = isPooling ? 'club' : 'ehailing';
         const rideStatus = isPooling ? 'pooling' : 'pending';
 
         // ============================================================
-        // 7. RESOLVE PICKUP ADDRESS (with safe fallback)
+        // 8. RESOLVE PICKUP ADDRESS (safe fallback)
         // ============================================================
         var preciseAddress = document.getElementById('uberPickupInput')?.value || "Current Location";
         try {
@@ -36517,7 +36708,7 @@ window.requestAsiyeGoRide = async function(taxiId) {
         let joinedExistingPoolId = null;
 
         // ============================================================
-        // 8. CHECK FOR EXISTING POOL (if club ride)
+        // 9. CHECK FOR EXISTING POOL (if club ride)
         // ============================================================
         if (isPooling) {
             try {
@@ -36548,12 +36739,12 @@ window.requestAsiyeGoRide = async function(taxiId) {
         }
 
         // ============================================================
-        // 9. BUILD PASSENGER OBJECT
+        // 10. BUILD PASSENGER OBJECT
         // ============================================================
         const passengerData = {
-            commuterId:     window.userId,
-            commuterName:   ((window.commuterData?.name || '') + ' ' + (window.commuterData?.surname || '')).trim() || 'Passenger',
-            commuterPhone:  window.commuterData?.phone || "",
+            commuterId:    window.userId,
+            commuterName:  ((window.commuterData?.name || '') + ' ' + (window.commuterData?.surname || '')).trim() || 'Passenger',
+            commuterPhone: window.commuterData?.phone || "",
             location: {
                 latitude:  window.commuterLat,
                 longitude: window.commuterLng
@@ -36570,7 +36761,7 @@ window.requestAsiyeGoRide = async function(taxiId) {
         };
 
         // ============================================================
-        // 10. CREATE OR JOIN REQUEST
+        // 11. CREATE OR JOIN REQUEST
         // ============================================================
         let requestId;
 
@@ -36582,11 +36773,13 @@ window.requestAsiyeGoRide = async function(taxiId) {
             const poolSnap = await database.ref(`requests/${requestId}`).once('value');
             const poolData = poolSnap.val();
 
-            if (poolData && Object.keys(poolData.passengers).length >= 2 &&
+            if (poolData &&
+                Object.keys(poolData.passengers).length >= 2 &&
                 typeof notifyDriversAboutClubPool === 'function') {
                 await notifyDriversAboutClubPool(requestId, poolData, poolData.taxiId);
             }
 
+            clearProgressInterval();
             if (typeof closeModal === 'function') closeModal('pendingRequestPopup');
             if (typeof showGenericMessage === 'function') {
                 showGenericMessage(
@@ -36648,14 +36841,14 @@ window.requestAsiyeGoRide = async function(taxiId) {
         }
 
         // ============================================================
-        // 11. PERSIST SESSION STATE
+        // 12. PERSIST SESSION STATE
         // ============================================================
         window.currentRequestId = requestId;
         localStorage.setItem('currentRequestId', requestId);
         await database.ref(`commuters/${window.userId}`).update({ currentRequest: requestId });
 
         // ============================================================
-        // 12. START LISTENERS
+        // 13. START LISTENERS
         // ============================================================
         if (typeof listenForRequestStatus === 'function') {
             listenForRequestStatus(requestId);
@@ -36668,6 +36861,8 @@ window.requestAsiyeGoRide = async function(taxiId) {
 
     } catch (error) {
         console.error("❌ Booking error:", error);
+
+        clearProgressInterval();
 
         if (typeof closeModal === 'function') closeModal('pendingRequestPopup');
 
@@ -49567,54 +49762,72 @@ function cinematicFlyThrough(activeMap, pickupLat, pickupLng, destinationLat, de
 // fitMapToRoute — Computes bounds & fits map with proper padding
 // =================================================================
 
+// =================================================================
+// fitMapToRoute — FIXED (explicit args, NaN-proof)
+// =================================================================
+
 function fitMapToRoute(activeMap, pickupLat, pickupLng, destinationLat, destinationLng) {
-    try {
-        // ---- Explicit coercion & logging ----
-        const pLng = Number(pickupLng);
-        const pLat = Number(pickupLat);
-        const dLng = Number(destinationLng);
-        const dLat = Number(destinationLat);
+    if (!activeMap) {
+        console.warn("fitMapToRoute: no map");
+        return;
+    }
 
-        console.log("🗺️ fitMapToRoute inputs:", {
-            pickup: [pLng, pLat],
-            destination: [dLng, dLat],
-            allFinite: [pLng, pLat, dLng, dLat].every(Number.isFinite)
-        });
+    // ---- Explicit coercion with FALLBACK chain ----
+    const pLat = Number(pickupLat) || Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat'));
+    const pLng = Number(pickupLng) || Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng'));
+    const dLat = Number(destinationLat);
+    const dLng = Number(destinationLng);
 
-        if (![pLng, pLat, dLng, dLat].every(Number.isFinite)) {
-            throw new Error(`Invalid coords — pickup: [${pLng}, ${pLat}], destination: [${dLng}, ${dLat}]`);
+    console.log("🗺️ fitMapToRoute inputs:", {
+        pickup: [pLng, pLat],
+        destination: [dLng, dLat],
+        allFinite: [pLat, pLng, dLat, dLng].every(Number.isFinite)
+    });
+
+    // ---- If ANY coord is bad, only fit to what we have ----
+    if (![pLat, pLng, dLat, dLng].every(Number.isFinite)) {
+        console.warn("⚠️ Some coords invalid — fitting to available points");
+
+        // Fit just to pickup if that's all we have
+        if (Number.isFinite(pLat) && Number.isFinite(pLng)) {
+            activeMap.flyTo({
+                center: [pLng, pLat],
+                zoom: 14,
+                duration: 800,
+                essential: true
+            });
         }
+        return;
+    }
 
-        // ---- Explicit SW/NE corners ----
+    // ---- Build bounds with explicit SW/NE ----
+    try {
         const swLng = Math.min(pLng, dLng);
         const swLat = Math.min(pLat, dLat);
         const neLng = Math.max(pLng, dLng);
         const neLat = Math.max(pLat, dLat);
 
-        const bounds = new mapboxgl.LngLatBounds(
-            [swLng, swLat],   // south-west
-            [neLng, neLat]    // north-east
-        );
-
-        if (!bounds || bounds.isEmpty()) {
-            throw new Error("Bounds object invalid or empty");
+        // Sanity double-check
+        if (![swLng, swLat, neLng, neLat].every(Number.isFinite)) {
+            throw new Error("Bounds corners contain NaN");
         }
 
-        // ---- Padding: TOP for marker pill, BOTTOM for the 35vh sheet ----
-        const topPad    = 130;                        // "You are here" pill height + breathing room
-        const bottomPad = Math.round(window.innerHeight * 0.35) + 40; // 35vh sheet + buffer
+        const bounds = new mapboxgl.LngLatBounds(
+            [swLng, swLat],
+            [neLng, neLat]
+        );
+
+        if (bounds.isEmpty()) throw new Error("Empty bounds");
+
+        // ---- Padding based on viewport ----
+        const topPad    = 130;
+        const bottomPad = Math.round(window.innerHeight * 0.35) + 40;
         const sidePad   = 60;
 
         console.log("🗺️ fitMapToRoute padding:", { topPad, bottomPad, sidePad });
 
-        // ---- Apply ----
         activeMap.fitBounds(bounds, {
-            padding: {
-                top: topPad,
-                bottom: bottomPad,
-                left: sidePad,
-                right: sidePad
-            },
+            padding: { top: topPad, bottom: bottomPad, left: sidePad, right: sidePad },
             maxZoom: 15,
             duration: 1000,
             essential: true
@@ -49624,45 +49837,36 @@ function fitMapToRoute(activeMap, pickupLat, pickupLng, destinationLat, destinat
     } catch (e) {
         console.warn("⚠️ fitBounds failed, using manual fallback:", e);
 
-        // ============ MANUAL FALLBACK ============
+        // ---- Manual fallback (always works) ----
         try {
-            const pLng = Number(pickupLng);
-            const pLat = Number(pickupLat);
-            const dLng = Number(destinationLng);
-            const dLat = Number(destinationLat);
+            const midLng = (pLng + dLng) / 2;
+            const midLat = (pLat + dLat) / 2;
+            const maxSpan = Math.max(Math.abs(dLng - pLng), Math.abs(dLat - pLat));
 
-            if ([pLng, pLat, dLng, dLat].every(Number.isFinite)) {
-                const midLng = (pLng + dLng) / 2;
-                const midLat = (pLat + dLat) / 2;
+            let zoom = 14;
+            if      (maxSpan > 0.5)  zoom = 9;
+            else if (maxSpan > 0.3)  zoom = 10;
+            else if (maxSpan > 0.15) zoom = 11;
+            else if (maxSpan > 0.08) zoom = 12;
+            else if (maxSpan > 0.04) zoom = 13;
+            else if (maxSpan > 0.02) zoom = 13.5;
+            else                     zoom = 14;
 
-                // Approximate zoom from span
-                const maxSpan = Math.max(Math.abs(dLng - pLng), Math.abs(dLat - pLat));
+            activeMap.flyTo({
+                center: [midLng, midLat],
+                zoom: zoom,
+                pitch: 0,
+                bearing: 0,
+                duration: 900,
+                essential: true
+            });
 
-                let zoom = 14;
-                if      (maxSpan > 0.5)  zoom = 9;
-                else if (maxSpan > 0.3)  zoom = 10;
-                else if (maxSpan > 0.15) zoom = 11;
-                else if (maxSpan > 0.08) zoom = 12;
-                else if (maxSpan > 0.04) zoom = 13;
-                else if (maxSpan > 0.02) zoom = 13.5;
-                else if (maxSpan > 0.01) zoom = 14;
-                else                     zoom = 15;
-
-                activeMap.flyTo({
-                    center: [midLng, midLat],
-                    zoom: zoom,
-                    duration: 1000,
-                    essential: true
-                });
-
-                console.log("🗺️ Manual fallback applied:", { midLng, midLat, zoom, maxSpan });
-            }
+            console.log("🗺️ Manual fallback applied:", { midLng, midLat, zoom });
         } catch (e2) {
-            console.error("❌ Total map positioning failure:", e2);
+            console.error("❌ All fitting failed:", e2);
         }
     }
 }
-
 // =================================================================
 // drawSearchRoute — Draws the dashed blue route with a glow
 // =================================================================
