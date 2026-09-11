@@ -12,6 +12,9 @@
 <script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script>
 <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
 
+<script src='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js'></script>
+<link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css' type='text/css' />
+
 <!-- Google Maps for the Search Bar (Places API only) -->
 <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async"></script>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -13464,7 +13467,137 @@ var requestStatusListener = null;
 const IOS_STORE_LINK = "https://apps.apple.com/za/app/asiye/id6765691149";
   // Global flag to prevent multiple simultaneous watches
   window.isWatchingAd = false;
+// =================================================================
+// CRITICAL: Define these functions globally at the start
+// =================================================================
 
+// Center map on user location - defined globally
+window.centerMapOnUserLocation = function() {
+    if (!window.map) return;
+
+    // Use cached or default coordinates
+    var lat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
+    var lng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
+
+    // Safely get padding
+    var bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
+
+    window.map.flyTo({
+        center: [lng, lat],
+        zoom: 16,
+        speed: 1.2,
+        curve: 1,
+        padding: { bottom: bottomPadding },
+        essential: true
+    });
+
+    // Update or create user marker
+    if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+        window.setupUserMarker([lng, lat]);
+    } else if (window.userMarker) {
+        window.userMarker.setLngLat([lng, lat]);
+    }
+};
+
+// Show destination search mode - defined globally
+window.showDestinationSearchMode = function() {
+    console.log("🔍 Showing destination search mode");
+    
+    const initialView = document.getElementById('destInitialView');
+    const searchView = document.getElementById('destSearchView');
+    
+    if (!searchView) {
+        console.error("❌ destSearchView not found");
+        return;
+    }
+    
+    // Hide initial view
+    if (initialView) {
+        initialView.style.display = 'none';
+        initialView.style.setProperty('display', 'none', 'important');
+    }
+    
+    // Show search view with proper content
+    searchView.style.setProperty('display', 'flex', 'important');
+    searchView.style.flexDirection = 'column';
+    searchView.style.height = '100vh';
+    searchView.style.background = '#1C1C1E';
+    
+    // Build the search view HTML if empty
+    if (!searchView.querySelector('#uber-pickup-container')) {
+        searchView.innerHTML = `
+            <div style="display:flex; align-items:center; padding: 20px 20px 10px 20px; border-bottom: 1px solid #333; flex-shrink: 0; background: #1C1C1E;">
+                <button onclick="resetDestinationPopup()" style="background: #2C2C2E; border: none; width: 42px; height: 42px; border-radius: 50%; color: white; cursor:pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                <h3 style="margin:0; color:#fff !important; flex:1; text-align:center; font-weight:800;">Request Private Ride</h3>
+                <div style="width:42px;"></div>
+            </div>
+            <div style="padding: 20px; flex: 1; overflow-y: auto; background: #1C1C1E;">
+                <div style="background: #2C2C2E; border-radius: 20px; padding: 18px; margin-bottom: 20px; border: 1px solid #444;">
+                    <label style="color:#888; font-size:0.7rem; font-weight:800; text-transform:uppercase; margin-bottom:8px; display:block;">Pickup</label>
+                    <div id="uber-pickup-container" class="uber-geocoder"></div>
+                    <div style="height: 1px; background: #3A3A3C; margin: 10px 0;"></div>
+                    <label style="color:#0A84FF; font-size:0.7rem; font-weight:800; text-transform:uppercase; margin-bottom:8px; display:block;">Where to?</label>
+                    <div id="uber-dest-container" class="uber-geocoder"></div>
+                </div>
+                <div id="uber-suggestions-list" style="max-height: 50vh; overflow-y: auto;"></div>
+            </div>
+        `;
+    }
+    
+    // Initialize geocoders
+    setTimeout(() => {
+        if (typeof window.initDualGeocoders === 'function') {
+            window.initDualGeocoders();
+        }
+        if (typeof window.restoreDefaultSuggestions === 'function') {
+            window.restoreDefaultSuggestions();
+        }
+    }, 200);
+};
+
+// Reset destination popup - defined globally
+window.resetDestinationPopup = function() {
+    console.log("🔄 Resetting destination popup");
+    
+    closeModal('destinationPromptPopup');
+    showModernDashboard();
+
+    setTimeout(() => {
+        const modal = document.getElementById('destinationPromptPopup');
+        if (modal) {
+            modal.style.setProperty('display', 'none', 'important');
+            modal.style.setProperty('opacity', '0', 'important');
+            modal.style.setProperty('visibility', 'hidden', 'important');
+            modal.classList.remove('open');
+        }
+        
+        const content = document.querySelector('#destinationPromptPopup .modal-content');
+        if (content) {
+            content.style.height = "auto";
+            content.style.maxHeight = "85vh";
+            content.style.borderRadius = "28px 28px 0 0";
+        }
+        
+        const initialView = document.getElementById('destInitialView');
+        const searchView = document.getElementById('destSearchView');
+        if (initialView) {
+            initialView.style.display = 'block';
+            initialView.style.setProperty('display', 'block', 'important');
+        }
+        if (searchView) {
+            searchView.style.display = 'none';
+            searchView.style.setProperty('display', 'none', 'important');
+        }
+        
+        window.ehailingDestLat = null;
+        window.ehailingDestLng = null;
+        window.userDropOffDestination = '';
+        window.isAsiyeGoMode = false;
+        window.currentRideMode = 'minibus';
+    }, 400);
+};
 function initializeUserEarnings() {
     if (!userId) return;
 
@@ -23026,7 +23159,6 @@ window.forceUpdateTrackingStatus = function(requestId, status, data) {
 function openModal(modalId) {
     console.log("Opening Modal:", modalId);
 
-    // Prevent recursion - check if we're already opening a modal
     if (window._isOpeningModal) {
         console.warn("Modal already opening, skipping recursion");
         return;
@@ -23035,107 +23167,105 @@ function openModal(modalId) {
     window._isOpeningModal = true;
 
     try {
-        // 1. Shared Geocoder Options (Includes Malls & Ranks)
-        // Wrapped in safety checks to prevent crashes if map/coords aren't ready
+        // 1. Shared Geocoder Options
         if (typeof mapboxgl !== 'undefined' && typeof map !== 'undefined' && typeof commuterLng !== 'undefined' && typeof commuterLat !== 'undefined') {
-            const geocoderOptions = {
-                accessToken: mapboxgl.accessToken,
-                mapboxgl: mapboxgl,
-                marker: false,
-                types: 'address,poi',
-                proximity: [commuterLng, commuterLat],
-                localGeocoder: typeof forwardGeocoder === 'function' ? forwardGeocoder : null,
-                zoom: 18,
-                placeholder: 'Search building, mall, or address...',
-                localGeocoderOnly: false
-            };
+            
+            // CRITICAL FIX: Check if MapboxGeocoder is available before using it
+            if (typeof MapboxGeocoder !== 'undefined') {
+                const geocoderOptions = {
+                    accessToken: mapboxgl.accessToken,
+                    mapboxgl: mapboxgl,
+                    marker: false,
+                    types: 'address,poi',
+                    proximity: [commuterLng, commuterLat],
+                    localGeocoder: typeof forwardGeocoder === 'function' ? forwardGeocoder : null,
+                    zoom: 18,
+                    placeholder: 'Search building, mall, or address...',
+                    localGeocoderOnly: false
+                };
 
-            // --- CASE 1: Main Destination Prompt (Taxi Search) ---
-           // Inside openModal(modalId) find this block:
-if (modalId === 'destinationPromptPopup' && typeof parcelGeocoder === 'undefined' || !window.geocoder) {
-    window.geocoder = new MapboxGeocoder(geocoderOptions);
-    const container = document.getElementById('geocoder-container');
-    if (container) {
-        container.innerHTML = '';
-        container.appendChild(window.geocoder.onAdd(map));
-        window.geocoder.on('result', (e) => {
-            userDropOffDestination = e.result.text;
-            // CRITICAL FIX: Save coords here too!
-            window.ehailingDestLng = e.result.geometry.coordinates[0];
-            window.ehailingDestLat = e.result.geometry.coordinates[1];
-        });
-    }
-}
-// --- CASE 2: Parcel Destination ---
-else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
-    window.parcelGeocoder = new MapboxGeocoder(geocoderOptions);
-    const container = document.getElementById('parcel-geocoder-container');
-    if (container) {
-        container.innerHTML = '';
-        container.appendChild(window.parcelGeocoder.onAdd(map));
-        window.parcelGeocoder.on('result', (e) => {
-            userDropOffDestination = e.result.text;
-            // CRITICAL FIX: Save coords here too!
-            window.ehailingDestLng = e.result.geometry.coordinates[0];
-            window.ehailingDestLat = e.result.geometry.coordinates[1];
-        });
-    }
-}
-            // --- CASE 3: Change Pickup Location (Manual Pin) ---
-            else if (modalId === 'changeLocationPopup' && !window.pickupGeocoder) {
-                const pickupOpts = { ...geocoderOptions, placeholder: 'Search pickup address' };
-                window.pickupGeocoder = new MapboxGeocoder(pickupOpts);
-                const container = document.getElementById('pickup-geocoder-container');
-                if (container) {
-                    container.innerHTML = '';
-                    container.appendChild(window.pickupGeocoder.onAdd(map));
-                    window.pickupGeocoder.on('result', (e) => {
-                        const [lng, lat] = e.result.geometry.coordinates;
-                        commuterLng = lng; commuterLat = lat;
-                        if (userMarker) userMarker.setLngLat([lng, lat]);
-                        map.flyTo({ center: [lng, lat], zoom: 17 });
-                        const addrDisplay = document.getElementById('passengerLocationAddress');
-                        if (addrDisplay) addrDisplay.textContent = e.result.text;
-                        closeModal('changeLocationPopup');
-                        openModal('locationConfirmPopup');
-                        window.pickupGeocoder.clear();
-                    });
+                // --- CASE 1: Main Destination Prompt ---
+                if (modalId === 'destinationPromptPopup' && !window.geocoder) {
+                    window.geocoder = new MapboxGeocoder(geocoderOptions);
+                    const container = document.getElementById('geocoder-container');
+                    if (container) {
+                        container.innerHTML = '';
+                        container.appendChild(window.geocoder.onAdd(map));
+                        window.geocoder.on('result', (e) => {
+                            userDropOffDestination = e.result.text;
+                            window.ehailingDestLng = e.result.geometry.coordinates[0];
+                            window.ehailingDestLat = e.result.geometry.coordinates[1];
+                        });
+                    }
                 }
-            }
-            // --- CASE 4: Market Ad Location (Business Address) ---
-            else if (modalId === 'addAdPopup' && !window.adAddressGeocoder) {
-                const adOpts = { ...geocoderOptions, placeholder: 'Where is your business?' };
-                window.adAddressGeocoder = new MapboxGeocoder(adOpts);
-                const container = document.getElementById('ad-address-geocoder-container');
-                if (container) {
-                    container.innerHTML = '';
-                    container.appendChild(window.adAddressGeocoder.onAdd(map));
-                    window.adAddressGeocoder.on('result', (e) => {
-                        selectedAdAddress.text = e.result.place_name;
-                        selectedAdAddress.coordinates = e.result.geometry.coordinates;
-                        if (typeof updateAdPreview === 'function') updateAdPreview();
-                    });
-                    window.adAddressGeocoder.on('clear', () => {
-                        selectedAdAddress = { text: '', coordinates: null };
-                    });
+                // --- CASE 2: Parcel Destination ---
+                else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
+                    window.parcelGeocoder = new MapboxGeocoder(geocoderOptions);
+                    const container = document.getElementById('parcel-geocoder-container');
+                    if (container) {
+                        container.innerHTML = '';
+                        container.appendChild(window.parcelGeocoder.onAdd(map));
+                        window.parcelGeocoder.on('result', (e) => {
+                            userDropOffDestination = e.result.text;
+                            window.ehailingDestLng = e.result.geometry.coordinates[0];
+                            window.ehailingDestLat = e.result.geometry.coordinates[1];
+                        });
+                    }
                 }
+                // --- CASE 3: Change Pickup Location ---
+                else if (modalId === 'changeLocationPopup' && !window.pickupGeocoder) {
+                    const pickupOpts = { ...geocoderOptions, placeholder: 'Search pickup address' };
+                    window.pickupGeocoder = new MapboxGeocoder(pickupOpts);
+                    const container = document.getElementById('pickup-geocoder-container');
+                    if (container) {
+                        container.innerHTML = '';
+                        container.appendChild(window.pickupGeocoder.onAdd(map));
+                        window.pickupGeocoder.on('result', (e) => {
+                            const [lng, lat] = e.result.geometry.coordinates;
+                            commuterLng = lng; commuterLat = lat;
+                            if (userMarker) userMarker.setLngLat([lng, lat]);
+                            map.flyTo({ center: [lng, lat], zoom: 17 });
+                            const addrDisplay = document.getElementById('passengerLocationAddress');
+                            if (addrDisplay) addrDisplay.textContent = e.result.text;
+                            closeModal('changeLocationPopup');
+                            openModal('locationConfirmPopup');
+                            window.pickupGeocoder.clear();
+                        });
+                    }
+                }
+                // --- CASE 4: Market Ad Location ---
+                else if (modalId === 'addAdPopup' && !window.adAddressGeocoder) {
+                    const adOpts = { ...geocoderOptions, placeholder: 'Where is your business?' };
+                    window.adAddressGeocoder = new MapboxGeocoder(adOpts);
+                    const container = document.getElementById('ad-address-geocoder-container');
+                    if (container) {
+                        container.innerHTML = '';
+                        container.appendChild(window.adAddressGeocoder.onAdd(map));
+                        window.adAddressGeocoder.on('result', (e) => {
+                            selectedAdAddress.text = e.result.place_name;
+                            selectedAdAddress.coordinates = e.result.geometry.coordinates;
+                            if (typeof updateAdPreview === 'function') updateAdPreview();
+                        });
+                        window.adAddressGeocoder.on('clear', () => {
+                            selectedAdAddress = { text: '', coordinates: null };
+                        });
+                    }
+                }
+            } else {
+                console.warn("⚠️ MapboxGeocoder not loaded yet, skipping geocoder initialization");
             }
         }
 
-        // --- FINAL STEP: VISUALLY OPEN THE MODAL (THE FIX) ---
+        // --- FINAL STEP: VISUALLY OPEN THE MODAL ---
         const targetModal = document.getElementById(modalId);
         if (targetModal) {
             targetModal.classList.add('open');
-
-            // CRITICAL FIX: Force above the Dashboard (80000) and override display:none
             targetModal.style.setProperty('display', 'flex', 'important');
             targetModal.style.setProperty('z-index', '100005', 'important');
             targetModal.style.setProperty('opacity', '1', 'important');
             targetModal.style.setProperty('visibility', 'visible', 'important');
-
             targetModal.scrollTop = 0;
 
-            // Reattach ads logic for specific modals
             if (modalId === 'taxiListSheet' && typeof setupTaxiSheetAds === 'function') {
                 setTimeout(setupTaxiSheetAds, 300);
             }
@@ -23145,13 +23275,11 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
     } catch (err) {
         console.error("Error in openModal:", err);
     } finally {
-        // Reset the flag after opening
         setTimeout(() => {
             window._isOpeningModal = false;
         }, 100);
     }
-}
-  async function snapToRoad(lng, lat) {
+}  async function snapToRoad(lng, lat) {
       return new Promise((resolve) => {
           // Use Mapbox Map Matching API for precise road snapping
           const url = `https://api.mapbox.com/matching/v5/mapbox/driving/${lng},${lat};${lng},${lat}?access_token=${mapboxgl.accessToken}&radiuses=20&geometries=geojson`;
