@@ -49214,14 +49214,12 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
         showRideSelectionView(fullPlaceName, lat, lng);
     }
 };
-
 // =================================================================
-// showRideSelectionView — COMPLETE, with 65% map visibility
+// showRideSelectionView — CINEMATIC FLY-THROUGH
 // =================================================================
-// - Map occupies at least 60% of the viewport
-// - Both markers (You are here + Destination flag) visible
-// - Dashed blue route drawn between them
-// - Confirm sheet sits compactly below with the pricing options
+// 1. Zoom in on destination flag
+// 2. Slowly pan to pickup ("You are here" pill)
+// 3. Zoom out to fit the entire route
 // =================================================================
 
 async function showRideSelectionView(destName, destLat, destLng) {
@@ -49239,25 +49237,15 @@ async function showRideSelectionView(destName, destLat, destLng) {
     window.commuterLng = pickupLng;
 
     if (![pickupLat, pickupLng, destinationLat, destinationLng].every(Number.isFinite)) {
-        console.warn("❌ showRideSelectionView: invalid coords", {
-            pickupLat, pickupLng, destinationLat, destinationLng
-        });
+        console.warn("❌ Invalid coords");
         if (typeof showGenericMessage === 'function') {
-            showGenericMessage(
-                "Location Error",
-                "Could not determine your location or destination. Please try again.",
-                "fa-map-marker-alt",
-                "icon-danger"
-            );
+            showGenericMessage("Location Error", "Could not determine location.", "fa-map-marker-alt", "icon-danger");
         }
         return;
     }
 
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
-    if (!activeMap) {
-        console.warn("❌ Mapbox not ready");
-        return;
-    }
+    if (!activeMap) return;
 
     // ============================================================
     // 2. CALCULATE DISTANCE & PRICING
@@ -49286,7 +49274,7 @@ async function showRideSelectionView(destName, destLat, destLng) {
     setText('price-club4', `R${club4Price}`);
     setText('price-club6', `R${club6Price}`);
 
-    // Pickup address display
+    // Pickup address
     const pickupAddrEl = document.getElementById('confirm-pickup-addr');
     if (pickupAddrEl) {
         const typed = document.getElementById('uberPickupInput')?.value?.trim();
@@ -49334,7 +49322,7 @@ async function showRideSelectionView(destName, destLat, destLng) {
     }
 
     // ============================================================
-    // 5. ADD MARKERS (pickup pill + destination flag)
+    // 5. ADD MARKERS (before animation, so they're visible)
     // ============================================================
     if (typeof setupUserMarker === 'function') {
         setupUserMarker([pickupLng, pickupLat]);
@@ -49344,19 +49332,13 @@ async function showRideSelectionView(destName, destLat, destLng) {
     }
 
     // ============================================================
-    // 6. DRAW ROUTE LINE
+    // 6. DRAW ROUTE LINE (only after animation is done, so it doesn't distract)
+    //    We store it on window and draw it at the end of the sequence.
     // ============================================================
-    if (routeGeometry) {
-        if (activeMap.isStyleLoaded()) {
-            drawSearchRoute(routeGeometry);
-        } else {
-            activeMap.once('style.load', () => drawSearchRoute(routeGeometry));
-        }
-    }
+    window._pendingRouteGeometry = routeGeometry;
 
     // ============================================================
     // 7. SHOW CONFIRM VIEW & SHRINK SHEET TO 35vh
-    //    ↳ This gives the map ~65% of the viewport height
     // ============================================================
     const initialView = document.getElementById('view-initial-search');
     const confirmView = document.getElementById('view-confirm-ride');
@@ -49371,20 +49353,23 @@ async function showRideSelectionView(destName, destLat, destLng) {
         confirmView.style.setProperty('display', 'block', 'important');
     }
     if (sheetContent) {
-        // ===== CRITICAL: 35vh sheet = 65% map on screen =====
         sheetContent.style.setProperty('height', '35vh', 'important');
         sheetContent.style.setProperty('max-height', '35vh', 'important');
         sheetContent.style.setProperty('overflow-y', 'auto', 'important');
     }
 
     // ============================================================
-    // 8. WAIT FOR SHEET LAYOUT TO SETTLE, THEN FIT MAP
-    //    (Uses requestAnimationFrame so padding accounts for new sheet height)
+    // 8. CINEMATIC FLY-THROUGH
+    //    Wait for the sheet's CSS layout to settle first
     // ============================================================
     requestAnimationFrame(() => {
         setTimeout(() => {
-            fitMapToRoute(activeMap, pickupLat, pickupLng, destinationLat, destinationLng);
-        }, 350); // brief delay so CSS height transition completes
+            cinematicFlyThrough(
+                activeMap,
+                pickupLat, pickupLng,
+                destinationLat, destinationLng
+            );
+        }, 400);
     });
 
     // ============================================================
@@ -49403,9 +49388,181 @@ async function showRideSelectionView(destName, destLat, destLng) {
         finalBtn.disabled = false;
     }
 
-    console.log("✅ showRideSelectionView complete — map at ~65% viewport");
-} 
+    console.log("✅ showRideSelectionView complete");
+}
 
+// =================================================================
+// cinematicFlyThrough — Three-phase camera animation
+// =================================================================
+// Phase 1 (0-900ms):      Zoom IN on destination flag
+// Phase 2 (900-2400ms):   Slow PAN to pickup location
+// Phase 3 (2400-3800ms):  Zoom OUT to fit full route
+// =================================================================
+
+function cinematicFlyThrough(activeMap, pickupLat, pickupLng, destinationLat, destinationLng) {
+    if (!activeMap) return;
+
+    console.log("🎬 Starting cinematic fly-through");
+
+    // ---- Sanity checks ----
+    const pLat = Number(pickupLat);
+    const pLng = Number(pickupLng);
+    const dLat = Number(destinationLat);
+    const dLng = Number(destinationLng);
+
+    if (![pLat, pLng, dLat, dLng].every(Number.isFinite)) {
+        console.warn("⚠️ cinematicFlyThrough: invalid coords, skipping");
+        return;
+    }
+
+    // ---- Compute final padding (same as fitBounds uses) ----
+    const topPad    = 130;
+    const bottomPad = Math.round(window.innerHeight * 0.35) + 40;
+    const sidePad   = 60;
+
+    // ============================================================
+    // PHASE 1: Zoom IN on Destination flag
+    // ============================================================
+    console.log("🎬 Phase 1: Zoom into destination");
+    activeMap.flyTo({
+        center: [dLng, dLat],
+        zoom: 16.5,           // close-in
+        pitch: 45,            // slight 3D tilt
+        bearing: 0,
+        duration: 900,
+        curve: 1.4,
+        essential: true
+    });
+
+    // ============================================================
+    // PHASE 2: Slowly pan to pickup location
+    // (starts after Phase 1 finishes)
+    // ============================================================
+    setTimeout(() => {
+        console.log("🎬 Phase 2: Pan to pickup");
+
+        // Compute bearing from destination → pickup so camera feels directed
+        const dy = pLat - dLat;
+        const dx = pLng - dLng;
+        let bearing = Math.atan2(dx, dy) * (180 / Math.PI);
+        if (bearing < 0) bearing += 360;
+        bearing = (bearing + 180) % 360; // face the direction of travel
+
+        activeMap.flyTo({
+            center: [pLng, pLat],
+            zoom: 16.5,
+            pitch: 45,
+            bearing: bearing,
+            duration: 1400,    // slower pan
+            curve: 1.2,
+            essential: true
+        });
+    }, 950); // 900ms zoom + 50ms buffer
+
+    // ============================================================
+    // PHASE 3: Zoom OUT to fit entire route
+    // (starts after Phase 2 finishes)
+    // ============================================================
+    setTimeout(() => {
+        console.log("🎬 Phase 3: Zoom out to fit route");
+
+        try {
+            // Explicit SW/NE bounds
+            const swLng = Math.min(pLng, dLng);
+            const swLat = Math.min(pLat, dLat);
+            const neLng = Math.max(pLng, dLng);
+            const neLat = Math.max(pLat, dLat);
+
+            const bounds = new mapboxgl.LngLatBounds(
+                [swLng, swLat],
+                [neLng, neLat]
+            );
+
+            if (bounds.isEmpty()) {
+                throw new Error("Empty bounds");
+            }
+
+            // ---- Draw the route line just before zooming out ----
+            if (window._pendingRouteGeometry) {
+                if (activeMap.isStyleLoaded()) {
+                    drawSearchRoute(window._pendingRouteGeometry);
+                } else {
+                    activeMap.once('style.load', () => drawSearchRoute(window._pendingRouteGeometry));
+                }
+                window._pendingRouteGeometry = null;
+            }
+
+            // ---- Zoom out with generous padding ----
+            activeMap.fitBounds(bounds, {
+                padding: {
+                    top: topPad,
+                    bottom: bottomPad,
+                    left: sidePad,
+                    right: sidePad
+                },
+                maxZoom: 15,
+                duration: 1400,   // slower zoom-out
+                essential: true
+            });
+
+            console.log("✅ Cinematic fly-through complete");
+        } catch (e) {
+            console.warn("⚠️ fitBounds in cinematic failed, using manual fallback:", e);
+
+            // ---- Manual fallback ----
+            try {
+                const midLng = (pLng + dLng) / 2;
+                const midLat = (pLat + dLat) / 2;
+                const maxSpan = Math.max(Math.abs(dLng - pLng), Math.abs(dLat - pLat));
+
+                let zoom = 14;
+                if      (maxSpan > 0.5)  zoom = 9;
+                else if (maxSpan > 0.3)  zoom = 10;
+                else if (maxSpan > 0.15) zoom = 11;
+                else if (maxSpan > 0.08) zoom = 12;
+                else if (maxSpan > 0.04) zoom = 13;
+                else if (maxSpan > 0.02) zoom = 13.5;
+                else                     zoom = 14;
+
+                activeMap.flyTo({
+                    center: [midLng, midLat],
+                    zoom: zoom,
+                    pitch: 0,
+                    bearing: 0,
+                    duration: 1200,
+                    essential: true
+                });
+
+                // Still draw the route
+                if (window._pendingRouteGeometry) {
+                    drawSearchRoute(window._pendingRouteGeometry);
+                    window._pendingRouteGeometry = null;
+                }
+
+                console.log("🗺️ Manual fallback applied");
+            } catch (e2) {
+                console.error("❌ Cinematic fallback failed:", e2);
+            }
+        }
+    }, 2400); // 900 (Phase 1) + 1400 (Phase 2) + 100ms buffer
+
+    // ============================================================
+    // Failsafe: If user interacts with the map, skip the animation
+    // ============================================================
+    const cancelOnUserInteraction = () => {
+        if (window._cinematicTimeouts) {
+            window._cinematicTimeouts.forEach(id => clearTimeout(id));
+            window._cinematicTimeouts = null;
+            console.log("🎬 User interaction — cinematic cancelled");
+        }
+        activeMap.off('mousedown', cancelOnUserInteraction);
+        activeMap.off('touchstart', cancelOnUserInteraction);
+    };
+
+    window._cinematicTimeouts = [];
+    activeMap.on('mousedown', cancelOnUserInteraction);
+    activeMap.on('touchstart', cancelOnUserInteraction);
+}
 // =================================================================
 // fitMapToRoute — Computes bounds & fits map with proper padding
 // =================================================================
