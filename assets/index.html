@@ -16044,132 +16044,102 @@ map.on('load', () => {
 // GUARANTEE HOME DASHBOARD VISIBILITY ON LOAD
 // =================================================================
 
- 
-
-// Quick selection helper for the new home screen suggestions
-window.quickSelectDest = function(destName) {
-    window.userDropOffDestination = destName;
-    openModal('destinationPromptPopup');
-    showDestinationSearchMode();
-    const destInput = document.getElementById('uberDestInput');
-    if (destInput) destInput.value = destName;
-    setTimeout(() => { findTaxisFlow(); }, 500);
-};  function updateDashboardUserInfo() {
-      if (window.commuterData) {
-          // Fetch Name and Surname to display "Welcome, [Full Name]"
-          var fName = window.commuterData.name || window.commuterData.firstName || '';
-          var lName = window.commuterData.surname || window.commuterData.lastName || '';
-          var fullName = `${fName} ${lName}`.trim() || 'Passenger';
-// Add inside function updateDashboardUserInfo() { ... }
-const totalTrips = window.commuterData.totalTrips || 0;
-const tripsTowardsNextReward = totalTrips % 15;
-const progressPercentage = (tripsTowardsNextReward / 15) * 100;
-
-const progressBar = document.getElementById('loyaltyProgressBar');
-const progressText = document.getElementById('loyaltyProgressText');
-
-if (progressBar && progressText) {
-    // If they just hit the milestone
-    if (totalTrips > 0 && tripsTowardsNextReward === 0) {
-        progressBar.style.width = '100%';
-        progressText.innerHTML = '<i class="fas fa-check-circle" style="color: #28a745;"></i>';
-        progressText.style.color = '#28a745';
-    } else {
-        progressBar.style.width = `${progressPercentage}%`;
-        progressText.textContent = `${tripsTowardsNextReward}/15`;
-        progressText.style.color = '#FFC107';
-    }
-}
-          const greetingEl = document.getElementById('homeGreetingName');
-          if (greetingEl) {
-              greetingEl.textContent = `Welcome, ${fullName}`;
-          }
-
-          // Update Profile Picture
-            if (window.commuterData.profile_picture_url) {
-              const picEl = document.getElementById('homeProfilePic');
-              if (picEl) {
-                  picEl.style.opacity = '0.3';
-                  picEl.style.transition = 'opacity 0.3s ease';
-                  picEl.onload = () => { picEl.style.opacity = '1'; };
-                  picEl.src = getValidImageUrl(window.commuterData.profile_picture_url);
+// ==========================================
+  // 1. FAIL-SAFE MAP INITIALIZATION
+  // ==========================================
+  // Global variable to track if we've locked onto the user yet
+  var hasCenteredOnUser = false;
+  // Global tracking variables
+  window.isCameraLockedOnUser = true;
+  window.locationWatchId = null;
+  // Create a button that temporarily disables follow mode, recenters, then re-enables
+  function createRecenterButton() {
+      const btn = document.createElement('button');
+      btn.id = 'recenterBtn';
+      btn.innerHTML = '<i class="fas fa-location-arrow"></i>';
+      btn.style.cssText = `
+          position: fixed;
+          bottom: 320px;
+          right: 20px;
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background: #007BFF;
+          color: white;
+          border: none;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+          z-index: 1000;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.2rem;
+      `;
+      btn.onclick = () => {
+          if (commuterLat && commuterLng) {
+              map.flyTo({ center: [commuterLng, commuterLat], zoom: 16, duration: 800 });
+              if (!followModeActive) {
+                  // Optionally re-enable follow mode after manual recenter
+                  enableFollowMode();
               }
           }
-      }
+      };
+      document.body.appendChild(btn);
   }
-window.saveUnifiedOnboardingData = async function(skipGoalSetup = false) {
-    try {
-        const uid = window.userId || localStorage.getItem('userId');
-        
-        // 1. Get Phone Number (Required)
-        const phoneInput = document.getElementById('enforcedPhoneInput');
-        const phone = phoneInput ? phoneInput.value.replace(/\s+/g, '').trim() : '';
-        
-        if (!phone || phone.length < 10) {
-            showToast("Please enter a valid phone number", "danger");
-            return;
-        }
+      
+geolocateControl.on('geolocate', function(e) {
+    commuterLat = e.coords.latitude;
+    commuterLng = e.coords.longitude;
+    
+    if (userMarker) userMarker.setLngLat([commuterLng, commuterLat]);
 
-        // 2. Get Referral Code (Optional)
-        const refCodeInput = document.getElementById('onboardReferralCode');
-        const refCode = refCodeInput ? refCodeInput.value.replace(/\s+/g, '').trim().toUpperCase() : '';
+    localStorage.setItem('lastLat', commuterLat);
+    localStorage.setItem('lastLng', commuterLng);
+    
+    // TRIGGER REFRESH IMMEDIATELY
+    window.refreshLocationDisplay();
+});
 
-        // 3. Set Default Data (Since Step 2 & 3 are deleted, we use placeholders or nulls)
-        const updates = {
-            phone: phone,
-            onboardingComplete: true,
-            clubOptOut: true, // User skipped club setup
-            onboardRoute: null, // No route provided during onboarding anymore
-            updatedAt: firebase.database.ServerValue.TIMESTAMP
-        };
 
-        // 4. Referral Logic
-        if (refCode) {
-            // Search for the Ambassador by Referral Code, Phone, or UID
-            const codeQuery = await database.ref('commuters').orderByChild('referralCode').equalTo(refCode).once('value');
-            let matchedReferrerId = null;
-            
-            if (codeQuery.exists()) { 
-                codeQuery.forEach(c => { matchedReferrerId = c.key; }); 
-            } else {
-                const phoneQuery = await database.ref('commuters').orderByChild('phone').equalTo(refCode).once('value');
-                if (phoneQuery.exists()) {
-                    phoneQuery.forEach(c => { matchedReferrerId = c.key; });
-                }
-            }
+// CRITICAL: This event fires only when the map is fully rendered and ready
+// CRITICAL: This event fires only when the map is fully rendered and ready
+map.on('load', () => {
+    console.log("✅ Map loaded. Managing UI state...");
 
-            if (matchedReferrerId && matchedReferrerId !== uid) {
-                updates.referredBy = matchedReferrerId; 
-                updates.promoRemaining = 1;
-                updates.promoValue = 25; 
-                
-                // Alert the Ambassador's dashboard
-                if (typeof window.processPendingReferralCounters === 'function') {
-                    window.processPendingReferralCounters(uid, matchedReferrerId);
-                }
-            }
-        }
+    const webPreloader = document.getElementById('solidPreloader');
+    if (webPreloader) webPreloader.style.display = 'none';
 
-        // 5. Save to Firebase
-        await database.ref(`commuters/${uid}`).update(updates);
-        if (window.commuterData) Object.assign(window.commuterData, updates);
-
-        // 6. Close Modal and Show Dashboard
-        const modal = document.getElementById('phoneEnforcementModal');
-        if (modal) {
-            modal.classList.remove('open');
-            modal.style.setProperty('display', 'none', 'important');
-        }
-        
-        showToast("Registration Complete!", "success");
-        showModernDashboard();
-
-    } catch (err) {
-        console.error("Save Onboarding Error:", err);
-        showToast("Error saving profile.", "warning");
-        showModernDashboard();
+    // Drop the "You are here" marker immediately using the best-known coords,
+    // instead of waiting on the async geolocation callback to place it.
+    if (typeof setupUserMarker === 'function') {
+        setupUserMarker([commuterLng || coords[0], commuterLat || coords[1]]);
     }
-};
+
+    // Start the live taxi feed only after Mapbox can accept marker additions.
+    if (typeof loadAndDisplayTaxisOnMap === 'function') {
+        loadAndDisplayTaxisOnMap();
+    }
+
+    // The newly fixed active trip checker will safely decide whether 
+    // to show the dashboard or the tracking screen.
+    checkPassengerActiveTrip();
+
+    // Drop the native preloader if running in the Android shell
+    setTimeout(() => {
+        if (window.Android && window.Android.postMessage) {
+            window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
+        }
+    }, 150);
+});    map.on('error', (e) => {
+          console.error("Mapbox GL Error:", e);
+          // Non-fatal source/tile errors happen routinely (e.g. route redraws) and
+          // shouldn't interrupt the user with a popup. Only surface real style load failures.
+          const isStyleFailure = !map.isStyleLoaded() && !e.sourceId;
+          if (isStyleFailure) {
+              showGenericMessage("Map Error", "Could not load map data. Please check your connection.", "fa-map", "icon-danger");
+          }
+      });
+  }
 // =======================================================================
 // UPDATED: NOTIFICATIONS POPUP (Fixed Text Visibility)
 // =======================================================================
