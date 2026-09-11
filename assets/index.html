@@ -13533,63 +13533,6 @@ window.setupUserMarker = function(coords) {
 
     console.log("✅ User marker added successfully");
 };
-// Show destination search mode - defined globally
-window.showDestinationSearchMode = function() {
-    console.log("🔍 Showing destination search mode");
-    
-    const initialView = document.getElementById('destInitialView');
-    const searchView = document.getElementById('destSearchView');
-    
-    if (!searchView) {
-        console.error("❌ destSearchView not found");
-        return;
-    }
-    
-    // Hide initial view
-    if (initialView) {
-        initialView.style.display = 'none';
-        initialView.style.setProperty('display', 'none', 'important');
-    }
-    
-    // Show search view with proper content
-    searchView.style.setProperty('display', 'flex', 'important');
-    searchView.style.flexDirection = 'column';
-    searchView.style.height = '100vh';
-    searchView.style.background = '#1C1C1E';
-    
-    // Build the search view HTML if empty
-    if (!searchView.querySelector('#uber-pickup-container')) {
-        searchView.innerHTML = `
-            <div style="display:flex; align-items:center; padding: 20px 20px 10px 20px; border-bottom: 1px solid #333; flex-shrink: 0; background: #1C1C1E;">
-                <button onclick="resetDestinationPopup()" style="background: #2C2C2E; border: none; width: 42px; height: 42px; border-radius: 50%; color: white; cursor:pointer; display: flex; align-items: center; justify-content: center; font-size: 1.1rem;">
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-                <h3 style="margin:0; color:#fff !important; flex:1; text-align:center; font-weight:800;">Request Private Ride</h3>
-                <div style="width:42px;"></div>
-            </div>
-            <div style="padding: 20px; flex: 1; overflow-y: auto; background: #1C1C1E;">
-                <div style="background: #2C2C2E; border-radius: 20px; padding: 18px; margin-bottom: 20px; border: 1px solid #444;">
-                    <label style="color:#888; font-size:0.7rem; font-weight:800; text-transform:uppercase; margin-bottom:8px; display:block;">Pickup</label>
-                    <div id="uber-pickup-container" class="uber-geocoder"></div>
-                    <div style="height: 1px; background: #3A3A3C; margin: 10px 0;"></div>
-                    <label style="color:#0A84FF; font-size:0.7rem; font-weight:800; text-transform:uppercase; margin-bottom:8px; display:block;">Where to?</label>
-                    <div id="uber-dest-container" class="uber-geocoder"></div>
-                </div>
-                <div id="uber-suggestions-list" style="max-height: 50vh; overflow-y: auto;"></div>
-            </div>
-        `;
-    }
-    
-    // Initialize geocoders
-    setTimeout(() => {
-        if (typeof window.initDualGeocoders === 'function') {
-            window.initDualGeocoders();
-        }
-        if (typeof window.restoreDefaultSuggestions === 'function') {
-            window.restoreDefaultSuggestions();
-        }
-    }, 200);
-};
 
 // Reset destination popup - defined globally
 window.resetDestinationPopup = function() {
@@ -45762,31 +45705,33 @@ window.setClubPayment = function(method) {
         cashBtn.style.background = '#2C2C2E'; cashBtn.style.color = '#888';
     }
 };
-// Replace the existing showDestinationSearchMode function with this:
+
+// =================================================================
+// showDestinationSearchMode - FIXED (with visible placeholders)
+// =================================================================
+
 window.showDestinationSearchMode = function() {
     console.log("🔍 Showing destination search mode");
-    
+
     const initialView = document.getElementById('destInitialView');
     const searchView = document.getElementById('destSearchView');
-    
+
     if (!searchView) {
         console.error("❌ destSearchView not found");
         return;
     }
-    
-    // Hide initial view
+
     if (initialView) {
         initialView.style.display = 'none';
         initialView.style.setProperty('display', 'none', 'important');
     }
-    
-    // Show search view with proper content
+
     searchView.style.setProperty('display', 'flex', 'important');
     searchView.style.flexDirection = 'column';
     searchView.style.height = '100vh';
     searchView.style.background = '#1C1C1E';
-    
-    // Build the search view HTML if empty
+
+    // Build search view if not already built
     if (!searchView.querySelector('#uber-pickup-container')) {
         searchView.innerHTML = `
             <div style="display:flex; align-items:center; padding: 20px 20px 10px 20px; border-bottom: 1px solid #333; flex-shrink: 0; background: #1C1C1E;">
@@ -45798,44 +45743,108 @@ window.showDestinationSearchMode = function() {
             </div>
             <div style="padding: 20px; flex: 1; overflow-y: auto; background: #1C1C1E;">
                 <div style="background: #2C2C2E; border-radius: 20px; padding: 18px; margin-bottom: 20px; border: 1px solid #444;">
-                    <label style="color:#888; font-size:0.7rem; font-weight:800; text-transform:uppercase; margin-bottom:8px; display:block;">Pickup</label>
-                    <div id="uber-pickup-container" class="uber-geocoder"></div>
-                    <div style="height: 1px; background: #3A3A3C; margin: 10px 0;"></div>
-                    <label style="color:#0A84FF; font-size:0.7rem; font-weight:800; text-transform:uppercase; margin-bottom:8px; display:block;">Where to?</label>
-                    <div id="uber-dest-container" class="uber-geocoder"></div>
+                    
+                    <!-- PICKUP ROW -->
+                    <div style="display:flex; align-items:center; gap:12px; padding: 6px 0;">
+                        <i class="fas fa-circle" style="color:#0A84FF; font-size:0.6rem; flex-shrink:0;"></i>
+                        <div style="flex:1; min-width:0;">
+                            <label style="color:#888; font-size:0.65rem; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">Pickup</label>
+                            <div id="uber-pickup-container" class="uber-geocoder" style="width:100%;"></div>
+                        </div>
+                    </div>
+
+                    <div style="height: 1px; background: #3A3A3C; margin: 12px 0;"></div>
+
+                    <!-- DESTINATION ROW -->
+                    <div style="display:flex; align-items:center; gap:12px; padding: 6px 0;">
+                        <i class="fas fa-square" style="color:#FF9F0A; font-size:0.6rem; flex-shrink:0;"></i>
+                        <div style="flex:1; min-width:0;">
+                            <label style="color:#FF9F0A; font-size:0.65rem; font-weight:800; text-transform:uppercase; display:block; margin-bottom:4px;">Where to?</label>
+                            <div id="uber-dest-container" class="uber-geocoder" style="width:100%;"></div>
+                        </div>
+                    </div>
                 </div>
                 <div id="uber-suggestions-list" style="max-height: 50vh; overflow-y: auto;"></div>
             </div>
         `;
     }
-    
-    // Initialize geocoders
+
+    // CRITICAL: Ensure Mapbox Geocoder CSS classes are visible
+    // Some global CSS rules may hide them
+    if (!document.getElementById('uber-geocoder-fix-css')) {
+        const style = document.createElement('style');
+        style.id = 'uber-geocoder-fix-css';
+        style.innerHTML = `
+            /* FORCE visibility of our custom inputs inside the geocoder containers */
+            .uber-geocoder input[type="text"] {
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                background: transparent !important;
+                color: #ffffff !important;
+                border: none !important;
+                outline: none !important;
+                width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                font-size: 1.05rem !important;
+                font-weight: 500 !important;
+                font-family: 'Manrope', sans-serif !important;
+                line-height: 1.4 !important;
+                height: auto !important;
+                min-height: 24px !important;
+                caret-color: #0A84FF !important;
+            }
+            .uber-geocoder input[type="text"]::placeholder {
+                color: #666 !important;
+                opacity: 1 !important;
+            }
+            .uber-geocoder input[type="text"]:focus {
+                color: #ffffff !important;
+            }
+            /* Also fix the search icon visibility */
+            .uber-geocoder .mapboxgl-ctrl-geocoder {
+                background: transparent !important;
+                border: none !important;
+                box-shadow: none !important;
+                width: 100% !important;
+                max-width: 100% !important;
+                min-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            .uber-geocoder .mapboxgl-ctrl-geocoder--input {
+                color: #ffffff !important;
+                background: transparent !important;
+                padding-left: 30px !important;
+                font-size: 1.05rem !important;
+                height: auto !important;
+                min-height: 28px !important;
+                border: none !important;
+            }
+            .uber-geocoder .mapboxgl-ctrl-geocoder--input::placeholder {
+                color: #666 !important;
+            }
+            .uber-geocoder .mapboxgl-ctrl-geocoder--icon-search {
+                fill: #888 !important;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    // Init geocoders after render
     setTimeout(() => {
         if (typeof window.initDualGeocoders === 'function') {
             window.initDualGeocoders();
-        } else {
-            // Fallback: setup inputs directly
-            setupDualGeocodersFallback();
         }
-        
-        // Restore default suggestions
         if (typeof window.restoreDefaultSuggestions === 'function') {
             window.restoreDefaultSuggestions();
         }
     }, 200);
-    
-    // Update title for Asiye Go
-    setTimeout(() => {
-        const titleEl = searchView.querySelector('h3');
-        if (titleEl) {
-            titleEl.textContent = 'Request Private Ride';
-        }
-    }, 100);
-    
-    console.log("✅ Destination search mode activated");
 };
+
 // =================================================================
-// FIXED initDualGeocoders - Sets values BEFORE Google Places wraps inputs
+// initDualGeocoders - FIXED: Guarantees visible text in both inputs
 // =================================================================
 
 window.initDualGeocoders = async function() {
@@ -45850,17 +45859,20 @@ window.initDualGeocoders = async function() {
     }
 
     // ============================================================
-    // 1. PREPARE THE PICKUP ADDRESS *BEFORE* creating the inputs
+    // 1. FETCH PICKUP ADDRESS FIRST (before rendering)
     // ============================================================
     let pickupAddressText = "Current Location";
     try {
         const lat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat'));
         const lng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng'));
+        console.log("📍 Prefetching pickup address for:", lat, lng);
+
         if (Number.isFinite(lat) && Number.isFinite(lng) && typeof window.getAddressFromCoordsPromise === 'function') {
             const addr = await window.getAddressFromCoordsPromise(lng, lat);
             if (addr && addr !== 'Unknown Location') {
-                pickupAddressText = addr.split(',')[0].trim(); // "27 Courtown Cres"
-                console.log("📌 Pickup prefill:", pickupAddressText);
+                // Take first meaningful segment (street name)
+                pickupAddressText = addr.split(',')[0].trim();
+                console.log("📌 Pickup prefill obtained:", pickupAddressText);
             }
         }
     } catch (e) {
@@ -45868,141 +45880,175 @@ window.initDualGeocoders = async function() {
     }
 
     // ============================================================
-    // 2. INJECT THE INPUT ELEMENTS WITH VALUES ALREADY SET
+    // 2. RENDER INPUTS - with REAL text baked in (not placeholder)
     // ============================================================
     destContainer.innerHTML = `
-        <input type="text" id="uberDestInput"
-               placeholder="Where to?"
-               autocomplete="off"
-               value=""
-               style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">
+        <input
+            type="text"
+            id="uberDestInput"
+            placeholder="Where to?"
+            autocomplete="off"
+            value=""
+            style="background:transparent !important; color:#ffffff !important; border:none !important; width:100% !important; font-size:1.05rem !important; font-weight:500 !important; outline:none !important; padding:4px 0 !important; margin:0 !important; height:auto !important; min-height:28px !important; caret-color:#0A84FF !important; display:block !important; visibility:visible !important;"
+        >
     `;
+
     pickupContainer.innerHTML = `
-        <input type="text" id="uberPickupInput"
-               placeholder="${pickupAddressText}"
-               autocomplete="off"
-               value="${pickupAddressText}"
-               style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">
+        <input
+            type="text"
+            id="uberPickupInput"
+            placeholder="Current Location"
+            autocomplete="off"
+            value="${pickupAddressText.replace(/"/g, '&quot;')}"
+            style="background:transparent !important; color:#ffffff !important; border:none !important; width:100% !important; font-size:1.05rem !important; font-weight:500 !important; outline:none !important; padding:4px 0 !important; margin:0 !important; height:auto !important; min-height:28px !important; caret-color:#0A84FF !important; display:block !important; visibility:visible !important;"
+        >
     `;
 
     const destInput   = document.getElementById('uberDestInput');
     const pickupInput = document.getElementById('uberPickupInput');
 
+    console.log("✅ Inputs rendered. Pickup value:", pickupInput?.value, "| Dest placeholder:", destInput?.placeholder);
+
     // ============================================================
-    // 3. LOCK IN THE PICKUP VALUE (in case anything clears it)
-    //    Some browsers clear inputs when autocomplete attaches.
+    // 3. PROTECT THE PICKUP VALUE
+    //    Google Places sometimes resets inputs on attach. We re-assert.
     // ============================================================
-    const lockPickupValue = () => {
-        if (pickupInput && (!pickupInput.value || pickupInput.value.trim() === '')) {
+    const protectPickupValue = () => {
+        if (!pickupInput) return;
+        if (!pickupInput.value || pickupInput.value.trim() === '') {
             pickupInput.value = pickupAddressText;
         }
     };
-    // Re-assert value a few times over the next few seconds
-    setTimeout(lockPickupValue, 300);
-    setTimeout(lockPickupValue, 1000);
-    setTimeout(lockPickupValue, 2500);
+    setTimeout(protectPickupValue, 200);
+    setTimeout(protectPickupValue, 600);
+    setTimeout(protectPickupValue, 1500);
+    setTimeout(protectPickupValue, 3000);
 
     // ============================================================
-    // 4. ATTACH GOOGLE PLACES SEARCH
+    // 4. ATTACH GOOGLE PLACES (with retry loop)
     // ============================================================
-    const attachPlaces = () => {
+    const attachPlaces = (attempt = 1) => {
         const googleReady = window.google && google.maps && google.maps.places;
 
-        // ---------- DESTINATION ----------
-        if (googleReady && destInput) {
-            const destAuto = new google.maps.places.Autocomplete(destInput, {
-                componentRestrictions: { country: 'za' },
-                fields: ['geometry', 'name', 'formatted_address', 'place_id']
-            });
-
-            // Bias toward user's location
-            if (window.commuterLat && window.commuterLng) {
-                const bias = new google.maps.LatLng(window.commuterLat, window.commuterLng);
-                const saBounds = new google.maps.LatLngBounds(
-                    new google.maps.LatLng(-35.0, 16.0),
-                    new google.maps.LatLng(-22.0, 33.0)
-                );
-                destAuto.setBounds(saBounds.extend(bias));
+        if (!googleReady) {
+            if (attempt <= 10) {
+                setTimeout(() => attachPlaces(attempt + 1), 400);
+            } else {
+                console.warn("⚠️ Google Places never became ready — inputs remain plain text");
             }
+            return;
+        }
 
-            destAuto.addListener('place_changed', () => {
-                const place = destAuto.getPlace();
-                if (!place || !place.geometry || !place.geometry.location) {
-                    console.warn("⚠️ User didn't select a valid place");
-                    return;
+        console.log(`✅ Attaching Google Places (attempt ${attempt})`);
+
+        // ---------- DESTINATION ----------
+        if (destInput && !destInput.dataset.placesAttached) {
+            try {
+                const destAuto = new google.maps.places.Autocomplete(destInput, {
+                    componentRestrictions: { country: 'za' },
+                    fields: ['geometry', 'name', 'formatted_address', 'place_id']
+                });
+
+                if (window.commuterLat && window.commuterLng) {
+                    const saBounds = new google.maps.LatLngBounds(
+                        new google.maps.LatLng(-35.0, 16.0),
+                        new google.maps.LatLng(-22.0, 33.0)
+                    );
+                    destAuto.setBounds(saBounds.extend(
+                        new google.maps.LatLng(window.commuterLat, window.commuterLng)
+                    ));
                 }
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
-                const name = place.name || (place.formatted_address || '').split(',')[0];
 
-                window.userDropOffDestination = name;
-                window.ehailingDestLat = lat;
-                window.ehailingDestLng = lng;
+                destAuto.addListener('place_changed', () => {
+                    const place = destAuto.getPlace();
+                    if (!place || !place.geometry || !place.geometry.location) {
+                        console.warn("⚠️ User typed without selecting a suggestion");
+                        return;
+                    }
+                    const lat = place.geometry.location.lat();
+                    const lng = place.geometry.location.lng();
+                    const name = place.name || (place.formatted_address || '').split(',')[0];
 
-                console.log("🔍 [Destination] selected:", name, lat, lng);
-            });
+                    console.log("🎯 [Destination] selected:", name, lat, lng);
+
+                    window.userDropOffDestination = name;
+                    window.ehailingDestLat = lat;
+                    window.ehailingDestLng = lng;
+
+                    // Fly map
+                    if (window.map) window.map.flyTo({ center: [lng, lat], zoom: 15, essential: true });
+
+                    // Trigger booking flow
+                    setTimeout(() => {
+                        if (typeof window.selectUberSuggestion === 'function') {
+                            window.selectUberSuggestion('destination', lng, lat, name);
+                        } else if (typeof window.showRideSelectionView === 'function') {
+                            window.showRideSelectionView(name, lat, lng);
+                        }
+                    }, 200);
+                });
+
+                destInput.dataset.placesAttached = 'true';
+            } catch (e) {
+                console.warn("Destination Places attach failed:", e);
+            }
         }
 
         // ---------- PICKUP ----------
-        if (googleReady && pickupInput) {
-            const pickupAuto = new google.maps.places.Autocomplete(pickupInput, {
-                componentRestrictions: { country: 'za' },
-                fields: ['geometry', 'name', 'formatted_address', 'place_id']
-            });
+        if (pickupInput && !pickupInput.dataset.placesAttached) {
+            try {
+                const pickupAuto = new google.maps.places.Autocomplete(pickupInput, {
+                    componentRestrictions: { country: 'za' },
+                    fields: ['geometry', 'name', 'formatted_address', 'place_id']
+                });
 
-            if (window.commuterLat && window.commuterLng) {
-                const bias = new google.maps.LatLng(window.commuterLat, window.commuterLng);
-                const saBounds = new google.maps.LatLngBounds(
-                    new google.maps.LatLng(-35.0, 16.0),
-                    new google.maps.LatLng(-22.0, 33.0)
-                );
-                pickupAuto.setBounds(saBounds.extend(bias));
+                if (window.commuterLat && window.commuterLng) {
+                    const saBounds = new google.maps.LatLngBounds(
+                        new google.maps.LatLng(-35.0, 16.0),
+                        new google.maps.LatLng(-22.0, 33.0)
+                    );
+                    pickupAuto.setBounds(saBounds.extend(
+                        new google.maps.LatLng(window.commuterLat, window.commuterLng)
+                    ));
+                }
+
+                pickupAuto.addListener('place_changed', () => {
+                    const place = pickupAuto.getPlace();
+                    if (!place || !place.geometry || !place.geometry.location) return;
+                    const lat = place.geometry.location.lat();
+                    const lng = place.geometry.location.lng();
+
+                    console.log("🎯 [Pickup] selected:", place.name, lat, lng);
+
+                    window.commuterLat = lat;
+                    window.commuterLng = lng;
+
+                    if (window.map) window.map.flyTo({ center: [lng, lat], zoom: 15, essential: true });
+                    if (window.userMarker) window.userMarker.setLngLat([lng, lat]);
+                });
+
+                pickupInput.dataset.placesAttached = 'true';
+            } catch (e) {
+                console.warn("Pickup Places attach failed:", e);
             }
-
-            pickupAuto.addListener('place_changed', () => {
-                const place = pickupAuto.getPlace();
-                if (!place || !place.geometry || !place.geometry.location) return;
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
-
-                window.commuterLat = lat;
-                window.commuterLng = lng;
-
-                console.log("🔍 [Pickup] selected:", place.name, lat, lng);
-
-                if (window.map) window.map.flyTo({ center: [lng, lat], zoom: 16 });
-                if (window.userMarker) window.userMarker.setLngLat([lng, lat]);
-
-                // Re-lock value after user selection
-                setTimeout(lockPickupValue, 100);
-            });
-
-            // Re-assert value one more time after Places attaches
-            setTimeout(lockPickupValue, 500);
         }
 
-        // If Google didn't load, at least keep the values visible
-        if (!googleReady) {
-            console.warn("⚠️ Google Places not ready — inputs will be plain text");
-        }
+        // Re-assert value one more time
+        setTimeout(protectPickupValue, 300);
     };
 
-    // Wait for Google Maps SDK
-    if (window.__googleMapsReady) {
-        attachPlaces();
-    } else {
-        window.__googleMapsCallbacks.push(attachPlaces);
-        // Fallback: try again shortly (in case callback never fires)
-        setTimeout(attachPlaces, 2000);
-    }
+    attachPlaces();
 
     // ============================================================
-    // 5. Restore default suggestions list
+    // 5. RESTORE SUGGESTIONS LIST
     // ============================================================
     if (typeof window.restoreDefaultSuggestions === 'function') {
-        setTimeout(window.restoreDefaultSuggestions, 400);
+        setTimeout(window.restoreDefaultSuggestions, 500);
     }
 };
+// =================================================================
+// FIXED initDualGeocoders - Sets values BEFORE Google Places wraps inputs
+// =================================================================
 // Add this fallback function if initDualGeocoders is not available
 function setupDualGeocodersFallback() {
     const destContainer = document.getElementById('uber-dest-container');
