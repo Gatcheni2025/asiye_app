@@ -30,7 +30,7 @@
   src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async&callback=onGoogleMapsReady">
 </script>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
-<!-- Replace YOUR_ACTUAL_API_KEY with your real Google Cloud API Key -->
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <!-- ADD TURF.JS HERE -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
@@ -13491,21 +13491,16 @@ const IOS_STORE_LINK = "https://apps.apple.com/za/app/asiye/id6765691149";
 // CRITICAL: Define these functions globally at the start
 // =================================================================
 // =================================================================
-// FIX: User marker - use Mapbox marker (NOT Google Maps)
+// PICKUP MARKER — "You are here" with edit button
 // =================================================================
 
 window.setupUserMarker = function(coords) {
-    // Use the global Mapbox map instance
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!activeMap || !coords) return;
 
-    // Validate coordinates
     const lng = Number(coords[0]);
     const lat = Number(coords[1]);
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
-        console.warn("setupUserMarker: invalid coordinates", coords);
-        return;
-    }
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
 
     // If marker exists, just move it
     if (window.userMarker) {
@@ -13513,17 +13508,92 @@ window.setupUserMarker = function(coords) {
         return;
     }
 
-    // Create the custom HTML element
     const el = document.createElement('div');
     el.className = 'user-location-marker';
-    el.style.cssText = 'width: 132px; height: 76px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; pointer-events: none; z-index: 10005;';
-    el.innerHTML = `
-        <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
-        <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
-        <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42);"></span>
+    el.style.cssText = `
+        width: 150px;
+        height: 88px;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-end;
+        pointer-events: none;
+        z-index: 10010;
     `;
 
-    // Add to Mapbox map (NOT Google Maps)
+    el.innerHTML = `
+        <!-- "You are here" pill with edit button -->
+        <div style="
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #ffffff;
+            border: 1.5px solid #007BFF;
+            border-radius: 24px;
+            padding: 5px 6px 5px 12px;
+            box-shadow: 0 6px 18px rgba(0, 123, 255, 0.28);
+            margin-bottom: 4px;
+            pointer-events: auto;
+        ">
+            <i class="fas fa-crosshairs" style="color: #007BFF; font-size: 10px;"></i>
+            <span style="
+                color: #111;
+                font-family: 'Manrope', sans-serif;
+                font-size: 10px;
+                font-weight: 800;
+                letter-spacing: 0.3px;
+                white-space: nowrap;
+                text-transform: uppercase;
+            ">
+                You are here
+            </span>
+            <button
+                onclick="openPickupEditPopup(event)"
+                title="Change pickup location"
+                style="
+                    width: 22px;
+                    height: 22px;
+                    border-radius: 50%;
+                    background: #007BFF;
+                    color: #ffffff;
+                    border: none;
+                    cursor: pointer;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 0;
+                    margin-left: 2px;
+                    transition: transform 0.15s ease;
+                "
+                onmouseover="this.style.transform='scale(1.15)'"
+                onmouseout="this.style.transform='scale(1)'"
+            >
+                <i class="fas fa-pen" style="font-size: 9px;"></i>
+            </button>
+        </div>
+
+        <!-- Pole -->
+        <div style="
+            width: 3px;
+            height: 26px;
+            background: linear-gradient(to bottom, #007BFF, #003d99);
+            border-radius: 2px;
+            box-shadow: 0 1px 3px rgba(0, 123, 255, 0.4);
+        "></div>
+
+        <!-- Blue dot -->
+        <div style="
+            width: 18px;
+            height: 18px;
+            background: #007BFF;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            box-shadow: 0 3px 10px rgba(0, 123, 255, 0.55);
+            margin-bottom: -12px;
+        "></div>
+    `;
+
     window.userMarker = new mapboxgl.Marker({
         element: el,
         anchor: 'bottom'
@@ -13531,9 +13601,123 @@ window.setupUserMarker = function(coords) {
     .setLngLat([lng, lat])
     .addTo(activeMap);
 
-    console.log("✅ User marker added successfully");
+    console.log("✅ User marker added with edit button");
 };
 
+// =================================================================
+// OPEN PICKUP EDIT MODAL
+// =================================================================
+
+window.openPickupEditPopup = function(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+
+    console.log("✏️ Opening pickup editor...");
+
+    // Close the destination search view (if open) so the pickup modal is clean
+    const destPopup = document.getElementById('destinationPromptPopup');
+    if (destPopup && destPopup.classList.contains('open')) {
+        // Don't close it entirely — just hide the search view, we'll return to it
+        window._returnToDestinationSearchAfterPickupEdit = true;
+        closeModal('destinationPromptPopup');
+    } else {
+        window._returnToDestinationSearchAfterPickupEdit = false;
+    }
+
+    // Open the existing change-location popup
+    if (typeof openModal === 'function') {
+        openModal('changeLocationPopup');
+    } else {
+        const modal = document.getElementById('changeLocationPopup');
+        if (modal) {
+            modal.classList.add('open');
+            modal.style.setProperty('display', 'flex', 'important');
+        }
+    }
+
+    // Wire up the pickup geocoder if not already done
+    setTimeout(() => {
+        const container = document.getElementById('pickup-geocoder-container');
+        if (!container) return;
+
+        // Avoid double-initializing
+        if (container.dataset.geocoderReady === 'true') return;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = 'pickupEditInput';
+        input.placeholder = 'Search pickup address...';
+        input.autocomplete = 'off';
+        input.style.cssText = `
+            width: 100%;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid #ddd;
+            background: #ffffff;
+            color: #111;
+            font-size: 1rem;
+            font-weight: 600;
+            outline: none;
+            font-family: 'Manrope', sans-serif;
+        `;
+
+        container.innerHTML = '';
+        container.appendChild(input);
+
+        // Attach Google Places
+        if (typeof window.attachGooglePlacesSearch === 'function') {
+            window.attachGooglePlacesSearch(input, (place) => {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                const name = place.name || (place.formatted_address || '').split(',')[0];
+
+                console.log("🎯 [Pickup Edit] selected:", name, lat, lng);
+
+                // Update globals
+                window.commuterLat = lat;
+                window.commuterLng = lng;
+                localStorage.setItem('lastLat', lat);
+                localStorage.setItem('lastLng', lng);
+
+                // Move user marker
+                if (window.userMarker) window.userMarker.setLngLat([lng, lat]);
+
+                // Save to Firebase so it persists
+                if (window.userId) {
+                    firebase.database().ref(`commuters/${window.userId}`).update({
+                        lastKnownLat: lat,
+                        lastKnownLng: lng
+                    }).catch(() => {});
+                }
+
+                // Close pickup edit modal
+                closeModal('changeLocationPopup');
+
+                // If we came from the destination search, reopen it
+                if (window._returnToDestinationSearchAfterPickupEdit) {
+                    setTimeout(() => {
+                        if (typeof openModal === 'function') openModal('destinationPromptPopup');
+                        if (typeof window.showDestinationSearchMode === 'function') {
+                            setTimeout(() => window.showDestinationSearchMode(), 100);
+                        }
+                    }, 200);
+                }
+
+                // Toast confirmation
+                if (typeof showToast === 'function') {
+                    showToast(`Pickup set: ${name}`, "success");
+                }
+            });
+        } else {
+            console.warn("⚠️ attachGooglePlacesSearch not available");
+        }
+
+        container.dataset.geocoderReady = 'true';
+        setTimeout(() => input.focus(), 300);
+    }, 250);
+};
 // Reset destination popup - defined globally
 window.resetDestinationPopup = function() {
     console.log("🔄 Resetting destination popup");
@@ -13960,37 +14144,95 @@ window.createTaxiMarker = async function(lngLat, initialRotation = 0) {
     
     return window.taxiMarker;
 };
+// =================================================================
+// DESTINATION FLAG MARKER
+// =================================================================
+
 window.setDropoffMarker = function(destLat, destLng) {
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
-    if (!activeMap || !Number.isFinite(destLat) || !Number.isFinite(destLng)) return null;
+    if (!activeMap) return null;
 
+    const lat = Number(destLat);
+    const lng = Number(destLng);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        console.warn("setDropoffMarker: invalid coords", destLat, destLng);
+        return null;
+    }
+
+    // Reuse existing marker if present
     if (window.searchDestMarker) {
-        window.searchDestMarker.setLngLat([destLng, destLat]);
+        window.searchDestMarker.setLngLat([lng, lat]);
         return window.searchDestMarker;
     }
 
     const el = document.createElement('div');
     el.style.cssText = `
-        width: 120px;
-        height: 62px;
-        position: relative;
+        width: 140px;
+        height: 78px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: flex-end;
         pointer-events: none;
+        position: relative;
+        z-index: 10005;
     `;
+
     el.innerHTML = `
-        <span style="padding: 5px 10px; border-radius: 9px; background: #111; color: #fff; font: 800 9px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 4px 14px rgba(22,47,82,.25);">Drop-off</span>
-        <span style="width: 2px; height: 20px; background: linear-gradient(#c7c7c7, #111); margin: 0 auto;"></span>
-        <i class="fas fa-map-marker-alt" style="color:#111; font-size: 1.7rem; filter: drop-shadow(0 3px 6px rgba(0,0,0,0.4));"></i>
+        <!-- Label pill -->
+        <div style="
+            background: linear-gradient(135deg, #FF9F0A 0%, #FF6A00 100%);
+            color: #ffffff;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-family: 'Manrope', sans-serif;
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.4px;
+            white-space: nowrap;
+            box-shadow: 0 4px 14px rgba(255, 159, 10, 0.45);
+            border: 1.5px solid #ffffff;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        ">
+            <i class="fas fa-flag-checkered" style="font-size: 9px; margin-right: 3px;"></i>
+            Destination
+        </div>
+
+        <!-- Pole -->
+        <div style="
+            width: 2px;
+            height: 26px;
+            background: linear-gradient(to bottom, #FF6A00, #111);
+            border-radius: 2px;
+        "></div>
+
+        <!-- Flag/Map pin icon -->
+        <div style="
+            width: 30px;
+            height: 30px;
+            background: #111;
+            border: 3px solid #ffffff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+            margin-bottom: -14px;
+        ">
+            <i class="fas fa-map-marker-alt" style="color: #FF9F0A; font-size: 13px;"></i>
+        </div>
     `;
-    window.searchDestMarker = new mapboxgl.Marker({ element: el, anchor: 'bottom' })
-        .setLngLat([destLng, destLat])
-        .addTo(activeMap);
+
+    window.searchDestMarker = new mapboxgl.Marker({
+        element: el,
+        anchor: 'bottom'
+    })
+    .setLngLat([lng, lat])
+    .addTo(activeMap);
+
     return window.searchDestMarker;
 };
-
 window.drawSearchingRoute = function(pickupLng, pickupLat, destLng, destLat) {
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!activeMap || ![pickupLng, pickupLat, destLng, destLat].every(Number.isFinite)) return;
@@ -48618,173 +48860,144 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
 // Called after the user selects a destination from Google Places.
 // Handles: coordinate validation, pricing, ETA fetch, map fit, UI switch
 // =================================================================
+// =================================================================
+// showRideSelectionView — ZOOMS OUT TO SHOW FULL ROUTE
+// =================================================================
 
 async function showRideSelectionView(destName, destLat, destLng) {
-    console.log("🚗 showRideSelectionView called:", { destName, destLat, destLng });
+    console.log("🚗 showRideSelectionView:", { destName, destLat, destLng });
 
-    // ============================================================
-    // 1. COORDINATE GUARD - Prevent NaN crashes
-    // ============================================================
-    const pickupLat = Number(window.commuterLat)
-        || parseFloat(localStorage.getItem('lastLat'))
-        || -29.8587; // Durban fallback
-    const pickupLng = Number(window.commuterLng)
-        || parseFloat(localStorage.getItem('lastLng'))
-        || 31.0218;
-
+    // ---------- 1. VALIDATE COORDINATES ----------
+    const pickupLat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat')) || -29.8587;
+    const pickupLng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng')) || 31.0218;
     const destinationLat = Number(destLat);
     const destinationLng = Number(destLng);
 
-    // Persist back to globals so downstream code has consistent values
     window.commuterLat = pickupLat;
     window.commuterLng = pickupLng;
 
     if (![pickupLat, pickupLng, destinationLat, destinationLng].every(Number.isFinite)) {
-        console.warn("❌ showRideSelectionView: invalid coordinates, aborting", {
-            pickupLat, pickupLng, destinationLat, destinationLng
-        });
+        console.warn("❌ Invalid coords");
         if (typeof showGenericMessage === 'function') {
-            showGenericMessage(
-                "Location Error",
-                "Could not determine your location or destination. Please try again.",
-                "fa-map-marker-alt",
-                "icon-danger"
-            );
+            showGenericMessage("Location Error", "Could not determine location.", "fa-map-marker-alt", "icon-danger");
         }
         return;
     }
 
-    // ============================================================
-    // 2. MAP GUARD - Ensure Mapbox is ready
-    // ============================================================
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
-    if (!activeMap) {
-        console.warn("❌ showRideSelectionView: Mapbox not ready");
-        if (typeof showGenericMessage === 'function') {
-            showGenericMessage(
-                "Map Unavailable",
-                "The map is still loading. Please try again in a moment.",
-                "fa-map",
-                "icon-danger"
-            );
-        }
-        return;
-    }
+    if (!activeMap) return;
 
-    // ============================================================
-    // 3. SAFE DOM LOOKUPS - Cache references
-    // ============================================================
-    const destAddrEl       = document.getElementById('confirm-dest-addr');
-    const pickupAddrEl     = document.getElementById('confirm-pickup-addr');
-    const priceGoEl        = document.getElementById('price-go');
-    const priceClub4El     = document.getElementById('price-club4');
-    const priceClub6El     = document.getElementById('price-club6');
-    const durationEl       = document.getElementById('trip-duration-tag');
-    const driverEtaEl      = document.getElementById('driver-eta-tag');
-    const initialView      = document.getElementById('view-initial-search');
-    const confirmView      = document.getElementById('view-confirm-ride');
-    const sheetContent     = document.getElementById('homeSheetContent');
-
-    // ============================================================
-    // 4. CALCULATE DISTANCE AND PRICING
-    // ============================================================
-    const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2; // 20% road curve buffer
+    // ---------- 2. CALCULATE DISTANCE & PRICING ----------
+    const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2;
     window.currentTripDistance = dist;
 
-    const baseGoPrice  = Math.max(30, Math.round(30 + (dist * 9.50))); // R30 base + R9.5/km
-    const club4Price   = Math.max(15, Math.round(baseGoPrice / 4));
-    const club6Price   = Math.max(12, Math.round(baseGoPrice / 6));
+    const baseGoPrice = Math.max(30, Math.round(30 + (dist * 9.50)));
+    const club4Price = Math.max(15, Math.round(baseGoPrice / 4));
+    const club6Price = Math.max(12, Math.round(baseGoPrice / 6));
 
-    // Store on window for later use by executeBooking
-    window.ridePrices = {
-        go: baseGoPrice,
-        club4: club4Price,
-        club6: club6Price
-    };
+    window.ridePrices = { go: baseGoPrice, club4: club4Price, club6: club6Price };
 
-    console.log(`💰 Distance: ${dist.toFixed(2)}km | Go: R${baseGoPrice} | Club4: R${club4Price} | Club6: R${club6Price}`);
+    // ---------- 3. UPDATE UI TEXT ----------
+    const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setText('confirm-dest-addr', (destName || 'Destination').split(',')[0]);
+    setText('price-go', `R${baseGoPrice}`);
+    setText('price-club4', `R${club4Price}`);
+    setText('price-club6', `R${club6Price}`);
 
-    // ============================================================
-    // 5. UPDATE UI TEXT
-    // ============================================================
-    if (destAddrEl) {
-        destAddrEl.textContent = (destName || 'Destination').split(',')[0];
-    }
-
-    if (priceGoEl)    priceGoEl.textContent    = `R${baseGoPrice}`;
-    if (priceClub4El) priceClub4El.textContent = `R${club4Price}`;
-    if (priceClub6El) priceClub6El.textContent = `R${club6Price}`;
-
-    // ---- Pickup address display ----
+    // Pickup address
+    const pickupAddrEl = document.getElementById('confirm-pickup-addr');
     if (pickupAddrEl) {
-        // 1st choice: what the user typed/selected in the pickup box
-        const typedPickup = document.getElementById('uberPickupInput')?.value?.trim();
-        if (typedPickup && typedPickup !== 'Current Location' && typedPickup.length > 2) {
-            pickupAddrEl.textContent = typedPickup.split(',')[0].trim();
+        const typed = document.getElementById('uberPickupInput')?.value?.trim();
+        if (typed && typed !== 'Current Location' && typed.length > 2) {
+            pickupAddrEl.textContent = typed.split(',')[0];
         } else {
-            // 2nd choice: reverse geocode the GPS coords
             pickupAddrEl.textContent = 'Fetching...';
             if (typeof window.getAddressFromCoordsPromise === 'function') {
                 window.getAddressFromCoordsPromise(pickupLng, pickupLat)
                     .then(addr => {
-                        if (addr && addr !== 'Unknown Location') {
-                            pickupAddrEl.textContent = addr.split(',')[0].trim();
-                        } else {
-                            pickupAddrEl.textContent = 'Current Location';
-                        }
+                        pickupAddrEl.textContent = (addr && addr !== 'Unknown Location')
+                            ? addr.split(',')[0].trim()
+                            : 'Current Location';
                     })
-                    .catch(() => {
-                        pickupAddrEl.textContent = 'Current Location';
-                    });
-            } else {
-                pickupAddrEl.textContent = 'Current Location';
+                    .catch(() => { pickupAddrEl.textContent = 'Current Location'; });
             }
         }
     }
 
-    // ============================================================
-    // 6. FETCH ROUTE DATA FROM MAPBOX (ETA + Duration + Geometry)
-    // ============================================================
+    // ---------- 4. FETCH ROUTE ----------
+    let routeGeometry = null;
     try {
         const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`;
         const res = await fetch(url);
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
         const data = await res.json();
         if (data.routes && data.routes[0]) {
             const route = data.routes[0];
+            routeGeometry = route.geometry;
+
             const etaMinutes = Math.round(route.duration / 60);
-            const distanceKm = (route.distance / 1000).toFixed(1);
-
-            console.log(`🛣️ Route: ${distanceKm}km | ${etaMinutes} min`);
-
-            if (durationEl) durationEl.textContent = `${etaMinutes} min trip`;
-            if (driverEtaEl) driverEtaEl.textContent = `Driver ~4 min away`;
-
-            // Draw the route on the map
-            if (typeof drawRouteToTaxi === 'function' && route.geometry) {
-                drawRouteToTaxi(route.geometry);
-            }
-
-            // Store for later use (e.g., ETA display during tracking)
-            window.currentRouteGeometry = route.geometry;
-            window.currentRouteDuration = route.duration;
-            window.currentRouteDistance = route.distance;
-        } else {
-            if (durationEl) durationEl.textContent = `~${Math.round(dist * 2)} min trip`;
-            if (driverEtaEl) driverEtaEl.textContent = `Driver ~4 min away`;
+            setText('trip-duration-tag', `${etaMinutes} min trip`);
+            setText('driver-eta-tag', `Driver ~4 min away`);
         }
-    } catch (err) {
-        console.warn("🛣️ Route fetch failed:", err);
-        // Provide a heuristic fallback so the UI isn't blank
-        if (durationEl) durationEl.textContent = `~${Math.round(dist * 2)} min trip`;
-        if (driverEtaEl) driverEtaEl.textContent = `Driver ~4 min away`;
+    } catch (e) {
+        console.warn("Route fetch failed:", e);
+        setText('trip-duration-tag', `~${Math.round(dist * 2)} min trip`);
+        setText('driver-eta-tag', `Driver ~4 min away`);
     }
 
-    // ============================================================
-    // 7. SWITCH VIEWS (initial → confirm)
-    // ============================================================
+    // ---------- 5. ADD MARKERS ----------
+    if (typeof setupUserMarker === 'function') {
+        setupUserMarker([pickupLng, pickupLat]);
+    }
+    if (typeof window.setDropoffMarker === 'function') {
+        window.setDropoffMarker(destinationLat, destinationLng);
+    }
+
+    // ---------- 6. DRAW ROUTE LINE ----------
+    if (routeGeometry && activeMap.isStyleLoaded()) {
+        drawSearchRoute(routeGeometry);
+    } else if (routeGeometry) {
+        activeMap.once('style.load', () => drawSearchRoute(routeGeometry));
+    }
+
+    // ---------- 7. ZOOM OUT TO SHOW FULL ROUTE ----------
+    try {
+        const bounds = new mapboxgl.LngLatBounds()
+            .extend([pickupLng, pickupLat])
+            .extend([destinationLng, destinationLat]);
+
+        // Dynamic padding — taller sheet needs more bottom room
+        const bottomPad = typeof window.getMapBottomPadding === 'function'
+            ? window.getMapBottomPadding()
+            : 420;
+
+        activeMap.fitBounds(bounds, {
+            padding: {
+                top: 120,         // room for the top toolbar
+                bottom: bottomPad, // room for the confirm sheet
+                left: 60,
+                right: 60
+            },
+            maxZoom: 15,           // don't over-zoom on short trips
+            duration: 1000,
+            essential: true
+        });
+
+        console.log("🗺️ Map fitted to route");
+    } catch (e) {
+        console.warn("fitBounds failed:", e);
+        // Midpoint fallback
+        try {
+            const midLat = (pickupLat + destinationLat) / 2;
+            const midLng = (pickupLng + destinationLng) / 2;
+            activeMap.flyTo({ center: [midLng, midLat], zoom: 12, duration: 800, essential: true });
+        } catch (e2) {}
+    }
+
+    // ---------- 8. SHOW CONFIRM VIEW ----------
+    const initialView = document.getElementById('view-initial-search');
+    const confirmView = document.getElementById('view-confirm-ride');
+    const sheetContent = document.getElementById('homeSheetContent');
+
     if (initialView) {
         initialView.style.display = 'none';
         initialView.style.setProperty('display', 'none', 'important');
@@ -48794,67 +49007,16 @@ async function showRideSelectionView(destName, destLat, destLng) {
         confirmView.style.setProperty('display', 'block', 'important');
     }
     if (sheetContent) {
-        sheetContent.style.height = '85vh';
+        // Keep sheet at 65vh so map stays visible above it
+        sheetContent.style.height = '65vh';
     }
 
-    // ============================================================
-    // 8. FIT MAP TO SHOW BOTH POINTS (with NaN protection)
-    // ============================================================
-    try {
-        // Add markers first (safe-add pattern)
-        if (typeof setupUserMarker === 'function') {
-            setupUserMarker([pickupLng, pickupLat]);
-        }
-        if (typeof window.setDropoffMarker === 'function') {
-            window.setDropoffMarker(destinationLat, destinationLng);
-        }
-
-        // Build the bounds with validated numbers
-        const bounds = new mapboxgl.LngLatBounds()
-            .extend([pickupLng, pickupLat])
-            .extend([destinationLng, destinationLat]);
-
-        // Get bottom padding (accounts for the sheet)
-        const bottomPad = typeof window.getMapBottomPadding === 'function'
-            ? window.getMapBottomPadding()
-            : 450;
-
-        activeMap.fitBounds(bounds, {
-            padding: { top: 80, bottom: bottomPad, left: 60, right: 60 },
-            maxZoom: 16,
-            duration: 900
-        });
-
-        console.log("🗺️ Map fitted to pickup ↔ destination");
-    } catch (e) {
-        console.warn("⚠️ fitBounds failed, using flyTo fallback:", e);
-        // Fallback: fly to the midpoint between pickup and destination
-        try {
-            const midLat = (pickupLat + destinationLat) / 2;
-            const midLng = (pickupLng + destinationLng) / 2;
-            activeMap.flyTo({
-                center: [midLng, midLat],
-                zoom: 13,
-                duration: 800,
-                essential: true
-            });
-        } catch (e2) {
-            console.error("❌ Map positioning completely failed:", e2);
-        }
-    }
-
-    // ============================================================
-    // 9. RESET RIDE TYPE SELECTION (fresh state for each booking)
-    // ============================================================
+    // Reset ride selection state
     window.selectedRideType = null;
-
-    // Reset visual borders on the option cards
     ['private', 'club4', 'club6'].forEach(id => {
         const el = document.getElementById('opt-' + id);
         if (el) el.style.borderColor = '#eee';
     });
-
-    // Reset the booking button
     const finalBtn = document.getElementById('final-booking-btn');
     if (finalBtn) {
         finalBtn.textContent = 'Select a Ride';
@@ -48863,6 +49025,64 @@ async function showRideSelectionView(destName, destLat, destLng) {
 
     console.log("✅ showRideSelectionView complete");
 }
+// =================================================================
+// DRAW SEARCH ROUTE (between pickup & destination)
+// =================================================================
+
+function drawSearchRoute(geometry) {
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap || !geometry || !geometry.coordinates) return;
+
+    const sourceId = 'search-trip-route';
+    const glowLayerId = 'search-trip-route-glow';
+    const lineLayerId = 'search-trip-route-line';
+
+    try {
+        // Clean up any existing layers/sources
+        [glowLayerId, lineLayerId].forEach(id => {
+            try { if (activeMap.getLayer(id)) activeMap.removeLayer(id); } catch (e) {}
+        });
+        try { if (activeMap.getSource(sourceId)) activeMap.removeSource(sourceId); } catch (e) {}
+
+        // Add source
+        activeMap.addSource(sourceId, {
+            type: 'geojson',
+            data: { type: 'Feature', properties: {}, geometry }
+        });
+
+        // Glow (soft halo)
+        activeMap.addLayer({
+            id: glowLayerId,
+            type: 'line',
+            source: sourceId,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+                'line-color': '#007BFF',
+                'line-width': 12,
+                'line-opacity': 0.15
+            }
+        });
+
+        // Main line (dashed)
+        activeMap.addLayer({
+            id: lineLayerId,
+            type: 'line',
+            source: sourceId,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+                'line-color': '#007BFF',
+                'line-width': 4,
+                'line-opacity': 0.9,
+                'line-dasharray': [2, 1.5]
+            }
+        });
+
+        console.log("✅ Search route drawn");
+    } catch (e) {
+        console.warn("drawSearchRoute failed:", e);
+    }
+}
+
 
 window.selectRideType = function(type) {
     window.selectedRideType = type;
