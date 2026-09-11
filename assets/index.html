@@ -13,10 +13,10 @@
 <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
 
 <!-- Google Maps for the Search Bar (Places API only) -->
-<script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_API_KEY&libraries=places&loading=async"></script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=ukltHnNjNAosw-FbWTkiLGFyWTM=Y&libraries=places&loading=async"></script>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
 <!-- Replace YOUR_ACTUAL_API_KEY with your real Google Cloud API Key -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/md5.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
     <!-- ADD TURF.JS HERE -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
     <!-- === START: ADDED LIBRARIES FOR ADVERT CAROUSEL === -->
@@ -16001,45 +16001,6 @@ geolocateControl.on('geolocate', function(e) {
 });
 
 
-// CRITICAL: This event fires only when the map is fully rendered and ready
-// CRITICAL: This event fires only when the map is fully rendered and ready
-map.on('load', () => {
-    console.log("â Map loaded. Managing UI state...");
-
-    const webPreloader = document.getElementById('solidPreloader');
-    if (webPreloader) webPreloader.style.display = 'none';
-
-    // Drop the "You are here" marker immediately using the best-known coords,
-    // instead of waiting on the async geolocation callback to place it.
-    if (typeof setupUserMarker === 'function') {
-        setupUserMarker([commuterLng || coords[0], commuterLat || coords[1]]);
-    }
-
-    // Start the live taxi feed only after Mapbox can accept marker additions.
-    if (typeof loadAndDisplayTaxisOnMap === 'function') {
-        loadAndDisplayTaxisOnMap();
-    }
-
-    // The newly fixed active trip checker will safely decide whether 
-    // to show the dashboard or the tracking screen.
-    checkPassengerActiveTrip();
-
-    // Drop the native preloader if running in the Android shell
-    setTimeout(() => {
-        if (window.Android && window.Android.postMessage) {
-            window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
-        }
-    }, 150);
-});    map.on('error', (e) => {
-          console.error("Mapbox GL Error:", e);
-          // Non-fatal source/tile errors happen routinely (e.g. route redraws) and
-          // shouldn't interrupt the user with a popup. Only surface real style load failures.
-          const isStyleFailure = !map.isStyleLoaded() && !e.sourceId;
-          if (isStyleFailure) {
-              showGenericMessage("Map Error", "Could not load map data. Please check your connection.", "fa-map", "icon-danger");
-          }
-      });
-  }
 // =================================================================
 // GUARANTEE HOME DASHBOARD VISIBILITY ON LOAD
 // =================================================================
@@ -16100,46 +16061,6 @@ geolocateControl.on('geolocate', function(e) {
     window.refreshLocationDisplay();
 });
 
-
-// CRITICAL: This event fires only when the map is fully rendered and ready
-// CRITICAL: This event fires only when the map is fully rendered and ready
-map.on('load', () => {
-    console.log("✅ Map loaded. Managing UI state...");
-
-    const webPreloader = document.getElementById('solidPreloader');
-    if (webPreloader) webPreloader.style.display = 'none';
-
-    // Drop the "You are here" marker immediately using the best-known coords,
-    // instead of waiting on the async geolocation callback to place it.
-    if (typeof setupUserMarker === 'function') {
-        setupUserMarker([commuterLng || coords[0], commuterLat || coords[1]]);
-    }
-
-    // Start the live taxi feed only after Mapbox can accept marker additions.
-    if (typeof loadAndDisplayTaxisOnMap === 'function') {
-        loadAndDisplayTaxisOnMap();
-    }
-
-    // The newly fixed active trip checker will safely decide whether 
-    // to show the dashboard or the tracking screen.
-    checkPassengerActiveTrip();
-
-    // Drop the native preloader if running in the Android shell
-    setTimeout(() => {
-        if (window.Android && window.Android.postMessage) {
-            window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
-        }
-    }, 150);
-});    map.on('error', (e) => {
-          console.error("Mapbox GL Error:", e);
-          // Non-fatal source/tile errors happen routinely (e.g. route redraws) and
-          // shouldn't interrupt the user with a popup. Only surface real style load failures.
-          const isStyleFailure = !map.isStyleLoaded() && !e.sourceId;
-          if (isStyleFailure) {
-              showGenericMessage("Map Error", "Could not load map data. Please check your connection.", "fa-map", "icon-danger");
-          }
-      });
-  }
 // =======================================================================
 // UPDATED: NOTIFICATIONS POPUP (Fixed Text Visibility)
 // =======================================================================
@@ -24209,7 +24130,104 @@ window.animateMarkerTo = function(marker, newLngLat, targetHeading, duration = 1
   syncMapRotation();
 
 
+// ==========================================
+// 1. FAIL-SAFE MAP INITIALIZATION (MAPBOX)
+// ==========================================
 
+window.startMap = function(coords) {
+    console.log("🗺️ Initializing Mapbox Map at:", coords);
+    const safeCoords = coords || [28.0473, -26.2041];
+
+    try {
+        // Initialize Mapbox
+        window.map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [safeCoords[0], safeCoords[1]],
+            zoom: 15.5,
+            pitch: 45, // 3D Tilt
+            attributionControl: false
+        });
+
+        // Safe Recenter Button Generator
+        function createRecenterButton() {
+            if (document.getElementById('recenterBtn')) return; // Prevent duplicates
+            const btn = document.createElement('button');
+            btn.id = 'recenterBtn';
+            btn.innerHTML = '<i class="fas fa-location-arrow"></i>';
+            btn.style.cssText = `
+                position: fixed;
+                bottom: 320px;
+                right: 20px;
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                background: #007BFF;
+                color: white;
+                border: none;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                z-index: 1000;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.2rem;
+            `;
+            btn.onclick = () => {
+                if (window.commuterLat && window.commuterLng) {
+                    window.map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16, duration: 800 });
+                    if (typeof enableFollowMode === 'function') {
+                        enableFollowMode();
+                    }
+                }
+            };
+            document.body.appendChild(btn);
+        }
+
+        // Mapbox Load Event Listener
+        window.map.on('load', () => {
+            console.log("✅ Mapbox loaded. Managing UI state...");
+
+            const webPreloader = document.getElementById('solidPreloader');
+            if (webPreloader) webPreloader.style.display = 'none';
+
+            // Drop the "You are here" marker
+            if (typeof setupUserMarker === 'function') {
+                setupUserMarker([window.commuterLng || safeCoords[0], window.commuterLat || safeCoords[1]]);
+            }
+
+            // Start the live taxi feed
+            if (typeof loadAndDisplayTaxisOnMap === 'function') {
+                loadAndDisplayTaxisOnMap();
+            }
+
+            // Check if active trip needs restoring
+            if (typeof checkPassengerActiveTrip === 'function') {
+                checkPassengerActiveTrip();
+            }
+            
+            // Build the UI recenter button
+            createRecenterButton();
+
+            // Native Android App message
+            setTimeout(() => {
+                if (window.Android && window.Android.postMessage) {
+                    window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
+                }
+            }, 150);
+        });
+
+        // Mapbox Safe Error Handling
+        window.map.on('error', (e) => {
+            console.warn("Mapbox non-fatal error:", e);
+        });
+
+    } catch (e) {
+        console.error("Mapbox initialization failed:", e);
+        const preloader = document.getElementById('solidPreloader');
+        if (preloader) preloader.style.display = 'none';
+    }
+};
 
   // ========================================================
   // SPAWN DUMMY TAXIS (WITH DELAY TO PREVENT RATE LIMITS)
@@ -24296,64 +24314,6 @@ window.animateMarkerTo = function(marker, newLngLat, targetHeading, duration = 1
 // ==========================================
 // 1. FAIL-SAFE MAP INITIALIZATION (GOOGLE MAPS)
 // ==========================================
-
-// ==========================================
-// 1. FAIL-SAFE MAP INITIALIZATION (MAPBOX VISUALS)
-// ==========================================
-
-window.startMap = function(coords) {
-    console.log("🗺️ Initializing Mapbox Map at:", coords);
-    const safeCoords = coords || [28.0473, -26.2041];
-
-    try {
-        window.map = new mapboxgl.Map({
-            container: 'map',
-            style: 'mapbox://styles/mapbox/streets-v12', // Change style if needed
-            center: [safeCoords[0], safeCoords[1]],
-            zoom: 15.5,
-            pitch: 45, // Retains your buttery 3D look
-            attributionControl: false
-        });
-
-        window.map.on('load', function() {
-            console.log("✅ Mapbox loaded successfully.");
-            
-            const preloader = document.getElementById('solidPreloader');
-            if (preloader) preloader.style.display = 'none';
-            
-            // Drop the "You are here" marker immediately
-            if (typeof window.setupUserMarker === 'function') {
-                window.setupUserMarker(safeCoords);
-            }
-
-            // Start the live taxi feed
-            if (typeof loadAndDisplayTaxisOnMap === 'function') {
-                loadAndDisplayTaxisOnMap();
-            }
-
-            // Check if there is an active trip to restore UI
-            if (typeof checkPassengerActiveTrip === 'function') {
-                checkPassengerActiveTrip();
-            }
-
-            // Drop the native preloader if running in the Android shell
-            setTimeout(() => {
-                if (window.Android && window.Android.postMessage) {
-                    window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
-                }
-            }, 150);
-        });
-        
-        window.map.on('error', (e) => {
-            console.warn("Mapbox non-fatal error:", e);
-        });
-
-    } catch (e) {
-        console.error("Mapbox initialization failed:", e);
-        const preloader = document.getElementById('solidPreloader');
-        if (preloader) preloader.style.display = 'none';
-    }
-};
 
 // ==========================================
 // 2. SETUP USER MARKER (GOOGLE MAPS)
