@@ -7,8 +7,11 @@
     <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script>
-    <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
+<!-- <script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script> -->
+<!-- <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' /> -->
+
+<!-- Add Google Maps -->
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places,geometry"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
     <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -13796,74 +13799,82 @@ window.showDriverTrackingPage = function(taxiId, requestKey, requestData) {
 // ================================================================
 // SETUP USER MARKER - FIXED
 // ================================================================
+// Replace createTaxiMarker()
+window.createTaxiMarker = async function(lngLat, initialRotation = 0) {
+    if (window.taxiMarker) {
+        window.taxiMarker.map = null;
+        window.taxiMarker = null;
+    }
+    if (!window.map) return null;
 
-function setupUserMarker(coords) {
-    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
-    const longitude = Number(coords && coords[0]);
-    const latitude = Number(coords && coords[1]);
-    if (!activeMap || !Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-        console.warn('User marker skipped: map or coordinates are unavailable.');
+    const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+
+    const el = document.createElement('div');
+    el.className = 'taxi-marker';
+    el.style.cssText = 'width: 60px; height: 70px; position: relative; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-direction: column;';
+
+    const isFull = (window.taxiData && window.taxiData.isFull === true);
+    const statusText = isFull ? "FULL" : "LOADING";
+    const statusColor = isFull ? '#f72585' : '#28a745';
+    const destination = (window.taxiData && window.taxiData.destination) ? window.taxiData.destination.split(',')[0].substring(0, 15) : "Available";
+
+    // Label
+    const label = document.createElement('div');
+    label.className = 'taxi-marker-label';
+    label.style.cssText = `position: absolute; top: -35px; left: 50%; transform: translateX(-50%); background: ${statusColor}; color: white; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; white-space: nowrap; z-index: 10; border: 1.5px solid white; box-shadow: 0 4px 10px rgba(0,0,0,0.3); text-align: center; pointer-events: none;`;
+    label.innerHTML = `<span style="font-size: 11px;">${statusText}</span><div class="dest-text" style="font-size: 8px; color: #ffd700; border-top: 1px solid rgba(255,255,255,0.2); margin-top: 2px; ${isFull ? 'display:none;' : ''}">${destination}</div>`;
+    el.appendChild(label);
+
+    // Canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 50; canvas.height = 50;
+    canvas.style.cssText = 'width: 50px; height: 50px; display: block; transition: transform 0.2s linear;';
+    el.appendChild(canvas);
+
+    // Draw initial car
+    if (typeof drawCarOnCanvas === 'function') drawCarOnCanvas(canvas.getContext('2d'), 50, 50, isFull);
+
+    // Google Advanced Marker
+    window.taxiMarker = new AdvancedMarkerElement({
+        map: window.map,
+        position: { lat: lngLat[1], lng: lngLat[0] },
+        content: el
+    });
+
+    window.taxiMarker._currentHeading = initialRotation || 0;
+    window.taxiMarker.updateRotation = function(rotation) {
+        this._currentHeading = rotation;
+        if (canvas) canvas.style.transform = `rotate(${rotation}deg)`;
+    };
+    
+    return window.taxiMarker;
+};
+
+// Replace setupUserMarker()
+window.setupUserMarker = async function(coords) {
+    if (!window.map || !coords) return;
+    const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
+
+    if (window.userMarker) {
+        window.userMarker.position = { lat: coords[1], lng: coords[0] };
         return;
     }
 
-    if (typeof activeMap.loaded === 'function' && !activeMap.loaded()) {
-        activeMap.once('load', () => setupUserMarker([longitude, latitude]));
-        return;
-    }
+    const el = document.createElement('div');
+    el.className = 'user-location-marker';
+    el.style.cssText = 'width: 132px; height: 76px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; pointer-events: none;';
+    el.innerHTML = `
+        <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
+        <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
+        <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
+    `;
 
-    try {
-        if (window.userMarker) {
-            window.userMarker.setLngLat([longitude, latitude]);
-            return;
-        }
-
-        // Create user marker with proper styling
-        const el = document.createElement('div');
-        el.className = 'user-location-marker';
-        el.style.cssText = `
-            width: 132px;
-            height: 76px;
-            position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-end;
-            pointer-events: none;
-        `;
-        el.innerHTML = `
-            <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
-            <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
-            <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
-        `;
-
-        if (!document.getElementById('userMarkerPulseStyle')) {
-            const styleTag = document.createElement('style');
-            styleTag.id = 'userMarkerPulseStyle';
-            styleTag.textContent = `
-                @keyframes userMarkerBeat {
-                    0%, 100% { transform: scale(1); }
-                    18% { transform: scale(1.25); }
-                    32% { transform: scale(1); }
-                    45% { transform: scale(1.15); }
-                    60% { transform: scale(1); }
-                }
-            `;
-            document.head.appendChild(styleTag);
-        }
-        
-        window.userMarker = new mapboxgl.Marker({
-            element: el,
-            anchor: 'bottom'
-        })
-        .setLngLat([longitude, latitude])
-        .addTo(activeMap);
-        
-        console.log("✅ User marker added successfully");
-    } catch (err) {
-        console.warn('Failed to create user location marker:', err);
-    }
-}
-
+    window.userMarker = new AdvancedMarkerElement({
+        map: window.map,
+        position: { lat: coords[1], lng: coords[0] },
+        content: el
+    });
+};
 // ================================================================
 // SHOW SEARCHING MAP VIEW - pickup + destination while finding a driver
 // ================================================================
@@ -15717,62 +15728,53 @@ window.lockPhoneModalOpen = function() {
           };
 
            // --- NEW: UNIVERSAL PAYFAST REDIRECT FUNCTION ---
-          window.initiatePayfastPayment = function(amount, itemName, customPaymentId) {
-              console.log(`Initiating PayFast Payment: ${itemName} - R${amount}`);
+       window.initiatePayfastPayment = function(amount, itemName, customPaymentId) {
+    const loader = document.getElementById('payfastRedirectLoader');
+    if (loader) loader.style.display = 'flex';
 
-              // Show the full-screen loader so the user knows they are being redirected
-              const loader = document.getElementById('payfastRedirectLoader');
-              if (loader) loader.style.display = 'flex';
+    const paymentData = {
+        merchant_id: PAYFAST_CONFIG.merchant_id,
+        merchant_key: PAYFAST_CONFIG.merchant_key,
+        return_url: PAYFAST_CONFIG.return_url,
+        cancel_url: PAYFAST_CONFIG.cancel_url,
+        notify_url: PAYFAST_CONFIG.notify_url,
+        name_first: commuterData?.name?.split(' ')[0] || 'Asiye',
+        name_last: commuterData?.surname || 'User',
+        email_address: commuterData?.email || 'user@asiye.cloud',
+        m_payment_id: `${customPaymentId}_${userId}_${Date.now()}`,
+        amount: parseFloat(amount).toFixed(2),
+        item_name: itemName
+    };
 
-              // Generate unique transaction ID combining the type, user ID, and timestamp
-              const m_payment_id = `${customPaymentId}_${userId}_${Date.now()}`;
+    // Generate Signature
+    let signatureString = '';
+    for (const key in paymentData) {
+        if (paymentData[key] !== '') {
+            signatureString += `${key}=${encodeURIComponent(paymentData[key].trim()).replace(/%20/g, "+")}&`;
+        }
+    }
+    signatureString = signatureString.slice(0, -1);
+    if (PAYFAST_CONFIG.passphrase) {
+        signatureString += `&passphrase=${encodeURIComponent(PAYFAST_CONFIG.passphrase.trim()).replace(/%20/g, "+")}`;
+    }
+    paymentData.signature = CryptoJS.MD5(signatureString).toString();
 
-              // Pull user details safely
-              const firstName = commuterData && commuterData.name ? commuterData.name.split(' ')[0] : 'Asiye';
-              const lastName = commuterData && commuterData.surname ? commuterData.surname : 'User';
-              const emailAddress = commuterData && commuterData.email ? commuterData.email : 'user@asiye.cloud';
+    // Create and submit form
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = PAYFAST_CONFIG.payfastUrl;
+    form.style.display = 'none';
 
-              // Prepare data exactly as PayFast expects
-              const paymentData = {
-                  merchant_id: PAYFAST_CONFIG.merchant_id,
-                  merchant_key: PAYFAST_CONFIG.merchant_key,
-                  return_url: PAYFAST_CONFIG.return_url,
-                  cancel_url: PAYFAST_CONFIG.cancel_url,
-                  notify_url: PAYFAST_CONFIG.notify_url,
-                  name_first: firstName,
-                  name_last: lastName,
-                  email_address: emailAddress,
-                  m_payment_id: m_payment_id,
-                  amount: parseFloat(amount).toFixed(2),
-                  item_name: itemName
-              };
-
-              // Create a hidden form dynamically
-              const form = document.createElement('form');
-              form.method = 'POST';
-              form.action = PAYFAST_CONFIG.payfastUrl;
-              form.style.display = 'none';
-
-              // Map data to form inputs
-              for (const key in paymentData) {
-                  if (paymentData.hasOwnProperty(key) && paymentData[key] !== '' && paymentData[key] !== null) {
-                      const hiddenField = document.createElement('input');
-                      hiddenField.type = 'hidden';
-                      hiddenField.name = key;
-                      hiddenField.value = paymentData[key];
-                      form.appendChild(hiddenField);
-                  }
-              }
-
-              // Append to body
-              document.body.appendChild(form);
-
-              // Add a slight delay so the user sees the "Securely Redirecting..." screen, then submit
-              setTimeout(() => {
-                  form.submit();
-              }, 1500);
-          };
-
+    for (const key in paymentData) {
+        const hiddenField = document.createElement('input');
+        hiddenField.type = 'hidden';
+        hiddenField.name = key;
+        hiddenField.value = paymentData[key];
+        form.appendChild(hiddenField);
+    }
+    document.body.appendChild(form);
+    setTimeout(() => form.submit(), 1500);
+};
           // --- START: CORRECTED SESSION LOGIC ---
 
 
@@ -16015,17 +16017,40 @@ window.lockPhoneModalOpen = function() {
       };
       document.body.appendChild(btn);
   }
-    function startMap(coords) {
-    map = new mapboxgl.Map({
-    container: 'map',
-    style: 'mapbox://styles/mapbox/streets-v12', // <-- Clean 2D Map style!
-    center: coords,
-    zoom: 15,
-    pitch: 0,
-    bearing: 0,
-    attributionControl: false,
-    logoPosition: 'bottom-left'
-});
+    
+   // Replace startMap()
+window.startMap = function(coords) {
+    console.log("🗺️ Initializing Google Map at:", coords);
+    const safeCoords = coords || [28.0473, -26.2041]; // Fallback to JHB
+    const centerLatLng = { lat: safeCoords[1], lng: safeCoords[0] };
+
+    try {
+        window.map = new google.maps.Map(document.getElementById('map'), {
+            center: centerLatLng,
+            zoom: 17.5,
+            disableDefaultUI: true, // Removes Google's default buttons for a clean look
+            mapId: "DEMO_MAP_ID", // Required for AdvancedMarkerElements (Custom HTML)
+            tilt: 0,
+            heading: 0
+        });
+
+        // Wait until map is fully loaded
+        google.maps.event.addListenerOnce(window.map, 'idle', () => {
+            console.log("✅ Google Map loaded.");
+            const preloader = document.getElementById('solidPreloader');
+            if (preloader) preloader.style.display = 'none';
+
+            // Start App Logic
+            if (typeof setupDriverMarker === 'function') setupDriverMarker(safeCoords);
+            if (typeof setupUserMarker === 'function') setupUserMarker(safeCoords);
+            if (typeof initDriverLocationSystem === 'function') initDriverLocationSystem();
+        });
+
+    } catch (e) {
+        console.error("Map initialization failed:", e);
+        document.getElementById('solidPreloader').style.display = 'none';
+    }
+};
 
 // Clean style load handler
 map.on('style.load', () => {
@@ -23455,82 +23480,11 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
       ctx.restore();
   }
 
-  // ========================================================
-  // TOP-DOWN TAXI MARKER WITH PROPER TAG SIZE
-  // ========================================================
-  function createTaxiMarker(lngLat) {
-      if (taxiMarker) {
-          taxiMarker.remove();
-          taxiMarker = null;
-      }
-
-      const el = document.createElement('div');
-      el.className = 'taxi-marker';
-      el.style.width = '44px';
-      el.style.height = '32px';
-      el.style.zIndex = '5';
-      el.style.position = 'relative';
-      el.style.pointerEvents = 'auto';
-      el.style.cursor = 'pointer';
-
-      const destination = taxiData && taxiData.destination ? taxiData.destination.split(',')[0].substring(0, 15) : "Elsewhere";
-      const isFull = taxiData && taxiData.isFull;
-
-      el.innerHTML = `
-          <div class="taxi-marker-label" style="
-              position: absolute;
-              bottom: 30px;
-              left: 50%;
-              transform: translateX(-50%);
-              background: ${isFull ? '#f72585' : '#2e7d32'};
-              color: white;
-              padding: 3px 8px;
-              border-radius: 16px;
-              font-size: 8px;
-              font-weight: 800;
-              white-space: nowrap;
-              z-index: 100;
-              border: 1.5px solid white;
-              box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-              text-align: center;
-              font-family: 'Manrope', sans-serif;
-              display: flex;
-              align-items: center;
-              gap: 4px;">
-              <span class="status-badge" style="background: rgba(0,0,0,0.4); padding: 2px 5px; border-radius: 10px; font-size: 7px; font-weight: 700;">${isFull ? 'FULL' : 'TO'}</span>
-              <span class="dest-text" style="font-size: 7px; color: #ffd700; font-weight: 600; max-width: 90px; overflow: hidden; text-overflow: ellipsis;">${destination}</span>
-          </div>
-          <canvas id="driver-taxi-canvas" width="44" height="32" style="width: 44px; height: 32px; display: block;"></canvas>
-      `;
-
-      taxiMarker = new mapboxgl.Marker({
-          element: el,
-          anchor: 'center',
-          pitchAlignment: 'map',
-          rotationAlignment: 'map'
-      }).setLngLat(lngLat).addTo(map);
-
       const canvas = el.querySelector('#driver-taxi-canvas');
       var currentRotation = 0;
       var pulseValue = 0;
       var pulseDirection = 1;
 
-      function animateTaxiCanvas() {
-          pulseValue += 0.02 * pulseDirection;
-          if (pulseValue > 0.6 || pulseValue < 0) pulseDirection *= -1;
-
-          drawQuantumTaxi(canvas.getContext('2d'), 44, 32, currentRotation, pulseValue * 0.3, isFull, false);
-          requestAnimationFrame(animateTaxiCanvas);
-      }
-
-      animateTaxiCanvas();
-
-      taxiMarker.updateRotation = (rotation) => {
-          currentRotation = rotation;
-      };
-
-      return taxiMarker;
-  }
 
   // ========================================================
   // 1. ROBUST ROAD SNAPPING (Mapbox Directions API)
@@ -23978,59 +23932,45 @@ function completePassengerCleanup(reqId) {
 // FIXED: completePassengerCleanup
 // ================================================================
 
-  // ========================================================
-  // 3. SMOOTH GLIDING FOR REAL/LIVE TAXIS
-  // ========================================================
-  function animateMarkerTo(marker, newLngLat, targetHeading, duration = 2000) {
-      if (!marker || !marker._map) return;
+ 
+// Replace animateMarkerTo()
+window.animateMarkerTo = function(marker, newLngLat, targetHeading, duration = 1000) {
+    if (!marker || !marker.position) return;
+    if (marker._animationID) cancelAnimationFrame(marker._animationID);
 
-      // Cancel existing animation to prevent stuttering
-      if (marker.animationFrameId) cancelAnimationFrame(marker.animationFrameId);
+    const startLat = marker.position.lat;
+    const startLng = marker.position.lng;
+    const startHeading = marker._currentHeading || 0;
+    const startTime = performance.now();
+    const rotationDiff = ((targetHeading - startHeading + 180) % 360 - 180);
 
-      const startLngLat = marker.getLngLat();
-      const startTime = performance.now();
-      const startPos = { lng: startLngLat.lng, lat: startLngLat.lat };
-      const endPos = { lng: newLngLat[0], lat: newLngLat[1] };
+    function frame(currentTime) {
+        const elapsed = currentTime - startTime;
+        const t = Math.min(elapsed / duration, 1);
+        const ease = t * (2 - t); // Ease-out
 
-    const canvas = marker.getElement().querySelector('.car-canvas');
-    var startHeading = parseFloat(canvas?.dataset?.heading || marker.currentHeading || 0);
-      var endHeading = targetHeading !== undefined ? targetHeading : startHeading;
+        const currentLng = startLng + (newLngLat[0] - startLng) * ease;
+        const currentLat = startLat + (newLngLat[1] - startLat) * ease;
+        const currentHeading = startHeading + (rotationDiff * ease);
 
-      // Normalize angle difference
-      var diff = endHeading - startHeading;
-      while (diff < -180) diff += 360;
-      while (diff > 180) diff -= 360;
-      endHeading = startHeading + diff;
+        marker.position = { lat: currentLat, lng: currentLng };
+        marker._currentHeading = (currentHeading + 360) % 360;
 
-      function animate(currentTime) {
-          const elapsed = currentTime - startTime;
-          var t = Math.min(elapsed / duration, 1);
+        // Update visual canvas rotation
+        const el = marker.content || (marker.getElement && marker.getElement());
+        if (el) {
+            const canvas = el.querySelector('canvas') || el.querySelector('.pax-moving-car') || el.querySelector('.car-icon');
+            if (canvas) canvas.style.transform = `rotate(${currentHeading}deg)`;
+        }
 
-          // Ease-out curve for natural braking feel
-          const ease = t * (2 - t);
-
-          const currentLng = startPos.lng + (endPos.lng - startPos.lng) * ease;
-          const currentLat = startPos.lat + (endPos.lat - startPos.lat) * ease;
-
-          marker.setLngLat([currentLng, currentLat]);
-
-          if (canvas) {
-              const currentHeading = startHeading + (endHeading - startHeading) * ease;
-              marker.currentHeading = currentHeading % 360;
-              canvas.dataset.heading = marker.currentHeading;
-
-              const mapBearing = typeof map !== 'undefined' ? map.getBearing() : 0;
-              canvas.style.transition = 'none'; // Override CSS
-              canvas.style.transform = `rotate(${marker.currentHeading - mapBearing}deg)`;
-          }
-
-          if (t < 1) {
-              marker.animationFrameId = requestAnimationFrame(animate);
-          }
-      }
-      marker.animationFrameId = requestAnimationFrame(animate);
-  }
-
+        if (t < 1) {
+            marker._animationID = requestAnimationFrame(frame);
+        } else {
+            marker._animationID = null;
+        }
+    }
+    marker._animationID = requestAnimationFrame(frame);
+};
   window.isTaxiValidForCommuters = function(taxi) {
       if (!taxi) return false;
       if (taxi.verificationStatus !== 'verified') return false;
@@ -24525,16 +24465,20 @@ function completePassengerCleanup(reqId) {
       }
   };
 
-  zoomToFitTaxis = window.zoomToFitTaxis;
-  window.safelyStartDummyTaxis = function() {
-      if (typeof map !== 'undefined' && map && map.isStyleLoaded() && commuterLat && commuterLng) {
-          if (typeof window.startDummyRoamLoop === 'function') {
-              window.startDummyRoamLoop();
-          }
-      } else {
-          setTimeout(window.safelyStartDummyTaxis, 1000);
-      }
-  };
+window.zoomToFitTaxis = function(taxis) {
+    if (!window.map || !window.commuterLat || !window.commuterLng) return;
+
+    const bounds = new google.maps.LatLngBounds();
+    bounds.extend({ lat: parseFloat(window.commuterLat), lng: parseFloat(window.commuterLng) });
+
+    if (taxis && taxis.length > 0) {
+        const nearestTaxis = taxis.slice(0, 3).filter(t => Number.isFinite(Number(t.longitude)));
+        nearestTaxis.forEach(t => bounds.extend({ lat: Number(t.latitude), lng: Number(t.longitude) }));
+    }
+
+    // Google Maps fits the bounds automatically
+    window.map.fitBounds(bounds);
+};
 
   // Start checking loop immediately
   setTimeout(window.safelyStartDummyTaxis, 1000);
@@ -27060,7 +27004,7 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
         if (pickupInput) pickupInput.value = fullPlaceName;
 
         if (userMarker) userMarker.setLngLat([lng, lat]);
-        if (map) map.flyTo({ center: [lng, lat], zoom: 16 });
+        if (map) map.panTo({ lat: lat, lng: lng }); map.setZoom(16);
 
         const container = document.getElementById('uber-suggestions-list');
         if (container) container.innerHTML = '';
@@ -32199,32 +32143,60 @@ window.processFirstTripReferralReward = function() {
 // =======================================================================
 // MAPBOX REVERSE GEOCODER (Converts GPS to Street Address)
 // =======================================================================
+// Replace getAddressFromCoordsPromise
 window.getAddressFromCoordsPromise = function(lng, lat) {
     return new Promise((resolve, reject) => {
         if (!lng || !lat || isNaN(lng) || isNaN(lat)) {
             reject("Invalid coordinates");
             return;
         }
-        
-        // Use Mapbox Geocoding API to find the address
-        const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}&types=address,poi,neighborhood,locality,place&limit=1`;
-        
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                if (data && data.features && data.features.length > 0) {
-                    resolve(data.features[0].place_name);
-                } else {
-                    resolve("Unknown Location");
-                }
-            })
-            .catch(error => {
-                console.error("Reverse geocoding error:", error);
-                reject(error);
-            });
+        const geocoder = new google.maps.Geocoder();
+        geocoder.geocode({ location: { lat: parseFloat(lat), lng: parseFloat(lng) } }, (results, status) => {
+            if (status === "OK" && results[0]) {
+                resolve(results[0].formatted_address);
+            } else {
+                resolve("Unknown Location");
+            }
+        });
     });
 };
 
+// Reusable function to initialize any search input with Google Autocomplete
+window.initGoogleAutocomplete = function(inputId, latId, lngId, textId, callback) {
+    const input = document.getElementById(inputId);
+    if (!input) return null;
+
+    const autocomplete = new google.maps.places.Autocomplete(input, {
+        componentRestrictions: { country: "za" }, // Restrict to SA
+        fields: ["geometry", "name", "formatted_address"]
+    });
+
+    autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry) return;
+
+        const lat = place.geometry.location.lat();
+        const lng = place.geometry.location.lng();
+        const address = place.formatted_address || place.name;
+
+        // Populate hidden inputs if provided
+        if (latId && document.getElementById(latId)) document.getElementById(latId).value = lat;
+        if (lngId && document.getElementById(lngId)) document.getElementById(lngId).value = lng;
+        if (textId && document.getElementById(textId)) document.getElementById(textId).value = address;
+        
+        // Pan the map
+        if (window.map) {
+            window.map.panTo({ lat, lng });
+            window.map.setZoom(16);
+        }
+
+        if (callback && typeof callback === 'function') {
+            callback(lat, lng, address);
+        }
+    });
+    
+    return autocomplete;
+};
 // =======================================================================
 // FAIL-SAFE REAL-TIME GEOLOCATION & ADDRESS RESOLVER
 // =======================================================================

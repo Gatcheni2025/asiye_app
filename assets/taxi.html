@@ -9,8 +9,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
-    <script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script>
-    <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
+  <!-- <script src='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js'></script> -->
+<!-- <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' /> -->
+
+<!-- Add Google Maps -->
+<script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places,geometry"></script>
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     <!-- Add this before closing </head> in taxi.html -->
     <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"></script>
@@ -11630,57 +11633,33 @@ window.showCounterInput = function(reqKey, offer, normal) {
             window.open(directionsUrl, '_blank');
         }
 
-        window.drawRoute = function(geometry, routeName) {
-        if (!map) return;
+        function drawRoute(startLngLat, endLngLat) {
+    const directionsService = new google.maps.DirectionsService();
+    const directionsRenderer = new google.maps.DirectionsRenderer({
+        map: window.map,
+        suppressMarkers: true,
+        polylineOptions: { strokeColor: "#0A84FF", strokeWeight: 6 }
+    });
 
-        // 1. Always clear the old route cleanly first
-        window.clearRoute();
-
-        // 2. Ensure map styling is ready before adding sources
-        if (!map.isStyleLoaded()) {
-            map.once('style.load', () => window.drawRoute(geometry, routeName));
-            return;
+    directionsService.route({
+        origin: { lat: startLngLat[1], lng: startLngLat[0] },
+        destination: { lat: endLngLat[1], lng: endLngLat[0] },
+        travelMode: google.maps.TravelMode.DRIVING
+    }, (response, status) => {
+        if (status === "OK") {
+            directionsRenderer.setDirections(response);
+            
+            // Get ETA and Distance
+            const leg = response.routes[0].legs[0];
+            const etaMinutes = Math.round(leg.duration.value / 60);
+            const distanceKm = (leg.distance.value / 1000).toFixed(1);
+            
+            console.log(`ETA: ${etaMinutes} mins, Distance: ${distanceKm} km`);
+        } else {
+            console.error("Directions request failed due to " + status);
         }
-
-        try {
-            // 3. ADD SOURCE
-            map.addSource('route', {
-                type: 'geojson',
-                data: { type: 'Feature', properties: {}, geometry: geometry }
-            });
-
-            // 4. ADD OUTER CASING (Dark Border for Premium Nav Look)
-            map.addLayer({
-                id: 'route-casing',
-                type: 'line',
-                source: 'route',
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': 'rgba(0,0,0,0.5)', 'line-width': 18, 'line-opacity': 1.0 }
-            });
-
-            // 5. ADD INNER LINE (Waze/Google Maps Navigation Blue)
-            map.addLayer({
-                id: 'route',
-                type: 'line',
-                source: 'route',
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: { 'line-color': '#0A84FF', 'line-width': 12, 'line-opacity': 1.0 }
-            });
-        } catch (e) {
-            console.error("Error drawing route on map:", e);
-        }
-
-        // 6. ADD DESTINATION PIN
-        const coordinates = geometry.coordinates;
-        if (coordinates && coordinates.length > 0) {
-            const endMarker = new mapboxgl.Marker({ color: '#f72585' })
-                .setLngLat(coordinates[coordinates.length - 1])
-                .addTo(map);
-            window.routeMarkers.push(endMarker);
-        }
-
-        window.currentRoute = { geometry: geometry, name: routeName };
-    };
+    });
+}
       window.clearRoute = function() {
         if (!map) return;
 
@@ -11760,7 +11739,26 @@ window.showCounterInput = function(reqKey, offer, normal) {
                     calculateSequentialRoute(waypoints);
                 });
         }
+function initGoogleAutocomplete(inputId, latId, lngId) {
+    const input = document.getElementById(inputId);
+    const autocomplete = new google.maps.places.Autocomplete(input, {
+        componentRestrictions: { country: "za" }, // Restrict to South Africa
+        fields: ["geometry", "name", "formatted_address"]
+    });
 
+    autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace();
+        if (!place.geometry) return;
+
+        // Set Hidden inputs
+        document.getElementById(latId).value = place.geometry.location.lat();
+        document.getElementById(lngId).value = place.geometry.location.lng();
+        
+        // Pan Map
+        window.map.panTo(place.geometry.location);
+        window.map.setZoom(16);
+    });
+}
         // --- Helper: Calculate Sequential Route (A -> B -> C) ---
         function calculateSequentialRoute(waypoints) {
             const coordinates = waypoints.map(wp => `${wp.lng},${wp.lat}`).join(';');
