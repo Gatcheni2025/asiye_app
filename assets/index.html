@@ -45771,67 +45771,142 @@ window.showDestinationSearchMode = function() {
 
     // CRITICAL: Ensure Mapbox Geocoder CSS classes are visible
     // Some global CSS rules may hide them
-    if (!document.getElementById('uber-geocoder-fix-css')) {
-        const style = document.createElement('style');
-        style.id = 'uber-geocoder-fix-css';
-        style.innerHTML = `
-            /* FORCE visibility of our custom inputs inside the geocoder containers */
-            .uber-geocoder input[type="text"] {
-                display: block !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                background: transparent !important;
-                color: #ffffff !important;
-                border: none !important;
-                outline: none !important;
-                width: 100% !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                font-size: 1.05rem !important;
-                font-weight: 500 !important;
-                font-family: 'Manrope', sans-serif !important;
-                line-height: 1.4 !important;
-                height: auto !important;
-                min-height: 24px !important;
-                caret-color: #0A84FF !important;
-            }
-            .uber-geocoder input[type="text"]::placeholder {
-                color: #666 !important;
-                opacity: 1 !important;
-            }
-            .uber-geocoder input[type="text"]:focus {
-                color: #ffffff !important;
-            }
-            /* Also fix the search icon visibility */
-            .uber-geocoder .mapboxgl-ctrl-geocoder {
-                background: transparent !important;
-                border: none !important;
-                box-shadow: none !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                min-width: 100% !important;
-                padding: 0 !important;
-                margin: 0 !important;
-            }
-            .uber-geocoder .mapboxgl-ctrl-geocoder--input {
-                color: #ffffff !important;
-                background: transparent !important;
-                padding-left: 30px !important;
-                font-size: 1.05rem !important;
-                height: auto !important;
-                min-height: 28px !important;
-                border: none !important;
-            }
-            .uber-geocoder .mapboxgl-ctrl-geocoder--input::placeholder {
-                color: #666 !important;
-            }
-            .uber-geocoder .mapboxgl-ctrl-geocoder--icon-search {
-                fill: #888 !important;
-            }
-        `;
-        document.head.appendChild(style);
-    }
+   // ============================================================
+// CRITICAL: Force both inputs to be DARK text on LIGHT background
+// (matches the visible white container backgrounds)
+// ============================================================
+if (!document.getElementById('uber-geocoder-fix-css')) {
+    const style = document.createElement('style');
+    style.id = 'uber-geocoder-fix-css';
+    style.innerHTML = `
+        /* ---------- FORCE DARK TEXT ON THE VISIBLE WHITE CARDS ---------- */
+        #uber-pickup-container,
+        #uber-dest-container {
+            background: #ffffff !important;
+            border-radius: 12px !important;
+            padding: 10px 14px !important;
+            border: 1px solid #E5E7EB !important;
+        }
 
+        /* ---------- INPUT FIELDS: DARK TEXT ---------- */
+        #uber-pickup-container input[type="text"],
+        #uber-dest-container input[type="text"],
+        #uberPickupInput,
+        #uberDestInput {
+            background: transparent !important;
+            color: #111111 !important;              /* DARK TEXT */
+            -webkit-text-fill-color: #111111 !important; /* iOS/Safari override */
+            border: none !important;
+            outline: none !important;
+            width: 100% !important;
+            padding: 6px 0 !important;
+            margin: 0 !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+            font-family: 'Manrope', sans-serif !important;
+            line-height: 1.4 !important;
+            height: auto !important;
+            min-height: 26px !important;
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            caret-color: #0A84FF !important;        /* Blue cursor */
+            text-shadow: none !important;
+        }
+
+        /* ---------- PLACEHOLDERS: GREY BUT VISIBLE ---------- */
+        #uber-pickup-container input[type="text"]::placeholder,
+        #uber-dest-container input[type="text"]::placeholder,
+        #uberPickupInput::placeholder,
+        #uberDestInput::placeholder {
+            color: #9CA3AF !important;              /* Medium grey */
+            -webkit-text-fill-color: #9CA3AF !important;
+            opacity: 1 !important;
+            font-weight: 500 !important;
+        }
+
+        /* ---------- FOCUS STATE ---------- */
+        #uber-pickup-container input[type="text"]:focus,
+        #uber-dest-container input[type="text"]:focus,
+        #uberPickupInput:focus,
+        #uberDestInput:focus {
+            color: #111111 !important;
+            -webkit-text-fill-color: #111111 !important;
+            background: transparent !important;
+        }
+
+        /* ---------- AUTOCOMPLETE AUTO-FILL (Chrome yellow) ---------- */
+        #uber-pickup-container input[type="text"]:-webkit-autofill,
+        #uber-dest-container input[type="text"]:-webkit-autofill,
+        #uberPickupInput:-webkit-autofill,
+        #uberDestInput:-webkit-autofill {
+            -webkit-box-shadow: 0 0 0 30px #ffffff inset !important;
+            -webkit-text-fill-color: #111111 !important;
+        }
+
+        /* ---------- ALSO FIX MAPBOX GEOCODER IF IT ATTACHES ---------- */
+        .uber-geocoder .mapboxgl-ctrl-geocoder {
+            background: #ffffff !important;
+            border: 1px solid #E5E7EB !important;
+            border-radius: 12px !important;
+            box-shadow: none !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            min-width: 100% !important;
+            padding: 10px 14px !important;
+            margin: 0 !important;
+        }
+        .uber-geocoder .mapboxgl-ctrl-geocoder--input {
+            color: #111111 !important;
+            -webkit-text-fill-color: #111111 !important;
+            background: transparent !important;
+            padding-left: 32px !important;
+            font-size: 1rem !important;
+            font-weight: 600 !important;
+            height: auto !important;
+            min-height: 26px !important;
+            border: none !important;
+        }
+        .uber-geocoder .mapboxgl-ctrl-geocoder--input::placeholder {
+            color: #9CA3AF !important;
+            -webkit-text-fill-color: #9CA3AF !important;
+        }
+        .uber-geocoder .mapboxgl-ctrl-geocoder--icon-search {
+            fill: #6B7280 !important;
+            top: 12px !important;
+        }
+
+        /* ---------- SUGGESTIONS DROPDOWN (dark theme to stand out) ---------- */
+        .pac-container {
+            background: #ffffff !important;
+            border: 1px solid #E5E7EB !important;
+            border-radius: 12px !important;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15) !important;
+            margin-top: 6px !important;
+            z-index: 2147483647 !important;
+        }
+        .pac-item {
+            color: #111111 !important;
+            padding: 10px 14px !important;
+            font-family: 'Manrope', sans-serif !important;
+            font-size: 0.9rem !important;
+            cursor: pointer !important;
+            border-top: 1px solid #F3F4F6 !important;
+        }
+        .pac-item:first-child { border-top: none !important; }
+        .pac-item:hover,
+        .pac-item-selected {
+            background: #F3F4F6 !important;
+        }
+        .pac-item-query {
+            color: #111111 !important;
+            font-weight: 700 !important;
+        }
+        .pac-icon { display: none !important; }
+        .pac-matched { color: #0A84FF !important; font-weight: 800 !important; }
+    `;
+    document.head.appendChild(style);
+}
     // Init geocoders after render
     setTimeout(() => {
         if (typeof window.initDualGeocoders === 'function') {
