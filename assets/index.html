@@ -24293,18 +24293,25 @@ window.animateMarkerTo = function(marker, newLngLat, targetHeading, duration = 1
       });
   };
 
+// ==========================================
+// 1. FAIL-SAFE MAP INITIALIZATION (GOOGLE MAPS)
+// ==========================================
+
+// ==========================================
+// 1. FAIL-SAFE MAP INITIALIZATION (MAPBOX VISUALS)
+// ==========================================
+
 window.startMap = function(coords) {
     console.log("🗺️ Initializing Mapbox Map at:", coords);
     const safeCoords = coords || [28.0473, -26.2041];
 
     try {
-        // 1. Initialize Mapbox (Visuals)
         window.map = new mapboxgl.Map({
             container: 'map',
-            style: 'mapbox://styles/mapbox/streets-v12', // or your custom style
+            style: 'mapbox://styles/mapbox/streets-v12', // Change style if needed
             center: [safeCoords[0], safeCoords[1]],
-            zoom: 15,
-            pitch: 45, // Gives the nice 3D look
+            zoom: 15.5,
+            pitch: 45, // Retains your buttery 3D look
             attributionControl: false
         });
 
@@ -24314,9 +24321,9 @@ window.startMap = function(coords) {
             const preloader = document.getElementById('solidPreloader');
             if (preloader) preloader.style.display = 'none';
             
-            // Drop the "You are here" marker
-            if (typeof setupUserMarker === 'function') {
-                setupUserMarker(safeCoords);
+            // Drop the "You are here" marker immediately
+            if (typeof window.setupUserMarker === 'function') {
+                window.setupUserMarker(safeCoords);
             }
 
             // Start the live taxi feed
@@ -24324,14 +24331,30 @@ window.startMap = function(coords) {
                 loadAndDisplayTaxisOnMap();
             }
 
+            // Check if there is an active trip to restore UI
             if (typeof checkPassengerActiveTrip === 'function') {
                 checkPassengerActiveTrip();
             }
+
+            // Drop the native preloader if running in the Android shell
+            setTimeout(() => {
+                if (window.Android && window.Android.postMessage) {
+                    window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
+                }
+            }, 150);
         });
+        
+        window.map.on('error', (e) => {
+            console.warn("Mapbox non-fatal error:", e);
+        });
+
     } catch (e) {
         console.error("Mapbox initialization failed:", e);
+        const preloader = document.getElementById('solidPreloader');
+        if (preloader) preloader.style.display = 'none';
     }
 };
+
 // ==========================================
 // 2. SETUP USER MARKER (GOOGLE MAPS)
 // ==========================================
@@ -32726,7 +32749,7 @@ window.rideNowPayFull = function(reqId, rideNowCost) {
         });
 };
 
-window.initDualGeocoders = function() {
+window.initDualGeocoders = async function() {
     const destContainer = document.getElementById('uber-dest-container');
     const pickupContainer = document.getElementById('uber-pickup-container');
 
@@ -32737,13 +32760,13 @@ window.initDualGeocoders = function() {
         pickupContainer.innerHTML = `<input type="text" id="uberPickupInput" placeholder="Current Location" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
     }
 
-    // 🚀 Activate Google Places for these inputs!
     const destInput = document.getElementById('uberDestInput');
     const pickupInput = document.getElementById('uberPickupInput');
 
-    if (destInput) {
+    // 🚀 Activate Google Places for Destination Input
+    if (destInput && typeof google !== 'undefined') {
         const destAutocomplete = new google.maps.places.Autocomplete(destInput, {
-            componentRestrictions: { country: "za" },
+            componentRestrictions: { country: "za" }, // Restrict to South Africa
             fields: ["geometry", "name", "formatted_address"]
         });
 
@@ -32756,12 +32779,15 @@ window.initDualGeocoders = function() {
             window.ehailingDestLng = place.geometry.location.lng();
             
             // Mapbox visual reaction
-            window.map.flyTo({ center: [window.ehailingDestLng, window.ehailingDestLat], zoom: 16 });
+            if (window.map) {
+                window.map.flyTo({ center: [window.ehailingDestLng, window.ehailingDestLat], zoom: 16 });
+            }
             window.findTaxisFlow();
         });
     }
 
-    if (pickupInput) {
+    // 🚀 Activate Google Places for Pickup Input
+    if (pickupInput && typeof google !== 'undefined') {
         const pickAutocomplete = new google.maps.places.Autocomplete(pickupInput, {
             componentRestrictions: { country: "za" },
             fields: ["geometry", "name", "formatted_address"]
@@ -32775,9 +32801,28 @@ window.initDualGeocoders = function() {
             window.commuterLng = place.geometry.location.lng();
             
             // Mapbox visual reaction
-            window.map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16 });
-            if (window.userMarker) window.userMarker.setLngLat([window.commuterLng, window.commuterLat]);
+            if (window.map) {
+                window.map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16 });
+            }
+            if (window.userMarker) {
+                window.userMarker.setLngLat([window.commuterLng, window.commuterLat]);
+            }
         });
+
+        // Set Initial value
+        pickupInput.value = "Fetching location...";
+        try {
+            const lat = window.commuterLat || -26.2041;
+            const lng = window.commuterLng || 28.0473;
+            if (lat && lng) {
+                const addr = await getAddressFromCoordsPromise(lng, lat);
+                pickupInput.value = addr.split(',')[0].trim();
+            } else {
+                pickupInput.value = "Current Location";
+            }
+        } catch (e) {
+            pickupInput.value = "Current Location";
+        }
     }
 };
 // Handle incoming notifications (override pattern)
