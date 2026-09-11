@@ -15923,49 +15923,6 @@ window.lockPhoneModalOpen = function() {
       }
   };
 
- // ==========================================
-  // 1. FAIL-SAFE MAP INITIALIZATION (MAPBOX)
-  // ==========================================
-  var hasCenteredOnUser = false;
-  window.isCameraLockedOnUser = true;
-  window.locationWatchId = null;
-
-  window.startMap = function(coords) {
-      console.log("🗺️ Initializing Mapbox Map at:", coords);
-      const safeCoords = coords || [28.0473, -26.2041];
-
-      try {
-          window.map = new mapboxgl.Map({
-              container: 'map',
-              style: 'mapbox://styles/mapbox/streets-v12',
-              center: [safeCoords[0], safeCoords[1]],
-              zoom: 15.5,
-              pitch: 45, // 3D effect
-              attributionControl: false
-          });
-
-          window.map.on('load', function() {
-              console.log("✅ Mapbox loaded successfully.");
-              const preloader = document.getElementById('solidPreloader');
-              if (preloader) preloader.style.display = 'none';
-              
-              if (typeof setupUserMarker === 'function') setupUserMarker(safeCoords);
-              if (typeof loadAndDisplayTaxisOnMap === 'function') loadAndDisplayTaxisOnMap();
-              if (typeof checkPassengerActiveTrip === 'function') checkPassengerActiveTrip();
-
-              setTimeout(() => {
-                  if (window.Android && window.Android.postMessage) {
-                      window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
-                  }
-              }, 150);
-          });
-          
-          window.map.on('error', (e) => console.warn("Mapbox warning:", e));
-      } catch (e) {
-          console.error("Mapbox init failed:", e);
-      }
-  };
-
   function createRecenterButton() {
       if (document.getElementById('recenterBtn')) return;
       const btn = document.createElement('button');
@@ -16319,7 +16276,153 @@ window.openEHailingTaxis = function() {
          if (!map) initializeMapAndLocation();
     });
 }
-          // Update this function in index.html
+ // ========================================================
+// SAFE MAP CENTERING & INITIALIZATION
+// ========================================================
+
+window.centerMapOnUserLocation = function() {
+    if (!window.map) return;
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                window.commuterLat = latitude;
+                window.commuterLng = longitude;
+
+                // Safely get padding
+                const bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
+
+                // Fly to user location
+                window.map.flyTo({
+                    center: [longitude, latitude],
+                    zoom: 16,
+                    speed: 1.2,
+                    curve: 1,
+                    padding: { bottom: bottomPadding },
+                    essential: true
+                });
+
+                // Update or create user marker
+                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                    window.setupUserMarker([longitude, latitude]);
+                } else if (window.userMarker) {
+                    window.userMarker.setLngLat([longitude, latitude]);
+                }
+            },
+            (error) => {
+                console.warn("GPS Timeout/Error. Using cached location.");
+                const fallbackLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
+                const fallbackLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
+
+                window.commuterLat = fallbackLat;
+                window.commuterLng = fallbackLng;
+                
+                const bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
+
+                window.map.flyTo({ 
+                    center: [fallbackLng, fallbackLat], 
+                    zoom: 14,
+                    padding: { bottom: bottomPadding } 
+                });
+
+                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                    window.setupUserMarker([fallbackLng, fallbackLat]);
+                } else if (window.userMarker) {
+                    window.userMarker.setLngLat([fallbackLng, fallbackLat]);
+                }
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
+    }
+};
+
+window.initializeMapAndLocation = function() {
+    console.log("Starting background location tracking...");
+
+    const savedLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
+    const savedLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
+
+    window.commuterLat = savedLat;
+    window.commuterLng = savedLng;
+
+    if (!window.map && typeof window.startMap === 'function') {
+        window.startMap([savedLng, savedLat]);
+    }
+
+    // Safely execute center and follow logic
+    const safeCenterAndFollow = () => {
+        window.centerMapOnUserLocation();
+        if (typeof window.enableFollowMode === 'function') {
+            window.enableFollowMode();
+        } else if (typeof enableFollowMode === 'function') {
+            enableFollowMode();
+        }
+    };
+
+    if (window.map) {
+        // Mapbox GL JS v3 sometimes uses map.loaded() instead of map.isStyleLoaded()
+        if (window.map.loaded ? window.map.loaded() : (window.map.isStyleLoaded && window.map.isStyleLoaded())) {
+            safeCenterAndFollow();
+        } else {
+            window.map.once('load', safeCenterAndFollow);
+        }
+    }
+
+    if (typeof createRecenterButton === 'function') createRecenterButton();
+
+    if (navigator.geolocation) {
+        if (window.locationWatchId) navigator.geolocation.clearWatch(window.locationWatchId);
+
+        window.locationWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                window.commuterLat = lat;
+                window.commuterLng = lng;
+                localStorage.setItem('lastLat', lat);
+                localStorage.setItem('lastLng', lng);
+
+                const dashboard = document.getElementById('modernHomeDashboard');
+                if (dashboard && dashboard.style.display !== 'none' && !dashboard.classList.contains('hidden')) {
+                    if (typeof fetchRealWeather === 'function') fetchRealWeather(lat, lng);
+                }
+
+                if (window.map && (window.map.loaded ? window.map.loaded() : window.map.isStyleLoaded())) {
+                    if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                        window.setupUserMarker([lng, lat]);
+                    } else if (window.userMarker) {
+                        window.userMarker.setLngLat([lng, lat]);
+                    }
+
+                    if (typeof followModeActive !== 'undefined' && followModeActive) {
+                        const padding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
+                        window.map.easeTo({ 
+                            center: [lng, lat], 
+                            padding: { bottom: padding },
+                            duration: 1000, 
+                            essential: true 
+                        });
+                    }
+                }
+
+                if (typeof setupEnhancedSearch === 'function') setupEnhancedSearch();
+            },
+            (err) => console.warn(`GPS Watch Error: ${err.message}`),
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    }
+};
+
+// Fallback for any legacy code calling it without "window."
+function initializeMapAndLocation() {
+    window.initializeMapAndLocation();
+}
+
+// Update this function in index.html
 function setupNotificationListeners() {
     if (!window.userId) {
         console.error("❌ Notification Listener failed: No UserID yet.");
@@ -23188,12 +23291,7 @@ else if (modalId === 'parcelDestinationPopup' && !window.parcelGeocoder) {
       ctx.restore();
   }
 
-      const canvas = el.querySelector('#driver-taxi-canvas');
-      var currentRotation = 0;
-      var pulseValue = 0;
-      var pulseDirection = 1;
-
-
+    
   // ========================================================
   // 1. ROBUST ROAD SNAPPING (Mapbox Directions API)
   // ========================================================
@@ -24041,49 +24139,113 @@ function loadAndDisplayTaxisOnMap() {
   }
   syncMapRotation();
 
+  // ========================================================
+// SAFE REAL-TIME TAXI LISTENER
+// ========================================================
+window.loadAndDisplayTaxisOnMap = function() {
+    console.log("Starting Real-Time Taxi Listeners...");
+    const taxisRef = database.ref('taxis');
+
+    // Remove old listeners to prevent duplicates
+    taxisRef.off();
+
+    // New taxi added
+    taxisRef.on('child_added', (snapshot) => {
+        if (typeof window.updateTaxiMarker === 'function') {
+            window.updateTaxiMarker(snapshot);
+        }
+    });
+
+    // Taxi moved/updated
+    taxisRef.on('child_changed', (snapshot) => {
+        if (typeof window.updateTaxiMarker === 'function') {
+            window.updateTaxiMarker(snapshot);
+        }
+
+        // Refresh taxi list if open
+        const sheet = document.getElementById('taxiListSheet');
+        if (sheet && sheet.classList.contains('open')) {
+            if (window.taxiListUpdateTimer) return;
+            window.taxiListUpdateTimer = setTimeout(() => {
+                window.taxiListUpdateTimer = null;
+                if (document.getElementById('taxiListSheet').classList.contains('open') && typeof window.findBroadcastingTaxis === 'function') {
+                    window.findBroadcastingTaxis(true);
+                }
+            }, 3000);
+        }
+    });
+
+    // Taxi removed
+    taxisRef.on('child_removed', (snapshot) => {
+        const taxiId = snapshot.key;
+        if (window.taxiMarkers && window.taxiMarkers[taxiId]) {
+            window.taxiMarkers[taxiId].remove();
+            delete window.taxiMarkers[taxiId];
+        }
+        if (window.dummyRoamers) {
+            delete window.dummyRoamers[taxiId];
+        }
+    });
+};
 // ==========================================
-  // 1. FAIL-SAFE MAP INITIALIZATION (MAPBOX)
-  // ==========================================
-  var hasCenteredOnUser = false;
-  window.isCameraLockedOnUser = true;
-  window.locationWatchId = null;
+// 1. FAIL-SAFE MAP INITIALIZATION (MAPBOX)
+// ==========================================
+window.startMap = function(coords) {
+    console.log("🗺️ Initializing Mapbox Map at:", coords);
+    const safeCoords = coords || [28.0473, -26.2041];
 
-  window.startMap = function(coords) {
-      console.log("🗺️ Initializing Mapbox Map at:", coords);
-      const safeCoords = coords || [28.0473, -26.2041];
+    try {
+        window.map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/streets-v12',
+            center: [safeCoords[0], safeCoords[1]],
+            zoom: 15.5,
+            pitch: 45, // 3D tilt effect
+            attributionControl: false
+        });
 
-      try {
-          window.map = new mapboxgl.Map({
-              container: 'map',
-              style: 'mapbox://styles/mapbox/streets-v12',
-              center: [safeCoords[0], safeCoords[1]],
-              zoom: 15.5,
-              pitch: 45, // 3D effect
-              attributionControl: false
-          });
+        window.map.on('load', function() {
+            console.log("✅ Mapbox loaded successfully.");
+            const preloader = document.getElementById('solidPreloader');
+            if (preloader) preloader.style.display = 'none';
+            
+            if (typeof window.setupUserMarker === 'function') window.setupUserMarker(safeCoords);
+            if (typeof window.loadAndDisplayTaxisOnMap === 'function') window.loadAndDisplayTaxisOnMap();
+            if (typeof checkPassengerActiveTrip === 'function') checkPassengerActiveTrip();
 
-          window.map.on('load', function() {
-              console.log("✅ Mapbox loaded successfully.");
-              const preloader = document.getElementById('solidPreloader');
-              if (preloader) preloader.style.display = 'none';
-              
-              if (typeof setupUserMarker === 'function') setupUserMarker(safeCoords);
-              if (typeof loadAndDisplayTaxisOnMap === 'function') loadAndDisplayTaxisOnMap();
-              if (typeof checkPassengerActiveTrip === 'function') checkPassengerActiveTrip();
+            setTimeout(() => {
+                if (window.Android && window.Android.postMessage) {
+                    window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
+                }
+            }, 150);
+        });
+        
+        window.map.on('error', (e) => console.warn("Mapbox warning:", e));
 
-              setTimeout(() => {
-                  if (window.Android && window.Android.postMessage) {
-                      window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
-                  }
-              }, 150);
-          });
-          
-          window.map.on('error', (e) => console.warn("Mapbox warning:", e));
-      } catch (e) {
-          console.error("Mapbox init failed:", e);
-      }
-  };
+        // Create Recenter Button Safely
+        if (!document.getElementById('recenterBtn')) {
+            const btn = document.createElement('button');
+            btn.id = 'recenterBtn';
+            btn.innerHTML = '<i class="fas fa-location-arrow"></i>';
+            btn.style.cssText = `
+                position: fixed; bottom: 320px; right: 20px; width: 48px; height: 48px; 
+                border-radius: 50%; background: #007BFF; color: white; border: none; 
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; cursor: pointer; 
+                display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+            `;
+            btn.onclick = () => {
+                if (window.commuterLat && window.commuterLng && window.map) {
+                    window.map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16, duration: 800 });
+                    if (typeof enableFollowMode === 'function') enableFollowMode();
+                }
+            };
+            document.body.appendChild(btn);
+        }
 
+    } catch (e) {
+        console.error("Mapbox init failed:", e);
+    }
+};
   function createRecenterButton() {
       if (document.getElementById('recenterBtn')) return;
       const btn = document.createElement('button');
@@ -27695,143 +27857,6 @@ window.setupDestAutocomplete = function() {
  // ========================================================
 // SAFE MAP CENTERING
 // ========================================================
-window.centerMapOnUserLocation = function() {
-    if (!window.map) return;
-
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const { latitude, longitude } = position.coords;
-                window.commuterLat = latitude;
-                window.commuterLng = longitude;
-
-                // SECURE CALL: Safely check for padding function
-                const bottomPadding = typeof window.getMapBottomPadding === 'function' 
-                    ? window.getMapBottomPadding() 
-                    : 350;
-
-                // Fly to user location WITH PADDING
-                window.map.flyTo({
-                    center: [longitude, latitude],
-                    zoom: 16,
-                    speed: 1.2,
-                    curve: 1,
-                    padding: { bottom: bottomPadding },
-                    essential: true
-                });
-
-                // Update or create user marker
-                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
-                    window.setupUserMarker([longitude, latitude]);
-                } else if (window.userMarker) {
-                    window.userMarker.setLngLat([longitude, latitude]);
-                }
-            },
-            (error) => {
-                console.warn("GPS Timeout/Error. Using cached or default location.");
-                const fallbackLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
-                const fallbackLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
-
-                window.commuterLat = fallbackLat;
-                window.commuterLng = fallbackLng;
-
-                const bottomPadding = typeof window.getMapBottomPadding === 'function' 
-                    ? window.getMapBottomPadding() 
-                    : 350;
-
-                window.map.flyTo({ 
-                    center: [window.commuterLng, window.commuterLat], 
-                    zoom: 14,
-                    padding: { bottom: bottomPadding }
-                });
-
-                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
-                    window.setupUserMarker([window.commuterLng, window.commuterLat]);
-                } else if (window.userMarker) {
-                    window.userMarker.setLngLat([window.commuterLng, window.commuterLat]);
-                }
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-        );
-    }
-};
-function initializeMapAndLocation() {
-    console.log("Starting background location tracking...");
-
-    const savedLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
-    const savedLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
-
-    commuterLat = savedLat;
-    commuterLng = savedLng;
-
-    if (!map) {
-        startMap([commuterLng, commuterLat]);
-    }
-
-    if (map && map.loaded()) {
-        centerMapOnUserLocation();
-        enableFollowMode();
-    } else if (map) {
-        map.once('load', () => {
-            centerMapOnUserLocation();
-            enableFollowMode();
-        });
-    }
-
-    if (typeof createRecenterButton === 'function') createRecenterButton();
-
-    if (navigator.geolocation) {
-        if (window.locationWatchId) navigator.geolocation.clearWatch(window.locationWatchId);
-
-        window.locationWatchId = navigator.geolocation.watchPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-
-                if (isNaN(lat) || isNaN(lng)) return;
-
-                commuterLat = lat;
-                commuterLng = lng;
-                localStorage.setItem('lastLat', lat);
-                localStorage.setItem('lastLng', lng);
-
-                const dashboard = document.getElementById('modernHomeDashboard');
-                if (dashboard && dashboard.style.display !== 'none' && !dashboard.classList.contains('hidden')) {
-                    if (typeof fetchRealWeather === 'function') fetchRealWeather(lat, lng);
-                }
-
-                if (map && map.isStyleLoaded()) {
-                    if (!userMarker && typeof setupUserMarker === 'function') {
-                        setupUserMarker([lng, lat]);
-                    } else if (userMarker) {
-                        userMarker.setLngLat([lng, lat]);
-                    }
-
-                    // Handle Camera Follow Mode smoothly WITH PADDING
-                    if (typeof followModeActive !== 'undefined' && followModeActive) {
-                        map.easeTo({ 
-                            center: [lng, lat], 
-                            padding: { bottom: window.getMapBottomPadding() }, // <-- FIX
-                            duration: 1000, 
-                            essential: true 
-                        });
-                    }
-                }
-
-                if (typeof setupEnhancedSearch === 'function') setupEnhancedSearch();
-            },
-            (err) => {
-                console.warn(`GPS Watch Error: ${err.message}`);
-                if (err && err.code === 1 && window.locationWatchId) {
-                    navigator.geolocation.clearWatch(window.locationWatchId);
-                    window.locationWatchId = null;
-                    console.info('Location permission denied; continuing with cached passenger location.');
-                }
-            },
-            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-        );
-    }
-}
 
    async function findTaxisWithRadiusExpansion(requestType = 'passenger') {
       console.log("Starting radius expansion search...");
