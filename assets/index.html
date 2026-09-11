@@ -32722,93 +32722,6 @@ window.rideNowPayFull = function(reqId, rideNowCost) {
 // FIX: initDualGeocoders - Use Google Places safely
 // =================================================================
 
-// =================================================================
-// HYBRID SEARCH: Google Places (search) + Mapbox (display)
-// =================================================================
-
-window.initDualGeocoders = function() {
-    const destContainer   = document.getElementById('uber-dest-container');
-    const pickupContainer = document.getElementById('uber-pickup-container');
-
-    if (destContainer) {
-        destContainer.innerHTML = `<input type="text" id="uberDestInput" placeholder="Where to?" autocomplete="off" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
-    }
-    if (pickupContainer) {
-        pickupContainer.innerHTML = `<input type="text" id="uberPickupInput" placeholder="Current Location" autocomplete="off" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
-    }
-
-    const runSetup = () => {
-        const destInput   = document.getElementById('uberDestInput');
-        const pickupInput = document.getElementById('uberPickupInput');
-
-        // --- DESTINATION: Google Places (biased to user location, SA only) ---
-        if (destInput) {
-            window.attachGooglePlacesSearch(destInput, (place) => {
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
-                const name = place.name || (place.formatted_address || '').split(',')[0];
-
-                window.userDropOffDestination = name;
-                window.ehailingDestLat = lat;
-                window.ehailingDestLng = lng;
-
-                console.log("🔍 [Google] Destination selected:", name, lat, lng);
-
-                // Move the Mapbox map to show the selection
-                if (window.map) {
-                    window.map.flyTo({ center: [lng, lat], zoom: 16, essential: true });
-                }
-
-                // Continue booking flow
-                if (typeof window.findTaxisFlow === 'function') {
-                    window.findTaxisFlow();
-                }
-            });
-        }
-
-        // --- PICKUP: Google Places + prefill from GPS via Google Geocoding ---
-        if (pickupInput) {
-            window.attachGooglePlacesSearch(pickupInput, (place) => {
-                const lat = place.geometry.location.lat();
-                const lng = place.geometry.location.lng();
-
-                window.commuterLat = lat;
-                window.commuterLng = lng;
-
-                console.log("🔍 [Google] Pickup selected:", place.name, lat, lng);
-
-                if (window.map) {
-                    window.map.flyTo({ center: [lng, lat], zoom: 16, essential: true });
-                }
-                if (window.userMarker) {
-                    window.userMarker.setLngLat([lng, lat]);
-                }
-            });
-
-            // Prefill with current GPS address (Google reverse geocode → falls back to Mapbox)
-            if (window.commuterLat && window.commuterLng) {
-                window.getAddressFromCoordsPromise(window.commuterLng, window.commuterLat)
-                    .then(addr => {
-                        if (addr && addr !== 'Unknown Location' && pickupInput.value.trim() === '') {
-                            pickupInput.value = addr.split(',')[0].trim();
-                        }
-                    })
-                    .catch(() => {});
-            }
-        }
-    };
-
-    // Wait for Google Maps to load, or run immediately if already loaded
-    if (window.__googleMapsReady) {
-        runSetup();
-    } else {
-        window.__googleMapsCallbacks.push(runSetup);
-    }
-};
-
-// =================================================================
-// GOOGLE PLACES AUTOCOMPLETE (Hybrid search - used by any input)
-// =================================================================
 
 // =================================================================
 // GOOGLE PLACES - MODERN VERSION (PlaceAutocompleteElement)
@@ -45921,7 +45834,175 @@ window.showDestinationSearchMode = function() {
     
     console.log("✅ Destination search mode activated");
 };
+// =================================================================
+// FIXED initDualGeocoders - Sets values BEFORE Google Places wraps inputs
+// =================================================================
 
+window.initDualGeocoders = async function() {
+    console.log("🔧 initDualGeocoders running...");
+
+    const destContainer   = document.getElementById('uber-dest-container');
+    const pickupContainer = document.getElementById('uber-pickup-container');
+
+    if (!destContainer || !pickupContainer) {
+        console.warn("⚠️ Geocoder containers not found");
+        return;
+    }
+
+    // ============================================================
+    // 1. PREPARE THE PICKUP ADDRESS *BEFORE* creating the inputs
+    // ============================================================
+    let pickupAddressText = "Current Location";
+    try {
+        const lat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat'));
+        const lng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng'));
+        if (Number.isFinite(lat) && Number.isFinite(lng) && typeof window.getAddressFromCoordsPromise === 'function') {
+            const addr = await window.getAddressFromCoordsPromise(lng, lat);
+            if (addr && addr !== 'Unknown Location') {
+                pickupAddressText = addr.split(',')[0].trim(); // "27 Courtown Cres"
+                console.log("📌 Pickup prefill:", pickupAddressText);
+            }
+        }
+    } catch (e) {
+        console.warn("Pickup prefill failed:", e);
+    }
+
+    // ============================================================
+    // 2. INJECT THE INPUT ELEMENTS WITH VALUES ALREADY SET
+    // ============================================================
+    destContainer.innerHTML = `
+        <input type="text" id="uberDestInput"
+               placeholder="Where to?"
+               autocomplete="off"
+               value=""
+               style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">
+    `;
+    pickupContainer.innerHTML = `
+        <input type="text" id="uberPickupInput"
+               placeholder="${pickupAddressText}"
+               autocomplete="off"
+               value="${pickupAddressText}"
+               style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">
+    `;
+
+    const destInput   = document.getElementById('uberDestInput');
+    const pickupInput = document.getElementById('uberPickupInput');
+
+    // ============================================================
+    // 3. LOCK IN THE PICKUP VALUE (in case anything clears it)
+    //    Some browsers clear inputs when autocomplete attaches.
+    // ============================================================
+    const lockPickupValue = () => {
+        if (pickupInput && (!pickupInput.value || pickupInput.value.trim() === '')) {
+            pickupInput.value = pickupAddressText;
+        }
+    };
+    // Re-assert value a few times over the next few seconds
+    setTimeout(lockPickupValue, 300);
+    setTimeout(lockPickupValue, 1000);
+    setTimeout(lockPickupValue, 2500);
+
+    // ============================================================
+    // 4. ATTACH GOOGLE PLACES SEARCH
+    // ============================================================
+    const attachPlaces = () => {
+        const googleReady = window.google && google.maps && google.maps.places;
+
+        // ---------- DESTINATION ----------
+        if (googleReady && destInput) {
+            const destAuto = new google.maps.places.Autocomplete(destInput, {
+                componentRestrictions: { country: 'za' },
+                fields: ['geometry', 'name', 'formatted_address', 'place_id']
+            });
+
+            // Bias toward user's location
+            if (window.commuterLat && window.commuterLng) {
+                const bias = new google.maps.LatLng(window.commuterLat, window.commuterLng);
+                const saBounds = new google.maps.LatLngBounds(
+                    new google.maps.LatLng(-35.0, 16.0),
+                    new google.maps.LatLng(-22.0, 33.0)
+                );
+                destAuto.setBounds(saBounds.extend(bias));
+            }
+
+            destAuto.addListener('place_changed', () => {
+                const place = destAuto.getPlace();
+                if (!place || !place.geometry || !place.geometry.location) {
+                    console.warn("⚠️ User didn't select a valid place");
+                    return;
+                }
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                const name = place.name || (place.formatted_address || '').split(',')[0];
+
+                window.userDropOffDestination = name;
+                window.ehailingDestLat = lat;
+                window.ehailingDestLng = lng;
+
+                console.log("🔍 [Destination] selected:", name, lat, lng);
+            });
+        }
+
+        // ---------- PICKUP ----------
+        if (googleReady && pickupInput) {
+            const pickupAuto = new google.maps.places.Autocomplete(pickupInput, {
+                componentRestrictions: { country: 'za' },
+                fields: ['geometry', 'name', 'formatted_address', 'place_id']
+            });
+
+            if (window.commuterLat && window.commuterLng) {
+                const bias = new google.maps.LatLng(window.commuterLat, window.commuterLng);
+                const saBounds = new google.maps.LatLngBounds(
+                    new google.maps.LatLng(-35.0, 16.0),
+                    new google.maps.LatLng(-22.0, 33.0)
+                );
+                pickupAuto.setBounds(saBounds.extend(bias));
+            }
+
+            pickupAuto.addListener('place_changed', () => {
+                const place = pickupAuto.getPlace();
+                if (!place || !place.geometry || !place.geometry.location) return;
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+
+                window.commuterLat = lat;
+                window.commuterLng = lng;
+
+                console.log("🔍 [Pickup] selected:", place.name, lat, lng);
+
+                if (window.map) window.map.flyTo({ center: [lng, lat], zoom: 16 });
+                if (window.userMarker) window.userMarker.setLngLat([lng, lat]);
+
+                // Re-lock value after user selection
+                setTimeout(lockPickupValue, 100);
+            });
+
+            // Re-assert value one more time after Places attaches
+            setTimeout(lockPickupValue, 500);
+        }
+
+        // If Google didn't load, at least keep the values visible
+        if (!googleReady) {
+            console.warn("⚠️ Google Places not ready — inputs will be plain text");
+        }
+    };
+
+    // Wait for Google Maps SDK
+    if (window.__googleMapsReady) {
+        attachPlaces();
+    } else {
+        window.__googleMapsCallbacks.push(attachPlaces);
+        // Fallback: try again shortly (in case callback never fires)
+        setTimeout(attachPlaces, 2000);
+    }
+
+    // ============================================================
+    // 5. Restore default suggestions list
+    // ============================================================
+    if (typeof window.restoreDefaultSuggestions === 'function') {
+        setTimeout(window.restoreDefaultSuggestions, 400);
+    }
+};
 // Add this fallback function if initDualGeocoders is not available
 function setupDualGeocodersFallback() {
     const destContainer = document.getElementById('uber-dest-container');
@@ -48410,97 +48491,258 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
     }
 };
 
+// =================================================================
+// showRideSelectionView - COMPLETE FIXED VERSION
+// =================================================================
+// Called after the user selects a destination from Google Places.
+// Handles: coordinate validation, pricing, ETA fetch, map fit, UI switch
+// =================================================================
+
 async function showRideSelectionView(destName, destLat, destLng) {
-    // CRITICAL FIX: Parse all coordinates as numbers
-    const pickupLat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
-    const pickupLng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
+    console.log("🚗 showRideSelectionView called:", { destName, destLat, destLng });
+
+    // ============================================================
+    // 1. COORDINATE GUARD - Prevent NaN crashes
+    // ============================================================
+    const pickupLat = Number(window.commuterLat)
+        || parseFloat(localStorage.getItem('lastLat'))
+        || -29.8587; // Durban fallback
+    const pickupLng = Number(window.commuterLng)
+        || parseFloat(localStorage.getItem('lastLng'))
+        || 31.0218;
+
     const destinationLat = Number(destLat);
     const destinationLng = Number(destLng);
 
-    // Update global coords if they were invalid
+    // Persist back to globals so downstream code has consistent values
     window.commuterLat = pickupLat;
     window.commuterLng = pickupLng;
 
-    // Bail out early if any coordinate is missing/NaN instead of crashing later
     if (![pickupLat, pickupLng, destinationLat, destinationLng].every(Number.isFinite)) {
-        console.warn("showRideSelectionView: invalid coordinates, aborting", { pickupLat, pickupLng, destinationLat, destinationLng });
-        showGenericMessage("Location Error", "Could not determine your location or destination. Please try again.", "fa-map-marker-alt", "icon-danger");
+        console.warn("❌ showRideSelectionView: invalid coordinates, aborting", {
+            pickupLat, pickupLng, destinationLat, destinationLng
+        });
+        if (typeof showGenericMessage === 'function') {
+            showGenericMessage(
+                "Location Error",
+                "Could not determine your location or destination. Please try again.",
+                "fa-map-marker-alt",
+                "icon-danger"
+            );
+        }
         return;
     }
 
+    // ============================================================
+    // 2. MAP GUARD - Ensure Mapbox is ready
+    // ============================================================
     const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
     if (!activeMap) {
-        showGenericMessage("Map Unavailable", "The map is still loading. Please try again in a moment.", "fa-map", "icon-danger");
+        console.warn("❌ showRideSelectionView: Mapbox not ready");
+        if (typeof showGenericMessage === 'function') {
+            showGenericMessage(
+                "Map Unavailable",
+                "The map is still loading. Please try again in a moment.",
+                "fa-map",
+                "icon-danger"
+            );
+        }
         return;
     }
 
-    // 1. Calculate Distance and Pricing
-    const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2;
+    // ============================================================
+    // 3. SAFE DOM LOOKUPS - Cache references
+    // ============================================================
+    const destAddrEl       = document.getElementById('confirm-dest-addr');
+    const pickupAddrEl     = document.getElementById('confirm-pickup-addr');
+    const priceGoEl        = document.getElementById('price-go');
+    const priceClub4El     = document.getElementById('price-club4');
+    const priceClub6El     = document.getElementById('price-club6');
+    const durationEl       = document.getElementById('trip-duration-tag');
+    const driverEtaEl      = document.getElementById('driver-eta-tag');
+    const initialView      = document.getElementById('view-initial-search');
+    const confirmView      = document.getElementById('view-confirm-ride');
+    const sheetContent     = document.getElementById('homeSheetContent');
+
+    // ============================================================
+    // 4. CALCULATE DISTANCE AND PRICING
+    // ============================================================
+    const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2; // 20% road curve buffer
     window.currentTripDistance = dist;
 
-    const baseGoPrice = Math.max(30, Math.round(30 + (dist * 9.50)));
-    const club4Price = Math.max(15, Math.round(baseGoPrice / 4));
-    const club6Price = Math.max(12, Math.round(baseGoPrice / 6));
+    const baseGoPrice  = Math.max(30, Math.round(30 + (dist * 9.50))); // R30 base + R9.5/km
+    const club4Price   = Math.max(15, Math.round(baseGoPrice / 4));
+    const club6Price   = Math.max(12, Math.round(baseGoPrice / 6));
 
-    // 2. Update UI text
-    document.getElementById('confirm-dest-addr').textContent = destName.split(',')[0];
-    document.getElementById('price-go').textContent = `R${baseGoPrice}`;
-    document.getElementById('price-club4').textContent = `R${club4Price}`;
-    document.getElementById('price-club6').textContent = `R${club6Price}`;
+    // Store on window for later use by executeBooking
+    window.ridePrices = {
+        go: baseGoPrice,
+        club4: club4Price,
+        club6: club6Price
+    };
 
-    const pickupAddrEl = document.getElementById('confirm-pickup-addr');
+    console.log(`💰 Distance: ${dist.toFixed(2)}km | Go: R${baseGoPrice} | Club4: R${club4Price} | Club6: R${club6Price}`);
+
+    // ============================================================
+    // 5. UPDATE UI TEXT
+    // ============================================================
+    if (destAddrEl) {
+        destAddrEl.textContent = (destName || 'Destination').split(',')[0];
+    }
+
+    if (priceGoEl)    priceGoEl.textContent    = `R${baseGoPrice}`;
+    if (priceClub4El) priceClub4El.textContent = `R${club4Price}`;
+    if (priceClub6El) priceClub6El.textContent = `R${club6Price}`;
+
+    // ---- Pickup address display ----
     if (pickupAddrEl) {
-        const typedPickup = document.getElementById('uberPickupInput')?.value;
-        if (typedPickup && typedPickup.trim() && typedPickup.trim() !== 'Current Location') {
+        // 1st choice: what the user typed/selected in the pickup box
+        const typedPickup = document.getElementById('uberPickupInput')?.value?.trim();
+        if (typedPickup && typedPickup !== 'Current Location' && typedPickup.length > 2) {
             pickupAddrEl.textContent = typedPickup.split(',')[0].trim();
-        } else if (typeof window.getAddressFromCoordsPromise === 'function') {
-            window.getAddressFromCoordsPromise(pickupLng, pickupLat)
-                .then(addr => { if (addr && addr !== 'Unknown Location') pickupAddrEl.textContent = addr.split(',')[0].trim(); })
-                .catch(() => {});
+        } else {
+            // 2nd choice: reverse geocode the GPS coords
+            pickupAddrEl.textContent = 'Fetching...';
+            if (typeof window.getAddressFromCoordsPromise === 'function') {
+                window.getAddressFromCoordsPromise(pickupLng, pickupLat)
+                    .then(addr => {
+                        if (addr && addr !== 'Unknown Location') {
+                            pickupAddrEl.textContent = addr.split(',')[0].trim();
+                        } else {
+                            pickupAddrEl.textContent = 'Current Location';
+                        }
+                    })
+                    .catch(() => {
+                        pickupAddrEl.textContent = 'Current Location';
+                    });
+            } else {
+                pickupAddrEl.textContent = 'Current Location';
+            }
         }
     }
 
-    // 3. Fetch ETA and Duration from Mapbox
+    // ============================================================
+    // 6. FETCH ROUTE DATA FROM MAPBOX (ETA + Duration + Geometry)
+    // ============================================================
     try {
-        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&overview=full&access_token=${mapboxgl.accessToken}`;
         const res = await fetch(url);
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
         const data = await res.json();
         if (data.routes && data.routes[0]) {
             const route = data.routes[0];
-            document.getElementById('trip-duration-tag').textContent = `${Math.round(route.duration / 60)} min trip`;
-            document.getElementById('driver-eta-tag').textContent = `Driver ~4 min away`;
+            const etaMinutes = Math.round(route.duration / 60);
+            const distanceKm = (route.distance / 1000).toFixed(1);
 
-            if (typeof drawRouteToTaxi === 'function') {
+            console.log(`🛣️ Route: ${distanceKm}km | ${etaMinutes} min`);
+
+            if (durationEl) durationEl.textContent = `${etaMinutes} min trip`;
+            if (driverEtaEl) driverEtaEl.textContent = `Driver ~4 min away`;
+
+            // Draw the route on the map
+            if (typeof drawRouteToTaxi === 'function' && route.geometry) {
                 drawRouteToTaxi(route.geometry);
             }
+
+            // Store for later use (e.g., ETA display during tracking)
+            window.currentRouteGeometry = route.geometry;
+            window.currentRouteDuration = route.duration;
+            window.currentRouteDistance = route.distance;
+        } else {
+            if (durationEl) durationEl.textContent = `~${Math.round(dist * 2)} min trip`;
+            if (driverEtaEl) driverEtaEl.textContent = `Driver ~4 min away`;
         }
-    } catch (e) {
-        console.warn("Route fetch failed:", e);
+    } catch (err) {
+        console.warn("🛣️ Route fetch failed:", err);
+        // Provide a heuristic fallback so the UI isn't blank
+        if (durationEl) durationEl.textContent = `~${Math.round(dist * 2)} min trip`;
+        if (driverEtaEl) driverEtaEl.textContent = `Driver ~4 min away`;
     }
 
-    // 4. Switch Views and expand sheet
-    document.getElementById('view-initial-search').style.display = 'none';
-    document.getElementById('view-confirm-ride').style.display = 'block';
-    document.getElementById('homeSheetContent').style.height = '85vh';
+    // ============================================================
+    // 7. SWITCH VIEWS (initial → confirm)
+    // ============================================================
+    if (initialView) {
+        initialView.style.display = 'none';
+        initialView.style.setProperty('display', 'none', 'important');
+    }
+    if (confirmView) {
+        confirmView.style.display = 'block';
+        confirmView.style.setProperty('display', 'block', 'important');
+    }
+    if (sheetContent) {
+        sheetContent.style.height = '85vh';
+    }
 
-    // Fit map to show both points
+    // ============================================================
+    // 8. FIT MAP TO SHOW BOTH POINTS (with NaN protection)
+    // ============================================================
     try {
-        if (typeof setupUserMarker === 'function') setupUserMarker([pickupLng, pickupLat]);
-        if (typeof window.setDropoffMarker === 'function') window.setDropoffMarker(destinationLat, destinationLng);
+        // Add markers first (safe-add pattern)
+        if (typeof setupUserMarker === 'function') {
+            setupUserMarker([pickupLng, pickupLat]);
+        }
+        if (typeof window.setDropoffMarker === 'function') {
+            window.setDropoffMarker(destinationLat, destinationLng);
+        }
 
+        // Build the bounds with validated numbers
         const bounds = new mapboxgl.LngLatBounds()
             .extend([pickupLng, pickupLat])
             .extend([destinationLng, destinationLat]);
-        const bottomPad = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 450;
+
+        // Get bottom padding (accounts for the sheet)
+        const bottomPad = typeof window.getMapBottomPadding === 'function'
+            ? window.getMapBottomPadding()
+            : 450;
+
         activeMap.fitBounds(bounds, {
             padding: { top: 80, bottom: bottomPad, left: 60, right: 60 },
             maxZoom: 16,
             duration: 900
         });
+
+        console.log("🗺️ Map fitted to pickup ↔ destination");
     } catch (e) {
-        console.warn("showRideSelectionView: fitBounds failed", e);
+        console.warn("⚠️ fitBounds failed, using flyTo fallback:", e);
+        // Fallback: fly to the midpoint between pickup and destination
+        try {
+            const midLat = (pickupLat + destinationLat) / 2;
+            const midLng = (pickupLng + destinationLng) / 2;
+            activeMap.flyTo({
+                center: [midLng, midLat],
+                zoom: 13,
+                duration: 800,
+                essential: true
+            });
+        } catch (e2) {
+            console.error("❌ Map positioning completely failed:", e2);
+        }
     }
+
+    // ============================================================
+    // 9. RESET RIDE TYPE SELECTION (fresh state for each booking)
+    // ============================================================
+    window.selectedRideType = null;
+
+    // Reset visual borders on the option cards
+    ['private', 'club4', 'club6'].forEach(id => {
+        const el = document.getElementById('opt-' + id);
+        if (el) el.style.borderColor = '#eee';
+    });
+
+    // Reset the booking button
+    const finalBtn = document.getElementById('final-booking-btn');
+    if (finalBtn) {
+        finalBtn.textContent = 'Select a Ride';
+        finalBtn.disabled = false;
+    }
+
+    console.log("✅ showRideSelectionView complete");
 }
+
 window.selectRideType = function(type) {
     window.selectedRideType = type;
     
