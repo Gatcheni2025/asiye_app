@@ -288,6 +288,7 @@ ASIYE.map = {
 
 
         const sourceId = 'asiye-route';
+        const outlineId = 'asiye-route-outline';
         const layerId = 'asiye-route-line';
 
 
@@ -297,6 +298,12 @@ ASIYE.map = {
             geometry: geometry
         };
 
+
+        /*
+         * If the source already exists, just
+         * update the data and bail — the layers
+         * are already on the map.
+         */
 
         if (this.instance.getSource(sourceId)) {
 
@@ -314,6 +321,46 @@ ASIYE.map = {
         });
 
 
+        /*
+         * White outline under the route.
+         * Gives the black line a clean edge
+         * over busy map tiles.
+         */
+
+        this.instance.addLayer({
+
+            id: outlineId,
+
+            type: 'line',
+
+            source: sourceId,
+
+            layout: {
+                'line-cap': 'round',
+                'line-join': 'round'
+            },
+
+            paint: {
+
+                'line-color': '#ffffff',
+
+                'line-width': [
+                    'interpolate',
+                    ['linear'],
+                    ['zoom'],
+                    10, 7,
+                    15, 9
+                ],
+
+                'line-opacity': 0.95
+            }
+        });
+
+
+        /*
+         * Main black route line.
+         */
+
         this.instance.addLayer({
 
             id: layerId,
@@ -328,9 +375,18 @@ ASIYE.map = {
             },
 
             paint: {
+
                 'line-color': '#111111',
-                'line-width': 5,
-                'line-opacity': 0.9
+
+                'line-width': [
+                    'interpolate',
+                    ['linear'],
+                    ['zoom'],
+                    10, 4,
+                    15, 6
+                ],
+
+                'line-opacity': 0.92
             }
         });
     },
@@ -380,6 +436,83 @@ ASIYE.map = {
     },
 
 
+    fitRouteGeometry(geometry) {
+
+        if (
+            !this.instance ||
+            !geometry ||
+            !Array.isArray(geometry.coordinates) ||
+            geometry.coordinates.length === 0
+        ) {
+
+            return;
+        }
+
+
+        const bounds =
+            new mapboxgl.LngLatBounds();
+
+
+        geometry.coordinates
+            .forEach(coord => {
+
+                if (
+                    Array.isArray(coord) &&
+                    coord.length >= 2
+                ) {
+
+                    const lng = Number(coord[0]);
+                    const lat = Number(coord[1]);
+
+
+                    if (
+                        Number.isFinite(lng) &&
+                        Number.isFinite(lat)
+                    ) {
+
+                        bounds.extend([lng, lat]);
+                    }
+                }
+            });
+
+
+        if (bounds.isEmpty()) {
+
+            return;
+        }
+
+
+        /*
+         * More bottom padding because
+         * ride selection sheet covers
+         * part of the map.
+         */
+
+        this.instance.fitBounds(
+
+            bounds,
+
+            {
+
+                padding: {
+
+                    top: 110,
+
+                    right: 55,
+
+                    bottom: 360,
+
+                    left: 55
+                },
+
+                duration: 850,
+
+                maxZoom: 15
+            }
+        );
+    },
+
+
     clearTrip() {
 
         if (this.destinationMarker) {
@@ -392,6 +525,12 @@ ASIYE.map = {
         if (this.instance?.getLayer('asiye-route-line')) {
 
             this.instance.removeLayer('asiye-route-line');
+        }
+
+
+        if (this.instance?.getLayer('asiye-route-outline')) {
+
+            this.instance.removeLayer('asiye-route-outline');
         }
 
 

@@ -28,7 +28,31 @@
         href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css"
         rel="stylesheet"
     >
+<script>
+    window.onGoogleMapsReady = function () {
 
+        window.__googleMapsReady = true;
+
+        console.log(
+            '✅ Google Maps Places ready'
+        );
+
+        if (
+            window.ASIYE &&
+            ASIYE.places &&
+            typeof ASIYE.places.init ===
+                'function'
+        ) {
+
+            ASIYE.places.init();
+        }
+    };
+</script>
+
+<script
+    async
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async&callback=onGoogleMapsReady">
+</script>
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js"></script>
 
     <!-- Firebase -->

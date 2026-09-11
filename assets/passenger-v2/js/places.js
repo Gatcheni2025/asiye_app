@@ -1,24 +1,64 @@
 /* ============================================================
    ASIYE PASSENGER V2
-   PLACES + ROUTE SERVICE
+   GOOGLE PLACES SEARCH + MAPBOX DIRECTIONS
    ============================================================ */
 
 window.ASIYE = window.ASIYE || {};
 
 ASIYE.places = {
 
+    autocompleteService: null,
+    placesService: null,
     searchTimer: null,
 
-    async search(query) {
+    init() {
+
+        if (
+            !window.google ||
+            !google.maps ||
+            !google.maps.places
+        ) {
+
+            console.warn(
+                'Google Places API not ready yet.'
+            );
+
+            return false;
+        }
+
+        if (!this.autocompleteService) {
+
+            this.autocompleteService =
+                new google.maps.places.AutocompleteService();
+        }
+
+        if (!this.placesService) {
+
+            const dummyMap =
+                document.createElement('div');
+
+            this.placesService =
+                new google.maps.places.PlacesService(
+                    dummyMap
+                );
+        }
+
+        console.log(
+            '✅ Google Places ready'
+        );
+
+        return true;
+    },
+
+
+    search(query) {
 
         const value =
             String(query || '')
             .trim();
 
 
-        if (
-            value.length < 3
-        ) {
+        if (value.length < 3) {
 
             this.renderSuggestions([]);
 
@@ -33,136 +73,45 @@ ASIYE.places = {
 
         this.searchTimer =
             setTimeout(
-                async () => {
+                () => {
 
-                    await this.performSearch(
+                    this.performSearch(
                         value
                     );
 
                 },
-                280
+                250
             );
     },
 
 
-    async performSearch(query) {
+    performSearch(query) {
 
-        const token =
-            window.ASIYE_CONFIG
-                ?.mapboxToken;
-
-
-        if (!token) {
+        if (!this.init()) {
 
             ASIYE.ui?.toast(
-                'Map search is not configured yet.'
+                'Google location search is still loading.'
             );
 
             return;
         }
 
 
-        const proximity =
-            this.getProximity();
+        const request = {
 
+            input:
+                query,
 
-        try {
+            componentRestrictions: {
+                country: 'za'
+            },
 
-            let url =
+            types: [
+                'geocode',
+                'establishment'
+            ]
+        };
 
-                `https://api.mapbox.com/geocoding/v5/mapbox.places/` +
-
-                `${encodeURIComponent(query)}.json` +
-
-                `?access_token=${encodeURIComponent(token)}` +
-
-                `&autocomplete=true` +
-
-                `&limit=6` +
-
-                `&country=za`;
-
-
-            if (proximity) {
-
-                url +=
-                    `&proximity=${proximity.lng},${proximity.lat}`;
-            }
-
-
-            const response =
-                await fetch(url);
-
-
-            if (!response.ok) {
-
-                throw new Error(
-                    `Search failed: ${response.status}`
-                );
-            }
-
-
-            const data =
-                await response.json();
-
-
-            const results =
-                (data.features || [])
-                .map(feature => ({
-
-                    id:
-                        feature.id,
-
-                    name:
-                        feature.text ||
-                        feature.place_name,
-
-                    address:
-                        feature.place_name ||
-                        feature.text,
-
-                    longitude:
-                        Number(
-                            feature.center?.[0]
-                        ),
-
-                    latitude:
-                        Number(
-                            feature.center?.[1]
-                        )
-
-                }))
-                .filter(item =>
-
-                    Number.isFinite(
-                        item.latitude
-                    ) &&
-
-                    Number.isFinite(
-                        item.longitude
-                    )
-                );
-
-
-            this.renderSuggestions(
-                results
-            );
-
-
-        } catch (error) {
-
-            console.error(
-                'Destination search failed:',
-                error
-            );
-
-
-            this.renderError();
-        }
-    },
-
-
-    getProximity() {
 
         const loc =
             ASIYE.state.location;
@@ -177,18 +126,69 @@ ASIYE.places = {
             )
         ) {
 
-            return {
+            request.locationBias = {
 
-                lat:
-                    loc.latitude,
+                center: {
+                    lat:
+                        loc.latitude,
 
-                lng:
-                    loc.longitude
+                    lng:
+                        loc.longitude
+                },
+
+                radius:
+                    50000
             };
         }
 
 
-        return null;
+        this.autocompleteService
+            .getPlacePredictions(
+                request,
+                (
+                    predictions,
+                    status
+                ) => {
+
+                    if (
+                        status !==
+                        google.maps.places
+                            .PlacesServiceStatus.OK
+                    ) {
+
+                        this.renderSuggestions([]);
+
+                        return;
+                    }
+
+
+                    const results =
+                        (predictions || [])
+                        .map(item => ({
+
+                            placeId:
+                                item.place_id,
+
+                            name:
+                                item.structured_formatting
+                                    ?.main_text ||
+                                item.description,
+
+                            address:
+                                item.description,
+
+                            secondary:
+                                item.structured_formatting
+                                    ?.secondary_text ||
+                                ''
+                        }));
+
+
+                    this.renderSuggestions(
+                        results
+                    );
+                }
+            );
     },
 
 
@@ -200,10 +200,7 @@ ASIYE.places = {
             );
 
 
-        if (!container) {
-
-            return;
-        }
+        if (!container) return;
 
 
         if (
@@ -256,6 +253,7 @@ ASIYE.places = {
 
                         <span class="place-address">
                             ${ASIYE.ui.escape(
+                                place.secondary ||
                                 place.address
                             )}
                         </span>
@@ -285,7 +283,7 @@ ASIYE.places = {
 
                 button.addEventListener(
                     'click',
-                    async () => {
+                    () => {
 
                         const index =
                             Number(
@@ -300,7 +298,7 @@ ASIYE.places = {
                         if (!place) return;
 
 
-                        await this.selectDestination(
+                        this.resolvePlaceDetails(
                             place
                         );
                     }
@@ -309,32 +307,83 @@ ASIYE.places = {
     },
 
 
-    renderError() {
+    resolvePlaceDetails(place) {
 
-        const container =
-            document.getElementById(
-                'destinationSuggestions'
+        if (
+            !place?.placeId ||
+            !this.placesService
+        ) {
+
+            return;
+        }
+
+
+        this.placesService
+            .getDetails(
+                {
+                    placeId:
+                        place.placeId,
+
+                    fields: [
+                        'name',
+                        'formatted_address',
+                        'geometry'
+                    ]
+                },
+                async (
+                    result,
+                    status
+                ) => {
+
+                    if (
+                        status !==
+                        google.maps.places
+                            .PlacesServiceStatus.OK ||
+                        !result?.geometry?.location
+                    ) {
+
+                        ASIYE.ui?.toast(
+                            'Could not load this destination.'
+                        );
+
+                        return;
+                    }
+
+
+                    const lat =
+                        result.geometry.location.lat();
+
+
+                    const lng =
+                        result.geometry.location.lng();
+
+
+                    const destination = {
+
+                        name:
+                            result.name ||
+                            place.name,
+
+                        address:
+                            result.formatted_address ||
+                            place.address,
+
+                        latitude:
+                            lat,
+
+                        longitude:
+                            lng,
+
+                        placeId:
+                            place.placeId
+                    };
+
+
+                    await this.selectDestination(
+                        destination
+                    );
+                }
             );
-
-
-        if (!container) return;
-
-
-        container.innerHTML = `
-
-            <div
-                style="
-                    padding:18px 6px;
-                    text-align:center;
-                    color:#888;
-                    font-size:11px;
-                "
-            >
-                Could not search right now.
-                Please try again.
-            </div>
-
-        `;
     },
 
 
@@ -345,18 +394,27 @@ ASIYE.places = {
         );
 
 
-        ASIYE.map?.showDestinationMarker?.(
+        ASIYE.map
+            ?.showDestinationMarker?.(
 
-            place.latitude,
+                place.latitude,
 
-            place.longitude
-        );
-
-
-        await this.calculateRoute();
+                place.longitude
+            );
 
 
-        ASIYE.ui.renderRideSelection();
+        const route =
+            await this.calculateRoute();
+
+
+        if (!route) {
+
+            return;
+        }
+
+
+        ASIYE.ui
+            .renderRideSelection();
     },
 
 
@@ -374,15 +432,12 @@ ASIYE.places = {
             !Number.isFinite(
                 origin.latitude
             ) ||
-
             !Number.isFinite(
                 origin.longitude
             ) ||
-
             !Number.isFinite(
                 destination.latitude
             ) ||
-
             !Number.isFinite(
                 destination.longitude
             )
@@ -402,6 +457,10 @@ ASIYE.places = {
 
 
         if (!token) {
+
+            ASIYE.ui.toast(
+                'Map routing is not configured.'
+            );
 
             return null;
         }
@@ -423,6 +482,8 @@ ASIYE.places = {
 
                 `&steps=false` +
 
+                `&alternatives=false` +
+
                 `&access_token=${encodeURIComponent(token)}`;
 
 
@@ -433,7 +494,7 @@ ASIYE.places = {
             if (!response.ok) {
 
                 throw new Error(
-                    `Route request failed: ${response.status}`
+                    `Directions failed: ${response.status}`
                 );
             }
 
@@ -472,12 +533,22 @@ ASIYE.places = {
             };
 
 
-            ASIYE.map?.drawRoute?.(
-                route.geometry
-            );
+            ASIYE.map
+                ?.drawRoute?.(
+                    route.geometry
+                );
 
 
-            ASIYE.map?.fitTrip?.();
+            /*
+             * IMPORTANT:
+             * Fit the full route, not just
+             * the two points.
+             */
+
+            ASIYE.map
+                ?.fitRouteGeometry?.(
+                    route.geometry
+                );
 
 
             return ASIYE.state.route;
