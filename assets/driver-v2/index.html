@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
+    <meta
+        name="theme-color"
+        content="#111111"
+    >
+
+    <title>Asiye Driver</title>
+
+
+    <!-- =====================================================
+         FONTS
+    ====================================================== -->
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+
+    <!-- =====================================================
+         ICONS
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    >
+
+
+    <!-- =====================================================
+         MAPBOX
+    ====================================================== -->
+
+    <link
+        href="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css"
+        rel="stylesheet"
+    >
+
+    <script
+        src="https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.js">
+    </script>
+
+
+    <!-- =====================================================
+         GOOGLE MAPS / PLACES
+         Used when driver needs accurate destination search
+    ====================================================== -->
+
+    <script>
+        window.onDriverGoogleReady = function () {
+
+            window.__driverGoogleReady =
+                true;
+
+            console.log(
+                "✅ Driver Google Maps ready"
+            );
+
+        };
+    </script>
+
+    <script
+        async
+        src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places,geometry&loading=async&callback=onDriverGoogleReady">
+    </script>
+
+
+    <!-- =====================================================
+         FIREBASE
+    ====================================================== -->
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js">
+    </script>
+
+
+    <!-- =====================================================
+         DRIVER CSS
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="./css/app.css"
+    >
+
+</head>
+
+
+<body>
+
+
+    <!-- =====================================================
+         APPLICATION ROOT
+    ====================================================== -->
+
+    <main id="driverApp">
+
+
+        <!-- =================================================
+             MAP
+        ================================================== -->
+
+        <div id="map"></div>
+
+
+        <!-- =================================================
+             TOP BAR
+        ================================================== -->
+
+        <header id="driverTopBar">
+
+
+            <button
+                id="driverMenuButton"
+                class="driver-circle-button"
+                aria-label="Open menu"
+            >
+
+                <i class="fas fa-bars"></i>
+
+            </button>
+
+
+            <button
+                id="driverStatusButton"
+                class="driver-status-pill"
+            >
+
+                <span
+                    id="driverOnlineDot"
+                    class="driver-online-dot offline"
+                ></span>
+
+
+                <div>
+
+                    <span class="driver-status-label">
+
+                        Driver status
+
+                    </span>
+
+
+                    <strong
+                        id="driverStatusText"
+                    >
+
+                        Offline
+
+                    </strong>
+
+                </div>
+
+            </button>
+
+
+            <button
+                id="driverProfileButton"
+                class="driver-profile-button"
+            >
+
+                <span id="driverProfileInitial">
+
+                    D
+
+                </span>
+
+            </button>
+
+
+        </header>
+
+
+        <!-- =================================================
+             MAP CONTROLS
+        ================================================== -->
+
+        <div id="driverMapControls">
+
+
+            <button
+                id="driverRecenterButton"
+                class="driver-map-control"
+                aria-label="Recenter"
+            >
+
+                <i class="fas fa-location-crosshairs"></i>
+
+            </button>
+
+
+            <button
+                id="driverNavigationButton"
+                class="driver-map-control"
+                aria-label="Navigation"
+            >
+
+                <i class="fas fa-route"></i>
+
+            </button>
+
+
+        </div>
+
+
+        <!-- =================================================
+             DRIVER AVAILABILITY CARD
+        ================================================== -->
+
+        <section
+            id="driverHomeSheet"
+            class="driver-bottom-sheet open"
+        >
+
+            <div class="driver-sheet-handle"></div>
+
+
+            <div id="driverSheetContent">
+
+                <!-- Rendered by app.js -->
+
+            </div>
+
+
+        </section>
+
+
+        <!-- =================================================
+             INCOMING REQUEST OVERLAY
+        ================================================== -->
+
+        <div
+            id="incomingRequestOverlay"
+            class="driver-overlay"
+        >
+
+            <div
+                id="incomingRequestCard"
+                class="driver-request-card"
+            >
+
+
+                <div
+                    class="driver-request-topline"
+                >
+
+                    <div>
+
+                        <span
+                            id="incomingRequestType"
+                            class="driver-request-badge"
+                        >
+
+                            ASIYE GO
+
+                        </span>
+
+                    </div>
+
+
+                    <div
+                        id="incomingRequestTimer"
+                        class="driver-request-timer"
+                    >
+
+                        20
+
+                    </div>
+
+                </div>
+
+
+                <div
+                    id="incomingRequestContent"
+                >
+
+                    <!-- Rendered by app.js -->
+
+                </div>
+
+
+                <div
+                    class="driver-request-actions"
+                >
+
+
+                    <button
+                        id="declineRequestButton"
+                        class="driver-btn driver-btn-secondary"
+                    >
+
+                        Decline
+
+                    </button>
+
+
+                    <button
+                        id="acceptRequestButton"
+                        class="driver-btn driver-btn-primary"
+                    >
+
+                        Accept
+
+                    </button>
+
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             ACTIVE TRIP PANEL
+        ================================================== -->
+
+        <section
+            id="activeTripSheet"
+            class="driver-bottom-sheet"
+        >
+
+            <div class="driver-sheet-handle"></div>
+
+
+            <div id="activeTripContent">
+
+                <!-- Trip controller UI -->
+
+            </div>
+
+        </section>
+
+
+        <!-- =================================================
+             CLUB PASSENGER LIST
+        ================================================== -->
+
+        <div
+            id="clubPassengerOverlay"
+            class="driver-overlay"
+        >
+
+            <div
+                class="driver-dialog-card driver-passenger-list-card"
+            >
+
+
+                <div
+                    class="driver-dialog-header"
+                >
+
+                    <div>
+
+                        <div class="driver-dialog-kicker">
+
+                            Asiye Club
+
+                        </div>
+
+
+                        <h2>
+
+                            Passengers
+
+                        </h2>
+
+                    </div>
+
+
+                    <button
+                        id="closeClubPassengers"
+                        class="driver-small-circle-button"
+                    >
+
+                        <i class="fas fa-times"></i>
+
+                    </button>
+
+                </div>
+
+
+                <div
+                    id="clubPassengerList"
+                    class="club-passenger-list"
+                >
+
+                    <!-- Rendered dynamically -->
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             PIN VERIFICATION
+        ================================================== -->
+
+        <div
+            id="driverPinOverlay"
+            class="driver-overlay"
+        >
+
+            <div
+                class="driver-dialog-card driver-pin-card"
+            >
+
+
+                <button
+                    id="closeDriverPin"
+                    class="driver-small-circle-button driver-dialog-close"
+                >
+
+                    <i class="fas fa-times"></i>
+
+                </button>
+
+
+                <div
+                    class="driver-pin-icon"
+                >
+
+                    <i class="fas fa-shield-halved"></i>
+
+                </div>
+
+
+                <div class="driver-dialog-kicker">
+
+                    Safety verification
+
+                </div>
+
+
+                <h2
+                    id="driverPinPassengerName"
+                >
+
+                    Passenger PIN
+
+                </h2>
+
+
+                <p
+                    id="driverPinInstructions"
+                    class="driver-dialog-copy"
+                >
+
+                    Ask the passenger for their
+                    4-digit pickup PIN.
+
+                </p>
+
+
+                <input
+                    id="driverPinInput"
+                    class="driver-pin-input"
+                    type="tel"
+                    inputmode="numeric"
+                    maxlength="4"
+                    autocomplete="one-time-code"
+                    placeholder="••••"
+                >
+
+
+                <div
+                    id="driverPinError"
+                    class="driver-pin-error"
+                >
+
+                    Incorrect PIN.
+                    Please try again.
+
+                </div>
+
+
+                <button
+                    id="verifyDriverPinButton"
+                    class="driver-btn driver-btn-primary driver-btn-full"
+                >
+
+                    Verify passenger
+
+                </button>
+
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             GENERIC CONFIRMATION DIALOG
+        ================================================== -->
+
+        <div
+            id="driverConfirmOverlay"
+            class="driver-overlay"
+        >
+
+            <div
+                class="driver-dialog-card"
+            >
+
+
+                <div
+                    id="driverConfirmIcon"
+                    class="driver-confirm-icon"
+                >
+
+                    <i class="fas fa-circle-question"></i>
+
+                </div>
+
+
+                <h2
+                    id="driverConfirmTitle"
+                >
+
+                    Confirm action
+
+                </h2>
+
+
+                <p
+                    id="driverConfirmMessage"
+                    class="driver-dialog-copy"
+                >
+
+                    Are you sure?
+
+                </p>
+
+
+                <div
+                    class="driver-confirm-actions"
+                >
+
+
+                    <button
+                        id="driverConfirmCancel"
+                        class="driver-btn driver-btn-secondary"
+                    >
+
+                        Back
+
+                    </button>
+
+
+                    <button
+                        id="driverConfirmAction"
+                        class="driver-btn driver-btn-danger"
+                    >
+
+                        Confirm
+
+                    </button>
+
+
+                </div>
+
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             COMPLETED TRIP DIALOG
+        ================================================== -->
+
+        <div
+            id="driverCompletedOverlay"
+            class="driver-overlay"
+        >
+
+            <div
+                class="driver-dialog-card driver-completed-card"
+            >
+
+
+                <div
+                    class="driver-complete-icon"
+                >
+
+                    <i class="fas fa-check"></i>
+
+                </div>
+
+
+                <div class="driver-dialog-kicker">
+
+                    Trip complete
+
+                </div>
+
+
+                <h2>
+
+                    Nice work
+
+                </h2>
+
+
+                <div
+                    id="driverCompletedFare"
+                    class="driver-completed-fare"
+                >
+
+                    R0.00
+
+                </div>
+
+
+                <div
+                    id="driverCompletedDetails"
+                    class="driver-dialog-copy"
+                >
+
+                    Payment details
+
+                </div>
+
+
+                <button
+                    id="driverCompletedDone"
+                    class="driver-btn driver-btn-primary driver-btn-full"
+                >
+
+                    Back to dashboard
+
+                </button>
+
+
+            </div>
+
+        </div>
+
+
+        <!-- =================================================
+             SIDE MENU
+        ================================================== -->
+
+        <div
+            id="driverMenuBackdrop"
+        ></div>
+
+
+        <aside
+            id="driverSideMenu"
+        >
+
+
+            <div
+                class="driver-menu-header"
+            >
+
+
+                <div
+                    class="driver-menu-profile"
+                >
+
+
+                    <div
+                        id="driverMenuAvatar"
+                        class="driver-menu-avatar"
+                    >
+
+                        D
+
+                    </div>
+
+
+                    <div>
+
+
+                        <strong
+                            id="driverMenuName"
+                        >
+
+                            Asiye Driver
+
+                        </strong>
+
+
+                        <span
+                            id="driverMenuVehicle"
+                        >
+
+                            Driver account
+
+                        </span>
+
+
+                    </div>
+
+
+                </div>
+
+
+                <button
+                    id="closeDriverMenu"
+                    class="driver-small-circle-button"
+                >
+
+                    <i class="fas fa-times"></i>
+
+                </button>
+
+
+            </div>
+
+
+            <nav
+                class="driver-menu-list"
+            >
+
+
+                <button
+                    data-driver-page="dashboard"
+                >
+
+                    <i class="fas fa-house"></i>
+
+                    Dashboard
+
+                </button>
+
+
+                <button
+                    data-driver-page="earnings"
+                >
+
+                    <i class="fas fa-wallet"></i>
+
+                    Earnings
+
+                </button>
+
+
+                <button
+                    data-driver-page="trips"
+                >
+
+                    <i class="fas fa-clock-rotate-left"></i>
+
+                    Trip history
+
+                </button>
+
+
+                <button
+                    data-driver-page="club"
+                >
+
+                    <i class="fas fa-users"></i>
+
+                    Club rides
+
+                </button>
+
+
+                <button
+                    data-driver-page="vehicle"
+                >
+
+                    <i class="fas fa-car"></i>
+
+                    Vehicle
+
+                </button>
+
+
+                <button
+                    data-driver-page="safety"
+                >
+
+                    <i class="fas fa-shield-halved"></i>
+
+                    Safety
+
+                </button>
+
+
+                <button
+                    data-driver-page="support"
+                >
+
+                    <i class="fas fa-headset"></i>
+
+                    Support
+
+                </button>
+
+
+                <button
+                    data-driver-page="account"
+                >
+
+                    <i class="fas fa-user"></i>
+
+                    Account
+
+                </button>
+
+
+            </nav>
+
+
+        </aside>
+
+
+        <!-- =================================================
+             TOASTS
+        ================================================== -->
+
+        <div
+            id="driverToastContainer"
+        ></div>
+
+
+        <!-- =================================================
+             CONNECTION STATUS
+        ================================================== -->
+
+        <div
+            id="driverConnectionBanner"
+            class="driver-connection-banner"
+        >
+
+            <i class="fas fa-wifi"></i>
+
+            <span>
+                Reconnecting...
+            </span>
+
+        </div>
+
+
+    </main>
+
+
+    <!-- =====================================================
+         DRIVER APPLICATION SCRIPTS
+    ====================================================== -->
+
+
+    <!-- Configuration -->
+    <script src="./js/config.js"></script>
+
+
+    <!-- State -->
+    <script src="./js/state.js"></script>
+
+
+    <!-- Firebase -->
+    <script src="./js/firebase.js"></script>
+
+
+    <!-- Location -->
+    <script src="./js/location.js"></script>
+
+
+    <!-- Map -->
+    <script src="./js/map.js"></script>
+
+
+    <!-- Incoming requests -->
+    <script src="./js/requests.js"></script>
+
+
+    <!-- Trip lifecycle -->
+    <script src="./js/trip-controller.js"></script>
+
+
+    <!-- Main UI Controller -->
+    <script src="./js/app.js"></script>
+
+
+</body>
+
+</html>

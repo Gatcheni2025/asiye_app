@@ -247,10 +247,23 @@ ASIYE.club = {
             }
 
 
+            /*
+             * A pool is joinable while it is
+             * pooling, still waiting for members,
+             * OR already has a driver assigned
+             * but is not yet full.
+             *
+             * Driver V2 may accept a Club early,
+             * which sets status to driver_waiting.
+             * New commuters must still be able to
+             * join that pool until capacity is hit.
+             */
+
             if (
                 ![
                     'pooling',
-                    'waiting_members'
+                    'waiting_members',
+                    'driver_waiting'
                 ].includes(
                     pool.status
                 )
@@ -628,6 +641,12 @@ ASIYE.club = {
                     /*
                      * Pool becomes ready only
                      * when completely filled.
+                     *
+                     * If a driver already accepted
+                     * early (taxiId present), we
+                     * keep the pool in the
+                     * driver_waiting state until
+                     * the last seat is taken.
                      */
 
                     if (
@@ -646,6 +665,20 @@ ASIYE.club = {
                                 .database
                                 .ServerValue
                                 .TIMESTAMP;
+
+                    } else {
+
+                        /*
+                         * Keep assigned driver's waiting state.
+                         */
+
+                        pool.status =
+
+                            pool.taxiId
+
+                            ? 'driver_waiting'
+
+                            : 'pooling';
                     }
 
 
