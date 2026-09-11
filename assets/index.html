@@ -15850,46 +15850,6 @@ window.setupRealTimeStatusListener = function(requestId) {
 // 4. OVERRIDE THE PENDING REQUEST POPUP TO INCLUDE REAL-TIME LISTENER
 // ========================================================================
 
-window.showPendingRequestPopup = function(request) {
-    console.log("⏳ Showing pending request popup for:", request.key);
-    
-    // Set up real-time listener IMMEDIATELY
-    if (request.key) {
-        listenForRequestStatus(request.key);
-        // Also set up the enhanced real-time listener
-        window.setupRealTimeStatusListener(request.key);
-    }
-    
-    const popup = document.getElementById('pendingRequestPopup');
-    if (!popup) return;
-    
-    const isClub = request.type === 'club';
-    const passCount = request.passengers ? Object.keys(request.passengers).length : 1;
-    const maxCapacity = request.maxCapacity || 3;
-    
-    popup.innerHTML = `
-        <div class="modal-content" style="background: #1C1C1E; border-radius: 24px; padding: 30px; text-align: center; max-width: 400px; margin: auto; border: 1px solid #333;">
-            <div class="spinner" style="width: 50px; height: 50px; border-width: 4px; margin: 0 auto 20px; border-left-color: ${isClub ? '#FF9F0A' : '#007BFF'};"></div>
-            <h3 style="color: white; font-weight: 800;">
-                ${isClub ? 'Club Pool' : 'Finding Driver'}...
-            </h3>
-            <p style="color: #aaa; margin-bottom: 10px;">
-                ${isClub ? `Waiting for ${maxCapacity - passCount} more passengers` : 'Please wait while we connect you with a driver.'}
-            </p>
-            ${isClub ? `<p style="color: #FF9F0A; font-weight: 700;">${passCount}/${maxCapacity} Passengers</p>` : ''}
-            <div id="requestStatusMessage" style="color: #aaa; font-size: 0.9rem; margin-top: 10px;">
-                Searching for drivers...
-            </div>
-            <button onclick="cancelCurrentRequest()" style="background: #dc3545; color: white; border: none; padding: 14px 30px; border-radius: 30px; font-weight: 800; margin-top: 20px; cursor: pointer;">
-                Cancel Request
-            </button>
-        </div>
-    `;
-    
-    popup.classList.add('open');
-    popup.style.display = 'flex';
-};
-
 // ========================================================================
 // 5. OVERRIDE THE REQUEST TAXI FUNCTION TO SETUP LISTENERS
 // ========================================================================
@@ -50283,6 +50243,2122 @@ window.switchPendingSheetToAccepted = function(request) {
 
     console.log("✅ Pending sheet switched to ACCEPTED state");
 };
+</script>
+
+<style>
+/* ==========================================================
+   ASIYE — PREMIUM PASSENGER BOOKING FLOW
+   ========================================================== */
+
+#pendingRequestPopup.asiye-booking-flow {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+
+    display: none;
+    align-items: flex-end !important;
+    justify-content: center !important;
+
+    background: transparent !important;
+
+    padding: 0 !important;
+    margin: 0 !important;
+
+    pointer-events: none !important;
+
+    z-index: 30000 !important;
+
+    opacity: 1 !important;
+    visibility: visible !important;
+    transform: none !important;
+}
+
+#pendingRequestPopup.asiye-booking-flow.open {
+    display: flex !important;
+}
+
+#pendingRequestPopup .asiye-request-sheet {
+    position: relative;
+
+    width: 100%;
+    max-width: 520px;
+
+    background: #ffffff !important;
+
+    border-radius: 28px 28px 0 0 !important;
+
+    padding:
+        10px
+        20px
+        max(22px, env(safe-area-inset-bottom))
+        20px !important;
+
+    margin: 0 !important;
+
+    box-shadow:
+        0 -1px 0 rgba(0,0,0,0.04),
+        0 -12px 40px rgba(0,0,0,0.12) !important;
+
+    border: none !important;
+
+    transform: translateY(0) !important;
+
+    pointer-events: auto !important;
+
+    font-family:
+        'Manrope',
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
+
+    color: #111111 !important;
+
+    overflow: hidden;
+}
+
+
+/* Handle */
+
+.asiye-request-handle {
+    width: 38px;
+    height: 5px;
+
+    background: #dedede;
+
+    border-radius: 20px;
+
+    margin: 0 auto 18px auto;
+}
+
+
+/* Main top row */
+
+.asiye-request-main {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+
+/* Icon */
+
+.asiye-request-icon-wrap {
+    position: relative;
+
+    width: 52px;
+    height: 52px;
+
+    flex: 0 0 52px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+.asiye-request-icon {
+    position: relative;
+
+    z-index: 3;
+
+    width: 46px;
+    height: 46px;
+
+    border-radius: 50%;
+
+    background: #111111;
+
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    font-size: 17px;
+
+    box-shadow:
+        0 6px 18px rgba(0,0,0,0.18);
+}
+
+
+/* Radar pulse */
+
+.asiye-request-radar,
+.asiye-request-radar::after {
+    content: "";
+
+    position: absolute;
+
+    left: 50%;
+    top: 50%;
+
+    width: 45px;
+    height: 45px;
+
+    border-radius: 50%;
+
+    transform:
+        translate(-50%, -50%)
+        scale(.8);
+
+    border: 1.5px solid rgba(0,0,0,0.20);
+
+    animation:
+        asiyeBookingRadar 2.1s ease-out infinite;
+}
+
+.asiye-request-radar::after {
+    animation-delay: 0.7s;
+}
+
+
+@keyframes asiyeBookingRadar {
+
+    0% {
+        transform:
+            translate(-50%, -50%)
+            scale(.75);
+
+        opacity: .7;
+    }
+
+    100% {
+        transform:
+            translate(-50%, -50%)
+            scale(1.75);
+
+        opacity: 0;
+    }
+}
+
+
+/* Copy */
+
+.asiye-request-copy {
+    flex: 1;
+    min-width: 0;
+}
+
+
+.asiye-request-eyebrow {
+    font-size: 11px;
+
+    color: #888888;
+
+    font-weight: 800;
+
+    text-transform: uppercase;
+
+    letter-spacing: .8px;
+
+    margin-bottom: 2px;
+}
+
+
+.asiye-request-title {
+    margin: 0 !important;
+
+    color: #111111 !important;
+
+    font-size: 17px !important;
+
+    line-height: 1.25 !important;
+
+    font-weight: 800 !important;
+
+    letter-spacing: -0.4px;
+}
+
+
+.asiye-request-subtitle {
+    margin: 4px 0 0 0 !important;
+
+    color: #777777 !important;
+
+    font-size: 13px !important;
+
+    line-height: 1.4 !important;
+
+    font-weight: 500 !important;
+}
+
+
+/* Animated searching indicator */
+
+.asiye-search-dots {
+    display: flex;
+    align-items: center;
+
+    gap: 4px;
+
+    margin-left: 8px;
+}
+
+
+.asiye-search-dots span {
+    width: 5px;
+    height: 5px;
+
+    border-radius: 50%;
+
+    background: #111111;
+
+    animation:
+        asiyeSearchDot 1.2s infinite ease-in-out;
+}
+
+
+.asiye-search-dots span:nth-child(2) {
+    animation-delay: .15s;
+}
+
+
+.asiye-search-dots span:nth-child(3) {
+    animation-delay: .3s;
+}
+
+
+@keyframes asiyeSearchDot {
+
+    0%,
+    60%,
+    100% {
+        opacity: .25;
+        transform: translateY(0);
+    }
+
+    30% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
+}
+
+
+/* Divider / progress */
+
+.asiye-booking-progress-track {
+    width: 100%;
+    height: 3px;
+
+    background: #eeeeee;
+
+    border-radius: 999px;
+
+    overflow: hidden;
+
+    margin: 18px 0 16px;
+}
+
+
+.asiye-booking-progress {
+    height: 100%;
+
+    width: 35%;
+
+    border-radius: inherit;
+
+    background: #111111;
+
+    animation:
+        asiyeBookingProgress 1.7s ease-in-out infinite;
+}
+
+
+@keyframes asiyeBookingProgress {
+
+    0% {
+        transform: translateX(-110%);
+    }
+
+    100% {
+        transform: translateX(390%);
+    }
+}
+
+
+/* Trip summary */
+
+.asiye-request-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    background: #f7f7f7;
+
+    border-radius: 16px;
+
+    padding: 12px 14px;
+
+    margin-bottom: 14px;
+}
+
+
+.asiye-request-summary-icon {
+    width: 32px;
+    height: 32px;
+
+    border-radius: 50%;
+
+    background: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    flex-shrink: 0;
+
+    color: #111111;
+}
+
+
+.asiye-request-summary-text {
+    min-width: 0;
+    flex: 1;
+}
+
+
+.asiye-request-summary-label {
+    font-size: 10px;
+
+    font-weight: 800;
+
+    color: #999999;
+
+    text-transform: uppercase;
+
+    letter-spacing: .6px;
+}
+
+
+.asiye-request-summary-value {
+    color: #222222;
+
+    font-size: 12px;
+
+    font-weight: 700;
+
+    white-space: nowrap;
+
+    overflow: hidden;
+
+    text-overflow: ellipsis;
+
+    margin-top: 2px;
+}
+
+
+/* Buttons */
+
+.asiye-request-actions {
+    display: flex;
+    gap: 10px;
+}
+
+
+.asiye-request-cancel {
+    width: 100%;
+
+    min-height: 48px;
+
+    background: #f3f3f3 !important;
+
+    color: #111111 !important;
+
+    border: none !important;
+
+    border-radius: 14px !important;
+
+    font-family: inherit;
+
+    font-size: 14px;
+
+    font-weight: 800;
+
+    cursor: pointer;
+
+    transition:
+        transform .15s ease,
+        background .15s ease,
+        opacity .15s ease;
+}
+
+
+.asiye-request-cancel:active {
+    transform: scale(.985);
+}
+
+
+.asiye-request-cancel:disabled {
+    cursor: default;
+
+    opacity: .55;
+}
+
+
+/* Cancelling state */
+
+.asiye-request-sheet.is-cancelling
+.asiye-request-radar {
+
+    display: none;
+}
+
+
+.asiye-request-sheet.is-cancelling
+.asiye-request-icon {
+
+    background: #eeeeee;
+
+    color: #222222;
+}
+
+
+.asiye-request-spinner {
+    width: 18px;
+    height: 18px;
+
+    border-radius: 50%;
+
+    border: 2px solid #d5d5d5;
+
+    border-top-color: #111111;
+
+    animation:
+        asiyeRequestSpin .7s linear infinite;
+}
+
+
+@keyframes asiyeRequestSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* Driver accepted */
+
+.asiye-request-sheet.driver-found
+.asiye-request-icon {
+
+    background: #111111;
+}
+
+
+.asiye-request-sheet.driver-found
+.asiye-request-radar {
+
+    border-color: rgba(40,167,69,.30);
+}
+
+
+.asiye-request-sheet.driver-found
+.asiye-request-radar::after {
+
+    border-color: rgba(40,167,69,.30);
+}
+
+
+.asiye-found-badge {
+    display: inline-flex;
+
+    align-items: center;
+
+    gap: 5px;
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    color: #187c3d;
+
+    background: #edf9f1;
+
+    padding: 4px 8px;
+
+    border-radius: 999px;
+
+    margin-top: 7px;
+}
+
+
+/* Mobile */
+
+@media (max-width: 520px) {
+
+    #pendingRequestPopup .asiye-request-sheet {
+        width: 100%;
+        max-width: 100%;
+
+        border-radius: 26px 26px 0 0 !important;
+    }
+
+}
+</style>
+
+
+<script>
+
+/* ==========================================================
+   ASIYE PASSENGER BOOKING FLOW
+   ONE UI — ONE STATE MACHINE — ONE LISTENER
+   ========================================================== */
+
+(function () {
+
+    /* ----------------------------------------------------------
+       STATE
+       ---------------------------------------------------------- */
+
+    window.ASIYE_BOOKING = window.ASIYE_BOOKING || {
+        requestId: null,
+        firebaseListener: null,
+        firebaseRef: null,
+        cancelling: false,
+        acceptedShown: false
+    };
+
+
+    /* ----------------------------------------------------------
+       SAFE HTML
+       ---------------------------------------------------------- */
+
+    function bookingEscape(value) {
+
+        if (value === undefined || value === null) {
+            return '';
+        }
+
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+
+    /* ----------------------------------------------------------
+       GET POPUP
+       ---------------------------------------------------------- */
+
+    function getBookingPopup() {
+
+        return document.getElementById('pendingRequestPopup');
+    }
+
+
+    /* ----------------------------------------------------------
+       STOP THIS UI'S LISTENER
+       ---------------------------------------------------------- */
+
+    function stopBookingFlowListener() {
+
+        const flow = window.ASIYE_BOOKING;
+
+        if (
+            flow.firebaseRef &&
+            flow.firebaseListener
+        ) {
+
+            try {
+
+                flow.firebaseRef.off(
+                    'value',
+                    flow.firebaseListener
+                );
+
+            } catch (error) {
+
+                console.warn(
+                    'Unable to remove booking UI listener:',
+                    error
+                );
+            }
+        }
+
+
+        flow.firebaseRef = null;
+        flow.firebaseListener = null;
+    }
+
+
+    /* ----------------------------------------------------------
+       CLOSE REQUEST SHEET
+       ---------------------------------------------------------- */
+
+    window.closeAsiyeBookingSheet = function () {
+
+        const popup = getBookingPopup();
+
+        if (!popup) {
+            return;
+        }
+
+
+        popup.classList.remove(
+            'open'
+        );
+
+        popup.style.setProperty(
+            'display',
+            'none',
+            'important'
+        );
+    };
+
+
+    /* ----------------------------------------------------------
+       BUILD SEARCHING UI
+       ---------------------------------------------------------- */
+
+    function buildSearchingSheet(request) {
+
+        const popup = getBookingPopup();
+
+        if (!popup) {
+            console.error(
+                'pendingRequestPopup was not found.'
+            );
+
+            return;
+        }
+
+
+        const isClub =
+            request &&
+            (
+                request.type === 'club' ||
+                request.carCategory === 'club' ||
+                request.carCategory === 'clubxl'
+            );
+
+
+        const destination =
+            request?.dropoffAddress ||
+            request?.destinationAddress ||
+            request?.destination ||
+            window.userDropOffDestination ||
+            'Your destination';
+
+
+        const passengerCount =
+            request?.passengers
+                ? Object.keys(request.passengers).length
+                : 1;
+
+
+        const maxCapacity =
+            Number(
+                request?.maxCapacity ||
+                3
+            );
+
+
+        let subtitle =
+            'Matching you with a nearby driver.';
+
+
+        let eyebrow =
+            'Asiye Go';
+
+
+        if (isClub) {
+
+            eyebrow =
+                'Asiye Club';
+
+
+            const spacesLeft =
+                Math.max(
+                    0,
+                    maxCapacity - passengerCount
+                );
+
+
+            subtitle =
+                spacesLeft > 0
+
+                    ? `${spacesLeft} more passenger${spacesLeft === 1 ? '' : 's'} needed before departure.`
+
+                    : 'Your Club ride is ready for a driver.';
+        }
+
+
+        popup.className =
+            'modal-overlay asiye-booking-flow open';
+
+
+        popup.style.setProperty(
+            'display',
+            'flex',
+            'important'
+        );
+
+
+        popup.style.setProperty(
+            'visibility',
+            'visible',
+            'important'
+        );
+
+
+        popup.style.setProperty(
+            'opacity',
+            '1',
+            'important'
+        );
+
+
+        popup.innerHTML = `
+
+            <div
+                id="pendingRequestSheet"
+                class="asiye-request-sheet"
+            >
+
+                <div class="asiye-request-handle"></div>
+
+
+                <div class="asiye-request-main">
+
+                    <div class="asiye-request-icon-wrap">
+
+                        <div
+                            class="asiye-request-radar"
+                            id="bookingRadar"
+                        ></div>
+
+                        <div
+                            class="asiye-request-icon"
+                            id="bookingRequestIcon"
+                        >
+                            <i class="fas fa-car-side"></i>
+                        </div>
+
+                    </div>
+
+
+                    <div class="asiye-request-copy">
+
+                        <div
+                            class="asiye-request-eyebrow"
+                            id="bookingFlowEyebrow"
+                        >
+                            ${bookingEscape(eyebrow)}
+                        </div>
+
+
+                        <h3
+                            class="asiye-request-title"
+                            id="pendingTitle"
+                        >
+                            Finding your driver
+                        </h3>
+
+
+                        <p
+                            class="asiye-request-subtitle"
+                            id="requestingMessage"
+                        >
+                            ${bookingEscape(subtitle)}
+                        </p>
+
+                    </div>
+
+
+                    <div
+                        class="asiye-search-dots"
+                        id="bookingSearchDots"
+                        aria-hidden="true"
+                    >
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+
+                </div>
+
+
+                <div
+                    class="asiye-booking-progress-track"
+                    id="bookingProgressTrack"
+                >
+                    <div
+                        class="asiye-booking-progress"
+                    ></div>
+                </div>
+
+
+                <div class="asiye-request-summary">
+
+                    <div class="asiye-request-summary-icon">
+
+                        <i class="fas fa-location-arrow"></i>
+
+                    </div>
+
+
+                    <div class="asiye-request-summary-text">
+
+                        <div class="asiye-request-summary-label">
+                            Destination
+                        </div>
+
+                        <div
+                            class="asiye-request-summary-value"
+                            id="bookingDestination"
+                        >
+                            ${bookingEscape(destination)}
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="asiye-request-actions">
+
+                    <button
+                        type="button"
+                        id="cancelRequestBtn"
+                        class="asiye-request-cancel"
+                        onclick="window.cancelCurrentRequest()"
+                    >
+                        Cancel request
+                    </button>
+
+                </div>
+
+            </div>
+        `;
+    }
+
+
+    /* ----------------------------------------------------------
+       UPDATE BOOKING UI STATE
+       ---------------------------------------------------------- */
+
+    window.setAsiyeBookingState = function (
+        state,
+        data = {}
+    ) {
+
+        const sheet =
+            document.getElementById(
+                'pendingRequestSheet'
+            );
+
+
+        if (!sheet) {
+            return;
+        }
+
+
+        const title =
+            document.getElementById(
+                'pendingTitle'
+            );
+
+
+        const subtitle =
+            document.getElementById(
+                'requestingMessage'
+            );
+
+
+        const eyebrow =
+            document.getElementById(
+                'bookingFlowEyebrow'
+            );
+
+
+        const icon =
+            document.getElementById(
+                'bookingRequestIcon'
+            );
+
+
+        const dots =
+            document.getElementById(
+                'bookingSearchDots'
+            );
+
+
+        const progress =
+            document.getElementById(
+                'bookingProgressTrack'
+            );
+
+
+        const cancelButton =
+            document.getElementById(
+                'cancelRequestBtn'
+            );
+
+
+        sheet.classList.remove(
+            'is-cancelling',
+            'driver-found'
+        );
+
+
+        switch (state) {
+
+
+            /* ==========================
+               SEARCHING
+               ========================== */
+
+            case 'searching':
+
+                if (eyebrow) {
+                    eyebrow.textContent =
+                        data.eyebrow ||
+                        'Asiye Go';
+                }
+
+
+                if (title) {
+                    title.textContent =
+                        'Finding your driver';
+                }
+
+
+                if (subtitle) {
+                    subtitle.textContent =
+                        data.message ||
+                        'Matching you with a nearby driver.';
+                }
+
+
+                if (icon) {
+
+                    icon.innerHTML =
+                        '<i class="fas fa-car-side"></i>';
+                }
+
+
+                if (dots) {
+                    dots.style.display =
+                        'flex';
+                }
+
+
+                if (progress) {
+                    progress.style.display =
+                        'block';
+                }
+
+
+                if (cancelButton) {
+
+                    cancelButton.disabled =
+                        false;
+
+                    cancelButton.textContent =
+                        'Cancel request';
+                }
+
+                break;
+
+
+
+            /* ==========================
+               DRIVER FOUND
+               ========================== */
+
+            case 'accepted':
+
+                sheet.classList.add(
+                    'driver-found'
+                );
+
+
+                if (eyebrow) {
+                    eyebrow.textContent =
+                        'Driver found';
+                }
+
+
+                if (title) {
+
+                    title.textContent =
+                        data.driverName
+
+                            ? `${data.driverName} is on the way`
+
+                            : 'Your driver is on the way';
+                }
+
+
+                if (subtitle) {
+
+                    subtitle.innerHTML = '';
+
+                    const text =
+                        document.createElement(
+                            'span'
+                        );
+
+
+                    text.textContent =
+                        data.message ||
+                        'Your driver is heading to your pickup point.';
+
+
+                    subtitle.appendChild(
+                        text
+                    );
+
+
+                    const badge =
+                        document.createElement(
+                            'span'
+                        );
+
+
+                    badge.className =
+                        'asiye-found-badge';
+
+
+                    badge.innerHTML =
+                        '<i class="fas fa-check"></i> Confirmed';
+
+
+                    subtitle.appendChild(
+                        document.createElement('br')
+                    );
+
+
+                    subtitle.appendChild(
+                        badge
+                    );
+                }
+
+
+                if (icon) {
+
+                    const initial =
+                        (
+                            data.driverName ||
+                            ''
+                        )
+                        .trim()
+                        .charAt(0)
+                        .toUpperCase();
+
+
+                    icon.innerHTML =
+                        initial
+
+                            ? bookingEscape(initial)
+
+                            : '<i class="fas fa-check"></i>';
+                }
+
+
+                if (dots) {
+                    dots.style.display =
+                        'none';
+                }
+
+
+                if (progress) {
+                    progress.style.display =
+                        'none';
+                }
+
+
+                if (cancelButton) {
+
+                    cancelButton.disabled =
+                        false;
+
+                    cancelButton.textContent =
+                        'Cancel trip';
+                }
+
+                break;
+
+
+
+            /* ==========================
+               CANCELLING
+               ========================== */
+
+            case 'cancelling':
+
+                sheet.classList.add(
+                    'is-cancelling'
+                );
+
+
+                if (eyebrow) {
+                    eyebrow.textContent =
+                        'Asiye';
+                }
+
+
+                if (title) {
+                    title.textContent =
+                        'Closing your request';
+                }
+
+
+                if (subtitle) {
+                    subtitle.textContent =
+                        'Just a moment while we update your booking.';
+                }
+
+
+                if (icon) {
+
+                    icon.innerHTML =
+                        '<div class="asiye-request-spinner"></div>';
+                }
+
+
+                if (dots) {
+                    dots.style.display =
+                        'none';
+                }
+
+
+                if (progress) {
+                    progress.style.display =
+                        'none';
+                }
+
+
+                if (cancelButton) {
+
+                    cancelButton.disabled =
+                        true;
+
+                    cancelButton.textContent =
+                        'Please wait';
+                }
+
+                break;
+
+
+
+            /* ==========================
+               ERROR
+               ========================== */
+
+            case 'error':
+
+                if (eyebrow) {
+                    eyebrow.textContent =
+                        'Booking';
+                }
+
+
+                if (title) {
+                    title.textContent =
+                        'Something went wrong';
+                }
+
+
+                if (subtitle) {
+                    subtitle.textContent =
+                        data.message ||
+                        'We could not update your request. Please try again.';
+                }
+
+
+                if (icon) {
+
+                    icon.innerHTML =
+                        '<i class="fas fa-exclamation"></i>';
+                }
+
+
+                if (dots) {
+                    dots.style.display =
+                        'none';
+                }
+
+
+                if (progress) {
+                    progress.style.display =
+                        'none';
+                }
+
+
+                if (cancelButton) {
+
+                    cancelButton.disabled =
+                        false;
+
+                    cancelButton.textContent =
+                        'Try cancelling again';
+                }
+
+                break;
+        }
+    };
+
+
+    /* ----------------------------------------------------------
+       MAIN SHOW FUNCTION
+       Replaces all old pending popup functions
+       ---------------------------------------------------------- */
+
+    window.showPendingRequestPopup = function (
+        request
+    ) {
+
+        request =
+            request || {};
+
+
+        const requestId =
+            request.key ||
+            request.requestId ||
+            window.currentRequestId ||
+            localStorage.getItem(
+                'currentRequestId'
+            );
+
+
+        console.log(
+            '🚕 Opening Asiye booking flow:',
+            requestId
+        );
+
+
+        if (requestId) {
+
+            window.currentRequestId =
+                requestId;
+
+
+            localStorage.setItem(
+                'currentRequestId',
+                requestId
+            );
+
+
+            window.ASIYE_BOOKING.requestId =
+                requestId;
+        }
+
+
+        buildSearchingSheet(
+            request
+        );
+
+
+        const isClub =
+            request.type === 'club' ||
+            request.carCategory === 'club' ||
+            request.carCategory === 'clubxl';
+
+
+        if (isClub) {
+
+            const passengerCount =
+                request.passengers
+                    ? Object.keys(
+                        request.passengers
+                    ).length
+                    : 1;
+
+
+            const maxCapacity =
+                Number(
+                    request.maxCapacity ||
+                    3
+                );
+
+
+            const needed =
+                Math.max(
+                    0,
+                    maxCapacity -
+                    passengerCount
+                );
+
+
+            window.setAsiyeBookingState(
+                'searching',
+                {
+                    eyebrow:
+                        'Asiye Club',
+
+                    message:
+                        needed > 0
+
+                            ? `Waiting for ${needed} more passenger${needed === 1 ? '' : 's'} while we prepare your ride.`
+
+                            : 'Your Club group is ready. Finding your driver.'
+                }
+            );
+
+        } else {
+
+            window.setAsiyeBookingState(
+                'searching',
+                {
+                    eyebrow:
+                        'Asiye Go',
+
+                    message:
+                        'Matching you with a nearby driver.'
+                }
+            );
+        }
+
+
+        if (requestId) {
+
+            startAsiyeBookingFlowListener(
+                requestId
+            );
+        }
+    };
+
+
+    /* ----------------------------------------------------------
+       BOOKING FLOW REALTIME LISTENER
+
+       IMPORTANT:
+       This listener only controls this sheet.
+       Existing trip tracking can continue handling
+       driver map movement, ETA, arrivals, etc.
+       ---------------------------------------------------------- */
+
+    function startAsiyeBookingFlowListener(
+        requestId
+    ) {
+
+        stopBookingFlowListener();
+
+
+        const ref =
+            firebase
+                .database()
+                .ref(
+                    `requests/${requestId}`
+                );
+
+
+        const listener =
+            ref.on(
+                'value',
+                function (snapshot) {
+
+                    const request =
+                        snapshot.val();
+
+
+                    if (!request) {
+                        return;
+                    }
+
+
+                    let status =
+                        request.status ||
+                        'pending';
+
+
+                    let taxiId =
+                        request.taxiId ||
+                        request.driverId;
+
+
+                    /*
+                     * Club passenger-specific state
+                     */
+                    if (
+                        request.type === 'club' &&
+                        request.passengers &&
+                        request.passengers[
+                            window.userId
+                        ]
+                    ) {
+
+                        const passenger =
+                            request.passengers[
+                                window.userId
+                            ];
+
+
+                        if (
+                            passenger.status &&
+                            passenger.status !==
+                            'pending'
+                        ) {
+
+                            status =
+                                passenger.status;
+                        }
+
+
+                        if (
+                            request.status ===
+                                'pooling' &&
+                            taxiId
+                        ) {
+
+                            status =
+                                'driver_waiting';
+                        }
+                    }
+
+
+                    console.log(
+                        '🚕 Booking UI status:',
+                        status
+                    );
+
+
+                    /* SEARCHING */
+
+                    if (
+                        status === 'pending' ||
+                        status === 'searching' ||
+                        status === 'pooling' ||
+                        status === 'requested'
+                    ) {
+
+                        return;
+                    }
+
+
+                    /* DRIVER ACCEPTED */
+
+                    if (
+                        status === 'accepted' ||
+                        status === 'driver_on_way' ||
+                        status === 'driver_waiting'
+                    ) {
+
+                        const driverName =
+                            request.driverName ||
+                            request.taxiName ||
+                            'Your driver';
+
+
+                        window.setAsiyeBookingState(
+                            'accepted',
+                            {
+                                driverName:
+                                    driverName,
+
+                                message:
+                                    request.pickupPin
+
+                                        ? `Driver confirmed. Your pickup PIN is ${request.pickupPin}.`
+
+                                        : 'Your driver is heading to your pickup point.'
+                            }
+                        );
+
+
+                        /*
+                         * Give user a brief visual confirmation,
+                         * then move into the existing detailed
+                         * driver tracking UI.
+                         */
+
+                        if (
+                            !window
+                                .ASIYE_BOOKING
+                                .acceptedShown
+                        ) {
+
+                            window
+                                .ASIYE_BOOKING
+                                .acceptedShown =
+                                true;
+
+
+                            setTimeout(
+                                function () {
+
+                                    window
+                                        .closeAsiyeBookingSheet();
+
+
+                                    if (
+                                        taxiId &&
+                                        typeof window
+                                            .showDriverAcceptedPopup ===
+                                            'function'
+                                    ) {
+
+                                        window
+                                            .showDriverAcceptedPopup(
+                                                taxiId,
+                                                {
+                                                    requestKey:
+                                                        requestId
+                                                }
+                                            );
+                                    }
+
+                                },
+                                900
+                            );
+                        }
+
+
+                        return;
+                    }
+
+
+                    /* DRIVER ARRIVED */
+
+                    if (
+                        status === 'arrived' ||
+                        status === 'passenger_here'
+                    ) {
+
+                        window.closeAsiyeBookingSheet();
+
+
+                        if (
+                            typeof window
+                                .showTaxiArrivedCommuterPopup ===
+                            'function'
+                        ) {
+
+                            window
+                                .showTaxiArrivedCommuterPopup(
+                                    request
+                                );
+                        }
+
+
+                        return;
+                    }
+
+
+                    /* TRIP STARTED */
+
+                    if (
+                        status === 'passenger_onboard' ||
+                        status === 'picked_up' ||
+                        status === 'in_transit'
+                    ) {
+
+                        window.closeAsiyeBookingSheet();
+
+
+                        if (
+                            typeof window
+                                .showInTransitCommuterPopup ===
+                            'function'
+                        ) {
+
+                            window
+                                .showInTransitCommuterPopup(
+                                    request
+                                );
+                        }
+
+
+                        return;
+                    }
+
+
+                    /* COMPLETED */
+
+                    if (
+                        status === 'completed'
+                    ) {
+
+                        stopBookingFlowListener();
+
+                        window.closeAsiyeBookingSheet();
+
+
+                        if (
+                            typeof window
+                                .showTripCompletedScreen ===
+                            'function'
+                        ) {
+
+                            window
+                                .showTripCompletedScreen(
+                                    requestId
+                                );
+                        }
+
+
+                        return;
+                    }
+
+
+                    /* CANCELLED BY DRIVER */
+
+                    if (
+                        status === 'cancelled_by_driver' ||
+                        status === 'cancelled_by_admin' ||
+                        status === 'rejected'
+                    ) {
+
+                        stopBookingFlowListener();
+
+
+                        window.currentRequestId =
+                            null;
+
+
+                        localStorage.removeItem(
+                            'currentRequestId'
+                        );
+
+
+                        window.closeAsiyeBookingSheet();
+
+
+                        if (
+                            typeof showToast ===
+                            'function'
+                        ) {
+
+                            showToast(
+                                'The driver could not complete this request. Please choose another ride.',
+                                'info'
+                            );
+                        }
+
+
+                        setTimeout(
+                            function () {
+
+                                if (
+                                    typeof showModernDashboard ===
+                                    'function'
+                                ) {
+
+                                    showModernDashboard();
+                                }
+
+                            },
+                            250
+                        );
+                    }
+                }
+            );
+
+
+        window.ASIYE_BOOKING.firebaseRef =
+            ref;
+
+
+        window.ASIYE_BOOKING.firebaseListener =
+            listener;
+    }
+
+
+    /* ----------------------------------------------------------
+       CANCEL BUTTON
+       ---------------------------------------------------------- */
+
+    window.cancelCurrentRequest = function () {
+
+        if (
+            window.ASIYE_BOOKING.cancelling
+        ) {
+
+            return;
+        }
+
+
+        const requestId =
+            window.currentRequestId ||
+            localStorage.getItem(
+                'currentRequestId'
+            );
+
+
+        if (!requestId) {
+
+            window.closeAsiyeBookingSheet();
+
+
+            if (
+                typeof showModernDashboard ===
+                'function'
+            ) {
+
+                showModernDashboard();
+            }
+
+
+            return;
+        }
+
+
+        const performCancel =
+            function () {
+
+                executeAsiyePassengerCancellation(
+                    requestId
+                );
+            };
+
+
+        if (
+            typeof window.showConfirmPopup ===
+            'function'
+        ) {
+
+            window.showConfirmPopup(
+
+                'Cancel this ride?',
+
+                'Your driver search will stop and this booking will be closed.',
+
+                performCancel,
+
+                'Cancel ride',
+
+                'Keep searching',
+
+                'danger'
+            );
+
+
+        } else {
+
+            if (
+                window.confirm(
+                    'Cancel this ride?'
+                )
+            ) {
+
+                performCancel();
+            }
+        }
+    };
+
+
+    /* ----------------------------------------------------------
+       COMPLETE CANCELLATION
+       ---------------------------------------------------------- */
+
+    async function executeAsiyePassengerCancellation(
+        requestId
+    ) {
+
+        if (!requestId) {
+            return;
+        }
+
+
+        if (
+            window.ASIYE_BOOKING.cancelling
+        ) {
+
+            return;
+        }
+
+
+        window.ASIYE_BOOKING.cancelling =
+            true;
+
+
+        window.setAsiyeBookingState(
+            'cancelling'
+        );
+
+
+        try {
+
+            /*
+             * Read request BEFORE updating it so
+             * we still know the assigned driver.
+             */
+
+            const snapshot =
+                await firebase
+                    .database()
+                    .ref(
+                        `requests/${requestId}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            const request =
+                snapshot.val() || {};
+
+
+            /*
+             * Update booking
+             */
+
+            await firebase
+                .database()
+                .ref(
+                    `requests/${requestId}`
+                )
+                .update({
+                    status:
+                        'cancelled_by_commuter',
+
+                    cancelledAt:
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+                });
+
+
+            /*
+             * Notify assigned driver
+             */
+
+            const driverId =
+                request.taxiId ||
+                request.driverId;
+
+
+            if (driverId) {
+
+                await firebase
+                    .database()
+                    .ref(
+                        `notifications/taxis/${driverId}`
+                    )
+                    .push({
+
+                        type:
+                            'cancelled_by_commuter',
+
+                        title:
+                            'Booking cancelled',
+
+                        message:
+                            `${
+                                request.commuterName ||
+                                'Passenger'
+                            } cancelled the booking.`,
+
+                        requestId:
+                            requestId,
+
+                        timestamp:
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP
+                    });
+            }
+
+
+            /*
+             * Clear commuter active request
+             */
+
+            const commuterId =
+                window.userId ||
+                request.commuterId;
+
+
+            if (commuterId) {
+
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${commuterId}`
+                    )
+                    .update({
+                        currentRequest:
+                            null
+                    });
+            }
+
+
+            /*
+             * Stop booking UI listener
+             */
+
+            stopBookingFlowListener();
+
+
+            /*
+             * Clear local state
+             */
+
+            window.currentRequestId =
+                null;
+
+
+            localStorage.removeItem(
+                'currentRequestId'
+            );
+
+
+            if (
+                window.commuterData
+            ) {
+
+                window.commuterData
+                    .currentRequest =
+                    null;
+            }
+
+
+            /*
+             * Clean map/trip data using your
+             * existing functions when available.
+             */
+
+            if (
+                typeof window
+                    .cleanupPassengerTripMap ===
+                'function'
+            ) {
+
+                try {
+
+                    window
+                        .cleanupPassengerTripMap();
+
+                } catch (error) {
+
+                    console.warn(
+                        error
+                    );
+                }
+            }
+
+
+            if (
+                window.confirmedTaxiMarker
+            ) {
+
+                try {
+
+                    window
+                        .confirmedTaxiMarker
+                        .remove();
+
+                } catch (error) {}
+
+
+                window.confirmedTaxiMarker =
+                    null;
+            }
+
+
+            /*
+             * Restore booking buttons
+             */
+
+            if (
+                typeof window
+                    .resetBookingButtonUI ===
+                'function'
+            ) {
+
+                window
+                    .resetBookingButtonUI();
+            }
+
+
+            /*
+             * Close gracefully.
+             */
+
+            window.closeAsiyeBookingSheet();
+
+
+            /*
+             * Small feedback only.
+             * Do NOT open another large modal.
+             */
+
+            if (
+                typeof showToast ===
+                'function'
+            ) {
+
+                showToast(
+                    'Ride cancelled',
+                    'info'
+                );
+            }
+
+
+            /*
+             * Return user to main booking map.
+             */
+
+            setTimeout(
+                function () {
+
+                    if (
+                        typeof showModernDashboard ===
+                        'function'
+                    ) {
+
+                        showModernDashboard();
+                    }
+
+                },
+                150
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                '❌ Booking cancellation failed:',
+                error
+            );
+
+
+            window
+                .setAsiyeBookingState(
+                    'error',
+                    {
+                        message:
+                            'We could not cancel the ride. Check your connection and try again.'
+                    }
+                );
+
+
+            if (
+                typeof showToast ===
+                'function'
+            ) {
+
+                showToast(
+                    'Unable to cancel the ride.',
+                    'danger'
+                );
+            }
+
+
+        } finally {
+
+            window.ASIYE_BOOKING.cancelling =
+                false;
+        }
+    }
+
+
+    /*
+     * Make available globally if another
+     * section of your code needs it.
+     */
+
+    window.executeAsiyePassengerCancellation =
+        executeAsiyePassengerCancellation;
+
+
+})();
 </script>
 </body>
 </html>
