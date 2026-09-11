@@ -16444,7 +16444,7 @@ window.openEHailingTaxis = function() {
     });
 }
 
-\window.centerMapOnUserLocation = function() {
+window.centerMapOnUserLocation = function() {
     if (!window.map) return;
 
     const lat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
