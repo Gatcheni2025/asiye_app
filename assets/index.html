@@ -11452,6 +11452,1203 @@ gmp-place-autocomplete {
     40%           { transform: scale(1);   opacity: 1;   }
 }
 </style>
+
+<style>
+    /* =========================================================
+   ASIYE UNIFIED RIDE EXPERIENCE
+   ========================================================= */
+
+:root {
+
+    --asiye-black: #111111;
+    --asiye-white: #ffffff;
+
+    --asiye-grey-50: #fafafa;
+    --asiye-grey-100: #f5f5f5;
+    --asiye-grey-150: #eeeeee;
+    --asiye-grey-300: #d6d6d6;
+    --asiye-grey-500: #8a8a8a;
+    --asiye-grey-700: #555555;
+
+    --asiye-green: #16a34a;
+    --asiye-red: #dc2626;
+    --asiye-blue: #276ef1;
+
+    --asiye-radius: 22px;
+}
+
+
+/* =========================================================
+   MAIN OVERLAY
+
+   Transparent so the MAP remains visible.
+========================================================= */
+
+#asiyeRideOverlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 20000;
+
+    display: none;
+
+    align-items: flex-end;
+
+    justify-content: center;
+
+    background: transparent;
+
+    pointer-events: none;
+}
+
+
+#asiyeRideOverlay.open {
+
+    display: flex;
+}
+
+
+/* =========================================================
+   MAIN SHEET
+========================================================= */
+
+#asiyeRideSheet {
+
+    width: 100%;
+
+    max-width: 520px;
+
+    max-height: 78vh;
+
+    overflow-y: auto;
+
+    background: #ffffff;
+
+    border-radius: 26px 26px 0 0;
+
+    box-shadow:
+        0 -10px 45px rgba(0,0,0,.14);
+
+    padding:
+
+        9px
+        20px
+        max(20px, env(safe-area-inset-bottom))
+        20px;
+
+    transform: translateY(110%);
+
+    transition:
+
+        transform .32s
+        cubic-bezier(.22,.8,.3,1),
+
+        max-height .3s ease;
+
+    pointer-events: auto;
+
+    font-family:
+        'Manrope',
+        -apple-system,
+        BlinkMacSystemFont,
+        'Segoe UI',
+        sans-serif;
+
+    color: #111;
+
+    scrollbar-width: none;
+}
+
+
+#asiyeRideSheet::-webkit-scrollbar {
+    display: none;
+}
+
+
+#asiyeRideOverlay.open #asiyeRideSheet {
+
+    transform: translateY(0);
+}
+
+
+/* =========================================================
+   HANDLE
+========================================================= */
+
+.asiye-sheet-handle {
+
+    width: 38px;
+
+    height: 4px;
+
+    background: #d7d7d7;
+
+    border-radius: 999px;
+
+    margin:
+
+        0 auto
+        17px auto;
+}
+
+
+/* =========================================================
+   TYPOGRAPHY
+========================================================= */
+
+.asiye-eyebrow {
+
+    color: #8a8a8a;
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    text-transform: uppercase;
+
+    letter-spacing: 1px;
+
+    margin-bottom: 4px;
+}
+
+
+.asiye-title {
+
+    margin: 0;
+
+    color: #111111 !important;
+
+    font-size: 20px;
+
+    line-height: 1.22;
+
+    font-weight: 850;
+
+    letter-spacing: -.5px;
+}
+
+
+.asiye-subtitle {
+
+    color: #757575 !important;
+
+    font-size: 13px;
+
+    line-height: 1.45;
+
+    font-weight: 500;
+
+    margin:
+
+        5px 0 0;
+}
+
+
+/* =========================================================
+   BASIC LAYOUT
+========================================================= */
+
+.asiye-row {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+}
+
+
+.asiye-between {
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    gap: 14px;
+}
+
+
+/* =========================================================
+   ROUND STATUS ICON
+========================================================= */
+
+.asiye-status-icon {
+
+    position: relative;
+
+    width: 48px;
+
+    height: 48px;
+
+    min-width: 48px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #111111;
+
+    color: #ffffff;
+
+    font-size: 17px;
+}
+
+
+/* =========================================================
+   SEARCH PULSE
+========================================================= */
+
+.asiye-search-icon::before,
+.asiye-search-icon::after {
+
+    content: "";
+
+    position: absolute;
+
+    inset: 0;
+
+    border:
+
+        1px solid
+        rgba(17,17,17,.25);
+
+    border-radius: 50%;
+
+    animation:
+
+        asiye-radar
+        2s
+        ease-out
+        infinite;
+}
+
+
+.asiye-search-icon::after {
+
+    animation-delay: .7s;
+}
+
+
+@keyframes asiye-radar {
+
+    0% {
+
+        transform: scale(.8);
+
+        opacity: .8;
+    }
+
+    100% {
+
+        transform: scale(1.8);
+
+        opacity: 0;
+    }
+
+}
+
+
+/* =========================================================
+   SEARCH LINE
+========================================================= */
+
+.asiye-search-progress {
+
+    height: 3px;
+
+    margin:
+
+        18px 0
+        15px;
+
+    overflow: hidden;
+
+    background: #ededed;
+
+    border-radius: 999px;
+}
+
+
+.asiye-search-progress span {
+
+    display: block;
+
+    width: 36%;
+
+    height: 100%;
+
+    background: #111;
+
+    animation:
+
+        asiye-progress
+        1.6s
+        ease-in-out
+        infinite;
+}
+
+
+@keyframes asiye-progress {
+
+    from {
+
+        transform:
+            translateX(-120%);
+    }
+
+    to {
+
+        transform:
+            translateX(390%);
+    }
+
+}
+
+
+/* =========================================================
+   ROUTE CARD
+========================================================= */
+
+.asiye-route-card {
+
+    display: flex;
+
+    gap: 12px;
+
+    align-items: center;
+
+    padding: 13px;
+
+    margin-top: 14px;
+
+    background: #f5f5f5;
+
+    border-radius: 16px;
+}
+
+
+.asiye-route-dot {
+
+    width: 9px;
+
+    height: 9px;
+
+    flex-shrink: 0;
+
+    border-radius: 50%;
+
+    background: #111;
+}
+
+
+.asiye-route-card.destination
+.asiye-route-dot {
+
+    background: #276ef1;
+}
+
+
+.asiye-route-copy {
+
+    flex: 1;
+
+    min-width: 0;
+}
+
+
+.asiye-route-label {
+
+    color: #999;
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    text-transform: uppercase;
+
+    letter-spacing: .8px;
+}
+
+
+.asiye-route-address {
+
+    margin-top: 2px;
+
+    color: #222;
+
+    font-size: 13px;
+
+    font-weight: 750;
+
+    overflow: hidden;
+
+    white-space: nowrap;
+
+    text-overflow: ellipsis;
+}
+
+
+/* =========================================================
+   RIDE CHOICE
+========================================================= */
+
+.asiye-ride-option {
+
+    display: flex;
+
+    width: 100%;
+
+    align-items: center;
+
+    gap: 14px;
+
+    padding: 14px;
+
+    margin-top: 10px;
+
+    text-align: left;
+
+    border:
+
+        2px solid
+        transparent;
+
+    border-radius: 18px;
+
+    background: #f5f5f5;
+
+    cursor: pointer;
+
+    transition:
+
+        .18s ease;
+}
+
+
+.asiye-ride-option.active {
+
+    background: #ffffff;
+
+    border-color: #111;
+
+    box-shadow:
+
+        0 4px 18px
+        rgba(0,0,0,.08);
+}
+
+
+.asiye-car-circle {
+
+    width: 54px;
+
+    height: 54px;
+
+    min-width: 54px;
+
+    border-radius: 16px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background: #ffffff;
+
+    font-size: 23px;
+
+    color: #111;
+}
+
+
+.asiye-option-info {
+
+    flex: 1;
+}
+
+
+.asiye-option-title {
+
+    color: #111;
+
+    font-size: 15px;
+
+    font-weight: 850;
+}
+
+
+.asiye-option-description {
+
+    margin-top: 2px;
+
+    color: #808080;
+
+    font-size: 11px;
+
+    line-height: 1.35;
+}
+
+
+.asiye-option-price {
+
+    color: #111;
+
+    font-size: 15px;
+
+    font-weight: 900;
+
+    white-space: nowrap;
+}
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.asiye-primary-button {
+
+    width: 100%;
+
+    min-height: 52px;
+
+    margin-top: 15px;
+
+    border: 0;
+
+    border-radius: 15px;
+
+    background: #111111;
+
+    color: #ffffff;
+
+    font-family: inherit;
+
+    font-size: 14px;
+
+    font-weight: 850;
+
+    cursor: pointer;
+
+    transition:
+
+        transform .15s,
+        opacity .15s;
+}
+
+
+.asiye-primary-button:active {
+
+    transform: scale(.985);
+}
+
+
+.asiye-primary-button:disabled {
+
+    opacity: .55;
+
+    cursor: default;
+}
+
+
+.asiye-secondary-button {
+
+    width: 100%;
+
+    min-height: 48px;
+
+    margin-top: 10px;
+
+    border: 0;
+
+    border-radius: 15px;
+
+    background: #f1f1f1;
+
+    color: #111;
+
+    font-family: inherit;
+
+    font-size: 13px;
+
+    font-weight: 800;
+
+    cursor: pointer;
+}
+
+
+/* =========================================================
+   DRIVER CARD
+========================================================= */
+
+.asiye-driver-card {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 13px;
+
+    padding:
+
+        14px 0;
+
+    margin-top: 8px;
+
+    border-bottom:
+
+        1px solid
+        #ededed;
+}
+
+
+.asiye-driver-avatar {
+
+    width: 56px;
+
+    height: 56px;
+
+    border-radius: 50%;
+
+    background: #efefef;
+
+    object-fit: cover;
+}
+
+
+.asiye-driver-data {
+
+    flex: 1;
+
+    min-width: 0;
+}
+
+
+.asiye-driver-name {
+
+    color: #111;
+
+    font-size: 15px;
+
+    font-weight: 850;
+}
+
+
+.asiye-driver-details {
+
+    margin-top: 3px;
+
+    color: #777;
+
+    font-size: 11px;
+
+    font-weight: 600;
+}
+
+
+.asiye-driver-plate {
+
+    display: inline-block;
+
+    margin-top: 5px;
+
+    padding:
+
+        4px 7px;
+
+    border-radius: 6px;
+
+    background: #111;
+
+    color: #fff;
+
+    font-size: 10px;
+
+    font-weight: 850;
+
+    letter-spacing: .5px;
+}
+
+
+/* =========================================================
+   ETA
+========================================================= */
+
+.asiye-eta {
+
+    text-align: right;
+}
+
+
+.asiye-eta-number {
+
+    color: #111;
+
+    font-size: 24px;
+
+    font-weight: 900;
+
+    line-height: 1;
+}
+
+
+.asiye-eta-label {
+
+    margin-top: 3px;
+
+    color: #999;
+
+    font-size: 9px;
+
+    font-weight: 800;
+
+    text-transform: uppercase;
+}
+
+
+/* =========================================================
+   ACTION BUTTONS
+========================================================= */
+
+.asiye-actions {
+
+    display: grid;
+
+    grid-template-columns:
+
+        repeat(3, 1fr);
+
+    gap: 9px;
+
+    margin-top: 13px;
+}
+
+
+.asiye-action-button {
+
+    min-height: 58px;
+
+    border: 0;
+
+    border-radius: 15px;
+
+    background: #f3f3f3;
+
+    color: #111;
+
+    font-family: inherit;
+
+    font-size: 10px;
+
+    font-weight: 800;
+
+    cursor: pointer;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: center;
+
+    align-items: center;
+
+    gap: 5px;
+}
+
+
+.asiye-action-button i {
+
+    font-size: 16px;
+}
+
+
+/* =========================================================
+   PICKUP PIN
+========================================================= */
+
+.asiye-pin-card {
+
+    margin-top: 13px;
+
+    padding: 13px;
+
+    text-align: center;
+
+    background: #f5f5f5;
+
+    border-radius: 16px;
+}
+
+
+.asiye-pin-label {
+
+    color: #888;
+
+    font-size: 9px;
+
+    font-weight: 850;
+
+    text-transform: uppercase;
+
+    letter-spacing: .9px;
+}
+
+
+.asiye-pin-value {
+
+    margin-top: 3px;
+
+    color: #111;
+
+    font-size: 25px;
+
+    font-weight: 900;
+
+    letter-spacing: 8px;
+}
+
+
+/* =========================================================
+   COMPLETION
+========================================================= */
+
+.asiye-complete-icon {
+
+    width: 58px;
+
+    height: 58px;
+
+    margin:
+
+        0 auto
+        13px;
+
+    border-radius: 50%;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background: #111;
+
+    color: #fff;
+
+    font-size: 20px;
+}
+
+
+.asiye-complete {
+
+    text-align: center;
+}
+
+
+.asiye-complete-price {
+
+    margin-top: 17px;
+
+    color: #111;
+
+    font-size: 32px;
+
+    font-weight: 900;
+}
+
+
+.asiye-payment-method {
+
+    margin-top: 3px;
+
+    color: #888;
+
+    font-size: 11px;
+
+    font-weight: 700;
+
+    text-transform: uppercase;
+}
+
+
+/* =========================================================
+   MODAL DIALOGS
+========================================================= */
+
+.asiye-dialog-overlay {
+
+    position: fixed;
+
+    inset: 0;
+
+    z-index: 60000;
+
+    display: none;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 20px;
+
+    background:
+
+        rgba(0,0,0,.46);
+
+    backdrop-filter:
+
+        blur(4px);
+}
+
+
+.asiye-dialog-overlay.open {
+
+    display: flex;
+}
+
+
+.asiye-dialog {
+
+    width: 100%;
+
+    max-width: 360px;
+
+    padding: 24px;
+
+    border-radius: 24px;
+
+    text-align: center;
+
+    background: #fff;
+
+    box-shadow:
+
+        0 20px 50px
+        rgba(0,0,0,.22);
+}
+
+
+.asiye-dialog h3 {
+
+    margin:
+
+        12px 0
+        6px;
+
+    color: #111 !important;
+
+    font-size: 19px;
+
+    font-weight: 850;
+}
+
+
+.asiye-dialog p {
+
+    margin:
+
+        0 0
+        18px;
+
+    color: #777 !important;
+
+    font-size: 13px;
+
+    line-height: 1.45;
+}
+
+
+.asiye-dialog-icon {
+
+    width: 50px;
+
+    height: 50px;
+
+    margin: auto;
+
+    border-radius: 50%;
+
+    background: #fee2e2;
+
+    color: #dc2626;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+}
+
+
+.asiye-danger-button {
+
+    width: 100%;
+
+    height: 50px;
+
+    border: 0;
+
+    border-radius: 14px;
+
+    background: #dc2626;
+
+    color: white;
+
+    font-weight: 850;
+
+    font-family: inherit;
+
+    cursor: pointer;
+}
+
+
+.asiye-dialog-secondary {
+
+    width: 100%;
+
+    height: 48px;
+
+    margin-top: 8px;
+
+    border: none;
+
+    border-radius: 14px;
+
+    background: #f2f2f2;
+
+    color: #111;
+
+    font-family: inherit;
+
+    font-weight: 800;
+
+    cursor: pointer;
+}
+
+
+/* =========================================================
+   RATING
+========================================================= */
+
+.asiye-rating-check {
+
+    width: 55px;
+
+    height: 55px;
+
+    margin: auto;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    border-radius: 50%;
+
+    background: #111;
+
+    color: #fff;
+}
+
+
+#asiyeRatingStars {
+
+    display: flex;
+
+    justify-content: center;
+
+    gap: 8px;
+
+    margin:
+
+        16px 0;
+}
+
+
+#asiyeRatingStars button {
+
+    border: 0;
+
+    padding: 2px;
+
+    background: transparent;
+
+    color: #d6d6d6;
+
+    font-size: 27px;
+
+    cursor: pointer;
+}
+
+
+#asiyeRatingStars button.active {
+
+    color: #ffb000;
+}
+
+
+#asiyeRatingComment {
+
+    width: 100%;
+
+    min-height: 84px;
+
+    padding: 13px !important;
+
+    resize: none;
+
+    border: none !important;
+
+    border-radius: 14px !important;
+
+    background: #f5f5f5 !important;
+
+    color: #111 !important;
+
+    font-family: inherit;
+
+    font-size: 13px !important;
+}
+
+
+/* =========================================================
+   SMALL PHONES
+========================================================= */
+
+@media(max-width:480px) {
+
+    #asiyeRideSheet {
+
+        max-width: 100%;
+
+        border-radius:
+            24px 24px
+            0 0;
+    }
+
+
+    .asiye-title {
+
+        font-size: 18px;
+    }
+
+
+    .asiye-actions {
+
+        gap: 7px;
+    }
+
+}
+</style>
 </head>
 <body>
 
@@ -13731,6 +14928,132 @@ gmp-place-autocomplete {
     <span style="font-size: 0.62rem; font-weight: 800; text-transform: uppercase; color: #888; white-space: nowrap;">You are here:</span>
     <span id="homeCurrentAddress" style="font-weight: 800; font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 125px;">Fetching...</span>
 </div>
+
+<!-- =========================================================
+     ASIYE — UNIFIED RIDE EXPERIENCE
+     Selection → Search → Driver → Trip → Complete
+========================================================= -->
+
+<div id="asiyeRideOverlay">
+
+    <div id="asiyeRideSheet">
+
+        <div class="asiye-sheet-handle"></div>
+
+        <div id="asiyeRideContent"></div>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     CANCEL CONFIRMATION
+========================================================= -->
+
+<div id="asiyeCancelOverlay" class="asiye-dialog-overlay">
+
+    <div class="asiye-dialog">
+
+        <div class="asiye-dialog-icon">
+            <i class="fas fa-times"></i>
+        </div>
+
+        <h3>Cancel this ride?</h3>
+
+        <p>
+            Your current driver search or trip request will be cancelled.
+        </p>
+
+        <button
+            id="asiyeConfirmCancelBtn"
+            class="asiye-danger-button"
+        >
+            Cancel ride
+        </button>
+
+        <button
+            class="asiye-dialog-secondary"
+            onclick="AsiyeRide.closeCancelDialog()"
+        >
+            Keep ride
+        </button>
+
+    </div>
+
+</div>
+
+
+<!-- =========================================================
+     RATING
+========================================================= -->
+
+<div id="asiyeRatingOverlay" class="asiye-dialog-overlay">
+
+    <div class="asiye-dialog">
+
+        <div class="asiye-rating-check">
+            <i class="fas fa-check"></i>
+        </div>
+
+        <h3>How was your ride?</h3>
+
+        <p id="asiyeRatingDriver">
+            Rate your Asiye driver
+        </p>
+
+
+        <div id="asiyeRatingStars">
+
+            <button data-rating="1">
+                <i class="fas fa-star"></i>
+            </button>
+
+            <button data-rating="2">
+                <i class="fas fa-star"></i>
+            </button>
+
+            <button data-rating="3">
+                <i class="fas fa-star"></i>
+            </button>
+
+            <button data-rating="4">
+                <i class="fas fa-star"></i>
+            </button>
+
+            <button data-rating="5">
+                <i class="fas fa-star"></i>
+            </button>
+
+        </div>
+
+
+        <textarea
+            id="asiyeRatingComment"
+            placeholder="Add a comment (optional)"
+            maxlength="300"
+        ></textarea>
+
+
+        <button
+            id="asiyeSubmitRatingBtn"
+            class="asiye-primary-button"
+            onclick="AsiyeRide.submitRating()"
+        >
+            Submit rating
+        </button>
+
+
+        <button
+            class="asiye-dialog-secondary"
+            onclick="AsiyeRide.finish()"
+        >
+            Skip
+        </button>
+
+    </div>
+
+</div>
 <script>
     function launchNativeNav(lat, lng) {
     if (window.AndroidNav) {
@@ -13911,6 +15234,3296 @@ var requestStatusListener = null;
 const IOS_STORE_LINK = "https://apps.apple.com/za/app/asiye/id6765691149";
   // Global flag to prevent multiple simultaneous watches
   window.isWatchingAd = false;
+
+
+
+/* ============================================================
+   ASIYE UNIFIED PASSENGER RIDE CONTROLLER
+   ============================================================ */
+
+window.AsiyeRide = {
+
+    /* ========================================================
+       STATE
+       ======================================================== */
+
+    requestId: null,
+
+    request: null,
+
+    driver: null,
+
+    driverId: null,
+
+    selectedRide: 'go',
+
+    status: 'idle',
+
+    requestRef: null,
+
+    requestListener: null,
+
+    driverRef: null,
+
+    driverListener: null,
+
+    driverMarker: null,
+
+    selectedRating: 0,
+
+    cancelling: false,
+
+
+    /* ========================================================
+       DOM
+       ======================================================== */
+
+    get overlay() {
+
+        return document.getElementById(
+            'asiyeRideOverlay'
+        );
+    },
+
+
+    get sheet() {
+
+        return document.getElementById(
+            'asiyeRideSheet'
+        );
+    },
+
+
+    get content() {
+
+        return document.getElementById(
+            'asiyeRideContent'
+        );
+    },
+
+
+    /* ========================================================
+       HELPERS
+       ======================================================== */
+
+    escape(value) {
+
+        return String(
+            value ?? ''
+        )
+
+        .replace(/&/g, '&amp;')
+
+        .replace(/</g, '&lt;')
+
+        .replace(/>/g, '&gt;')
+
+        .replace(/"/g, '&quot;')
+
+        .replace(/'/g, '&#039;');
+    },
+
+
+    money(value) {
+
+        const number =
+            Number(value || 0);
+
+        return `R${number.toFixed(0)}`;
+    },
+
+
+    open() {
+
+        if (!this.overlay) return;
+
+        this.overlay.classList.add(
+            'open'
+        );
+
+
+        /*
+         * Make sure map remains clear.
+         */
+
+        const mapElement =
+            document.getElementById(
+                'map'
+            );
+
+
+        if (mapElement) {
+
+            mapElement.style.filter =
+                'none';
+
+            mapElement.style.opacity =
+                '1';
+
+            mapElement.style.visibility =
+                'visible';
+        }
+
+
+        setTimeout(() => {
+
+            if (
+                window.map &&
+                typeof window.map.resize ===
+                'function'
+            ) {
+
+                window.map.resize();
+            }
+
+        }, 100);
+    },
+
+
+    close() {
+
+        if (!this.overlay) return;
+
+        this.overlay.classList.remove(
+            'open'
+        );
+    },
+
+
+    /* ========================================================
+       1. RIDE SELECTION
+       ======================================================== */
+
+    showRideSelection(options = {}) {
+
+        this.status =
+            'selection';
+
+
+        /*
+         * Values can come from your existing pricing code.
+         */
+
+        this.bookingOptions = {
+
+            destination:
+
+                options.destination ||
+                window.userDropOffDestination ||
+                'Your destination',
+
+            distance:
+
+                options.distance ||
+                window.tripDistance ||
+                '',
+
+            duration:
+
+                options.duration ||
+                window.tripDuration ||
+                '',
+
+            goPrice:
+
+                Number(
+                    options.goPrice ??
+                    window.calculatedTripPrice ??
+                    0
+                ),
+
+            club4Price:
+
+                Number(
+                    options.club4Price ??
+                    window.club4Price ??
+                    0
+                ),
+
+            club6Price:
+
+                Number(
+                    options.club6Price ??
+                    window.club6Price ??
+                    0
+                )
+        };
+
+
+        this.selectedRide =
+            options.defaultRide ||
+            'go';
+
+
+        this.renderSelection();
+
+        this.open();
+    },
+
+
+    renderSelection() {
+
+        const o =
+            this.bookingOptions || {};
+
+
+        this.content.innerHTML = `
+
+            <div class="asiye-between">
+
+                <div>
+
+                    <div class="asiye-eyebrow">
+                        Choose your ride
+                    </div>
+
+                    <h2 class="asiye-title">
+                        ${this.escape(
+                            o.destination
+                        )}
+                    </h2>
+
+                    <p class="asiye-subtitle">
+
+                        ${
+                            o.distance
+                            ?
+                            this.escape(
+                                o.distance
+                            ) + ' · '
+                            :
+                            ''
+                        }
+
+                        ${
+                            o.duration
+                            ?
+                            this.escape(
+                                o.duration
+                            )
+                            :
+                            ''
+                        }
+
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            ${this.rideOption(
+                'go',
+                'fa-car-side',
+                'Asiye Go',
+                'Private ride directly to your destination.',
+                o.goPrice
+            )}
+
+
+            ${this.rideOption(
+                'club4',
+                'fa-users',
+                'Asiye Club 4',
+                'Share the ride and pay less.',
+                o.club4Price
+            )}
+
+
+            ${this.rideOption(
+                'club6',
+                'fa-people-group',
+                'Asiye Club 6',
+                'Best value for larger shared rides.',
+                o.club6Price
+            )}
+
+
+            <button
+                class="asiye-primary-button"
+                onclick="AsiyeRide.confirmSelectedRide()"
+            >
+
+                ${this.getConfirmButtonText()}
+
+            </button>
+
+        `;
+
+
+        this.updateSelectedRideVisual();
+    },
+
+
+    rideOption(
+        id,
+        icon,
+        name,
+        description,
+        price
+    ) {
+
+        /*
+         * Hide Club options if no price
+         * has been calculated.
+         */
+
+        if (
+            id !== 'go' &&
+            !price
+        ) {
+
+            return '';
+        }
+
+
+        return `
+
+            <button
+
+                class="asiye-ride-option"
+
+                id="asiyeRideOption-${id}"
+
+                onclick="
+                    AsiyeRide.selectRide('${id}')
+                "
+            >
+
+                <div class="asiye-car-circle">
+
+                    <i class="fas ${icon}"></i>
+
+                </div>
+
+
+                <div class="asiye-option-info">
+
+                    <div class="asiye-option-title">
+
+                        ${this.escape(name)}
+
+                    </div>
+
+
+                    <div class="asiye-option-description">
+
+                        ${this.escape(description)}
+
+                    </div>
+
+                </div>
+
+
+                <div class="asiye-option-price">
+
+                    ${this.money(price)}
+
+                </div>
+
+            </button>
+
+        `;
+    },
+
+
+    selectRide(type) {
+
+        this.selectedRide =
+            type;
+
+
+        this.updateSelectedRideVisual();
+
+
+        const button =
+            this.content.querySelector(
+                '.asiye-primary-button'
+            );
+
+
+        if (button) {
+
+            button.textContent =
+                this.getConfirmButtonText();
+        }
+    },
+
+
+    updateSelectedRideVisual() {
+
+        [
+            'go',
+            'club4',
+            'club6'
+        ]
+        .forEach(type => {
+
+            const element =
+                document.getElementById(
+                    `asiyeRideOption-${type}`
+                );
+
+
+            if (!element) return;
+
+
+            element.classList.toggle(
+                'active',
+                this.selectedRide === type
+            );
+        });
+    },
+
+
+    getConfirmButtonText() {
+
+        switch (
+            this.selectedRide
+        ) {
+
+            case 'club4':
+
+                return 'Confirm Asiye Club 4';
+
+
+            case 'club6':
+
+                return 'Confirm Asiye Club 6';
+
+
+            default:
+
+                return 'Confirm Asiye Go';
+        }
+    },
+
+
+    /* ========================================================
+       CONNECT TO EXISTING BOOKING LOGIC
+       ======================================================== */
+
+    confirmSelectedRide() {
+
+        /*
+         * Update your existing global ride category.
+         */
+
+        if (
+            this.selectedRide === 'go'
+        ) {
+
+            window.selectedRideCategory =
+                'go';
+
+        } else {
+
+            window.selectedRideCategory =
+                'club';
+        }
+
+
+        /*
+         * If your current app already uses
+         * requestAsiyeGoRide(), keep using it.
+         */
+
+        if (
+            this.selectedRide === 'go' &&
+            typeof window.requestAsiyeGoRide ===
+                'function'
+        ) {
+
+            window.requestAsiyeGoRide();
+
+            return;
+        }
+
+
+        /*
+         * Club integration.
+         */
+
+        if (
+            this.selectedRide !== 'go'
+        ) {
+
+            window.selectedClubType =
+                this.selectedRide;
+
+
+            if (
+                typeof window.requestAsiyeClubRide ===
+                    'function'
+            ) {
+
+                window.requestAsiyeClubRide(
+                    this.selectedRide
+                );
+
+                return;
+            }
+
+
+            if (
+                typeof window.submitClubSubscription ===
+                    'function'
+            ) {
+
+                window.submitClubSubscription();
+
+                return;
+            }
+        }
+
+
+        console.warn(
+            'No Asiye booking creation function is available.'
+        );
+    },
+
+
+    /* ========================================================
+       START UI AFTER FIREBASE REQUEST IS CREATED
+       ======================================================== */
+
+    start(requestId, requestData = {}) {
+
+        if (!requestId) {
+
+            console.error(
+                'AsiyeRide.start() requires requestId'
+            );
+
+            return;
+        }
+
+
+        this.cleanupListeners();
+
+
+        this.requestId =
+            requestId;
+
+
+        this.request =
+            requestData || {};
+
+
+        this.status =
+            'searching';
+
+
+        window.currentRequestId =
+            requestId;
+
+
+        localStorage.setItem(
+            'currentRequestId',
+            requestId
+        );
+
+
+        this.renderSearching();
+
+        this.open();
+
+
+        this.listenToRequest(
+            requestId
+        );
+    },
+
+
+    /* ========================================================
+       SEARCHING
+       ======================================================== */
+
+    renderSearching() {
+
+        const request =
+            this.request || {};
+
+
+        const isClub =
+
+            request.type === 'club' ||
+
+            request.carCategory ===
+                'club' ||
+
+            window.selectedRideCategory ===
+                'club';
+
+
+        const destination =
+
+            request.destination ||
+
+            request.dropoffAddress ||
+
+            window.userDropOffDestination ||
+
+            'Your destination';
+
+
+        this.content.innerHTML = `
+
+            <div class="asiye-row">
+
+                <div
+                    class="
+                        asiye-status-icon
+                        asiye-search-icon
+                    "
+                >
+
+                    <i class="fas fa-car-side"></i>
+
+                </div>
+
+
+                <div style="flex:1">
+
+                    <div class="asiye-eyebrow">
+
+                        ${
+                            isClub
+                            ?
+                            'Asiye Club'
+                            :
+                            'Asiye Go'
+                        }
+
+                    </div>
+
+
+                    <h2 class="asiye-title">
+
+                        ${
+                            isClub
+                            ?
+                            'Preparing your shared ride'
+                            :
+                            'Finding your driver'
+                        }
+
+                    </h2>
+
+
+                    <p class="asiye-subtitle">
+
+                        ${
+                            isClub
+
+                            ?
+
+                            'Finding the right Club match and nearby drivers.'
+
+                            :
+
+                            'Connecting you with nearby Asiye drivers.'
+                        }
+
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <div class="asiye-search-progress">
+
+                <span></span>
+
+            </div>
+
+
+            <div class="
+                asiye-route-card
+                destination
+            ">
+
+                <div class="asiye-route-dot"></div>
+
+
+                <div class="asiye-route-copy">
+
+                    <div class="asiye-route-label">
+                        Destination
+                    </div>
+
+
+                    <div class="asiye-route-address">
+
+                        ${this.escape(
+                            destination
+                        )}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <button
+                class="asiye-secondary-button"
+                onclick="AsiyeRide.openCancelDialog()"
+            >
+
+                Cancel request
+
+            </button>
+
+        `;
+
+
+        this.open();
+
+
+        /*
+         * Retain your existing beautiful route/map function.
+         */
+
+        if (
+            typeof window.showSearchingMapView ===
+                'function'
+        ) {
+
+            const lat =
+                Number(
+                    window.ehailingDestLat
+                );
+
+
+            const lng =
+                Number(
+                    window.ehailingDestLng
+                );
+
+
+            if (
+                Number.isFinite(lat) &&
+                Number.isFinite(lng)
+            ) {
+
+                try {
+
+                    window.showSearchingMapView(
+                        lat,
+                        lng
+                    );
+
+                } catch (e) {
+
+                    console.warn(
+                        'Searching map:',
+                        e
+                    );
+                }
+            }
+        }
+    },
+
+
+    /* ========================================================
+       SINGLE FIREBASE REQUEST LISTENER
+       ======================================================== */
+
+    listenToRequest(requestId) {
+
+        this.cleanupRequestListener();
+
+
+        this.requestRef =
+            firebase
+                .database()
+                .ref(
+                    `requests/${requestId}`
+                );
+
+
+        this.requestListener =
+            this.requestRef.on(
+
+                'value',
+
+                snapshot => {
+
+                    const request =
+                        snapshot.val();
+
+
+                    if (!request) {
+
+                        console.warn(
+                            'Request no longer exists:',
+                            requestId
+                        );
+
+                        return;
+                    }
+
+
+                    this.request =
+                        request;
+
+
+                    let status =
+                        request.status ||
+                        'pending';
+
+
+                    /*
+                     * Passenger-specific Club status.
+                     */
+
+                    if (
+                        request.type === 'club' &&
+                        request.passengers &&
+                        window.userId &&
+                        request.passengers[
+                            window.userId
+                        ]
+                    ) {
+
+                        const passenger =
+
+                            request.passengers[
+                                window.userId
+                            ];
+
+
+                        /*
+                         * Only use passenger status
+                         * where it is meaningful.
+                         */
+
+                        if (
+                            passenger.status ===
+                                'passenger_onboard' ||
+
+                            passenger.status ===
+                                'completed'
+                        ) {
+
+                            status =
+                                passenger.status;
+                        }
+                    }
+
+
+                    console.log(
+                        '🚕 ASIYE RIDE STATE:',
+                        status
+                    );
+
+
+                    this.handleStatus(
+                        status,
+                        request
+                    );
+                }
+            );
+    },
+
+
+    /* ========================================================
+       STATE MACHINE
+       ======================================================== */
+
+    handleStatus(
+        status,
+        request
+    ) {
+
+        switch (
+            status
+        ) {
+
+
+            /*
+             * SEARCHING
+             */
+
+            case 'pending':
+
+            case 'requested':
+
+            case 'searching':
+
+            case 'pooling':
+
+            case 'waiting_pool':
+
+                if (
+                    this.status !==
+                    'searching'
+                ) {
+
+                    this.status =
+                        'searching';
+
+
+                    this.renderSearching();
+                }
+
+                break;
+
+
+
+            /*
+             * ACCEPTED
+             */
+
+            case 'accepted':
+
+            case 'driver_on_way':
+
+            case 'driver_waiting':
+
+                this.status =
+                    'driver_on_way';
+
+
+                this.driverId =
+
+                    request.taxiId ||
+
+                    request.driverId;
+
+
+                this.loadDriver();
+
+                break;
+
+
+
+            /*
+             * ARRIVED
+             */
+
+            case 'arrived':
+
+            case 'passenger_here':
+
+                this.status =
+                    'arrived';
+
+
+                this.driverId =
+
+                    request.taxiId ||
+
+                    request.driverId;
+
+
+                this.renderArrived();
+
+                this.listenToDriver();
+
+                break;
+
+
+
+            /*
+             * TRAVELLING
+             */
+
+            case 'passenger_onboard':
+
+            case 'picked_up':
+
+            case 'in_transit':
+
+                this.status =
+                    'in_transit';
+
+
+                this.driverId =
+
+                    request.taxiId ||
+
+                    request.driverId;
+
+
+                this.renderInTransit();
+
+                this.listenToDriver();
+
+                break;
+
+
+
+            /*
+             * COMPLETE
+             */
+
+            case 'completed':
+
+            case 'completed_by_driver':
+
+                this.status =
+                    'completed';
+
+
+                this.renderCompleted();
+
+                this.cleanupDriverListener();
+
+                break;
+
+
+
+            /*
+             * DRIVER CANCELLED
+             */
+
+            case 'cancelled_by_driver':
+
+            case 'cancelled_by_admin':
+
+            case 'rejected':
+
+                this.handleRemoteCancellation();
+
+                break;
+
+
+
+            /*
+             * PASSENGER CANCELLED
+             */
+
+            case 'cancelled_by_commuter':
+
+                this.cleanupAfterCancel();
+
+                break;
+        }
+    },
+
+
+    /* ========================================================
+       DRIVER DATA
+       ======================================================== */
+
+    async loadDriver() {
+
+        if (!this.driverId) {
+
+            console.warn(
+                'Driver ID missing.'
+            );
+
+            return;
+        }
+
+
+        try {
+
+            const snapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `taxis/${this.driverId}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            this.driver =
+                snapshot.val() || {};
+
+
+            this.renderDriverComing();
+
+
+            this.listenToDriver();
+
+
+        } catch (error) {
+
+            console.error(
+                'Failed loading driver:',
+                error
+            );
+
+
+            this.renderDriverComing();
+        }
+    },
+
+
+    /* ========================================================
+       DRIVER APPROACHING
+       ======================================================== */
+
+    renderDriverComing() {
+
+        const request =
+            this.request || {};
+
+
+        const driver =
+            this.driver || {};
+
+
+        const name =
+
+            request.driverName ||
+
+            request.taxiName ||
+
+            driver.name ||
+
+            driver.fullName ||
+
+            'Your driver';
+
+
+        const rating =
+
+            driver.rating ||
+
+            request.driverRating ||
+
+            '5.0';
+
+
+        const vehicle =
+
+            request.vehicleName ||
+
+            driver.vehicleModel ||
+
+            driver.carModel ||
+
+            driver.model ||
+
+            'Asiye vehicle';
+
+
+        const registration =
+
+            request.registration ||
+
+            driver.registration ||
+
+            driver.carRegistration ||
+
+            driver.registrationNumber ||
+
+            '';
+
+
+        const avatar =
+
+            driver.profile_picture_url ||
+
+            driver.profileImageUrl ||
+
+            driver.profileImage ||
+
+            `https://ui-avatars.com/api/?name=${
+                encodeURIComponent(name)
+            }&background=111111&color=ffffff`;
+
+
+        const pin =
+
+            request.pickupPin ||
+
+            request.pin ||
+
+            '';
+
+
+        this.content.innerHTML = `
+
+            <div class="asiye-between">
+
+                <div>
+
+                    <div class="asiye-eyebrow">
+                        Driver confirmed
+                    </div>
+
+                    <h2 class="asiye-title">
+
+                        ${this.escape(name)}
+                        is coming to you
+
+                    </h2>
+
+                </div>
+
+
+                <div class="asiye-eta">
+
+                    <div
+                        id="asiyeLiveEta"
+                        class="asiye-eta-number"
+                    >
+
+                        —
+
+                    </div>
+
+                    <div class="asiye-eta-label">
+                        min away
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="asiye-driver-card">
+
+                <img
+                    class="asiye-driver-avatar"
+                    src="${this.escape(avatar)}"
+                    onerror="
+                        this.src=
+                        'https://ui-avatars.com/api/?name=Driver&background=111111&color=ffffff'
+                    "
+                >
+
+
+                <div class="asiye-driver-data">
+
+                    <div class="asiye-driver-name">
+
+                        ${this.escape(name)}
+
+                    </div>
+
+
+                    <div class="asiye-driver-details">
+
+                        ★ ${this.escape(rating)}
+                        ·
+                        ${this.escape(vehicle)}
+
+                    </div>
+
+
+                    ${
+                        registration
+                        ?
+                        `
+
+                        <div class="asiye-driver-plate">
+
+                            ${this.escape(
+                                registration
+                            )}
+
+                        </div>
+
+                        `
+                        :
+                        ''
+                    }
+
+                </div>
+
+            </div>
+
+
+            ${
+                pin
+                ?
+                `
+
+                <div class="asiye-pin-card">
+
+                    <div class="asiye-pin-label">
+
+                        Pickup PIN
+
+                    </div>
+
+
+                    <div class="asiye-pin-value">
+
+                        ${this.escape(pin)}
+
+                    </div>
+
+                </div>
+
+                `
+                :
+                ''
+            }
+
+
+            <div class="asiye-actions">
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.callDriver()"
+                >
+                    <i class="fas fa-phone"></i>
+                    Call
+                </button>
+
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.messageDriver()"
+                >
+                    <i class="fas fa-comment"></i>
+                    Message
+                </button>
+
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.openSafety()"
+                >
+                    <i class="fas fa-shield-alt"></i>
+                    Safety
+                </button>
+
+            </div>
+
+
+            <button
+                class="asiye-secondary-button"
+                onclick="AsiyeRide.openCancelDialog()"
+            >
+                Cancel trip
+            </button>
+
+        `;
+
+
+        this.open();
+    },
+
+
+    /* ========================================================
+       ARRIVED
+       ======================================================== */
+
+    renderArrived() {
+
+        const request =
+            this.request || {};
+
+
+        const name =
+
+            request.driverName ||
+
+            request.taxiName ||
+
+            this.driver?.name ||
+
+            'Your driver';
+
+
+        const pin =
+
+            request.pickupPin ||
+
+            request.pin ||
+
+            '';
+
+
+        this.content.innerHTML = `
+
+            <div class="asiye-row">
+
+                <div class="asiye-status-icon">
+
+                    <i class="fas fa-location-dot"></i>
+
+                </div>
+
+
+                <div style="flex:1">
+
+                    <div class="asiye-eyebrow">
+                        Driver arrived
+                    </div>
+
+
+                    <h2 class="asiye-title">
+                        Your driver is here
+                    </h2>
+
+
+                    <p class="asiye-subtitle">
+
+                        ${this.escape(name)}
+                        is waiting at your pickup point.
+
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            ${
+                pin
+                ?
+                `
+
+                <div class="asiye-pin-card">
+
+                    <div class="asiye-pin-label">
+
+                        Give this PIN to your driver
+
+                    </div>
+
+
+                    <div class="asiye-pin-value">
+
+                        ${this.escape(pin)}
+
+                    </div>
+
+                </div>
+
+                `
+                :
+                ''
+            }
+
+
+            <button
+                class="asiye-primary-button"
+                onclick="AsiyeRide.confirmOnboard()"
+            >
+                I'm in the car
+            </button>
+
+
+            <div class="asiye-actions">
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.callDriver()"
+                >
+                    <i class="fas fa-phone"></i>
+                    Call
+                </button>
+
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.messageDriver()"
+                >
+                    <i class="fas fa-comment"></i>
+                    Message
+                </button>
+
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.openSafety()"
+                >
+                    <i class="fas fa-shield-alt"></i>
+                    Safety
+                </button>
+
+            </div>
+
+        `;
+
+
+        this.open();
+    },
+
+
+    /* ========================================================
+       PASSENGER ONBOARD
+       ======================================================== */
+
+    async confirmOnboard() {
+
+        if (!this.requestId) return;
+
+
+        const button =
+
+            this.content.querySelector(
+                '.asiye-primary-button'
+            );
+
+
+        if (button) {
+
+            button.disabled =
+                true;
+
+
+            button.innerHTML =
+
+                '<i class="fas fa-circle-notch fa-spin"></i> Starting trip';
+        }
+
+
+        try {
+
+            await firebase
+                .database()
+                .ref(
+                    `requests/${this.requestId}`
+                )
+                .update({
+
+                    status:
+                        'passenger_onboard',
+
+                    passengerOnboardAt:
+
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+                });
+
+
+        } catch (error) {
+
+            console.error(
+                'Passenger onboard error:',
+                error
+            );
+
+
+            if (button) {
+
+                button.disabled =
+                    false;
+
+
+                button.textContent =
+                    "I'm in the car";
+            }
+        }
+    },
+
+
+    /* ========================================================
+       IN TRANSIT
+       ======================================================== */
+
+    renderInTransit() {
+
+        const destination =
+
+            this.request?.destination ||
+
+            this.request?.dropoffAddress ||
+
+            window.userDropOffDestination ||
+
+            'your destination';
+
+
+        this.content.innerHTML = `
+
+            <div class="asiye-between">
+
+                <div>
+
+                    <div class="asiye-eyebrow">
+
+                        Trip underway
+
+                    </div>
+
+
+                    <h2
+                        id="asiyeTransitEta"
+                        class="asiye-title"
+                    >
+
+                        On the way
+
+                    </h2>
+
+
+                    <p class="asiye-subtitle">
+
+                        To
+                        ${this.escape(
+                            destination
+                        )}
+
+                    </p>
+
+                </div>
+
+
+                <div class="asiye-status-icon">
+
+                    <i class="fas fa-route"></i>
+
+                </div>
+
+            </div>
+
+
+            <div class="
+                asiye-route-card
+                destination
+            ">
+
+                <div class="asiye-route-dot"></div>
+
+
+                <div class="asiye-route-copy">
+
+                    <div class="asiye-route-label">
+
+                        Destination
+
+                    </div>
+
+
+                    <div class="asiye-route-address">
+
+                        ${this.escape(
+                            destination
+                        )}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="asiye-actions">
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.openSafety()"
+                >
+                    <i class="fas fa-shield-alt"></i>
+                    Safety
+                </button>
+
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.shareTrip()"
+                >
+                    <i class="fas fa-share-nodes"></i>
+                    Share trip
+                </button>
+
+
+                <button
+                    class="asiye-action-button"
+                    onclick="AsiyeRide.messageDriver()"
+                >
+                    <i class="fas fa-comment"></i>
+                    Message
+                </button>
+
+            </div>
+
+        `;
+
+
+        this.open();
+    },
+
+
+    /* ========================================================
+       LIVE DRIVER LOCATION
+       ======================================================== */
+
+    listenToDriver() {
+
+        if (!this.driverId) return;
+
+
+        this.cleanupDriverListener();
+
+
+        this.driverRef =
+
+            firebase
+                .database()
+                .ref(
+                    `taxis/${this.driverId}`
+                );
+
+
+        this.driverListener =
+
+            this.driverRef.on(
+
+                'value',
+
+                snapshot => {
+
+                    const driver =
+                        snapshot.val();
+
+
+                    if (!driver) return;
+
+
+                    this.driver =
+                        driver;
+
+
+                    const lat =
+                        Number(
+                            driver.latitude
+                        );
+
+
+                    const lng =
+                        Number(
+                            driver.longitude
+                        );
+
+
+                    if (
+                        Number.isFinite(lat) &&
+                        Number.isFinite(lng)
+                    ) {
+
+                        this.updateDriverMarker(
+                            lat,
+                            lng
+                        );
+
+
+                        if (
+                            this.status ===
+                            'driver_on_way'
+                        ) {
+
+                            this.calculatePickupEta(
+                                lat,
+                                lng
+                            );
+                        }
+                    }
+                }
+            );
+    },
+
+
+    updateDriverMarker(
+        lat,
+        lng
+    ) {
+
+        if (
+            !window.map ||
+            !window.mapboxgl
+        ) {
+
+            return;
+        }
+
+
+        if (!this.driverMarker) {
+
+            const el =
+                document.createElement(
+                    'div'
+                );
+
+
+            el.style.cssText = `
+
+                width:42px;
+
+                height:42px;
+
+                border-radius:50%;
+
+                background:#111;
+
+                color:#fff;
+
+                border:3px solid #fff;
+
+                display:flex;
+
+                align-items:center;
+
+                justify-content:center;
+
+                box-shadow:
+                    0 5px 14px
+                    rgba(0,0,0,.25);
+
+                font-size:16px;
+
+            `;
+
+
+            el.innerHTML =
+
+                '<i class="fas fa-car-side"></i>';
+
+
+            this.driverMarker =
+
+                new mapboxgl.Marker({
+                    element: el
+                })
+
+                .setLngLat([
+                    lng,
+                    lat
+                ])
+
+                .addTo(
+                    window.map
+                );
+
+
+        } else {
+
+            this.driverMarker
+                .setLngLat([
+                    lng,
+                    lat
+                ]);
+        }
+    },
+
+
+    /* ========================================================
+       ETA TO PICKUP
+       ======================================================== */
+
+    async calculatePickupEta(
+        driverLat,
+        driverLng
+    ) {
+
+        const passengerLat =
+            Number(
+                window.commuterLat ||
+                localStorage.getItem(
+                    'lastLat'
+                )
+            );
+
+
+        const passengerLng =
+            Number(
+                window.commuterLng ||
+                localStorage.getItem(
+                    'lastLng'
+                )
+            );
+
+
+        if (
+            !Number.isFinite(
+                passengerLat
+            ) ||
+
+            !Number.isFinite(
+                passengerLng
+            )
+        ) {
+
+            return;
+        }
+
+
+        if (
+            !window.mapboxgl ||
+            !mapboxgl.accessToken
+        ) {
+
+            return;
+        }
+
+
+        try {
+
+            const url =
+
+                `https://api.mapbox.com/directions/v5/mapbox/driving/` +
+
+                `${driverLng},${driverLat};` +
+
+                `${passengerLng},${passengerLat}` +
+
+                `?overview=false` +
+
+                `&access_token=${mapboxgl.accessToken}`;
+
+
+            const response =
+                await fetch(url);
+
+
+            const data =
+                await response.json();
+
+
+            if (
+                !data.routes ||
+                !data.routes.length
+            ) {
+
+                return;
+            }
+
+
+            const minutes =
+
+                Math.max(
+                    1,
+                    Math.round(
+                        data.routes[0]
+                            .duration /
+                        60
+                    )
+                );
+
+
+            const eta =
+                document.getElementById(
+                    'asiyeLiveEta'
+                );
+
+
+            if (eta) {
+
+                eta.textContent =
+                    minutes;
+            }
+
+
+        } catch (error) {
+
+            console.warn(
+                'ETA unavailable:',
+                error
+            );
+        }
+    },
+
+
+    /* ========================================================
+       CANCEL DIALOG
+       ======================================================== */
+
+    openCancelDialog() {
+
+        const overlay =
+
+            document.getElementById(
+                'asiyeCancelOverlay'
+            );
+
+
+        if (overlay) {
+
+            overlay.classList.add(
+                'open'
+            );
+        }
+
+
+        const button =
+
+            document.getElementById(
+                'asiyeConfirmCancelBtn'
+            );
+
+
+        if (button) {
+
+            button.onclick = () => {
+
+                this.cancel();
+            };
+        }
+    },
+
+
+    closeCancelDialog() {
+
+        const overlay =
+
+            document.getElementById(
+                'asiyeCancelOverlay'
+            );
+
+
+        if (overlay) {
+
+            overlay.classList.remove(
+                'open'
+            );
+        }
+    },
+
+
+    /* ========================================================
+       CANCELLATION
+       ======================================================== */
+
+    async cancel() {
+
+        if (
+            !this.requestId ||
+            this.cancelling
+        ) {
+
+            return;
+        }
+
+
+        this.cancelling =
+            true;
+
+
+        const button =
+
+            document.getElementById(
+                'asiyeConfirmCancelBtn'
+            );
+
+
+        if (button) {
+
+            button.disabled =
+                true;
+
+
+            button.innerHTML =
+
+                '<i class="fas fa-circle-notch fa-spin"></i> Cancelling';
+        }
+
+
+        try {
+
+            const requestSnapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `requests/${this.requestId}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            const request =
+
+                requestSnapshot.val() ||
+                {};
+
+
+            await firebase
+                .database()
+                .ref(
+                    `requests/${this.requestId}`
+                )
+                .update({
+
+                    status:
+                        'cancelled_by_commuter',
+
+                    cancelledAt:
+
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+                });
+
+
+            const driverId =
+
+                request.taxiId ||
+
+                request.driverId;
+
+
+            if (driverId) {
+
+                firebase
+                    .database()
+                    .ref(
+                        `notifications/taxis/${driverId}`
+                    )
+                    .push({
+
+                        type:
+                            'cancelled_by_commuter',
+
+                        title:
+                            'Booking cancelled',
+
+                        message:
+
+                            `${
+                                request.commuterName ||
+                                'Passenger'
+                            } cancelled the booking.`,
+
+                        requestId:
+                            this.requestId,
+
+                        timestamp:
+
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP
+                    });
+            }
+
+
+            if (window.userId) {
+
+                firebase
+                    .database()
+                    .ref(
+                        `commuters/${window.userId}`
+                    )
+                    .update({
+
+                        currentRequest:
+                            null
+                    });
+            }
+
+
+            this.cleanupAfterCancel();
+
+
+        } catch (error) {
+
+            console.error(
+                'Cancellation failed:',
+                error
+            );
+
+
+            this.cancelling =
+                false;
+
+
+            if (button) {
+
+                button.disabled =
+                    false;
+
+
+                button.textContent =
+                    'Cancel ride';
+            }
+
+
+            if (
+                typeof showToast ===
+                'function'
+            ) {
+
+                showToast(
+                    'Could not cancel. Please try again.',
+                    'danger'
+                );
+            }
+        }
+    },
+
+
+    cleanupAfterCancel() {
+
+        this.closeCancelDialog();
+
+
+        this.cleanupListeners();
+
+
+        this.removeDriverMarker();
+
+
+        this.close();
+
+
+        if (
+            typeof window.clearSearchingMapView ===
+            'function'
+        ) {
+
+            try {
+
+                window.clearSearchingMapView();
+
+            } catch (e) {}
+        }
+
+
+        window.currentRequestId =
+            null;
+
+
+        localStorage.removeItem(
+            'currentRequestId'
+        );
+
+
+        if (
+            window.commuterData
+        ) {
+
+            window.commuterData
+                .currentRequest =
+                null;
+        }
+
+
+        this.requestId =
+            null;
+
+
+        this.request =
+            null;
+
+
+        this.driver =
+            null;
+
+
+        this.driverId =
+            null;
+
+
+        this.status =
+            'idle';
+
+
+        this.cancelling =
+            false;
+
+
+        if (
+            typeof showToast ===
+            'function'
+        ) {
+
+            showToast(
+                'Ride cancelled',
+                'info'
+            );
+        }
+
+
+        setTimeout(() => {
+
+            if (
+                typeof window
+                    .showModernDashboard ===
+                    'function'
+            ) {
+
+                window
+                    .showModernDashboard();
+            }
+
+        }, 150);
+    },
+
+
+    handleRemoteCancellation() {
+
+        this.cleanupListeners();
+
+
+        this.removeDriverMarker();
+
+
+        this.close();
+
+
+        window.currentRequestId =
+            null;
+
+
+        localStorage.removeItem(
+            'currentRequestId'
+        );
+
+
+        if (
+            typeof showToast ===
+            'function'
+        ) {
+
+            showToast(
+                'This ride is no longer available. Please request another driver.',
+                'info'
+            );
+        }
+
+
+        setTimeout(() => {
+
+            if (
+                typeof showModernDashboard ===
+                    'function'
+            ) {
+
+                showModernDashboard();
+            }
+
+        }, 300);
+    },
+
+
+    /* ========================================================
+       COMPLETED
+       ======================================================== */
+
+    renderCompleted() {
+
+        const request =
+            this.request || {};
+
+
+        let myData =
+            request;
+
+
+        if (
+            request.type === 'club' &&
+            request.passengers &&
+            window.userId &&
+            request.passengers[
+                window.userId
+            ]
+        ) {
+
+            myData =
+                request.passengers[
+                    window.userId
+                ];
+        }
+
+
+        const amount =
+
+            Number(
+
+                myData.finalAmount ||
+
+                myData.price ||
+
+                request.finalAmount ||
+
+                request.calculatedPrice ||
+
+                0
+            );
+
+
+        const paymentMethod =
+
+            myData.paymentMethod ||
+
+            request.paymentMethod ||
+
+            'cash';
+
+
+        const destination =
+
+            request.destination ||
+
+            request.dropoffAddress ||
+
+            window.userDropOffDestination ||
+
+            'Destination';
+
+
+        this.content.innerHTML = `
+
+            <div class="asiye-complete">
+
+                <div class="asiye-complete-icon">
+
+                    <i class="fas fa-check"></i>
+
+                </div>
+
+
+                <h2 class="asiye-title">
+
+                    You've arrived
+
+                </h2>
+
+
+                <p class="asiye-subtitle">
+
+                    ${this.escape(
+                        destination
+                    )}
+
+                </p>
+
+
+                <div class="asiye-complete-price">
+
+                    R${amount.toFixed(2)}
+
+                </div>
+
+
+                <div class="asiye-payment-method">
+
+                    ${this.escape(
+                        paymentMethod
+                    )}
+
+                </div>
+
+            </div>
+
+
+            <button
+                class="asiye-primary-button"
+                onclick="AsiyeRide.openRating()"
+            >
+
+                Rate your driver
+
+            </button>
+
+
+            <button
+                class="asiye-secondary-button"
+                onclick="AsiyeRide.finish()"
+            >
+
+                Done
+
+            </button>
+
+        `;
+
+
+        this.open();
+    },
+
+
+    /* ========================================================
+       RATING
+       ======================================================== */
+
+    openRating() {
+
+        const overlay =
+
+            document.getElementById(
+                'asiyeRatingOverlay'
+            );
+
+
+        const name =
+
+            this.request?.driverName ||
+
+            this.request?.taxiName ||
+
+            this.driver?.name ||
+
+            'your driver';
+
+
+        const label =
+
+            document.getElementById(
+                'asiyeRatingDriver'
+            );
+
+
+        if (label) {
+
+            label.textContent =
+
+                `Rate ${name}`;
+        }
+
+
+        this.selectedRating =
+            0;
+
+
+        document
+            .querySelectorAll(
+                '#asiyeRatingStars button'
+            )
+            .forEach(button => {
+
+                button.classList.remove(
+                    'active'
+                );
+
+
+                button.onclick = () => {
+
+                    this.setRating(
+                        Number(
+                            button.dataset.rating
+                        )
+                    );
+                };
+            });
+
+
+        if (overlay) {
+
+            overlay.classList.add(
+                'open'
+            );
+        }
+    },
+
+
+    setRating(rating) {
+
+        this.selectedRating =
+            rating;
+
+
+        document
+            .querySelectorAll(
+                '#asiyeRatingStars button'
+            )
+            .forEach(button => {
+
+                const value =
+                    Number(
+                        button.dataset.rating
+                    );
+
+
+                button.classList.toggle(
+
+                    'active',
+
+                    value <= rating
+                );
+            });
+    },
+
+
+    async submitRating() {
+
+        if (
+            !this.selectedRating
+        ) {
+
+            if (
+                typeof showToast ===
+                'function'
+            ) {
+
+                showToast(
+                    'Choose a star rating first.',
+                    'info'
+                );
+            }
+
+            return;
+        }
+
+
+        const button =
+
+            document.getElementById(
+                'asiyeSubmitRatingBtn'
+            );
+
+
+        const comment =
+
+            document
+                .getElementById(
+                    'asiyeRatingComment'
+                )
+                ?.value
+                ?.trim() ||
+
+            '';
+
+
+        if (button) {
+
+            button.disabled =
+                true;
+
+
+            button.innerHTML =
+
+                '<i class="fas fa-circle-notch fa-spin"></i> Saving';
+        }
+
+
+        try {
+
+            const driverId =
+
+                this.driverId ||
+
+                this.request?.taxiId ||
+
+                this.request?.driverId;
+
+
+            /*
+             * Passenger's rating record.
+             */
+
+            if (
+                window.userId &&
+                this.requestId
+            ) {
+
+                await firebase
+                    .database()
+                    .ref(
+
+                        `commuters/${window.userId}/ratingsGiven/${this.requestId}`
+
+                    )
+                    .set({
+
+                        rating:
+                            this.selectedRating,
+
+                        comment:
+                            comment,
+
+                        driverId:
+                            driverId || '',
+
+                        timestamp:
+
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP
+                    });
+            }
+
+
+            /*
+             * Driver's rating history.
+             */
+
+            if (driverId) {
+
+                await firebase
+                    .database()
+                    .ref(
+                        `taxis/${driverId}/ratings`
+                    )
+                    .push({
+
+                        rating:
+                            this.selectedRating,
+
+                        comment:
+                            comment,
+
+                        commuterId:
+                            window.userId || '',
+
+                        commuterName:
+
+                            window
+                                .commuterData
+                                ?.name ||
+
+                            'Passenger',
+
+                        timestamp:
+
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP
+                    });
+            }
+
+
+            this.finish();
+
+
+        } catch (error) {
+
+            console.error(
+                'Rating failed:',
+                error
+            );
+
+
+            if (button) {
+
+                button.disabled =
+                    false;
+
+
+                button.textContent =
+                    'Submit rating';
+            }
+        }
+    },
+
+
+    /* ========================================================
+       CALL
+       ======================================================== */
+
+    callDriver() {
+
+        const phone =
+
+            this.driver?.phone ||
+
+            this.driver?.phoneNumber ||
+
+            this.request?.driverPhone;
+
+
+        if (!phone) {
+
+            if (
+                typeof showToast ===
+                'function'
+            ) {
+
+                showToast(
+                    'Driver phone number is unavailable.',
+                    'info'
+                );
+            }
+
+            return;
+        }
+
+
+        window.location.href =
+
+            `tel:${phone}`;
+    },
+
+
+    /* ========================================================
+       CHAT
+       ======================================================== */
+
+    messageDriver() {
+
+        const driverId =
+
+            this.driverId ||
+
+            this.request?.taxiId;
+
+
+        const name =
+
+            this.request?.driverName ||
+
+            this.driver?.name ||
+
+            'Driver';
+
+
+        if (
+            typeof window.openTripChat ===
+            'function'
+        ) {
+
+            window.openTripChat(
+                null,
+                driverId,
+                name
+            );
+
+
+        } else if (
+            typeof window.openChat ===
+            'function'
+        ) {
+
+            window.openChat(
+                driverId,
+                name
+            );
+        }
+    },
+
+
+    /* ========================================================
+       SAFETY
+       ======================================================== */
+
+    openSafety() {
+
+        if (
+            typeof window.openEmergencyAlert ===
+            'function'
+        ) {
+
+            window.openEmergencyAlert();
+
+            return;
+        }
+
+
+        if (
+            typeof showToast ===
+            'function'
+        ) {
+
+            showToast(
+                'Safety centre unavailable.',
+                'info'
+            );
+        }
+    },
+
+
+    /* ========================================================
+       SHARE TRIP
+       ======================================================== */
+
+    async shareTrip() {
+
+        const destination =
+
+            this.request?.destination ||
+
+            window.userDropOffDestination ||
+
+            'my destination';
+
+
+        const text =
+
+            `I'm travelling with Asiye to ${destination}.`;
+
+
+        try {
+
+            if (
+                navigator.share
+            ) {
+
+                await navigator.share({
+
+                    title:
+                        'My Asiye trip',
+
+                    text:
+                        text
+                });
+
+
+            } else {
+
+                await navigator
+                    .clipboard
+                    .writeText(
+                        text
+                    );
+
+
+                if (
+                    typeof showToast ===
+                    'function'
+                ) {
+
+                    showToast(
+                        'Trip information copied.',
+                        'success'
+                    );
+                }
+            }
+
+
+        } catch (error) {
+
+            /*
+             * Ignore share-sheet cancellation.
+             */
+
+            if (
+                error.name !==
+                'AbortError'
+            ) {
+
+                console.warn(
+                    error
+                );
+            }
+        }
+    },
+
+
+    /* ========================================================
+       FINISH
+       ======================================================== */
+
+    finish() {
+
+        const ratingOverlay =
+
+            document.getElementById(
+                'asiyeRatingOverlay'
+            );
+
+
+        if (ratingOverlay) {
+
+            ratingOverlay.classList.remove(
+                'open'
+            );
+        }
+
+
+        this.cleanupListeners();
+
+
+        this.removeDriverMarker();
+
+
+        this.close();
+
+
+        window.currentRequestId =
+            null;
+
+
+        localStorage.removeItem(
+            'currentRequestId'
+        );
+
+
+        if (
+            window.commuterData
+        ) {
+
+            window.commuterData
+                .currentRequest =
+                null;
+        }
+
+
+        this.requestId =
+            null;
+
+
+        this.request =
+            null;
+
+
+        this.driver =
+            null;
+
+
+        this.driverId =
+            null;
+
+
+        this.status =
+            'idle';
+
+
+        if (
+            typeof window.clearSearchingMapView ===
+                'function'
+        ) {
+
+            try {
+
+                window
+                    .clearSearchingMapView();
+
+            } catch (e) {}
+        }
+
+
+        if (
+            typeof window.showModernDashboard ===
+                'function'
+        ) {
+
+            window.showModernDashboard();
+        }
+    },
+
+
+    /* ========================================================
+       CLEANUP
+       ======================================================== */
+
+    cleanupRequestListener() {
+
+        if (
+            this.requestRef &&
+            this.requestListener
+        ) {
+
+            try {
+
+                this.requestRef.off(
+
+                    'value',
+
+                    this.requestListener
+                );
+
+            } catch (e) {}
+        }
+
+
+        this.requestRef =
+            null;
+
+
+        this.requestListener =
+            null;
+    },
+
+
+    cleanupDriverListener() {
+
+        if (
+            this.driverRef &&
+            this.driverListener
+        ) {
+
+            try {
+
+                this.driverRef.off(
+
+                    'value',
+
+                    this.driverListener
+                );
+
+            } catch (e) {}
+        }
+
+
+        this.driverRef =
+            null;
+
+
+        this.driverListener =
+            null;
+    },
+
+
+    cleanupListeners() {
+
+        this.cleanupRequestListener();
+
+        this.cleanupDriverListener();
+    },
+
+
+    removeDriverMarker() {
+
+        if (
+            this.driverMarker
+        ) {
+
+            try {
+
+                this.driverMarker
+                    .remove();
+
+            } catch (e) {}
+
+
+            this.driverMarker =
+                null;
+        }
+    },
+
+
+    /* ========================================================
+       RESTORE ACTIVE RIDE AFTER RELOAD
+       ======================================================== */
+
+    async restore() {
+
+        const requestId =
+
+            window.currentRequestId ||
+
+            localStorage.getItem(
+                'currentRequestId'
+            );
+
+
+        if (!requestId) {
+
+            return false;
+        }
+
+
+        try {
+
+            const snapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `requests/${requestId}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            const request =
+                snapshot.val();
+
+
+            if (!request) {
+
+                localStorage.removeItem(
+                    'currentRequestId'
+                );
+
+                return false;
+            }
+
+
+            const activeStatuses = [
+
+                'pending',
+                'requested',
+                'searching',
+                'pooling',
+                'waiting_pool',
+                'accepted',
+                'driver_on_way',
+                'driver_waiting',
+                'arrived',
+                'passenger_here',
+                'passenger_onboard',
+                'picked_up',
+                'in_transit'
+
+            ];
+
+
+            if (
+                !activeStatuses.includes(
+                    request.status
+                )
+            ) {
+
+                return false;
+            }
+
+
+            this.requestId =
+                requestId;
+
+
+            this.request =
+                request;
+
+
+            this.listenToRequest(
+                requestId
+            );
+
+
+            this.handleStatus(
+
+                request.status,
+
+                request
+            );
+
+
+            return true;
+
+
+        } catch (error) {
+
+            console.error(
+                'Ride restore failed:',
+                error
+            );
+
+
+            return false;
+        }
+    }
+
+};
+
+
+/* ============================================================
+   INITIALISE STAR BUTTONS
+============================================================ */
+
+document.addEventListener(
+    'DOMContentLoaded',
+    function () {
+
+        document
+            .querySelectorAll(
+                '#asiyeRatingStars button'
+            )
+            .forEach(button => {
+
+                button.addEventListener(
+                    'click',
+                    function () {
+
+                        AsiyeRide.setRating(
+
+                            Number(
+                                this.dataset.rating
+                            )
+                        );
+                    }
+                );
+            });
+
+    }
+);
+
+</script>
 // =================================================================
 // CRITICAL: Define these functions globally at the start
 // =================================================================
@@ -36423,7 +41036,23 @@ window.submitInstantClubBooking = async function() {
         }
     }
 };
+window.currentRequestId =
+    requestId;
 
+localStorage.setItem(
+    'currentRequestId',
+    requestId
+);
+
+
+/*
+ * NEW UNIFIED ASIYE SYSTEM
+ */
+
+AsiyeRide.start(
+    requestId,
+    requestData
+);
 
 // =======================================================================
 // 2. WIZARD NAVIGATION & VALIDATION
@@ -36948,42 +41577,7 @@ console.log("🎯 Confirm Trip sheet hidden, pending sheet shown");
             }
         }
 
-        // ============================================================
-        // 12. PERSIST SESSION STATE
-        // ============================================================
-        window.currentRequestId = requestId;
-        localStorage.setItem('currentRequestId', requestId);
-        await database.ref(`commuters/${window.userId}`).update({ currentRequest: requestId });
-
-        // ============================================================
-        // 13. START LISTENERS
-        // ============================================================
-        if (typeof listenForRequestStatus === 'function') {
-            listenForRequestStatus(requestId);
-        }
-        if (typeof window.startTaxiSearchTimer === 'function') {
-            window.startTaxiSearchTimer(requestId);
-        }
-
-        console.log("✅ requestAsiyeGoRide complete — requestId:", requestId);
-
-    } catch (error) {
-        console.error("❌ Booking error:", error);
-
-        clearProgressInterval();
-
-        if (typeof closeModal === 'function') closeModal('pendingRequestPopup');
-
-        if (typeof showGenericMessage === 'function') {
-            showGenericMessage(
-                "Error",
-                "Something went wrong. Please try again.",
-                "fa-exclamation-triangle",
-                "icon-danger"
-            );
-        }
-    }
-};
+        
 // =======================================================================
 // NOTIFY DRIVERS ABOUT E-HAILING (ASIYE GO) RIDE
 // =======================================================================
