@@ -15,10 +15,7 @@ ASIYE.ui = {
     renderHome() {
 
         const container =
-
-            document.getElementById(
-                'sheetContent'
-            );
+            document.getElementById('sheetContent');
 
 
         if (!container) {
@@ -67,9 +64,7 @@ ASIYE.ui = {
                     <h1 class="home-title">
 
                         Where to,
-                        ${this.escape(
-                            firstName
-                        )}?
+                        ${this.escape(firstName)}?
 
                     </h1>
 
@@ -94,38 +89,26 @@ ASIYE.ui = {
                 class="destination-button"
             >
 
-                <div
-                    class="
-                        destination-search-icon
-                    "
-                >
+                <div class="destination-search-icon">
 
                     <i class="fas fa-search"></i>
 
                 </div>
 
 
-                <div
-                    class="
-                        destination-button-text
-                    "
-                >
+                <div class="destination-button-text">
 
-                    <span
-                        class="
-                            destination-button-label
-                        "
-                    >
+                    <span class="destination-button-label">
+
                         Where to?
+
                     </span>
 
 
-                    <span
-                        class="
-                            destination-button-subtitle
-                        "
-                    >
+                    <span class="destination-button-subtitle">
+
                         Search destination
+
                     </span>
 
                 </div>
@@ -256,15 +239,12 @@ ASIYE.ui = {
          */
 
         document
-            .getElementById(
-                'whereToButton'
-            )
+            .getElementById('whereToButton')
             ?.addEventListener(
                 'click',
                 () => {
 
-                    ASIYE.ui
-                        .renderDestinationSearch();
+                    ASIYE.ui.renderDestinationSearch();
                 }
             );
 
@@ -274,15 +254,12 @@ ASIYE.ui = {
          */
 
         container
-            .querySelector(
-                '[data-action="ride"]'
-            )
+            .querySelector('[data-action="ride"]')
             ?.addEventListener(
                 'click',
                 () => {
 
-                    ASIYE.ui
-                        .renderDestinationSearch();
+                    ASIYE.ui.renderDestinationSearch();
                 }
             );
 
@@ -292,9 +269,7 @@ ASIYE.ui = {
          */
 
         container
-            .querySelector(
-                '[data-action="club"]'
-            )
+            .querySelector('[data-action="club"]')
             ?.addEventListener(
                 'click',
                 () => {
@@ -311,9 +286,7 @@ ASIYE.ui = {
          */
 
         container
-            .querySelector(
-                '[data-action="parcel"]'
-            )
+            .querySelector('[data-action="parcel"]')
             ?.addEventListener(
                 'click',
                 () => {
@@ -330,9 +303,7 @@ ASIYE.ui = {
          */
 
         document
-            .getElementById(
-                'walletStrip'
-            )
+            .getElementById('walletStrip')
             ?.addEventListener(
                 'click',
                 () => {
@@ -366,10 +337,7 @@ ASIYE.ui = {
     renderDestinationSearch() {
 
         const container =
-
-            document.getElementById(
-                'sheetContent'
-            );
+            document.getElementById('sheetContent');
 
 
         if (!container) return;
@@ -416,11 +384,7 @@ ASIYE.ui = {
                         id="pickupInput"
                         class="location-input"
                         type="text"
-                        value="${
-                            this.escape(
-                                pickup
-                            )
-                        }"
+                        value="${this.escape(pickup)}"
                         readonly
                     >
 
@@ -485,9 +449,7 @@ ASIYE.ui = {
 
 
         document
-            .getElementById(
-                'destinationBackButton'
-            )
+            .getElementById('destinationBackButton')
             ?.addEventListener(
                 'click',
                 () => {
@@ -498,10 +460,7 @@ ASIYE.ui = {
 
 
         const input =
-
-            document.getElementById(
-                'destinationInput'
-            );
+            document.getElementById('destinationInput');
 
 
         if (input) {
@@ -524,22 +483,9 @@ ASIYE.ui = {
                         event.target.value.trim();
 
 
-                    if (
-                        value.length >= 3
-                    ) {
-
-                        console.log(
-                            'Search destination:',
-                            value
-                        );
-
-
-                        /*
-                         * Next step:
-                         * places.js will handle
-                         * Mapbox / Google search.
-                         */
-                    }
+                    ASIYE.places.search(
+                        value
+                    );
                 }
             );
         }
@@ -560,18 +506,14 @@ ASIYE.ui = {
             'fa-clock-rotate-left';
 
 
-        if (
-            icon === 'home'
-        ) {
+        if (icon === 'home') {
 
             iconClass =
                 'fa-house';
         }
 
 
-        if (
-            icon === 'work'
-        ) {
+        if (icon === 'work') {
 
             iconClass =
                 'fa-briefcase';
@@ -630,29 +572,316 @@ ASIYE.ui = {
 
 
     /* ========================================================
+       RIDE SELECTION
+       ======================================================== */
+
+    renderRideSelection() {
+
+        const container =
+            document.getElementById('sheetContent');
+
+
+        if (!container) {
+
+            return;
+        }
+
+
+        const destination =
+            ASIYE.state.destination;
+
+
+        const route =
+            ASIYE.state.route;
+
+
+        const prices =
+            ASIYE.pricing.calculate();
+
+
+        ASIYE.state.booking.fare =
+            prices.go;
+
+
+        container.innerHTML = `
+
+            <div class="sheet-page-header">
+
+                <button
+                    id="rideSelectionBack"
+                    class="sheet-back-button"
+                >
+
+                    <i class="fas fa-arrow-left"></i>
+
+                </button>
+
+
+                <div>
+
+                    <h2 class="sheet-page-title">
+
+                        Choose your ride
+
+                    </h2>
+
+
+                    <div
+                        style="
+                            color:#888;
+                            font-size:10px;
+                            margin-top:2px;
+                        "
+                    >
+
+                        ${route.distanceKm.toFixed(1)} km
+
+                        ·
+
+                        ${route.durationMinutes} min
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="asiye-route-summary">
+
+                <div
+                    style="
+                        font-size:11px;
+                        color:#888;
+                        margin-bottom:3px;
+                        font-weight:700;
+                    "
+                >
+                    Destination
+                </div>
+
+                <div
+                    style="
+                        font-size:13px;
+                        font-weight:800;
+                        color:#111;
+                    "
+                >
+                    ${this.escape(
+                        destination.name ||
+                        destination.address
+                    )}
+                </div>
+
+            </div>
+
+
+            ${this.renderRideCard(
+                'go',
+                'Asiye Go',
+                'Private ride',
+                prices.go,
+                'fa-car-side'
+            )}
+
+
+            ${this.renderRideCard(
+                'club4',
+                'Asiye Club 4',
+                'Share with up to 3 others',
+                prices.club4,
+                'fa-users'
+            )}
+
+
+            ${this.renderRideCard(
+                'club6',
+                'Asiye Club 6',
+                'Lowest shared fare',
+                prices.club6,
+                'fa-people-group'
+            )}
+
+
+            <button
+                id="confirmRideSelection"
+                class="primary-button"
+                style="margin-top:14px;"
+            >
+                Confirm Asiye Go
+            </button>
+
+        `;
+
+
+        ASIYE.state.booking.rideType =
+            'go';
+
+
+        this.updateRideSelection();
+
+
+        document
+            .getElementById('rideSelectionBack')
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    ASIYE.map.clearTrip();
+
+                    ASIYE.resetDestination();
+
+                    this.renderDestinationSearch();
+                }
+            );
+
+
+        container
+            .querySelectorAll('[data-ride-type]')
+            .forEach(card => {
+
+                card.addEventListener(
+                    'click',
+                    () => {
+
+                        ASIYE.state.booking.rideType =
+                            card.dataset.rideType;
+
+
+                        this.updateRideSelection();
+                    }
+                );
+            });
+
+
+        document
+            .getElementById('confirmRideSelection')
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    ASIYE.ui.toast(
+                        'Next: payment and booking request.'
+                    );
+                }
+            );
+    },
+
+
+    renderRideCard(
+        type,
+        title,
+        subtitle,
+        price,
+        icon
+    ) {
+
+        return `
+
+            <button
+                data-ride-type="${type}"
+                class="ride-choice-card"
+            >
+
+                <div class="ride-choice-icon">
+
+                    <i class="fas ${icon}"></i>
+
+                </div>
+
+
+                <div class="ride-choice-copy">
+
+                    <div class="ride-choice-title">
+
+                        ${this.escape(title)}
+
+                    </div>
+
+
+                    <div class="ride-choice-subtitle">
+
+                        ${this.escape(subtitle)}
+
+                    </div>
+
+                </div>
+
+
+                <div class="ride-choice-price">
+
+                    R${Number(price).toFixed(0)}
+
+                </div>
+
+            </button>
+
+        `;
+    },
+
+
+    updateRideSelection() {
+
+        const selected =
+            ASIYE.state.booking.rideType;
+
+
+        document
+            .querySelectorAll('[data-ride-type]')
+            .forEach(card => {
+
+                card.classList.toggle(
+
+                    'selected',
+
+                    card.dataset.rideType ===
+                    selected
+                );
+            });
+
+
+        const button =
+            document.getElementById('confirmRideSelection');
+
+
+        if (!button) return;
+
+
+        const labels = {
+
+            go:
+                'Confirm Asiye Go',
+
+            club4:
+                'Confirm Asiye Club 4',
+
+            club6:
+                'Confirm Asiye Club 6'
+        };
+
+
+        button.textContent =
+            labels[selected] ||
+            'Confirm ride';
+    },
+
+
+    /* ========================================================
        MENU
        ======================================================== */
 
     openMenu() {
 
         document
-            .getElementById(
-                'sideMenu'
-            )
+            .getElementById('sideMenu')
             ?.classList
-            .add(
-                'open'
-            );
+            .add('open');
 
 
         document
-            .getElementById(
-                'menuBackdrop'
-            )
+            .getElementById('menuBackdrop')
             ?.classList
-            .add(
-                'open'
-            );
+            .add('open');
 
 
         ASIYE.state.ui.menuOpen =
@@ -663,23 +892,15 @@ ASIYE.ui = {
     closeMenu() {
 
         document
-            .getElementById(
-                'sideMenu'
-            )
+            .getElementById('sideMenu')
             ?.classList
-            .remove(
-                'open'
-            );
+            .remove('open');
 
 
         document
-            .getElementById(
-                'menuBackdrop'
-            )
+            .getElementById('menuBackdrop')
             ?.classList
-            .remove(
-                'open'
-            );
+            .remove('open');
 
 
         ASIYE.state.ui.menuOpen =
@@ -697,20 +918,14 @@ ASIYE.ui = {
     ) {
 
         const container =
-
-            document.getElementById(
-                'toastContainer'
-            );
+            document.getElementById('toastContainer');
 
 
         if (!container) return;
 
 
         const toast =
-
-            document.createElement(
-                'div'
-            );
+            document.createElement('div');
 
 
         toast.className =
@@ -721,9 +936,7 @@ ASIYE.ui = {
             message;
 
 
-        container.appendChild(
-            toast
-        );
+        container.appendChild(toast);
 
 
         setTimeout(
@@ -743,34 +956,17 @@ ASIYE.ui = {
 
     escape(value) {
 
-        return String(
-            value ?? ''
-        )
+        return String(value ?? '')
 
-        .replace(
-            /&/g,
-            '&amp;'
-        )
+        .replace(/&/g, '&amp;')
 
-        .replace(
-            /</g,
-            '&lt;'
-        )
+        .replace(/</g, '&lt;')
 
-        .replace(
-            />/g,
-            '&gt;'
-        )
+        .replace(/>/g, '&gt;')
 
-        .replace(
-            /"/g,
-            '&quot;'
-        )
+        .replace(/"/g, '&quot;')
 
-        .replace(
-            /'/g,
-            '&#039;'
-        );
+        .replace(/'/g, '&#039;');
     }
 
 };
@@ -795,15 +991,11 @@ document.addEventListener(
          * Firebase will replace this next.
          */
 
-        if (
-            !ASIYE.state.user
-        ) {
+        if (!ASIYE.state.user) {
 
             ASIYE.setUser(
 
-                localStorage.getItem(
-                    'userId'
-                ),
+                localStorage.getItem('userId'),
 
                 {
                     name:
@@ -831,6 +1023,20 @@ document.addEventListener(
 
 
         /*
+         * Location
+         */
+
+        if (
+            ASIYE.location &&
+            typeof ASIYE.location.start ===
+                'function'
+        ) {
+
+            ASIYE.location.start();
+        }
+
+
+        /*
          * Home
          */
 
@@ -842,9 +1048,7 @@ document.addEventListener(
          */
 
         document
-            .getElementById(
-                'menuButton'
-            )
+            .getElementById('menuButton')
             ?.addEventListener(
                 'click',
                 () => {
@@ -855,9 +1059,7 @@ document.addEventListener(
 
 
         document
-            .getElementById(
-                'closeMenuButton'
-            )
+            .getElementById('closeMenuButton')
             ?.addEventListener(
                 'click',
                 () => {
@@ -868,9 +1070,7 @@ document.addEventListener(
 
 
         document
-            .getElementById(
-                'menuBackdrop'
-            )
+            .getElementById('menuBackdrop')
             ?.addEventListener(
                 'click',
                 () => {
@@ -885,15 +1085,12 @@ document.addEventListener(
          */
 
         document
-            .getElementById(
-                'recenterButton'
-            )
+            .getElementById('recenterButton')
             ?.addEventListener(
                 'click',
                 () => {
 
-                    ASIYE.map
-                        ?.centerUser();
+                    ASIYE.map?.centerUser();
                 }
             );
 
@@ -903,9 +1100,7 @@ document.addEventListener(
          */
 
         document
-            .querySelectorAll(
-                '#sideMenu [data-page]'
-            )
+            .querySelectorAll('#sideMenu [data-page]')
             .forEach(button => {
 
                 button.addEventListener(
@@ -916,16 +1111,12 @@ document.addEventListener(
                             button.dataset.page;
 
 
-                        ASIYE.ui
-                            .closeMenu();
+                        ASIYE.ui.closeMenu();
 
 
-                        if (
-                            page === 'home'
-                        ) {
+                        if (page === 'home') {
 
-                            ASIYE.ui
-                                .renderHome();
+                            ASIYE.ui.renderHome();
 
                             return;
                         }
