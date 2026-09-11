@@ -13,7 +13,7 @@
 <link href='https://api.mapbox.com/mapbox-gl-js/v3.1.2/mapbox-gl.css' rel='stylesheet' />
 
 <!-- Google Maps for the Search Bar (Places API only) -->
-<script async defer src="https://maps.googleapis.com/maps/api/js?key=ukltHnNjNAosw-FbWTkiLGFyWTM=Y&libraries=places&loading=async"></script>
+<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async"></script>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
 <!-- Replace YOUR_ACTUAL_API_KEY with your real Google Cloud API Key -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -15923,8 +15923,68 @@ window.lockPhoneModalOpen = function() {
       }
   };
 
-  // --- URL Cleaner & Referral Catcher ---
-    // --- URL Cleaner & Referral Catcher ---
+ // ==========================================
+  // 1. FAIL-SAFE MAP INITIALIZATION (MAPBOX)
+  // ==========================================
+  var hasCenteredOnUser = false;
+  window.isCameraLockedOnUser = true;
+  window.locationWatchId = null;
+
+  window.startMap = function(coords) {
+      console.log("🗺️ Initializing Mapbox Map at:", coords);
+      const safeCoords = coords || [28.0473, -26.2041];
+
+      try {
+          window.map = new mapboxgl.Map({
+              container: 'map',
+              style: 'mapbox://styles/mapbox/streets-v12',
+              center: [safeCoords[0], safeCoords[1]],
+              zoom: 15.5,
+              pitch: 45, // 3D effect
+              attributionControl: false
+          });
+
+          window.map.on('load', function() {
+              console.log("✅ Mapbox loaded successfully.");
+              const preloader = document.getElementById('solidPreloader');
+              if (preloader) preloader.style.display = 'none';
+              
+              if (typeof setupUserMarker === 'function') setupUserMarker(safeCoords);
+              if (typeof loadAndDisplayTaxisOnMap === 'function') loadAndDisplayTaxisOnMap();
+              if (typeof checkPassengerActiveTrip === 'function') checkPassengerActiveTrip();
+
+              setTimeout(() => {
+                  if (window.Android && window.Android.postMessage) {
+                      window.Android.postMessage(JSON.stringify({ action: 'hidePreloader' }));
+                  }
+              }, 150);
+          });
+          
+          window.map.on('error', (e) => console.warn("Mapbox warning:", e));
+      } catch (e) {
+          console.error("Mapbox init failed:", e);
+      }
+  };
+
+  function createRecenterButton() {
+      if (document.getElementById('recenterBtn')) return;
+      const btn = document.createElement('button');
+      btn.id = 'recenterBtn';
+      btn.innerHTML = '<i class="fas fa-location-arrow"></i>';
+      btn.style.cssText = `
+          position: fixed; bottom: 320px; right: 20px; width: 48px; height: 48px; 
+          border-radius: 50%; background: #007BFF; color: white; border: none; 
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 1000; cursor: pointer; 
+          display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+      `;
+      btn.onclick = () => {
+          if (window.commuterLat && window.commuterLng && window.map) {
+              window.map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16, duration: 800 });
+              if (typeof enableFollowMode === 'function') enableFollowMode();
+          }
+      };
+      document.body.appendChild(btn);
+  }
     // --- URL Cleaner & Referral Catcher ---
     (function() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -15944,122 +16004,8 @@ window.lockPhoneModalOpen = function() {
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     })();
-  // ==========================================
-  // 1. FAIL-SAFE MAP INITIALIZATION
-  // ==========================================
-  // Global variable to track if we've locked onto the user yet
-  var hasCenteredOnUser = false;
-  // Global tracking variables
-  window.isCameraLockedOnUser = true;
-  window.locationWatchId = null;
-  // Create a button that temporarily disables follow mode, recenters, then re-enables
-  function createRecenterButton() {
-      const btn = document.createElement('button');
-      btn.id = 'recenterBtn';
-      btn.innerHTML = '<i class="fas fa-location-arrow"></i>';
-      btn.style.cssText = `
-          position: fixed;
-          bottom: 320px;
-          right: 20px;
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          background: #007BFF;
-          color: white;
-          border: none;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          z-index: 1000;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.2rem;
-      `;
-      btn.onclick = () => {
-          if (commuterLat && commuterLng) {
-              map.flyTo({ center: [commuterLng, commuterLat], zoom: 16, duration: 800 });
-              if (!followModeActive) {
-                  // Optionally re-enable follow mode after manual recenter
-                  enableFollowMode();
-              }
-          }
-      };
-      document.body.appendChild(btn);
-  }
-      
-geolocateControl.on('geolocate', function(e) {
-    commuterLat = e.coords.latitude;
-    commuterLng = e.coords.longitude;
-    
-    if (userMarker) userMarker.setLngLat([commuterLng, commuterLat]);
+ 
 
-    localStorage.setItem('lastLat', commuterLat);
-    localStorage.setItem('lastLng', commuterLng);
-    
-    // TRIGGER REFRESH IMMEDIATELY
-    window.refreshLocationDisplay();
-});
-
-
-// =================================================================
-// GUARANTEE HOME DASHBOARD VISIBILITY ON LOAD
-// =================================================================
-
-// ==========================================
-  // 1. FAIL-SAFE MAP INITIALIZATION
-  // ==========================================
-  // Global variable to track if we've locked onto the user yet
-  var hasCenteredOnUser = false;
-  // Global tracking variables
-  window.isCameraLockedOnUser = true;
-  window.locationWatchId = null;
-  // Create a button that temporarily disables follow mode, recenters, then re-enables
-  function createRecenterButton() {
-      const btn = document.createElement('button');
-      btn.id = 'recenterBtn';
-      btn.innerHTML = '<i class="fas fa-location-arrow"></i>';
-      btn.style.cssText = `
-          position: fixed;
-          bottom: 320px;
-          right: 20px;
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          background: #007BFF;
-          color: white;
-          border: none;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-          z-index: 1000;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.2rem;
-      `;
-      btn.onclick = () => {
-          if (commuterLat && commuterLng) {
-              map.flyTo({ center: [commuterLng, commuterLat], zoom: 16, duration: 800 });
-              if (!followModeActive) {
-                  // Optionally re-enable follow mode after manual recenter
-                  enableFollowMode();
-              }
-          }
-      };
-      document.body.appendChild(btn);
-  }
-      
-geolocateControl.on('geolocate', function(e) {
-    commuterLat = e.coords.latitude;
-    commuterLng = e.coords.longitude;
-    
-    if (userMarker) userMarker.setLngLat([commuterLng, commuterLat]);
-
-    localStorage.setItem('lastLat', commuterLat);
-    localStorage.setItem('lastLng', commuterLng);
-    
-    // TRIGGER REFRESH IMMEDIATELY
-    window.refreshLocationDisplay();
-});
 
 // =======================================================================
 // UPDATED: NOTIFICATIONS POPUP (Fixed Text Visibility)
