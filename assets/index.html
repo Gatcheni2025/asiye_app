@@ -16,7 +16,19 @@
 <link rel='stylesheet' href='https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css' type='text/css' />
 
 <!-- Google Maps for the Search Bar (Places API only) -->
-<script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async"></script>
+<script>
+  // Google Maps callback so we know it's ready
+  window.__googleMapsReady = false;
+  window.__googleMapsCallbacks = [];
+  window.onGoogleMapsReady = function() {
+    window.__googleMapsReady = true;
+    window.__googleMapsCallbacks.forEach(cb => { try { cb(); } catch(e) { console.warn(e); } });
+    window.__googleMapsCallbacks = [];
+  };
+</script>
+<script async
+  src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBW0hr64rL5_lR_9EJXmKywalnO8wkxrQc&libraries=places&loading=async&callback=onGoogleMapsReady">
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&display=swap" rel="stylesheet">
 <!-- Replace YOUR_ACTUAL_API_KEY with your real Google Cloud API Key -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
@@ -11274,6 +11286,14 @@ body #genericMessagePopup span[style*="text-transform: uppercase"] {
     font-size: 0.85rem !important;
     display: block !important;
 }
+
+/* Add to <head> */
+gmp-place-autocomplete {
+  width: 100%;
+  background: transparent;
+  --gmp-place-autocomplete-input-color: white;
+  --gmp-place-autocomplete-input-font-size: 1.15rem;
+}
 </style>
 </head>
 <body>
@@ -13470,35 +13490,49 @@ const IOS_STORE_LINK = "https://apps.apple.com/za/app/asiye/id6765691149";
 // =================================================================
 // CRITICAL: Define these functions globally at the start
 // =================================================================
+// =================================================================
+// FIX: User marker - use Mapbox marker (NOT Google Maps)
+// =================================================================
 
-// Center map on user location - defined globally
-window.centerMapOnUserLocation = function() {
-    if (!window.map) return;
+window.setupUserMarker = function(coords) {
+    // Use the global Mapbox map instance
+    const activeMap = window.map || (typeof map !== 'undefined' ? map : null);
+    if (!activeMap || !coords) return;
 
-    // Use cached or default coordinates
-    var lat = window.commuterLat || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
-    var lng = window.commuterLng || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
-
-    // Safely get padding
-    var bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
-
-    window.map.flyTo({
-        center: [lng, lat],
-        zoom: 16,
-        speed: 1.2,
-        curve: 1,
-        padding: { bottom: bottomPadding },
-        essential: true
-    });
-
-    // Update or create user marker
-    if (!window.userMarker && typeof window.setupUserMarker === 'function') {
-        window.setupUserMarker([lng, lat]);
-    } else if (window.userMarker) {
-        window.userMarker.setLngLat([lng, lat]);
+    // Validate coordinates
+    const lng = Number(coords[0]);
+    const lat = Number(coords[1]);
+    if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+        console.warn("setupUserMarker: invalid coordinates", coords);
+        return;
     }
-};
 
+    // If marker exists, just move it
+    if (window.userMarker) {
+        window.userMarker.setLngLat([lng, lat]);
+        return;
+    }
+
+    // Create the custom HTML element
+    const el = document.createElement('div');
+    el.className = 'user-location-marker';
+    el.style.cssText = 'width: 132px; height: 76px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; pointer-events: none; z-index: 10005;';
+    el.innerHTML = `
+        <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
+        <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
+        <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42);"></span>
+    `;
+
+    // Add to Mapbox map (NOT Google Maps)
+    window.userMarker = new mapboxgl.Marker({
+        element: el,
+        anchor: 'bottom'
+    })
+    .setLngLat([lng, lat])
+    .addTo(activeMap);
+
+    console.log("✅ User marker added successfully");
+};
 // Show destination search mode - defined globally
 window.showDestinationSearchMode = function() {
     console.log("🔍 Showing destination search mode");
@@ -16409,66 +16443,36 @@ window.openEHailingTaxis = function() {
          if (!map) initializeMapAndLocation();
     });
 }
+
+\window.centerMapOnUserLocation = function() {
+    if (!window.map) return;
+
+    const lat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
+    const lng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    window.commuterLat = lat;
+    window.commuterLng = lng;
+
+    const bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
+
+    window.map.flyTo({
+        center: [lng, lat],
+        zoom: 16,
+        speed: 1.2,
+        curve: 1,
+        padding: { bottom: bottomPadding },
+        essential: true
+    });
+
+    if (typeof window.setupUserMarker === 'function') {
+        window.setupUserMarker([lng, lat]);
+    }
+};
  // ========================================================
 // SAFE MAP CENTERING & INITIALIZATION
 // ========================================================
-
-window.centerMapOnUserLocation = function() {
-    if (!window.map) return;
-
-    if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const { latitude, longitude } = position.coords;
-                window.commuterLat = latitude;
-                window.commuterLng = longitude;
-
-                // Safely get padding
-                const bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
-
-                // Fly to user location
-                window.map.flyTo({
-                    center: [longitude, latitude],
-                    zoom: 16,
-                    speed: 1.2,
-                    curve: 1,
-                    padding: { bottom: bottomPadding },
-                    essential: true
-                });
-
-                // Update or create user marker
-                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
-                    window.setupUserMarker([longitude, latitude]);
-                } else if (window.userMarker) {
-                    window.userMarker.setLngLat([longitude, latitude]);
-                }
-            },
-            (error) => {
-                console.warn("GPS Timeout/Error. Using cached location.");
-                const fallbackLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
-                const fallbackLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
-
-                window.commuterLat = fallbackLat;
-                window.commuterLng = fallbackLng;
-                
-                const bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
-
-                window.map.flyTo({ 
-                    center: [fallbackLng, fallbackLat], 
-                    zoom: 14,
-                    padding: { bottom: bottomPadding } 
-                });
-
-                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
-                    window.setupUserMarker([fallbackLng, fallbackLat]);
-                } else if (window.userMarker) {
-                    window.userMarker.setLngLat([fallbackLng, fallbackLat]);
-                }
-            },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
-        );
-    }
-};
 
 window.initializeMapAndLocation = function() {
     console.log("Starting background location tracking...");
@@ -24481,46 +24485,6 @@ window.startMap = function(coords) {
 // ==========================================
 
 // ==========================================
-// 2. SETUP USER MARKER (GOOGLE MAPS)
-// ==========================================
-
-window.setupUserMarker = async function(coords) {
-    if (!window.map || !coords) return;
-    
-    try {
-        // Import the marker library for custom HTML markers
-        const { AdvancedMarkerElement } = await google.maps.importLibrary("marker");
-
-        // If it already exists, just move it
-        if (window.userMarker) {
-            window.userMarker.position = { lat: coords[1], lng: coords[0] };
-            return;
-        }
-
-        // Create the custom HTML element
-        const el = document.createElement('div');
-        el.className = 'user-location-marker';
-        el.style.cssText = 'width: 132px; height: 76px; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; pointer-events: none;';
-        el.innerHTML = `
-            <span style="position: absolute; right: 5px; bottom: 26px; padding: 7px 10px; border: 1px solid rgba(23,105,210,.16); border-radius: 6px; background: #fff; color: #172235; font: 800 10px/1 Arial, sans-serif; white-space: nowrap; box-shadow: 0 5px 16px rgba(22,47,82,.18);">You are here</span>
-            <span style="width: 3px; height: 31px; border-radius: 3px 3px 0 0; background: linear-gradient(to bottom, #78aefa, #1769d2); box-shadow: 0 1px 3px rgba(23,105,210,.28);"></span>
-            <span style="position:relative; width: 16px; height: 16px; background: #1769d2; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 3px 10px rgba(23,105,210,.42); animation: userMarkerBeat 2.4s ease-in-out infinite;"></span>
-        `;
-
-        // Add to Google Map
-        window.userMarker = new AdvancedMarkerElement({
-            map: window.map,
-            position: { lat: coords[1], lng: coords[0] },
-            content: el
-        });
-        
-        console.log("✅ User marker added successfully");
-    } catch (err) {
-        console.warn('Failed to create user location marker:', err);
-    }
-};
-
-// ==========================================
 // 3. ZOOM TO FIT (GOOGLE MAPS BOUNDS)
 // ==========================================
 
@@ -32024,28 +31988,80 @@ window.processFirstTripReferralReward = function() {
         }
     });
 };
+// =================================================================
+// FIX: Reverse geocoding via Mapbox (not Google - API key not authorized)
+// =================================================================
+// =================================================================
+// HYBRID REVERSE GEOCODE: Google first (better SA coverage) → Mapbox fallback
+// =================================================================
 
-// =======================================================================
-// MAPBOX REVERSE GEOCODER (Converts GPS to Street Address)
-// =======================================================================
-// Replace getAddressFromCoordsPromise
 window.getAddressFromCoordsPromise = function(lng, lat) {
-    return new Promise((resolve, reject) => {
-        if (!lng || !lat || isNaN(lng) || isNaN(lat)) {
-            reject("Invalid coordinates");
-            return;
+    return new Promise((resolve) => {
+        const lngNum = Number(lng);
+        const latNum = Number(lat);
+
+        if (!Number.isFinite(lngNum) || !Number.isFinite(latNum)) {
+            return resolve("Unknown Location");
         }
-        const geocoder = new google.maps.Geocoder();
-        geocoder.geocode({ location: { lat: parseFloat(lat), lng: parseFloat(lng) } }, (results, status) => {
-            if (status === "OK" && results[0]) {
-                resolve(results[0].formatted_address);
-            } else {
-                resolve("Unknown Location");
+
+        // --- TRY GOOGLE FIRST ---
+        const tryGoogle = () => {
+            if (!window.google || !google.maps || !google.maps.Geocoder) return false;
+
+            try {
+                const geocoder = new google.maps.Geocoder();
+                geocoder.geocode(
+                    { location: { lat: latNum, lng: lngNum } },
+                    (results, status) => {
+                        if (status === 'OK' && results && results[0]) {
+                            console.log("📌 [Google] Reverse geocode OK:", results[0].formatted_address);
+                            resolve(results[0].formatted_address);
+                        } else {
+                            console.warn("[Google] Reverse geocode failed:", status, "→ falling back to Mapbox");
+                            tryMapbox();
+                        }
+                    }
+                );
+                return true;
+            } catch (e) {
+                console.warn("[Google] Reverse geocode error:", e, "→ falling back to Mapbox");
+                return false;
             }
-        });
+        };
+
+        // --- FALLBACK: MAPBOX ---
+        const tryMapbox = () => {
+            const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lngNum},${latNum}.json?access_token=${mapboxgl.accessToken}&types=address,place,locality,neighborhood&limit=1`;
+
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.features && data.features.length > 0) {
+                        resolve(data.features[0].place_name || "Unknown Location");
+                    } else {
+                        resolve("Unknown Location");
+                    }
+                })
+                .catch(() => resolve("Unknown Location"));
+        };
+
+        // Only try Google if it's ready
+        if (window.__googleMapsReady) {
+            const usedGoogle = tryGoogle();
+            if (!usedGoogle) tryMapbox();
+        } else {
+            // Google not ready yet - wait a moment, then try again
+            window.__googleMapsCallbacks.push(() => {
+                const usedGoogle = tryGoogle();
+                if (!usedGoogle) tryMapbox();
+            });
+            // Safety timeout in case Google never loads
+            setTimeout(() => {
+                if (window.__googleMapsReady === false) tryMapbox();
+            }, 3000);
+        }
     });
 };
-
 // Reusable function to initialize any search input with Google Autocomplete
 window.initGoogleAutocomplete = function(inputId, latId, lngId, textId, callback) {
     const input = document.getElementById(inputId);
@@ -32702,82 +32718,191 @@ window.rideNowPayFull = function(reqId, rideNowCost) {
         });
 };
 
-window.initDualGeocoders = async function() {
-    const destContainer = document.getElementById('uber-dest-container');
+// =================================================================
+// FIX: initDualGeocoders - Use Google Places safely
+// =================================================================
+
+// =================================================================
+// HYBRID SEARCH: Google Places (search) + Mapbox (display)
+// =================================================================
+
+window.initDualGeocoders = function() {
+    const destContainer   = document.getElementById('uber-dest-container');
     const pickupContainer = document.getElementById('uber-pickup-container');
 
     if (destContainer) {
-        destContainer.innerHTML = `<input type="text" id="uberDestInput" placeholder="Where to?" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
+        destContainer.innerHTML = `<input type="text" id="uberDestInput" placeholder="Where to?" autocomplete="off" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
     }
     if (pickupContainer) {
-        pickupContainer.innerHTML = `<input type="text" id="uberPickupInput" placeholder="Current Location" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
+        pickupContainer.innerHTML = `<input type="text" id="uberPickupInput" placeholder="Current Location" autocomplete="off" style="background:transparent; color:#ffffff; border:none; width:100%; font-size:1.15rem; font-weight:500; outline:none; padding:0; height:38px;">`;
     }
 
-    const destInput = document.getElementById('uberDestInput');
-    const pickupInput = document.getElementById('uberPickupInput');
+    const runSetup = () => {
+        const destInput   = document.getElementById('uberDestInput');
+        const pickupInput = document.getElementById('uberPickupInput');
 
-    // 🚀 Activate Google Places for Destination Input
-    if (destInput && typeof google !== 'undefined') {
-        const destAutocomplete = new google.maps.places.Autocomplete(destInput, {
-            componentRestrictions: { country: "za" }, // Restrict to South Africa
-            fields: ["geometry", "name", "formatted_address"]
-        });
+        // --- DESTINATION: Google Places (biased to user location, SA only) ---
+        if (destInput) {
+            window.attachGooglePlacesSearch(destInput, (place) => {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+                const name = place.name || (place.formatted_address || '').split(',')[0];
 
-        destAutocomplete.addListener("place_changed", () => {
-            const place = destAutocomplete.getPlace();
-            if (!place.geometry) return;
-            
-            window.userDropOffDestination = place.name;
-            window.ehailingDestLat = place.geometry.location.lat();
-            window.ehailingDestLng = place.geometry.location.lng();
-            
-            // Mapbox visual reaction
-            if (window.map) {
-                window.map.flyTo({ center: [window.ehailingDestLng, window.ehailingDestLat], zoom: 16 });
-            }
-            window.findTaxisFlow();
-        });
-    }
+                window.userDropOffDestination = name;
+                window.ehailingDestLat = lat;
+                window.ehailingDestLng = lng;
 
-    // 🚀 Activate Google Places for Pickup Input
-    if (pickupInput && typeof google !== 'undefined') {
-        const pickAutocomplete = new google.maps.places.Autocomplete(pickupInput, {
-            componentRestrictions: { country: "za" },
-            fields: ["geometry", "name", "formatted_address"]
-        });
+                console.log("🔍 [Google] Destination selected:", name, lat, lng);
 
-        pickAutocomplete.addListener("place_changed", () => {
-            const place = pickAutocomplete.getPlace();
-            if (!place.geometry) return;
-            
-            window.commuterLat = place.geometry.location.lat();
-            window.commuterLng = place.geometry.location.lng();
-            
-            // Mapbox visual reaction
-            if (window.map) {
-                window.map.flyTo({ center: [window.commuterLng, window.commuterLat], zoom: 16 });
-            }
-            if (window.userMarker) {
-                window.userMarker.setLngLat([window.commuterLng, window.commuterLat]);
-            }
-        });
+                // Move the Mapbox map to show the selection
+                if (window.map) {
+                    window.map.flyTo({ center: [lng, lat], zoom: 16, essential: true });
+                }
 
-        // Set Initial value
-        pickupInput.value = "Fetching location...";
-        try {
-            const lat = window.commuterLat || -26.2041;
-            const lng = window.commuterLng || 28.0473;
-            if (lat && lng) {
-                const addr = await getAddressFromCoordsPromise(lng, lat);
-                pickupInput.value = addr.split(',')[0].trim();
-            } else {
-                pickupInput.value = "Current Location";
-            }
-        } catch (e) {
-            pickupInput.value = "Current Location";
+                // Continue booking flow
+                if (typeof window.findTaxisFlow === 'function') {
+                    window.findTaxisFlow();
+                }
+            });
         }
+
+        // --- PICKUP: Google Places + prefill from GPS via Google Geocoding ---
+        if (pickupInput) {
+            window.attachGooglePlacesSearch(pickupInput, (place) => {
+                const lat = place.geometry.location.lat();
+                const lng = place.geometry.location.lng();
+
+                window.commuterLat = lat;
+                window.commuterLng = lng;
+
+                console.log("🔍 [Google] Pickup selected:", place.name, lat, lng);
+
+                if (window.map) {
+                    window.map.flyTo({ center: [lng, lat], zoom: 16, essential: true });
+                }
+                if (window.userMarker) {
+                    window.userMarker.setLngLat([lng, lat]);
+                }
+            });
+
+            // Prefill with current GPS address (Google reverse geocode → falls back to Mapbox)
+            if (window.commuterLat && window.commuterLng) {
+                window.getAddressFromCoordsPromise(window.commuterLng, window.commuterLat)
+                    .then(addr => {
+                        if (addr && addr !== 'Unknown Location' && pickupInput.value.trim() === '') {
+                            pickupInput.value = addr.split(',')[0].trim();
+                        }
+                    })
+                    .catch(() => {});
+            }
+        }
+    };
+
+    // Wait for Google Maps to load, or run immediately if already loaded
+    if (window.__googleMapsReady) {
+        runSetup();
+    } else {
+        window.__googleMapsCallbacks.push(runSetup);
     }
 };
+
+// =================================================================
+// GOOGLE PLACES AUTOCOMPLETE (Hybrid search - used by any input)
+// =================================================================
+
+// =================================================================
+// GOOGLE PLACES - MODERN VERSION (PlaceAutocompleteElement)
+// Removes the deprecation warning and is future-proof
+// =================================================================
+
+window.attachGooglePlacesSearch = function(inputEl, onPlaceSelected) {
+    if (!inputEl) return null;
+
+    const setup = async () => {
+        if (!window.google || !google.maps || !google.maps.places) return;
+
+        // Load the new Places library
+        try {
+            await google.maps.importLibrary("places");
+        } catch (e) {
+            console.warn("[Places] Could not import new Places library, using legacy:", e);
+            // Fall back to legacy Autocomplete
+            return setupLegacy(inputEl, onPlaceSelected);
+        }
+
+        // If PlaceAutocompleteElement is available, use it
+        if (google.maps.places.PlaceAutocompleteElement) {
+            // Note: PlaceAutocompleteElement renders its OWN input element.
+            // We replace the input with the new element.
+            const parent = inputEl.parentElement;
+            const originalAttrs = {
+                id: inputEl.id,
+                placeholder: inputEl.placeholder,
+                style: inputEl.getAttribute('style')
+            };
+
+            const placeAuto = new google.maps.places.PlaceAutocompleteElement({
+                componentRestrictions: { country: 'za' },
+                locationBias: (window.commuterLat && window.commuterLng)
+                    ? { center: { lat: window.commuterLat, lng: window.commuterLng }, radius: 50000 }
+                    : undefined
+            });
+
+            // Copy over some styles
+            placeAuto.style.cssText = originalAttrs.style || '';
+            placeAuto.id = originalAttrs.id;
+
+            // Replace the input
+            parent.replaceChild(placeAuto, inputEl);
+
+            placeAuto.addEventListener('gmp-select', async (event) => {
+                const place = event.placePrediction.toPlace();
+                await place.fetchFields({ fields: ['geometry', 'displayName', 'formattedAddress'] });
+
+                onPlaceSelected({
+                    name: place.displayName?.text || place.formattedAddress?.split(',')[0] || '',
+                    formatted_address: place.formattedAddress || '',
+                    geometry: { location: place.location }
+                });
+            });
+
+            return placeAuto;
+        } else {
+            // Fallback
+            return setupLegacy(inputEl, onPlaceSelected);
+        }
+    };
+
+    // Legacy fallback (old Autocomplete API - still works)
+    const setupLegacy = (inputEl, onPlaceSelected) => {
+        const saBounds = new google.maps.LatLngBounds(
+            new google.maps.LatLng(-35.0, 16.0),
+            new google.maps.LatLng(-22.0, 33.0)
+        );
+
+        const autocomplete = new google.maps.places.Autocomplete(inputEl, {
+            componentRestrictions: { country: 'za' },
+            bounds: saBounds,
+            fields: ['geometry', 'name', 'formatted_address', 'place_id']
+        });
+
+        autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (!place || !place.geometry) return;
+            onPlaceSelected(place);
+        });
+
+        return autocomplete;
+    };
+
+    if (window.__googleMapsReady) {
+        return setup();
+    } else {
+        window.__googleMapsCallbacks.push(() => setup());
+        return null;
+    }
+};
+
 // Handle incoming notifications (override pattern)
 const originalHandleIncomingNotification = window.handleIncomingNotification;
 
@@ -48286,12 +48411,17 @@ window.selectUberSuggestion = function(type, lng, lat, fullPlaceName) {
 };
 
 async function showRideSelectionView(destName, destLat, destLng) {
-    const pickupLat = Number.parseFloat(window.commuterLat);
-    const pickupLng = Number.parseFloat(window.commuterLng);
-    const destinationLat = Number.parseFloat(destLat);
-    const destinationLng = Number.parseFloat(destLng);
+    // CRITICAL FIX: Parse all coordinates as numbers
+    const pickupLat = Number(window.commuterLat) || parseFloat(localStorage.getItem('lastLat')) || -26.2041;
+    const pickupLng = Number(window.commuterLng) || parseFloat(localStorage.getItem('lastLng')) || 28.0473;
+    const destinationLat = Number(destLat);
+    const destinationLng = Number(destLng);
 
-    // Bail out early if any coordinate is missing/NaN instead of crashing later on fitBounds.
+    // Update global coords if they were invalid
+    window.commuterLat = pickupLat;
+    window.commuterLng = pickupLng;
+
+    // Bail out early if any coordinate is missing/NaN instead of crashing later
     if (![pickupLat, pickupLng, destinationLat, destinationLng].every(Number.isFinite)) {
         console.warn("showRideSelectionView: invalid coordinates, aborting", { pickupLat, pickupLng, destinationLat, destinationLng });
         showGenericMessage("Location Error", "Could not determine your location or destination. Please try again.", "fa-map-marker-alt", "icon-danger");
@@ -48305,10 +48435,10 @@ async function showRideSelectionView(destName, destLat, destLng) {
     }
 
     // 1. Calculate Distance and Pricing
-    const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2; // 20% road curve buffer
+    const dist = calculateDistance(pickupLat, pickupLng, destinationLat, destinationLng) * 1.2;
     window.currentTripDistance = dist;
 
-    const baseGoPrice = Math.max(30, Math.round(30 + (dist * 9.50))); // R30 base + R9.5/km
+    const baseGoPrice = Math.max(30, Math.round(30 + (dist * 9.50)));
     const club4Price = Math.max(15, Math.round(baseGoPrice / 4));
     const club6Price = Math.max(12, Math.round(baseGoPrice / 6));
 
@@ -48318,7 +48448,6 @@ async function showRideSelectionView(destName, destLat, destLng) {
     document.getElementById('price-club4').textContent = `R${club4Price}`;
     document.getElementById('price-club6').textContent = `R${club6Price}`;
 
-    // Show the passenger's real pickup address instead of the "Current Location" placeholder
     const pickupAddrEl = document.getElementById('confirm-pickup-addr');
     if (pickupAddrEl) {
         const typedPickup = document.getElementById('uberPickupInput')?.value;
@@ -48326,43 +48455,52 @@ async function showRideSelectionView(destName, destLat, destLng) {
             pickupAddrEl.textContent = typedPickup.split(',')[0].trim();
         } else if (typeof window.getAddressFromCoordsPromise === 'function') {
             window.getAddressFromCoordsPromise(pickupLng, pickupLat)
-                .then(addr => { if (addr) pickupAddrEl.textContent = addr.split(',')[0].trim(); })
+                .then(addr => { if (addr && addr !== 'Unknown Location') pickupAddrEl.textContent = addr.split(',')[0].trim(); })
                 .catch(() => {});
         }
     }
-    
+
     // 3. Fetch ETA and Duration from Mapbox
-    const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.routes && data.routes[0]) {
-        const route = data.routes[0];
-        document.getElementById('trip-duration-tag').textContent = `${Math.round(route.duration / 60)} min trip`;
-        document.getElementById('driver-eta-tag').textContent = `Driver ~4 min away`; // Local simulated ETA
-        
-        // Draw route on map
-        drawRouteToTaxi(route.geometry);
+    try {
+        const url = `https://api.mapbox.com/directions/v5/mapbox/driving/${pickupLng},${pickupLat};${destinationLng},${destinationLat}?geometries=geojson&access_token=${mapboxgl.accessToken}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.routes && data.routes[0]) {
+            const route = data.routes[0];
+            document.getElementById('trip-duration-tag').textContent = `${Math.round(route.duration / 60)} min trip`;
+            document.getElementById('driver-eta-tag').textContent = `Driver ~4 min away`;
+
+            if (typeof drawRouteToTaxi === 'function') {
+                drawRouteToTaxi(route.geometry);
+            }
+        }
+    } catch (e) {
+        console.warn("Route fetch failed:", e);
     }
 
     // 4. Switch Views and expand sheet
     document.getElementById('view-initial-search').style.display = 'none';
     document.getElementById('view-confirm-ride').style.display = 'block';
     document.getElementById('homeSheetContent').style.height = '85vh';
-    
-    // Fit map to show both points, leaving room for the confirm-ride sheet so the
-    // route isn't hidden behind it (sheet height varies by device, so measure it live)
+
+    // Fit map to show both points
     try {
         if (typeof setupUserMarker === 'function') setupUserMarker([pickupLng, pickupLat]);
         if (typeof window.setDropoffMarker === 'function') window.setDropoffMarker(destinationLat, destinationLng);
 
-        const bounds = new mapboxgl.LngLatBounds().extend([pickupLng, pickupLat]).extend([destinationLng, destinationLat]);
+        const bounds = new mapboxgl.LngLatBounds()
+            .extend([pickupLng, pickupLat])
+            .extend([destinationLng, destinationLat]);
         const bottomPad = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 450;
-        activeMap.fitBounds(bounds, { padding: { top: 80, bottom: bottomPad, left: 60, right: 60 }, maxZoom: 16, duration: 900 });
+        activeMap.fitBounds(bounds, {
+            padding: { top: 80, bottom: bottomPad, left: 60, right: 60 },
+            maxZoom: 16,
+            duration: 900
+        });
     } catch (e) {
         console.warn("showRideSelectionView: fitBounds failed", e);
     }
 }
-
 window.selectRideType = function(type) {
     window.selectedRideType = type;
     
