@@ -9396,103 +9396,162 @@ function escapeHtml(text) {
                 window.locationErrorCallback({ code: 1, message: error });
             }
         };
+// ========================================================
+// SAFE MAP CENTERING
+// ========================================================
+window.centerMapOnUserLocation = function() {
+    if (!window.map) return;
 
-       function initializeMapAndLocation() {
-    console.log("📍 Attempting to acquire location...");
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const { latitude, longitude } = position.coords;
+                window.commuterLat = latitude;
+                window.commuterLng = longitude;
 
-    // Show skip button after 4 seconds
-    setTimeout(() => {
-        const skipBtn = document.getElementById('skipGPSBtn');
-        if (skipBtn) skipBtn.style.display = 'block';
-    }, 4000);
+                const bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
 
-    const preloaderStatus = document.getElementById('preloader-status');
-    if (preloaderStatus) preloaderStatus.textContent = 'Acquiring GPS signal...';
+                // Fly to user location
+                window.map.flyTo({
+                    center: [longitude, latitude],
+                    zoom: 16,
+                    speed: 1.2,
+                    curve: 1,
+                    padding: { bottom: bottomPadding },
+                    essential: true
+                });
 
-    const defaultLocation = [28.0473, -26.2041];
-    var locationResolved = false;
+                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                    window.setupUserMarker([longitude, latitude]);
+                } else if (window.userMarker) {
+                    window.userMarker.setLngLat([longitude, latitude]);
+                }
+            },
+            (error) => {
+                console.warn("GPS Timeout/Error. Using cached location.");
+                const fallbackLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
+                const fallbackLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
 
-    const success = (position) => {
-        if (locationResolved) return;
-        locationResolved = true;
-        const coords = [position.coords.longitude, position.coords.latitude];
-        console.log("✅ Location acquired:", coords);
-        localStorage.setItem('lastLat', String(position.coords.latitude));
-        localStorage.setItem('lastLng', String(position.coords.longitude));
-        taxiLngLat = coords;
-        updateLocationName(position.coords.latitude, position.coords.longitude);
-        startMap(coords);
-    };
+                window.commuterLat = fallbackLat;
+                window.commuterLng = fallbackLng;
 
-    const error = (err) => {
-        if (locationResolved) return;
-        locationResolved = true;
-        console.warn(`⚠️ GPS Error: ${err.message}. Switching to low accuracy...`);
+                const bottomPadding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
 
-        var fallbackResolved = false;
+                window.map.flyTo({ 
+                    center: [fallbackLng, fallbackLat], 
+                    zoom: 14,
+                    padding: { bottom: bottomPadding } 
+                });
 
-        const fallbackSuccess = (pos) => {
-            if (fallbackResolved) return;
-            fallbackResolved = true;
-            const coords = [pos.coords.longitude, pos.coords.latitude];
-            localStorage.setItem('lastLat', String(pos.coords.latitude));
-            localStorage.setItem('lastLng', String(pos.coords.longitude));
-            taxiLngLat = coords;
-            updateLocationName(pos.coords.latitude, pos.coords.longitude);
-            startMap(coords);
-        };
-
-        const fallbackError = () => {
-            if (fallbackResolved) return;
-            fallbackResolved = true;
-            const cachedLat = parseFloat(localStorage.getItem('lastLat'));
-            const cachedLng = parseFloat(localStorage.getItem('lastLng'));
-            const hasCachedLocation = !isNaN(cachedLat) && !isNaN(cachedLng);
-            const fallbackCoords = hasCachedLocation ? [cachedLng, cachedLat] : defaultLocation;
-
-            console.warn(`GPS unavailable. Using ${hasCachedLocation ? 'the last known location' : 'the default location'}.`);
-            taxiLngLat = fallbackCoords;
-            updateLocationName(fallbackCoords[1], fallbackCoords[0]);
-            startMap(fallbackCoords);
-            showCommunicationBanner(
-                hasCachedLocation ? 'Using your last known location while GPS reconnects.' : 'Using a temporary location while GPS reconnects.',
-                'warning'
-            );
-        };
-
-        // SAFARI BUG FIX: Manual fallback timeout for the low-accuracy request
-        setTimeout(() => fallbackError(), 15000);
-
-        navigator.geolocation.getCurrentPosition(fallbackSuccess, fallbackError, {
-            enableHighAccuracy: false,
-            timeout: 10000,
-            maximumAge: 0
-        });
-    };
-
-    // SAFARI BUG FIX: Manual timeout for the high-accuracy request (Safari ignores the built-in timeout)
-    setTimeout(() => {
-        if (!locationResolved) {
-            console.warn("Manual geolocation timeout triggered (Safari hang workaround).");
-            error({ code: 3, message: "Browser GPS timeout" });
-        }
-    }, 20000);
-
-    const geoOptions = {
-        enableHighAccuracy: true,
-        timeout: 15000,
-        maximumAge: 60000
-    };
-
-    if (window.Android || window.Asiye) {
-        navigator.geolocation.getCurrentPosition(success, error, geoOptions);
-    } else if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(success, error, geoOptions);
-    } else {
-        console.error("Geolocation not supported");
-        error({ code: 2, message: "Not supported" });
+                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                    window.setupUserMarker([fallbackLng, fallbackLat]);
+                } else if (window.userMarker) {
+                    window.userMarker.setLngLat([fallbackLng, fallbackLat]);
+                }
+            },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
     }
+};
+
+// ========================================================
+// SAFE MAP & LOCATION INITIALIZER
+// ========================================================
+window.initializeMapAndLocation = function() {
+    console.log("Starting background location tracking...");
+
+    const savedLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
+    const savedLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
+
+    window.commuterLat = savedLat;
+    window.commuterLng = savedLng;
+
+    if (!window.map && typeof window.startMap === 'function') {
+        window.startMap([savedLng, savedLat]);
+    }
+
+    // Safely execute center and follow logic
+    const safeCenterAndFollow = () => {
+        if (typeof window.centerMapOnUserLocation === 'function') {
+            window.centerMapOnUserLocation();
+        }
+        if (typeof window.enableFollowMode === 'function') {
+            window.enableFollowMode();
+        } else if (typeof enableFollowMode === 'function') {
+            enableFollowMode();
+        }
+    };
+
+    if (window.map) {
+        // Mapbox GL JS v3 sometimes uses map.loaded() instead of map.isStyleLoaded()
+        if (window.map.loaded ? window.map.loaded() : (window.map.isStyleLoaded && window.map.isStyleLoaded())) {
+            safeCenterAndFollow();
+        } else {
+            window.map.once('load', safeCenterAndFollow);
+        }
+    }
+
+    if (typeof createRecenterButton === 'function') createRecenterButton();
+
+    if (navigator.geolocation) {
+        if (window.locationWatchId) navigator.geolocation.clearWatch(window.locationWatchId);
+
+        window.locationWatchId = navigator.geolocation.watchPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+
+                if (isNaN(lat) || isNaN(lng)) return;
+
+                window.commuterLat = lat;
+                window.commuterLng = lng;
+                localStorage.setItem('lastLat', lat);
+                localStorage.setItem('lastLng', lng);
+
+                const dashboard = document.getElementById('modernHomeDashboard');
+                if (dashboard && dashboard.style.display !== 'none' && !dashboard.classList.contains('hidden')) {
+                    if (typeof fetchRealWeather === 'function') fetchRealWeather(lat, lng);
+                }
+
+                if (window.map && (window.map.loaded ? window.map.loaded() : window.map.isStyleLoaded())) {
+                    if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                        window.setupUserMarker([lng, lat]);
+                    } else if (window.userMarker) {
+                        window.userMarker.setLngLat([lng, lat]);
+                    }
+
+                    // Handle Camera Follow Mode smoothly
+                    if (typeof followModeActive !== 'undefined' && followModeActive) {
+                        const padding = typeof window.getMapBottomPadding === 'function' ? window.getMapBottomPadding() : 350;
+                        window.map.easeTo({ 
+                            center: [lng, lat], 
+                            padding: { bottom: padding },
+                            duration: 1000, 
+                            essential: true 
+                        });
+                    }
+                }
+
+                if (typeof setupEnhancedSearch === 'function') setupEnhancedSearch();
+            },
+            (err) => {
+                console.warn(`GPS Watch Error: ${err.message}`);
+                if (err && err.code === 1 && window.locationWatchId) {
+                    navigator.geolocation.clearWatch(window.locationWatchId);
+                    window.locationWatchId = null;
+                    console.info('Location permission denied; continuing with cached location.');
+                }
+            },
+            { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+    }
+};
+
+// In case your app logic was relying on the old function name without "window."
+function initializeMapAndLocation() {
+    window.initializeMapAndLocation();
 }
+      
         window.skipGPSAndLoad = function() {
             console.warn("User skipped GPS acquisition.");
             const defaultLocation = [28.0473, -26.2041];
