@@ -17212,45 +17212,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     
-    function loadAndDisplayTaxisOnMap() {
-      console.log("Starting Real-Time Taxi Listeners...");
-      const taxisRef = database.ref('taxis');
-
-      // Remove old listeners
-      taxisRef.off();
-
-      // New taxi added
-      taxisRef.on('child_added', (snapshot) => {
-          updateTaxiMarker(snapshot);
-      });
-
-      // Taxi moved/updated
-      taxisRef.on('child_changed', (snapshot) => {
-          updateTaxiMarker(snapshot);
-
-          // Refresh taxi list if open
-          if (document.getElementById('taxiListSheet').classList.contains('open')) {
-              if (window.taxiListUpdateTimer) return;
-              window.taxiListUpdateTimer = setTimeout(() => {
-                  window.taxiListUpdateTimer = null;
-                  if (document.getElementById('taxiListSheet').classList.contains('open')) {
-                      findBroadcastingTaxis(true);
-                  }
-              }, 3000);
-          }
-      });
-
-      // Taxi removed
-      taxisRef.on('child_removed', (snapshot) => {
-          const taxiId = snapshot.key;
-          if (taxiMarkers[taxiId]) {
-              taxiMarkers[taxiId].remove();
-              delete taxiMarkers[taxiId];
-          }
-          delete dummyRoamers[taxiId];
-      });
-  }
-
        // Global variables for ad management
        var slidingAdsInterval;
       var taxiSheetAdInterval;
@@ -24011,51 +23972,56 @@ window.animateMarkerTo = function(marker, newLngLat, targetHeading, duration = 1
       }
       requestAnimationFrame(loop);
   };
-  // ========================================================
-  // MAKE SURE loadAndDisplayTaxisOnMap IS CALLED CORRECTLY
-  // ========================================================
-  function loadAndDisplayTaxisOnMap() {
-      console.log("Starting Real-Time Taxi Listeners...");
-      const taxisRef = database.ref('taxis');
+// ========================================================
+// SAFE REAL-TIME TAXI LISTENER
+// ========================================================
+function loadAndDisplayTaxisOnMap() {
+    console.log("Starting Real-Time Taxi Listeners...");
+    const taxisRef = database.ref('taxis');
 
-      // Remove old listeners
-      taxisRef.off();
+    // Remove old listeners to prevent duplicates
+    taxisRef.off();
 
-      // New taxi added
-      taxisRef.on('child_added', (snapshot) => {
-          updateTaxiMarker(snapshot);
-      });
+    // New taxi added
+    taxisRef.on('child_added', (snapshot) => {
+        // SECURE CALL: Check if function exists and use window prefix
+        if (typeof window.updateTaxiMarker === 'function') {
+            window.updateTaxiMarker(snapshot);
+        }
+    });
 
-      // Taxi moved/updated
-      taxisRef.on('child_changed', (snapshot) => {
-          updateTaxiMarker(snapshot);
+    // Taxi moved/updated
+    taxisRef.on('child_changed', (snapshot) => {
+        // SECURE CALL
+        if (typeof window.updateTaxiMarker === 'function') {
+            window.updateTaxiMarker(snapshot);
+        }
 
-          // Refresh taxi list if open
-          if (document.getElementById('taxiListSheet').classList.contains('open')) {
-              if (window.taxiListUpdateTimer) return;
-              window.taxiListUpdateTimer = setTimeout(() => {
-                  window.taxiListUpdateTimer = null;
-                  if (document.getElementById('taxiListSheet').classList.contains('open')) {
-                      findBroadcastingTaxis(true);
-                  }
-              }, 3000);
-          }
-      });
+        // Refresh taxi list if open
+        const sheet = document.getElementById('taxiListSheet');
+        if (sheet && sheet.classList.contains('open')) {
+            if (window.taxiListUpdateTimer) return;
+            window.taxiListUpdateTimer = setTimeout(() => {
+                window.taxiListUpdateTimer = null;
+                if (document.getElementById('taxiListSheet').classList.contains('open') && typeof window.findBroadcastingTaxis === 'function') {
+                    window.findBroadcastingTaxis(true);
+                }
+            }, 3000);
+        }
+    });
 
-      // Taxi removed
-      taxisRef.on('child_removed', (snapshot) => {
-          const taxiId = snapshot.key;
-          if (taxiMarkers[taxiId]) {
-              taxiMarkers[taxiId].remove();
-              delete taxiMarkers[taxiId];
-          }
-          delete dummyRoamers[taxiId];
-      });
-  }
-
-  // ========================================================
-  // BOOKED TAXI LOGIC (GLUED TO ROUTE & FACING ROAD)
-  // ========================================================
+    // Taxi removed
+    taxisRef.on('child_removed', (snapshot) => {
+        const taxiId = snapshot.key;
+        if (window.taxiMarkers && window.taxiMarkers[taxiId]) {
+            window.taxiMarkers[taxiId].remove();
+            delete window.taxiMarkers[taxiId];
+        }
+        if (window.dummyRoamers) {
+            delete window.dummyRoamers[taxiId];
+        }
+    });
+}
   // ========================================================
   // PURE 2D TOP-DOWN TOYOTA QUANTUM (UBER/BOLT STYLE)
   // ========================================================
@@ -26521,52 +26487,6 @@ window.zoomToFitTaxis = function(taxis) {
   }
 
 
-  function centerMapOnUserLocation() {
-      if (!map) return;
-
-      if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-              (position) => {
-                  const { latitude, longitude } = position.coords;
-                  commuterLat = latitude;
-                  commuterLng = longitude;
-
-                  // Fly to user location
-                  map.flyTo({
-                      center: [longitude, latitude],
-                      zoom: 16,
-                      speed: 1.2,
-                      curve: 1,
-                      essential: true
-                  });
-
-                  // FIX: Create the 'You' marker if it doesn't exist, otherwise update it
-                  if (!userMarker && typeof setupUserMarker === 'function') {
-                      setupUserMarker([longitude, latitude]);
-                  } else if (userMarker) {
-                      userMarker.setLngLat([longitude, latitude]);
-                  }
-              },
-              (error) => {
-                  console.warn("Geolocation error. Falling back to default:", error);
-                  const fallbackLat = localStorage.getItem('lastLat') || -26.2041;
-                  const fallbackLng = localStorage.getItem('lastLng') || 28.0473;
-
-                  commuterLat = parseFloat(fallbackLat);
-                  commuterLng = parseFloat(fallbackLng);
-
-                  map.flyTo({ center: [commuterLng, commuterLat], zoom: 14 });
-
-                  // FIX: Create marker at fallback location too
-                  if (!userMarker && typeof setupUserMarker === 'function') {
-                      setupUserMarker([commuterLng, commuterLat]);
-                  }
-              },
-              { enableHighAccuracy: true, timeout: 5000 }
-          );
-      }
-  }
-
  var locationWatchId = null;
 
   var followModeActive = true;
@@ -27772,31 +27692,39 @@ window.setupDestAutocomplete = function() {
         }
     }
 };
- window.centerMapOnUserLocation = function() {
-    if (!map) return;
+ // ========================================================
+// SAFE MAP CENTERING
+// ========================================================
+window.centerMapOnUserLocation = function() {
+    if (!window.map) return;
 
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
                 const { latitude, longitude } = position.coords;
-                commuterLat = latitude;
-                commuterLng = longitude;
+                window.commuterLat = latitude;
+                window.commuterLng = longitude;
+
+                // SECURE CALL: Safely check for padding function
+                const bottomPadding = typeof window.getMapBottomPadding === 'function' 
+                    ? window.getMapBottomPadding() 
+                    : 350;
 
                 // Fly to user location WITH PADDING
-                map.flyTo({
+                window.map.flyTo({
                     center: [longitude, latitude],
                     zoom: 16,
                     speed: 1.2,
                     curve: 1,
-                    padding: { bottom: window.getMapBottomPadding() }, // <-- FIX: Pushes marker up
+                    padding: { bottom: bottomPadding },
                     essential: true
                 });
 
                 // Update or create user marker
-                if (!userMarker && typeof setupUserMarker === 'function') {
-                    setupUserMarker([longitude, latitude]);
-                } else if (userMarker) {
-                    userMarker.setLngLat([longitude, latitude]);
+                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                    window.setupUserMarker([longitude, latitude]);
+                } else if (window.userMarker) {
+                    window.userMarker.setLngLat([longitude, latitude]);
                 }
             },
             (error) => {
@@ -27804,26 +27732,29 @@ window.setupDestAutocomplete = function() {
                 const fallbackLat = localStorage.getItem('lastLat') ? parseFloat(localStorage.getItem('lastLat')) : -26.2041;
                 const fallbackLng = localStorage.getItem('lastLng') ? parseFloat(localStorage.getItem('lastLng')) : 28.0473;
 
-                commuterLat = fallbackLat;
-                commuterLng = fallbackLng;
+                window.commuterLat = fallbackLat;
+                window.commuterLng = fallbackLng;
 
-                map.flyTo({ 
-                    center: [commuterLng, commuterLat], 
+                const bottomPadding = typeof window.getMapBottomPadding === 'function' 
+                    ? window.getMapBottomPadding() 
+                    : 350;
+
+                window.map.flyTo({ 
+                    center: [window.commuterLng, window.commuterLat], 
                     zoom: 14,
-                    padding: { bottom: window.getMapBottomPadding() } // <-- FIX
+                    padding: { bottom: bottomPadding }
                 });
 
-                if (!userMarker && typeof setupUserMarker === 'function') {
-                    setupUserMarker([commuterLng, commuterLat]);
-                } else if (userMarker) {
-                    userMarker.setLngLat([commuterLng, commuterLat]);
+                if (!window.userMarker && typeof window.setupUserMarker === 'function') {
+                    window.setupUserMarker([window.commuterLng, window.commuterLat]);
+                } else if (window.userMarker) {
+                    window.userMarker.setLngLat([window.commuterLng, window.commuterLat]);
                 }
             },
             { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
         );
     }
 };
-
 function initializeMapAndLocation() {
     console.log("Starting background location tracking...");
 
