@@ -164,9 +164,7 @@ ASIYE_DRIVER.ui = {
 
                 <h2
                     class="driver-title"
-                    style="
-                        margin-top:5px;
-                    "
+                    style="margin-top:5px;"
                 >
 
                     Driver account required
@@ -182,23 +180,37 @@ ASIYE_DRIVER.ui = {
                     "
                 >
 
-                    This browser is not currently
-                    connected to a registered
-                    Asiye driver profile.
+                    Sign in with your registered
+                    Asiye driver account to continue.
 
                 </p>
+
+
+                <button
+                    id="driverLoginButton"
+                    class="
+                        driver-btn
+                        driver-btn-primary
+                        driver-btn-full
+                    "
+                    style="margin-top:17px;"
+                >
+
+                    <i class="fas fa-right-to-bracket"></i>
+
+                    Sign in
+
+                </button>
 
 
                 <button
                     id="retryDriverSession"
                     class="
                         driver-btn
-                        driver-btn-primary
+                        driver-btn-secondary
                         driver-btn-full
                     "
-                    style="
-                        margin-top:17px;
-                    "
+                    style="margin-top:9px;"
                 >
 
                     <i class="fas fa-rotate-right"></i>
@@ -210,6 +222,20 @@ ASIYE_DRIVER.ui = {
             </div>
 
         `;
+
+
+        document
+            .getElementById(
+                'driverLoginButton'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    window.location.href =
+                        './login.html';
+                }
+            );
 
 
         document
