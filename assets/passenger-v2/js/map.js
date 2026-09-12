@@ -15,8 +15,17 @@ ASIYE.map = {
 
     initialized: false,
 
+    driverMarker: null,
+
+    driverLocation: null,
+
 
     init() {
+
+        if (this.instance) {
+            this.resize();
+            return;
+        }
 
         if (typeof mapboxgl === 'undefined') {
 
@@ -79,6 +88,8 @@ ASIYE.map = {
 
                 this.initialized = true;
 
+                this.resize();
+
                 console.log('✅ Asiye V2 map ready');
 
 
@@ -97,6 +108,10 @@ ASIYE.map = {
                 }
             });
 
+            if (this.driverLocation) {
+                this.showDriverLocation(...this.driverLocation);
+            }
+
 
         } catch (error) {
 
@@ -108,6 +123,39 @@ ASIYE.map = {
     /* ========================================================
        USER LOCATION MARKER
        ======================================================== */
+
+    showDriverLocation(latitude, longitude, heading = 0) {
+        if (latitude == null || longitude == null || latitude === '' || longitude === '') return;
+        const lat = Number(latitude);
+        const lng = Number(longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return;
+
+        this.driverLocation = [lat, lng, heading];
+        if (!this.instance) return;
+
+        if (!this.driverMarker) {
+            const element = document.createElement('div');
+            element.className = 'passenger-live-car';
+            element.setAttribute('aria-label', 'Driver location');
+            element.innerHTML = `<div class="passenger-live-car-shadow"></div>
+                <div class="passenger-live-car-body">
+                    <div class="car-windscreen"></div><div class="car-roof"></div>
+                    <div class="car-light car-light-left"></div>
+                    <div class="car-light car-light-right"></div>
+                </div>`;
+            this.driverMarker = new mapboxgl.Marker({
+                element, anchor: 'center', rotationAlignment: 'map', pitchAlignment: 'map'
+            }).setLngLat([lng, lat]).addTo(this.instance);
+        }
+        this.driverMarker.setLngLat([lng, lat]);
+        this.driverMarker.setRotation(Number.isFinite(Number(heading)) ? Number(heading) : 0);
+    },
+
+    removeDriverMarker() {
+        this.driverMarker?.remove();
+        this.driverMarker = null;
+        this.driverLocation = null;
+    },
 
     showUserLocation(latitude, longitude) {
 

@@ -1,12 +1,12 @@
 /* ============================================================
-   ASIYE PASSENGER V2
+   ASIYE DRIVER V2
    MAP + LIVE DRIVER CAR
    ============================================================ */
 
-window.ASIYE = window.ASIYE || {};
+window.ASIYE_DRIVER = window.ASIYE_DRIVER || {};
 
 
-ASIYE.map = {
+ASIYE_DRIVER.map = {
 
     /* ========================================================
        STATE
@@ -59,7 +59,7 @@ ASIYE.map = {
 
         const token =
 
-            window.ASIYE_CONFIG
+            window.ASIYE_DRIVER_CONFIG
                 ?.mapboxToken;
 
 
@@ -78,11 +78,11 @@ ASIYE.map = {
         if (!tokenIsValid) {
 
             console.error(
-                '❌ Passenger Mapbox token missing or invalid.'
+                '❌ Driver Mapbox token missing or invalid.'
             );
 
 
-            ASIYE.ui?.toast(
+            ASIYE_DRIVER.ui?.toast(
                 'Map configuration is missing.',
                 'danger'
             );
@@ -96,7 +96,7 @@ ASIYE.map = {
 
 
         const stateLocation =
-            ASIYE.state?.location || {};
+            ASIYE_DRIVER.state?.location || {};
 
 
         const lat =
@@ -166,7 +166,7 @@ ASIYE.map = {
 
 
                     console.log(
-                        '✅ Passenger Mapbox ready'
+                        '✅ Driver Mapbox ready'
                     );
 
 
@@ -174,7 +174,7 @@ ASIYE.map = {
 
 
                     const location =
-                        ASIYE.state?.location || {};
+                        ASIYE_DRIVER.state?.location || {};
 
 
                     if (
@@ -215,7 +215,7 @@ ASIYE.map = {
         } catch (error) {
 
             console.error(
-                '❌ Passenger map initialization failed:',
+                '❌ Driver map initialization failed:',
                 error
             );
         }
@@ -232,6 +232,8 @@ ASIYE.map = {
         heading = 0
     ) {
 
+        if (latitude == null || longitude == null || latitude === '' || longitude === '') return;
+
         const lat =
             Number(latitude);
 
@@ -247,7 +249,8 @@ ASIYE.map = {
         if (
             !this.instance ||
             !Number.isFinite(lat) ||
-            !Number.isFinite(lng)
+            !Number.isFinite(lng) ||
+            Math.abs(lat) > 90 || Math.abs(lng) > 180
         ) {
 
             return;
@@ -326,6 +329,11 @@ ASIYE.map = {
             .setRotation(
                 rotation
             );
+
+        if (!this.hasCenteredOnDriver) {
+            this.hasCenteredOnDriver = true;
+            this.instance.easeTo({ center: [lng, lat], zoom: 16, duration: 650 });
+        }
     },
 
 
@@ -358,7 +366,7 @@ ASIYE.map = {
     ) {
 
         const location =
-            ASIYE.state?.location || {};
+            ASIYE_DRIVER.state?.location || {};
 
 
         if (
@@ -371,7 +379,7 @@ ASIYE.map = {
             )
         ) {
 
-            ASIYE.ui?.toast(
+            ASIYE_DRIVER.ui?.toast(
                 'Waiting for driver location.'
             );
 
@@ -424,7 +432,7 @@ ASIYE.map = {
 
 
         const driverLocation =
-            ASIYE.state?.location || {};
+            ASIYE_DRIVER.state?.location || {};
 
 
         if (
@@ -436,7 +444,7 @@ ASIYE.map = {
             )
         ) {
 
-            ASIYE.ui?.toast(
+            ASIYE_DRIVER.ui?.toast(
                 'Waiting for driver GPS location.',
                 'warning'
             );
@@ -447,7 +455,7 @@ ASIYE.map = {
 
         const token =
 
-            window.ASIYE_CONFIG
+            window.ASIYE_DRIVER_CONFIG
                 ?.mapboxToken;
 
 
@@ -542,7 +550,7 @@ ASIYE.map = {
             );
 
 
-            ASIYE.setNavigationTarget({
+            ASIYE_DRIVER.setNavigationTarget({
 
                 type:
                     target.type,
@@ -593,12 +601,12 @@ ASIYE.map = {
         } catch (error) {
 
             console.error(
-                'Passenger directions failed:',
+                'Driver directions failed:',
                 error
             );
 
 
-            ASIYE.ui?.toast(
+            ASIYE_DRIVER.ui?.toast(
                 'Unable to calculate navigation.',
                 'danger'
             );
@@ -971,7 +979,7 @@ ASIYE.map = {
             null;
 
 
-        ASIYE.clearNavigation?.();
+        ASIYE_DRIVER.clearNavigation?.();
     }
 
 };

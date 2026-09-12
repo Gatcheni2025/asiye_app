@@ -2393,3 +2393,215 @@ button:disabled {
 
     opacity: 1;
 }
+/* Live driver marker */
+.passenger-live-car {
+
+    position:
+        absolute;
+
+    width:
+        46px;
+
+    height:
+        58px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    transition:
+        transform .25s ease;
+
+    pointer-events:
+        none;
+}
+
+
+.passenger-live-car-shadow {
+
+    position:
+        absolute;
+
+    width:
+        29px;
+
+    height:
+        39px;
+
+    border-radius:
+        50%;
+
+    background:
+        rgba(0, 0, 0, .22);
+
+    filter:
+        blur(5px);
+
+    transform:
+        translateY(5px);
+}
+
+
+.passenger-live-car-body {
+
+    position:
+        relative;
+
+    width:
+        31px;
+
+    height:
+        48px;
+
+    border-radius:
+        11px 11px 9px 9px;
+
+    background:
+        #111;
+
+    border:
+        3px solid
+        #fff;
+
+    box-shadow:
+        0 5px 15px
+        rgba(0,0,0,.28);
+}
+
+
+.passenger-live-car-body::before,
+.passenger-live-car-body::after {
+
+    content:
+        "";
+
+    position:
+        absolute;
+
+    width:
+        4px;
+
+    height:
+        11px;
+
+    background:
+        #222;
+
+    border-radius:
+        3px;
+}
+
+
+.passenger-live-car-body::before {
+
+    left:
+        -5px;
+
+    top:
+        13px;
+}
+
+
+.passenger-live-car-body::after {
+
+    right:
+        -5px;
+
+    top:
+        13px;
+}
+
+
+.car-windscreen {
+
+    position:
+        absolute;
+
+    top:
+        7px;
+
+    left:
+        5px;
+
+    right:
+        5px;
+
+    height:
+        12px;
+
+    border-radius:
+        5px 5px 3px 3px;
+
+    background:
+        linear-gradient(
+            180deg,
+            #d9e6ea,
+            #8fa4aa
+        );
+}
+
+
+.car-roof {
+
+    position:
+        absolute;
+
+    left:
+        7px;
+
+    right:
+        7px;
+
+    top:
+        22px;
+
+    height:
+        14px;
+
+    border-radius:
+        4px;
+
+    background:
+        #292929;
+}
+
+
+.car-light {
+
+    position:
+        absolute;
+
+    bottom:
+        4px;
+
+    width:
+        5px;
+
+    height:
+        3px;
+
+    border-radius:
+        2px;
+
+    background:
+        #ffef9c;
+}
+
+
+.car-light-left {
+
+    left:
+        5px;
+}
+
+
+.car-light-right {
+
+    right:
+        5px;
+}

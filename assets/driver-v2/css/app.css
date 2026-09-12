@@ -3578,7 +3578,7 @@ and
 .passenger-live-car {
 
     position:
-        relative;
+        absolute;
 
     width:
         46px;
