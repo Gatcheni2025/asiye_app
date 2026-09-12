@@ -63,7 +63,7 @@ ASIYE_DRIVER.map = {
         if (
             !token ||
             token ===
-            'YOUR_MAPBOX_PUBLIC_TOKEN'
+            'pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw'
         ) {
 
             console.error(
