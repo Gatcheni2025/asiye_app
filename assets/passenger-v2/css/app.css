@@ -2605,3 +2605,42 @@ button:disabled {
     right:
         5px;
 }
+
+/* Passenger pickup: shared on-the-way and arrived presentation. */
+.pickup-card { color:#17221e; padding:4px 2px 0; }
+.pickup-heading { padding:0 2px; }
+.pickup-status { display:inline-flex; align-items:center; gap:7px; color:#476556; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:1.2px; }
+.pickup-status > span { width:6px; height:6px; border-radius:50%; background:#328763; box-shadow:0 0 0 4px #edf6f0; }
+.pickup-heading h2 { margin:12px 0 6px; font-size:clamp(23px,6vw,29px); line-height:1.15; font-weight:800; letter-spacing:-1px; overflow-wrap:anywhere; }
+.pickup-heading p { margin:0; font-size:12px; line-height:1.6; color:#69746e; }
+.pickup-progress { display:flex; gap:5px; margin:19px 0; }
+.pickup-progress span { height:3px; flex:1; border-radius:10px; background:#e8eeea; }
+.pickup-progress span:first-child, .pickup-progress span:nth-child(2) { background:#35946c; }
+.pickup-card--arrived .pickup-progress span { background:#35946c; }
+.pickup-driver { display:flex; align-items:center; gap:12px; padding:0 0 19px; }
+.pickup-avatar { flex-shrink:0; width:49px; height:49px; border-radius:17px; display:grid; place-items:center; background:linear-gradient(145deg,#ebeee9,#d4e1d8); color:#284535; font-size:21px; font-weight:700; border:1px solid #dfe8e1; }
+.pickup-driver-info { display:flex; flex:1; min-width:0; flex-direction:column; gap:5px; }
+.pickup-driver-info > strong { font-size:15px; overflow-wrap:anywhere; }
+.pickup-driver-info > span { font-size:11px; color:#46554c; }
+.pickup-star { color:#ac7925; }.pickup-muted { color:#7b847e; }
+.pickup-vehicle { text-align:right; max-width:45%; }
+.pickup-vehicle > span { display:block; margin-bottom:7px; font-size:9px; text-transform:uppercase; letter-spacing:.8px; color:#78817b; }
+.pickup-vehicle strong { display:inline-block; border:1px solid #d9dfd9; background:#fafbf8; border-radius:7px; padding:7px 10px; font-size:13px; letter-spacing:1px; overflow-wrap:anywhere; }
+.pickup-pin { padding:17px; background:#f3f6f3; border:1px solid #e4ebe4; border-radius:18px; }
+.pickup-pin-heading { display:flex; align-items:center; justify-content:space-between; font-size:11px; font-weight:700; color:#4f6356; }
+.pickup-pin-heading svg { width:18px; height:18px; color:#638572; }
+.pickup-pin-digits { display:flex; gap:9px; margin:12px 0 9px; flex-wrap:wrap; }
+.pickup-pin-digits > span { display:grid; place-items:center; width:44px; height:48px; border-radius:9px; border:1px solid #e1e7df; background:white; font-size:25px; font-weight:800; font-variant-numeric:tabular-nums; box-shadow:0 2px 2px #17221e04; }
+.pickup-pin p { margin:0; font-size:10px; line-height:1.5; color:#718074; }
+.pickup-card--arrived .pickup-pin { background:#183e30; border-color:#183e30; }
+.pickup-card--arrived .pickup-pin-heading, .pickup-card--arrived .pickup-pin-heading svg { color:#e5f1e8; }
+.pickup-card--arrived .pickup-pin p { color:#bacfc1; }
+.pickup-card--arrived .pickup-pin-digits > span { background:#fffdf5; border-color:transparent; }
+.pickup-actions { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:15px; }
+.pickup-actions button { display:flex; align-items:center; justify-content:center; gap:7px; min-height:48px; border:1px solid #e2e7e2; border-radius:12px; background:white; color:#263c30; font-weight:700; font-size:11px; }
+.pickup-actions button:hover { background:#f1f6f2; border-color:#b7cbbd; }
+.pickup-actions button:focus-visible { outline:2px solid #248454; outline-offset:3px; }
+.pickup-actions svg { width:17px; height:17px; }
+.pickup-action-feedback { font-size:11px; line-height:1.5; color:#596d60; }
+.pickup-action-feedback:not(:empty) { margin-top:12px; padding:12px; background:#f3f6f3; border-radius:10px; }
+@media(max-width:350px) { .pickup-driver { gap:8px; }.pickup-vehicle strong { font-size:11px; padding:7px; }.pickup-actions button { gap:5px; } }

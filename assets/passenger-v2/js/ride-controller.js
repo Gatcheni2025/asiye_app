@@ -917,148 +917,76 @@ ASIYE.ride = {
        DRIVER ON WAY
        ======================================================== */
 
-    renderDriverOnWay(request) {
-
-        const container =
-            document.getElementById(
-                'sheetContent'
-            );
-
-
+    renderPickupCard(request, arrived) {
+        const container = document.getElementById('sheetContent');
         if (!container) return;
-
-
-        const passenger =
-            this.getPassengerData(
-                request
-            );
-
-
-        const pin =
-            passenger.pickupPin ||
-            request.pickupPin ||
-            '----';
-
-
+        const escape = value => ASIYE.ui.escape(value);
+        const passenger = this.getPassengerData(request);
+        const pin = String(passenger.pickupPin ?? request.pickupPin ?? '----');
+        const name = request.driverName || 'Your driver';
+        const rating = Number(request.driverRating);
+        const phone = String(request.driverPhone || '').replace(/[^\d+]/g, '');
+        const icons = {
+            call: '<path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a14 14 0 0 1-7-7l2-2-2-5Z"/>',
+            message: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5A8.5 8.5 0 0 1 10.5 3h2a8.5 8.5 0 0 1 8.5 8.5Z"/><path d="M7 9h9M7 13h6"/>',
+            safety: '<path d="m12 3 8 3v6c0 5-8 9-8 9S4 17 4 12V6l8-3Z"/><path d="m8 12 3 3 5-6"/>'
+        };
+        const icon = name => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${icons[name]}</svg>`;
         container.innerHTML = `
-
-            <div class="asiye-between">
-
-                <div>
-
-                    <div class="home-kicker">
-                        Driver on the way
+            <section class="pickup-card ${arrived ? 'pickup-card--arrived' : ''}">
+                <header class="pickup-heading">
+                    <span class="pickup-status"><span></span>${arrived ? 'Driver arrived' : 'Driver on the way'}</span>
+                    <h2>${arrived ? 'Your driver is here' : `${escape(name)} is coming`}</h2>
+                    <p ${arrived ? '' : 'id="passengerDriverEta"'}>${arrived ? 'Meet your driver at the pickup point.' : 'Your driver is heading to your pickup.'}</p>
+                </header>
+                <div class="pickup-progress" aria-hidden="true"><span></span><span></span><span></span></div>
+                <div class="pickup-driver">
+                    <div class="pickup-avatar" aria-hidden="true">${escape(name.charAt(0).toUpperCase())}</div>
+                    <div class="pickup-driver-info"><strong>${escape(name)}</strong>
+                        <span>${Number.isFinite(rating) && rating > 0 ? `<span class="pickup-star">★</span> ${rating.toFixed(1)} <span class="pickup-muted">· Driver</span>` : 'Your driver'}</span>
                     </div>
-
-                    <h2 class="sheet-page-title">
-                        ${
-                            ASIYE.ui.escape(
-                                request.driverName ||
-                                'Your driver'
-                            )
-                        } is coming
-                    </h2>
-
-                    <div
-                        id="passengerDriverEta"
-                        class="home-greeting"
-                    >
-                        Calculating arrival time...
-                    </div>
-
+                    <div class="pickup-vehicle"><span>Vehicle plate</span><strong>${escape(request.vehicleReg || 'Not available')}</strong></div>
                 </div>
-
-            </div>
-
-            ${this.driverCard(request)}
-
-            <div class="asiye-pin-card">
-
-                <div class="asiye-pin-label">
-                    Pickup PIN
+                <div class="pickup-pin">
+                    <div class="pickup-pin-heading"><span>${arrived ? 'Give your driver this PIN' : 'Your pickup PIN'}</span>${icon('safety')}</div>
+                    <div class="pickup-pin-digits" aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
+                    <p>${arrived ? 'Share when you are ready to start your ride.' : 'Share with your driver when they arrive.'}</p>
                 </div>
-
-                <div class="asiye-pin-value">
-                    ${ASIYE.ui.escape(pin)}
+                <div class="pickup-actions">
+                    <button type="button" data-pickup-action="call">${icon('call')}<span>Call</span></button>
+                    <button type="button" data-pickup-action="message">${icon('message')}<span>Message</span></button>
+                    <button type="button" data-pickup-action="safety">${icon('safety')}<span>Safety</span></button>
                 </div>
-
-            </div>
-
-            <div class="asiye-actions">
-
-                <button class="asiye-action-button">
-                    <i class="fas fa-phone"></i>
-                    Call
-                </button>
-
-                <button class="asiye-action-button">
-                    <i class="fas fa-comment"></i>
-                    Message
-                </button>
-
-                <button class="asiye-action-button">
-                    <i class="fas fa-shield-halved"></i>
-                    Safety
-                </button>
-
-            </div>
-        `;
+                <div class="pickup-action-feedback" role="status"></div>
+            </section>`;
+        container.querySelectorAll('[data-pickup-action]').forEach(button => {
+            button.addEventListener('click', () => {
+                const action = button.dataset.pickupAction;
+                if (action === 'call' || action === 'message') {
+                    if (!phone || !/^\+?\d{7,15}$/.test(phone)) {
+                        container.querySelector('.pickup-action-feedback').textContent = 'The driver’s contact number is not available yet.';
+                        return;
+                    }
+                    window.location.href = `${action === 'call' ? 'tel' : 'sms'}:${phone}`;
+                } else {
+                    container.querySelector('.pickup-action-feedback').textContent = 'Check the vehicle plate before boarding. Share your pickup PIN only with your driver when you are ready to start.';
+                }
+            });
+        });
+        ASIYE.map?.resize();
     },
 
+    renderDriverOnWay(request) {
+        this.renderPickupCard(request, false);
+    },
 
     /* ========================================================
        ARRIVED
        ======================================================== */
 
     renderArrived(request) {
-
-        const passenger =
-            this.getPassengerData(
-                request
-            );
-
-
-        const pin =
-            passenger.pickupPin ||
-            request.pickupPin ||
-            '----';
-
-
-        const container =
-            document.getElementById(
-                'sheetContent'
-            );
-
-
-        container.innerHTML = `
-
-            <div class="home-kicker">
-                Driver arrived
-            </div>
-
-            <h2 class="home-title">
-                Your driver is here
-            </h2>
-
-            <div class="home-greeting">
-                Meet the driver at your pickup point.
-            </div>
-
-            <div class="asiye-pin-card">
-
-                <div class="asiye-pin-label">
-                    Give driver this PIN
-                </div>
-
-                <div class="asiye-pin-value">
-                    ${ASIYE.ui.escape(pin)}
-                </div>
-
-            </div>
-
-        `;
+        this.renderPickupCard(request, true);
     },
-
 
     /* ========================================================
        IN TRANSIT

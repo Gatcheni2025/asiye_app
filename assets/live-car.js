@@ -4,8 +4,8 @@ window.AsiyeLiveCar = {
         const element = document.createElement('div');
         element.setAttribute('aria-label', 'Driver location');
         // Mapbox owns the outer transform; the drawing has no transform transition.
-        element.style.cssText = 'width:42px;height:68px;pointer-events:none;';
-        element.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 100" width="42" height="68" aria-hidden="true" style="display:block;filter:drop-shadow(0 3px 3px #0006)">
+        element.style.cssText = 'width:22px;height:35px;pointer-events:none;';
+        element.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 100" width="22" height="35" aria-hidden="true" style="display:block;filter:drop-shadow(0 1px 1px #0005)">
             <defs><linearGradient id="car-paint" x2="1" y2="0"><stop stop-color="#9da7ad"/><stop offset=".22" stop-color="#f7fafb"/><stop offset=".5" stop-color="#fff"/><stop offset=".8" stop-color="#dce2e5"/><stop offset="1" stop-color="#89959c"/></linearGradient>
             <linearGradient id="car-glass" x2="0" y2="1"><stop stop-color="#536b78"/><stop offset="1" stop-color="#182a36"/></linearGradient></defs>
             <g fill="#172027"><rect x="10" y="20" width="7" height="17" rx="3"/><rect x="47" y="20" width="7" height="17" rx="3"/><rect x="10" y="66" width="7" height="17" rx="3"/><rect x="47" y="66" width="7" height="17" rx="3"/></g>
