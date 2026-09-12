@@ -7,29 +7,37 @@ window.ASIYE =
     window.ASIYE || {};
 
 
-/*
- * IMPORTANT:
- *
- * Copy the SAME Firebase Web configuration
- * from your existing working Asiye app.
- *
- * Firebase Web API keys are client configuration,
- * but your Realtime Database / Firestore rules
- * must still protect your data.
- */
+/* ============================================================
+   FIREBASE CONFIG
+   ============================================================ */
 
-  const firebaseConfig = {
-              apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
-              authDomain: "asiye-80386.firebaseapp.com",
-              databaseURL: "https://asiye-80386-default-rtdb.firebaseio.com",
-              projectId: "asiye-80386",
-              storageBucket: "asiye-80386.firebasestorage.app",
-              appId: "1:531902350858:web:f8a4a246bf350d50e3c1f3"
-          };
+const firebaseConfig = {
+
+    apiKey:
+        "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
+
+    authDomain:
+        "asiye-80386.firebaseapp.com",
+
+    databaseURL:
+        "https://asiye-80386-default-rtdb.firebaseio.com",
+
+    projectId:
+        "asiye-80386",
+
+    storageBucket:
+        "asiye-80386.firebasestorage.app",
+
+    messagingSenderId:
+        "531902350858",
+
+    appId:
+        "1:531902350858:web:f8a4a246bf350d50e3c1f3"
+};
 
 
 /* ============================================================
-   INITIALIZE ONLY ONCE
+   INITIALIZE FIREBASE
    ============================================================ */
 
 try {
@@ -44,6 +52,10 @@ try {
         );
     }
 
+
+    /*
+     * Prevent duplicate initialization.
+     */
 
     if (
         firebase.apps &&
@@ -63,18 +75,18 @@ try {
         ASIYE.firebaseApp =
 
             firebase.initializeApp(
-                ASIYE_FIREBASE_CONFIG
+                firebaseConfig
             );
 
 
         console.log(
-            "✅ Firebase initialized"
+            "✅ Passenger Firebase initialized"
         );
     }
 
 
     /* ========================================================
-       FIREBASE SERVICES
+       SERVICES
        ======================================================== */
 
     ASIYE.auth =
@@ -85,23 +97,54 @@ try {
         firebase.database();
 
 
-    ASIYE.storage =
-        firebase.storage();
+    /*
+     * Storage is optional.
+     * Only initialize if firebase-storage-compat.js is loaded.
+     */
 
+    if (
+        typeof firebase.storage ===
+        "function"
+    ) {
+
+        ASIYE.storage =
+            firebase.storage();
+
+    } else {
+
+        ASIYE.storage =
+            null;
+
+
+        console.warn(
+            "⚠️ Firebase Storage SDK not loaded"
+        );
+    }
+
+
+    /*
+     * Compatibility for older Asiye code.
+     */
 
     window.database =
         ASIYE.database;
 
 
     console.log(
-        "✅ Firebase Realtime Database ready"
+        "✅ Passenger Firebase Database ready"
+    );
+
+
+    console.log(
+        "Firebase project:",
+        firebase.app().options.projectId
     );
 
 
 } catch (error) {
 
     console.error(
-        "❌ Firebase initialization failed:",
+        "❌ Passenger Firebase initialization failed:",
         error
     );
 
