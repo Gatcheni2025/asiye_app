@@ -83,6 +83,150 @@ ASIYE_DRIVER.ui = {
 
 
     /* ========================================================
+       DRIVER LOGIN REQUIRED
+       ======================================================== */
+
+    showDriverLoginRequired() {
+
+        const container =
+            document.getElementById(
+                'driverSheetContent'
+            );
+
+
+        const homeSheet =
+            document.getElementById(
+                'driverHomeSheet'
+            );
+
+
+        const activeSheet =
+            document.getElementById(
+                'activeTripSheet'
+            );
+
+
+        activeSheet
+            ?.classList
+            .remove(
+                'open'
+            );
+
+
+        homeSheet
+            ?.classList
+            .add(
+                'open'
+            );
+
+
+        if (!container) {
+
+            return;
+        }
+
+
+        container.innerHTML = `
+
+            <div
+                style="
+                    text-align:center;
+                    padding:16px 5px 8px;
+                "
+            >
+
+                <div
+                    style="
+                        width:58px;
+                        height:58px;
+                        border-radius:18px;
+                        background:#111;
+                        color:white;
+                        margin:0 auto 14px;
+                        display:flex;
+                        align-items:center;
+                        justify-content:center;
+                        font-size:21px;
+                    "
+                >
+
+                    <i class="fas fa-car-side"></i>
+
+                </div>
+
+
+                <div class="driver-kicker">
+
+                    Asiye Driver
+
+                </div>
+
+
+                <h2
+                    class="driver-title"
+                    style="
+                        margin-top:5px;
+                    "
+                >
+
+                    Driver account required
+
+                </h2>
+
+
+                <p
+                    class="driver-subtitle"
+                    style="
+                        max-width:300px;
+                        margin:7px auto 0;
+                    "
+                >
+
+                    This browser is not currently
+                    connected to a registered
+                    Asiye driver profile.
+
+                </p>
+
+
+                <button
+                    id="retryDriverSession"
+                    class="
+                        driver-btn
+                        driver-btn-primary
+                        driver-btn-full
+                    "
+                    style="
+                        margin-top:17px;
+                    "
+                >
+
+                    <i class="fas fa-rotate-right"></i>
+
+                    Retry driver session
+
+                </button>
+
+            </div>
+
+        `;
+
+
+        document
+            .getElementById(
+                'retryDriverSession'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    ASIYE_DRIVER.initialize();
+                }
+            );
+    },
+
+
+    /* ========================================================
        SHOW DASHBOARD
        ======================================================== */
 
@@ -2735,7 +2879,14 @@ ASIYE_DRIVER.ui = {
 
 
 /* ============================================================
-   DRIVER AUTH / INITIALIZATION
+   DRIVER SESSION RESOLUTION
+
+   Important:
+   Passenger and Driver V2 may share the same Firebase Auth
+   session in the browser.
+
+   Therefore we NEVER assume currentUser is a taxi driver.
+   We verify the UID against taxis/{uid}.
    ============================================================ */
 
 ASIYE_DRIVER.initialize = async function () {
@@ -2745,110 +2896,364 @@ ASIYE_DRIVER.initialize = async function () {
     );
 
 
-    /*
-     * ========================================================
-     * AUTHENTICATION
-     * ========================================================
-     */
+    try {
 
-    firebase.auth()
-        .onAuthStateChanged(
-            async user => {
-
-                if (!user) {
-
-                    console.warn(
-                        'No Firebase driver signed in.'
-                    );
+        const driverSession =
+            await ASIYE_DRIVER.resolveDriverSession();
 
 
-                    /*
-                     * Development fallback only.
-                     *
-                     * The old application may already store
-                     * the driver UID locally.
-                     */
+        if (!driverSession) {
 
-                    const localDriverId =
-
-                        localStorage.getItem(
-                            'userId'
-                        ) ||
-
-                        localStorage.getItem(
-                            'driverId'
-                        );
+            console.warn(
+                '⚠️ No valid Asiye driver session found.'
+            );
 
 
-                    if (!localDriverId) {
+            ASIYE_DRIVER.ui
+                .showDriverLoginRequired();
 
-                        ASIYE_DRIVER.ui.toast(
-                            'Driver login required.',
-                            'warning'
-                        );
-
-
-                        ASIYE_DRIVER.ui
-                            .renderDashboard();
+            return;
+        }
 
 
-                        return;
-                    }
-
-
-                    await ASIYE_DRIVER
-                        .loadDriver(
-                            localDriverId
-                        );
-
-
-                    return;
-                }
-
-
-                await ASIYE_DRIVER
-                    .loadDriver(
-                        user.uid
-                    );
-            }
+        console.log(
+            '✅ Valid driver session:',
+            driverSession.uid
         );
+
+
+        await ASIYE_DRIVER.loadDriver(
+
+            driverSession.uid,
+
+            driverSession.data
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            '❌ Driver startup failed:',
+            error
+        );
+
+
+        ASIYE_DRIVER.ui.toast(
+            error.message ||
+            'Unable to start driver app.',
+            'danger'
+        );
+    }
 };
 
 
 /* ============================================================
-   LOAD DRIVER
+   FIND THE CORRECT DRIVER UID
+   ============================================================ */
+
+ASIYE_DRIVER.resolveDriverSession =
+async function () {
+
+    /*
+     * Candidate priority:
+     *
+     * 1. Dedicated Driver V2 driverId
+     * 2. Old Asiye userId, but only if type says driver
+     * 3. Firebase authenticated UID
+     *
+     * EVERY candidate is checked against taxis/{uid}.
+     */
+
+    const candidates = [];
+
+
+    const savedDriverId =
+        localStorage.getItem(
+            'driverId'
+        );
+
+
+    const savedUserId =
+        localStorage.getItem(
+            'userId'
+        );
+
+
+    const savedUserType =
+
+        String(
+            localStorage.getItem(
+                'userType'
+            ) || ''
+        )
+        .toLowerCase();
+
+
+    const authUser =
+        firebase.auth().currentUser;
+
+
+    /*
+     * Dedicated V2 driver session.
+     */
+
+    if (savedDriverId) {
+
+        candidates.push({
+
+            uid:
+                savedDriverId,
+
+            source:
+                'driverId'
+        });
+    }
+
+
+    /*
+     * Legacy Asiye Driver session.
+     */
+
+    if (
+        savedUserId &&
+        (
+            savedUserType ===
+                'driver' ||
+
+            savedUserType ===
+                'taxi' ||
+
+            !savedUserType
+        )
+    ) {
+
+        candidates.push({
+
+            uid:
+                savedUserId,
+
+            source:
+                'legacy-userId'
+        });
+    }
+
+
+    /*
+     * Firebase Auth can be passenger OR driver.
+     * So it MUST be verified against taxis/.
+     */
+
+    if (
+        authUser?.uid
+    ) {
+
+        candidates.push({
+
+            uid:
+                authUser.uid,
+
+            source:
+                'firebase-auth'
+        });
+    }
+
+
+    /*
+     * Remove duplicate UIDs.
+     */
+
+    const unique = [];
+
+    const seen =
+        new Set();
+
+
+    candidates.forEach(
+        candidate => {
+
+            if (
+                !candidate.uid ||
+                seen.has(
+                    candidate.uid
+                )
+            ) {
+
+                return;
+            }
+
+
+            seen.add(
+                candidate.uid
+            );
+
+
+            unique.push(
+                candidate
+            );
+        }
+    );
+
+
+    console.log(
+        '🔎 Driver session candidates:',
+        unique.map(
+            candidate => ({
+                source:
+                    candidate.source,
+
+                uid:
+                    candidate.uid
+            })
+        )
+    );
+
+
+    /*
+     * Verify each candidate against Firebase.
+     */
+
+    for (
+        const candidate
+        of unique
+    ) {
+
+        try {
+
+            const snapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `taxis/${candidate.uid}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            if (
+                snapshot.exists()
+            ) {
+
+                const driver =
+                    snapshot.val();
+
+
+                console.log(
+
+                    `✅ Taxi profile found using ${candidate.source}`,
+
+                    candidate.uid
+                );
+
+
+                /*
+                 * Save dedicated Driver V2 identity.
+                 */
+
+                localStorage.setItem(
+                    'driverId',
+                    candidate.uid
+                );
+
+
+                localStorage.setItem(
+                    'userType',
+                    'driver'
+                );
+
+
+                return {
+
+                    uid:
+                        candidate.uid,
+
+                    data:
+                        driver,
+
+                    source:
+                        candidate.source
+                };
+            }
+
+
+            console.log(
+
+                `ℹ️ ${candidate.source} UID is not a taxi profile:`,
+
+                candidate.uid
+            );
+
+
+        } catch (error) {
+
+            console.warn(
+
+                `Could not check driver candidate ${candidate.uid}:`,
+
+                error
+            );
+        }
+    }
+
+
+    return null;
+};
+
+
+/* ============================================================
+   LOAD VERIFIED DRIVER
    ============================================================ */
 
 ASIYE_DRIVER.loadDriver =
 async function (
-    driverId
+    driverId,
+    existingDriverData = null
 ) {
 
     try {
 
-        const snapshot =
-
-            await firebase
-                .database()
-                .ref(
-                    `taxis/${driverId}`
-                )
-                .once(
-                    'value'
-                );
+        let driver =
+            existingDriverData;
 
 
-        const driver =
-            snapshot.val();
-
+        /*
+         * Fetch if resolver did not already
+         * provide the profile.
+         */
 
         if (!driver) {
 
-            throw new Error(
-                'Driver profile was not found.'
-            );
+            const snapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `taxis/${driverId}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            if (
+                !snapshot.exists()
+            ) {
+
+                throw new Error(
+                    'This account does not have an Asiye driver profile.'
+                );
+            }
+
+
+            driver =
+                snapshot.val();
         }
 
+
+        /*
+         * Establish Driver V2 identity.
+         */
 
         ASIYE_DRIVER.setDriver(
             driverId,
@@ -2862,73 +3267,106 @@ async function (
         );
 
 
+        localStorage.setItem(
+            'userType',
+            'driver'
+        );
+
+
         console.log(
-            '✅ Driver loaded:',
+            '✅ Driver profile loaded:',
             driverId
         );
 
 
         /*
-         * Live driver profile listener.
+         * ====================================================
+         * SINGLE LIVE DRIVER PROFILE LISTENER
+         * ====================================================
          */
 
-        firebase
-            .database()
-            .ref(
-                `taxis/${driverId}`
-            )
-            .on(
-                'value',
-                liveSnapshot => {
+        if (
+            ASIYE_DRIVER.driverProfileRef &&
+            ASIYE_DRIVER.driverProfileListener
+        ) {
 
-                    const liveDriver =
-                        liveSnapshot.val();
-
-
-                    if (!liveDriver) return;
-
-
-                    ASIYE_DRIVER.state.driver =
-                        liveDriver;
-
+            ASIYE_DRIVER
+                .driverProfileRef
+                .off(
+                    'value',
 
                     ASIYE_DRIVER
-                        .syncDriverAvailability(
-                            liveDriver
-                        );
+                        .driverProfileListener
+                );
+        }
 
 
-                    ASIYE_DRIVER.ui
-                        .updateTopStatus();
+        ASIYE_DRIVER.driverProfileRef =
+
+            firebase
+                .database()
+                .ref(
+                    `taxis/${driverId}`
+                );
 
 
-                    ASIYE_DRIVER.ui
-                        .updateDriverProfileUI();
+        ASIYE_DRIVER.driverProfileListener =
+
+            ASIYE_DRIVER
+                .driverProfileRef
+                .on(
+                    'value',
+
+                    snapshot => {
+
+                        const liveDriver =
+                            snapshot.val();
 
 
-                    if (
-                        ASIYE_DRIVER.state.ui
-                            .screen ===
-                        'dashboard'
-                    ) {
+                        if (!liveDriver) {
+
+                            console.warn(
+                                'Driver profile was removed.'
+                            );
+
+                            return;
+                        }
+
+
+                        ASIYE_DRIVER.state.driver =
+                            liveDriver;
+
+
+                        ASIYE_DRIVER
+                            .syncDriverAvailability(
+                                liveDriver
+                            );
+
 
                         ASIYE_DRIVER.ui
-                            .renderDashboard();
+                            .updateTopStatus();
+
+
+                        ASIYE_DRIVER.ui
+                            .updateDriverProfileUI();
+
+
+                        if (
+                            ASIYE_DRIVER.state
+                                .ui
+                                .screen ===
+                            'dashboard'
+                        ) {
+
+                            ASIYE_DRIVER.ui
+                                .renderDashboard();
+                        }
                     }
-                }
-            );
+                );
 
 
         /*
-         * Start location.
-         */
-
-        ASIYE_DRIVER.location
-            ?.start?.();
-
-
-        /*
-         * Start map.
+         * Map
          */
 
         ASIYE_DRIVER.map
@@ -2936,7 +3374,15 @@ async function (
 
 
         /*
-         * Render dashboard.
+         * GPS
+         */
+
+        ASIYE_DRIVER.location
+            ?.start?.();
+
+
+        /*
+         * Driver profile UI
          */
 
         ASIYE_DRIVER.ui
@@ -2948,7 +3394,10 @@ async function (
 
 
         /*
-         * Restore current request first.
+         * IMPORTANT:
+         *
+         * Restore an existing trip BEFORE
+         * listening for new requests.
          */
 
         await ASIYE_DRIVER.requests
@@ -2956,19 +3405,29 @@ async function (
 
 
         /*
-         * Start incoming booking listener
-         * only if driver is online.
+         * Start incoming bookings only
+         * when this driver is online and
+         * does not already have a trip.
          */
 
         if (
             ASIYE_DRIVER.state
                 .availability
-                .isOnline
+                .isOnline &&
+
+            !ASIYE_DRIVER.state
+                .availability
+                .currentRequest
         ) {
 
             ASIYE_DRIVER.requests
                 .start();
         }
+
+
+        console.log(
+            '✅ Asiye Driver V2 ready'
+        );
 
 
     } catch (error) {
@@ -2981,13 +3440,13 @@ async function (
 
         ASIYE_DRIVER.ui.toast(
             error.message ||
-            'Could not load driver account.',
+            'Could not load driver profile.',
             'danger'
         );
 
 
         ASIYE_DRIVER.ui
-            .renderDashboard();
+            .showDriverLoginRequired();
     }
 };
 
