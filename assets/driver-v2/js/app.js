@@ -4064,9 +4064,7 @@ document.addEventListener(
                             }
 
 
-                            ASIYE_DRIVER.ui.toast(
-                                `${page} is coming next.`
-                            );
+                            AsiyePages.open(page);
                         }
                     );
                 }

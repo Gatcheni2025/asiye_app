@@ -1,0 +1,264 @@
+{
+  "rules": {
+    "commuters": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "phone",
+        "isAmbassador",
+        "verificationStatus"
+      ]
+    },
+    "ambassador_team_chat": {
+      ".read": true,
+      ".write": true
+    },
+    "taxis": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "phone",
+        "isOnline",
+        "destination"
+      ]
+    },
+    "requests": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "taxiId",
+        "status",
+        "commuterId",
+        "timestamp"
+      ]
+    },
+    "notifications": {
+      ".read": true,
+      ".write": true
+    },
+    "chats": {
+      ".read": true,
+      ".write": true
+    },
+    "subscriptions": {
+      ".read": true,
+      ".write": true
+    },
+    "withdrawals": {
+      ".read": true,
+      ".write": true
+    },
+    "voucherUsage": {
+      ".read": true,
+      ".write": true
+    },
+    "admins": {
+      ".read": true,
+      ".write": true
+    },
+    "debitOrderQueue": {
+      ".read": true,
+      ".write": true
+    },
+    "debitOrders": {
+      ".read": true,
+      ".write": true
+    },
+    "marketAds": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "userId",
+        "status",
+        "createdAt"
+      ]
+    },
+    "verificationQueue": {
+      ".read": true,
+      ".write": true
+    },
+    "support_chats": {
+      ".read": true,
+      ".write": true
+    },
+    "driver_applications": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": [
+        "email",
+        "phone"
+      ]
+    },
+    "vouchers": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": "code"
+    },
+    "voucher_requests": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "ambassadorPhone"
+      ]
+    },
+    "businesses": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "settings": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "delivery_requests": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "commuterId",
+        "handlerId",
+        "status",
+        "assignedTaxiId"
+      ]
+    },
+    "pending_deliveries": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "orderId",
+        "createdAt"
+      ]
+    },
+    "payout_requests": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "status",
+        "requestedAt"
+      ]
+    },
+    "earnings": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": [
+        "handlerId",
+        "timestamp"
+      ]
+    },
+    "campuses": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "users": {
+      ".indexOn": [
+        "email"
+      ],
+      ".read": "auth != null && root.child('admins').hasChild(auth.uid)",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "businessUsers": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "campaigns": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "club_pools": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
+      "waiting_list": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null"
+        }
+      }
+    },
+    "adAnalytics": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.uid === 'YOUR_ADMIN_UID_HERE'"
+    },
+    "messages": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null"
+      }
+    },
+    "handlers": {
+      ".indexOn": [
+        "phone",
+        "email"
+      ],
+      ".read": true,
+      ".write": "auth != null"
+    },
+    "admin_queue": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      "external_vouchers": {
+        ".indexOn": [
+          "status"
+        ]
+      }
+    },
+    "handler_applications": {
+      ".read": "auth != null",
+      "$application_id": {
+        ".write": "!data.exists()"
+      }
+    },
+    "drivers": {
+      ".indexOn": [
+        "email",
+        "phone",
+        "licenseNumber",
+        "status"
+      ],
+      ".read": "auth != null",
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && (auth.uid === $uid || root.child('admins').hasChild(auth.uid))"
+      }
+    },
+    "adRewards": {
+      "$uid": {
+        ".write": "$uid === auth.uid",
+        ".read": "$uid === auth.uid"
+      }
+    },
+    "tripChats": {
+      "$trip": {
+        "$passenger": {
+          ".indexOn": [
+            "createdAt"
+          ],
+          ".read": "auth != null && (root.child('requests').child($trip).child('driverAuthUid').val() === auth.uid || ((root.child('requests').child($trip).child('commuterId').val() === $passenger || root.child('requests').child($trip).child('passengers').child($passenger).exists()) && ($passenger === auth.uid || root.child('commuters').child($passenger).child('authUid').val() === auth.uid)))",
+          "$message": {
+            "role": {
+              ".validate": "newData.val() === 'driver' || newData.val() === 'passenger'"
+            },
+            "$other": {
+              ".validate": false
+            },
+            "senderUid": {
+              ".validate": "newData.isString()"
+            },
+            ".validate": "newData.hasChildren(['text', 'senderUid', 'role', 'createdAt']) && newData.child('senderUid').val() === auth.uid && ((newData.child('role').val() === 'driver' && root.child('requests').child($trip).child('driverAuthUid').val() === auth.uid) || (newData.child('role').val() === 'passenger' && ($passenger === auth.uid || root.child('commuters').child($passenger).child('authUid').val() === auth.uid)))",
+            "createdAt": {
+              ".validate": "newData.isNumber() && newData.val() === now"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 1000"
+            },
+            ".write": "!data.exists() && (auth != null && (root.child('requests').child($trip).child('driverAuthUid').val() === auth.uid || ((root.child('requests').child($trip).child('commuterId').val() === $passenger || root.child('requests').child($trip).child('passengers').child($passenger).exists()) && ($passenger === auth.uid || root.child('commuters').child($passenger).child('authUid').val() === auth.uid))))"
+          }
+        }
+      }
+    }
+  }
+}

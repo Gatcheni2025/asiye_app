@@ -2180,9 +2180,7 @@ document.addEventListener(
                         }
 
 
-                        ASIYE.ui.toast(
-                            `${page} will be connected in Passenger V2.`
-                        );
+                        AsiyePages.open(page);
                     }
                 );
             });

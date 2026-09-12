@@ -1006,7 +1006,7 @@ ASIYE.ride = {
 
         container.innerHTML = `
 
-            <div class="asiye-between">
+            <div class="passenger-transit-card"><div class="asiye-between">
 
                 <div>
 
@@ -1034,14 +1034,14 @@ ASIYE.ride = {
 
             </div>
 
-            <div class="asiye-actions">
+            <div class="asiye-actions transit-actions">
 
-                <button class="asiye-action-button">
-                    <i class="fas fa-shield-halved"></i>
+                <button class="asiye-action-button" id="transitSafety">
+                    <i class="fas fa-shield-halved" aria-hidden="true"></i>
                     Safety
                 </button>
 
-                <button class="asiye-action-button">
+                <button class="asiye-action-button" id="transitShare">
                     <i class="fas fa-share-nodes"></i>
                     Share
                 </button>
@@ -1052,8 +1052,17 @@ ASIYE.ride = {
                 </button>
 
             </div>
+            </div>
         `;
         document.getElementById('inTransitChat')?.addEventListener('click', () => AsiyeTripChat.open(request, this.requestId));
+        document.getElementById('transitSafety')?.addEventListener('click', () => AsiyePages.open('safety'));
+        document.getElementById('transitShare')?.addEventListener('click', async () => {
+            const text = `I'm on an Asiye ride to ${request.destination || request.destinationName || 'my destination'}. Driver: ${request.driverName || 'Not available'}. Vehicle: ${request.vehicleReg || 'Not available'}.`;
+            try {
+                if (navigator.share) await navigator.share({ title: 'My Asiye trip', text });
+                else { await navigator.clipboard.writeText(text); ASIYE.ui.toast('Trip details copied.'); }
+            } catch (error) { if (error.name !== 'AbortError') ASIYE.ui.toast('Unable to share trip details.'); }
+        });
     },
 
 
