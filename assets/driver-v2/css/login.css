@@ -1071,3 +1071,180 @@ button {
     }
 
 }
+
+/* ============================================================
+   SOCIAL AUTHENTICATION
+   ============================================================ */
+
+.social-login-section {
+
+    margin-bottom:
+        20px;
+}
+
+
+.social-login-button {
+
+    width:
+        100%;
+
+    min-height:
+        54px;
+
+    padding:
+        0 16px;
+
+    border:
+        1.5px solid
+        #e5e5e5;
+
+    border-radius:
+        16px;
+
+    background:
+        #ffffff;
+
+    color:
+        #111111;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    gap:
+        11px;
+
+    font-size:
+        11px;
+
+    font-weight:
+        900;
+
+    transition:
+        transform .15s ease,
+        background .15s ease;
+}
+
+
+.social-login-button +
+.social-login-button {
+
+    margin-top:
+        9px;
+}
+
+
+.social-login-button:active {
+
+    transform:
+        scale(.985);
+}
+
+
+.social-provider-icon {
+
+    width:
+        23px;
+
+    height:
+        23px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    flex-shrink:
+        0;
+
+    font-size:
+        16px;
+
+    font-weight:
+        900;
+}
+
+
+.google-icon {
+
+    font-family:
+        Arial,
+        sans-serif;
+
+    font-weight:
+        700;
+}
+
+
+.apple-login-button {
+
+    background:
+        #111111;
+
+    border-color:
+        #111111;
+
+    color:
+        white;
+}
+
+
+.apple-login-button i {
+
+    font-size:
+        20px;
+}
+
+
+.login-divider {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        11px;
+
+    margin:
+        19px 0 3px;
+}
+
+
+.login-divider span {
+
+    height:
+        1px;
+
+    flex:
+        1;
+
+    background:
+        #e5e5e5;
+}
+
+
+.login-divider strong {
+
+    color:
+        #aaaaaa;
+
+    font-size:
+        9px;
+
+    font-weight:
+        800;
+
+    text-transform:
+        uppercase;
+}

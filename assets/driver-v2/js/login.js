@@ -281,6 +281,32 @@ window.ASIYE_DRIVER_LOGIN = {
                     }
                 }
             );
+
+
+        document
+            .getElementById(
+                'googleLoginButton'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    this.signInWithGoogle();
+                }
+            );
+
+
+        document
+            .getElementById(
+                'appleLoginButton'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    this.signInWithApple();
+                }
+            );
     },
 
 
@@ -371,10 +397,6 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-        /*
-         * 0821234567
-         */
-
         if (
             phone.startsWith('0')
         ) {
@@ -383,10 +405,6 @@ window.ASIYE_DRIVER_LOGIN = {
                 phone.substring(1);
         }
 
-
-        /*
-         * 27821234567
-         */
 
         if (
             phone.startsWith('27')
@@ -491,10 +509,6 @@ window.ASIYE_DRIVER_LOGIN = {
 
         try {
 
-            /*
-             * Recreate verifier if necessary.
-             */
-
             if (
                 !this.recaptchaVerifier
             ) {
@@ -563,10 +577,6 @@ window.ASIYE_DRIVER_LOGIN = {
                 'phone'
             );
 
-
-            /*
-             * Reset reCAPTCHA after failure.
-             */
 
             this.prepareRecaptcha();
 
@@ -734,16 +744,285 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
     /* ========================================================
-       VERIFY TAXI PROFILE
+       SIGN IN WITH GOOGLE
        ======================================================== */
 
-    async verifyDriverProfile(
-        user
-    ) {
+    async signInWithGoogle() {
+
+        const button =
+            document.getElementById(
+                'googleLoginButton'
+            );
+
 
         try {
 
-            const snapshot =
+            if (button) {
+
+                button.disabled =
+                    true;
+
+
+                button.innerHTML = `
+
+                    <i
+                        class="
+                            fas
+                            fa-circle-notch
+                            fa-spin
+                        "
+                    ></i>
+
+                    Connecting to Google...
+
+                `;
+            }
+
+
+            const provider =
+
+                new firebase.auth
+                    .GoogleAuthProvider();
+
+
+            provider.setCustomParameters({
+
+                prompt:
+                    'select_account'
+
+            });
+
+
+            const result =
+
+                await firebase
+                    .auth()
+                    .signInWithPopup(
+                        provider
+                    );
+
+
+            if (!result.user) {
+
+                throw new Error(
+                    'Google authentication failed.'
+                );
+            }
+
+
+            this.showStep(
+                'profileCheckStep'
+            );
+
+
+            await this.verifyDriverProfile(
+                result.user
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                'Google sign-in failed:',
+                error
+            );
+
+
+            if (
+                error.code ===
+                'auth/popup-closed-by-user'
+            ) {
+
+                this.toast(
+                    'Google sign-in was cancelled.'
+                );
+
+            } else {
+
+                this.handleSocialError(
+                    error,
+                    'Google'
+                );
+            }
+
+
+        } finally {
+
+            if (button) {
+
+                button.disabled =
+                    false;
+
+
+                button.innerHTML = `
+
+                    <span class="social-provider-icon google-icon">
+                        G
+                    </span>
+
+                    <span>
+                        Continue with Google
+                    </span>
+
+                `;
+            }
+        }
+    },
+
+
+    /* ========================================================
+       SIGN IN WITH APPLE
+       ======================================================== */
+
+    async signInWithApple() {
+
+        const button =
+            document.getElementById(
+                'appleLoginButton'
+            );
+
+
+        try {
+
+            if (button) {
+
+                button.disabled =
+                    true;
+
+
+                button.innerHTML = `
+
+                    <i
+                        class="
+                            fas
+                            fa-circle-notch
+                            fa-spin
+                        "
+                    ></i>
+
+                    Connecting to Apple...
+
+                `;
+            }
+
+
+            const provider =
+
+                new firebase.auth
+                    .OAuthProvider(
+                        'apple.com'
+                    );
+
+
+            provider.addScope(
+                'email'
+            );
+
+
+            provider.addScope(
+                'name'
+            );
+
+
+            const result =
+
+                await firebase
+                    .auth()
+                    .signInWithPopup(
+                        provider
+                    );
+
+
+            if (!result.user) {
+
+                throw new Error(
+                    'Apple authentication failed.'
+                );
+            }
+
+
+            this.showStep(
+                'profileCheckStep'
+            );
+
+
+            await this.verifyDriverProfile(
+                result.user
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                'Apple sign-in failed:',
+                error
+            );
+
+
+            if (
+                error.code ===
+                'auth/popup-closed-by-user'
+            ) {
+
+                this.toast(
+                    'Apple sign-in was cancelled.'
+                );
+
+            } else {
+
+                this.handleSocialError(
+                    error,
+                    'Apple'
+                );
+            }
+
+
+        } finally {
+
+            if (button) {
+
+                button.disabled =
+                    false;
+
+
+                button.innerHTML = `
+
+                    <i class="fab fa-apple"></i>
+
+                    <span>
+                        Continue with Apple
+                    </span>
+
+                `;
+            }
+        }
+    },
+
+
+    /* ========================================================
+       VERIFY / RESOLVE DRIVER PROFILE
+
+       Supports:
+       1. New profiles keyed by Firebase UID
+       2. Legacy profiles keyed by an older UID
+       3. Phone-number matching
+       4. Email matching for Google / Apple
+       ======================================================== */
+
+    async verifyDriverProfile(user) {
+
+        try {
+
+            this.showStep(
+                'profileCheckStep'
+            );
+
+
+            /* ====================================================
+               1. NORMAL UID LOOKUP
+            ==================================================== */
+
+            let snapshot =
 
                 await firebase
                     .database()
@@ -756,17 +1035,186 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
             if (
-                !snapshot.exists()
+                snapshot.exists()
             ) {
 
-                console.warn(
-                    'Authenticated account is not registered as driver:',
-                    user.uid
+                await this.completeDriverLogin(
+
+                    user.uid,
+
+                    snapshot.val(),
+
+                    user
+                );
+
+                return;
+            }
+
+
+            console.log(
+                'ℹ️ No taxi profile under Auth UID. Checking legacy profile...'
+            );
+
+
+            /* ====================================================
+               2. SEARCH BY VERIFIED PHONE
+            ==================================================== */
+
+            const phoneVariants =
+                this.buildPhoneVariants(
+                    user.phoneNumber ||
+                    this.currentPhone
                 );
 
 
-                this.showStep(
-                    'notDriverStep'
+            let legacyMatch =
+                null;
+
+
+            for (
+                const phone
+                of phoneVariants
+            ) {
+
+                const phoneSnapshot =
+
+                    await firebase
+                        .database()
+                        .ref('taxis')
+                        .orderByChild('phone')
+                        .equalTo(phone)
+                        .once(
+                            'value'
+                        );
+
+
+                if (
+                    phoneSnapshot.exists()
+                ) {
+
+                    phoneSnapshot.forEach(
+                        child => {
+
+                            if (!legacyMatch) {
+
+                                legacyMatch = {
+
+                                    id:
+                                        child.key,
+
+                                    data:
+                                        child.val()
+                                };
+                            }
+                        }
+                    );
+
+
+                    if (legacyMatch) {
+
+                        break;
+                    }
+                }
+            }
+
+
+            /* ====================================================
+               3. SEARCH BY EMAIL
+               Useful for Google / Apple
+            ==================================================== */
+
+            if (
+                !legacyMatch &&
+                user.email
+            ) {
+
+                const emailSnapshot =
+
+                    await firebase
+                        .database()
+                        .ref('taxis')
+                        .orderByChild('email')
+                        .equalTo(
+                            user.email
+                        )
+                        .once(
+                            'value'
+                        );
+
+
+                if (
+                    emailSnapshot.exists()
+                ) {
+
+                    emailSnapshot.forEach(
+                        child => {
+
+                            if (!legacyMatch) {
+
+                                legacyMatch = {
+
+                                    id:
+                                        child.key,
+
+                                    data:
+                                        child.val()
+                                };
+                            }
+                        }
+                    );
+                }
+            }
+
+
+            /* ====================================================
+               LEGACY PROFILE FOUND
+            ==================================================== */
+
+            if (
+                legacyMatch
+            ) {
+
+                console.log(
+                    '✅ Existing driver profile found:',
+                    legacyMatch.id
+                );
+
+
+                await firebase
+                    .database()
+                    .ref(
+                        `taxis/${legacyMatch.id}`
+                    )
+                    .update({
+
+                        authUid:
+                            user.uid,
+
+                        authPhone:
+                            user.phoneNumber ||
+                            this.currentPhone ||
+                            null,
+
+                        authEmail:
+                            user.email ||
+                            null,
+
+                        authLinkedAt:
+
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP
+                    });
+
+
+                await this.completeDriverLogin(
+
+                    legacyMatch.id,
+
+                    legacyMatch.data,
+
+                    user
                 );
 
 
@@ -774,63 +1222,18 @@ window.ASIYE_DRIVER_LOGIN = {
             }
 
 
-            const driver =
-                snapshot.val();
+            /* ====================================================
+               NO DRIVER FOUND
+            ==================================================== */
 
-
-            /*
-             * Save compatibility session values.
-             */
-
-            localStorage.setItem(
-                'driverId',
+            console.warn(
+                'Authenticated account is not registered as driver:',
                 user.uid
             );
 
 
-            localStorage.setItem(
-                'userId',
-                user.uid
-            );
-
-
-            localStorage.setItem(
-                'userType',
-                'driver'
-            );
-
-
-            if (
-                driver.phone
-            ) {
-
-                localStorage.setItem(
-                    'driverPhone',
-                    driver.phone
-                );
-            }
-
-
-            console.log(
-                '✅ Driver login successful:',
-                user.uid
-            );
-
-
-            this.toast(
-                'Welcome back.'
-            );
-
-
-            setTimeout(
-                () => {
-
-                    window.location.replace(
-                        './index.html'
-                    );
-
-                },
-                450
+            this.showStep(
+                'notDriverStep'
             );
 
 
@@ -842,15 +1245,157 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-            this.showStep(
-                'phoneStep'
-            );
-
-
             this.toast(
                 'Unable to verify your driver account.'
             );
+
+
+            this.showStep(
+                'phoneStep'
+            );
         }
+    },
+
+
+    /* ========================================================
+       PHONE VARIANTS
+       ======================================================== */
+
+    buildPhoneVariants(rawPhone) {
+
+        if (!rawPhone) {
+
+            return [];
+        }
+
+
+        let digits =
+
+            String(rawPhone)
+            .replace(
+                /\D/g,
+                ''
+            );
+
+
+        if (
+            digits.startsWith('27') &&
+            digits.length === 11
+        ) {
+
+            digits =
+                digits.substring(2);
+        }
+
+
+        if (
+            digits.startsWith('0')
+        ) {
+
+            digits =
+                digits.substring(1);
+        }
+
+
+        if (
+            digits.length !== 9
+        ) {
+
+            return [];
+        }
+
+
+        return [
+
+            `+27${digits}`,
+
+            `27${digits}`,
+
+            `0${digits}`,
+
+            digits
+
+        ];
+    },
+
+
+    /* ========================================================
+       COMPLETE DRIVER LOGIN
+       ======================================================== */
+
+    async completeDriverLogin(
+        driverProfileId,
+        driverData,
+        authUser
+    ) {
+
+        localStorage.setItem(
+            'driverId',
+            driverProfileId
+        );
+
+
+        localStorage.setItem(
+            'userId',
+            driverProfileId
+        );
+
+
+        localStorage.setItem(
+            'authUid',
+            authUser.uid
+        );
+
+
+        localStorage.setItem(
+            'userType',
+            'driver'
+        );
+
+
+        if (
+            authUser.phoneNumber
+        ) {
+
+            localStorage.setItem(
+                'driverPhone',
+                authUser.phoneNumber
+            );
+        }
+
+
+        console.log(
+            '✅ Driver authenticated'
+        );
+
+
+        console.log(
+            'Profile ID:',
+            driverProfileId
+        );
+
+
+        console.log(
+            'Firebase Auth UID:',
+            authUser.uid
+        );
+
+
+        this.toast(
+            `Welcome back${driverData?.name ? `, ${driverData.name}` : ''}.`
+        );
+
+
+        setTimeout(
+            () => {
+
+                window.location.replace(
+                    './index.html'
+                );
+
+            },
+            450
+        );
     },
 
 
@@ -1116,6 +1661,71 @@ window.ASIYE_DRIVER_LOGIN = {
 
             element.textContent =
                 message;
+        }
+
+
+        this.toast(
+            message
+        );
+    },
+
+
+    /* ========================================================
+       SOCIAL LOGIN ERRORS
+       ======================================================== */
+
+    handleSocialError(
+        error,
+        providerName
+    ) {
+
+        console.error(
+            `${providerName} authentication error:`,
+            error
+        );
+
+
+        let message =
+
+            `${providerName} sign-in failed. Please try again.`;
+
+
+        switch (
+            error?.code
+        ) {
+
+            case 'auth/popup-blocked':
+
+                message =
+                    `Your browser blocked the ${providerName} sign-in window.`;
+
+                break;
+
+
+            case 'auth/cancelled-popup-request':
+
+            case 'auth/popup-closed-by-user':
+
+                message =
+                    `${providerName} sign-in was cancelled.`;
+
+                break;
+
+
+            case 'auth/account-exists-with-different-credential':
+
+                message =
+                    'An Asiye account already exists using another sign-in method. Sign in using your original method first.';
+
+                break;
+
+
+            case 'auth/operation-not-allowed':
+
+                message =
+                    `${providerName} sign-in has not been enabled in Firebase yet.`;
+
+                break;
         }
 
 
