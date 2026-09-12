@@ -268,6 +268,8 @@ ASIYE_DRIVER.location = {
          * 3) Firebase — throttled.
          */
 
+        ASIYE_DRIVER.navigator?.update(ASIYE_DRIVER.state.location);
+
         const now =
             Date.now();
 

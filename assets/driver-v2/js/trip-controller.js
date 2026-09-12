@@ -470,102 +470,8 @@ ASIYE_DRIVER.trip = {
        "Driver → Passenger" to "Driver → Destination".
        ======================================================== */
 
-    async startDestinationNavigation(
-        request
-    ) {
-
-        if (!request) {
-
-            return;
-        }
-
-
-        const destination =
-
-            request.destinationCoords ||
-
-            request.dropoffLocation;
-
-
-        const latitude =
-
-            Number(
-                destination?.latitude ??
-                destination?.lat
-            );
-
-
-        const longitude =
-
-            Number(
-                destination?.longitude ??
-                destination?.lng
-            );
-
-
-        if (
-            !Number.isFinite(latitude) ||
-            !Number.isFinite(longitude)
-        ) {
-
-            ASIYE_DRIVER.ui
-                ?.toast?.(
-                    'Destination location is unavailable.'
-                );
-
-
-            return;
-        }
-
-
-        const target = {
-
-            type:
-                'dropoff',
-
-            id:
-                request.requestId ||
-                request.key,
-
-            label:
-                request.destinationName ||
-                request.destination ||
-                'Destination',
-
-            latitude:
-                latitude,
-
-            longitude:
-                longitude
-        };
-
-
-        /*
-         * Replace the pickup route with a
-         * destination route on the driver map.
-         */
-
-        const route =
-
-            await ASIYE_DRIVER.map
-                ?.routeTo?.(
-                    target
-                );
-
-
-        /*
-         * Switch Driver UI into navigation mode.
-         */
-
-        ASIYE_DRIVER.ui
-            ?.renderNavigator?.(
-
-                target,
-
-                request,
-
-                route
-            );
+    async startDestinationNavigation(request) {
+        ASIYE_DRIVER.ui.showInTransit(request);
     },
 
 
@@ -2556,6 +2462,8 @@ ASIYE_DRIVER.trip = {
        ======================================================== */
 
     stop() {
+
+        ASIYE_DRIVER.navigator?.stop();
 
         if (
             this.requestRef &&

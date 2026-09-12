@@ -4044,3 +4044,15 @@ and
     font-weight:
         900;
 }
+/* Active destination navigation */
+.turn-guidance { display:flex; gap:16px; align-items:center; background:#102e2b; color:white; padding:18px; border-radius:18px; }
+.turn-guidance-arrow { font-size:54px; line-height:1; min-width:48px; text-align:center; }
+.turn-guidance strong { font-size:22px; color:#85edc1; }
+.turn-guidance h2 { font-size:18px; line-height:1.3; margin:5px 0 0; }
+.navigation-summary { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 2px 8px; font-size:14px; }
+.navigation-summary > strong { font-size:27px; color:#147b54; }
+.navigation-destination { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:#666; font-size:12px; margin:0 0 10px; }
+.navigation-controls { display:flex; gap:10px; margin-bottom:10px; }
+.navigation-controls button { flex:1; min-height:42px; padding:8px; background:#eef3f1; }
+.destination-navigation .driver-bottom-sheet { max-height:52vh; }
+.destination-navigation #activeTripContent { max-height:calc(52vh - 45px); }

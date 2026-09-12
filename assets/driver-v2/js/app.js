@@ -2529,46 +2529,20 @@ ASIYE_DRIVER.ui = {
 
         container.innerHTML = `
 
-            <div class="driver-trip-header">
-
-                <div>
-
-                    <div class="driver-kicker">
-                        Trip underway
-                    </div>
-
-                    <h2 class="driver-title">
-                        Drive to destination
-                    </h2>
-
-                    <div class="driver-subtitle">
-
-                        ${
-                            this.escape(
-                                request.destination ||
-                                'Destination'
-                            )
-                        }
-
-                    </div>
-
-                </div>
-
-
-                <div
-                    class="
-                        driver-trip-status-icon
-                        success
-                    "
-                >
-
-                    <i class="fas fa-route"></i>
-
-                </div>
-
+            <section class="turn-guidance">
+                <div id="navArrow" class="turn-guidance-arrow">↑</div>
+                <div><strong id="navTurnDistance">Trip underway</strong>
+                    <h2 id="navInstruction">Finding your route…</h2></div>
+            </section>
+            <div class="navigation-summary">
+                <strong id="navEta">—</strong><span id="navDistance">—</span>
+                <span>Arrival <b id="navArrival">—</b></span>
             </div>
-
-
+            <p class="navigation-destination">${this.escape(request.destinationName || request.destination || 'Destination')}</p>
+            <div class="navigation-controls">
+                <button id="navFollow" class="driver-btn">Follow car</button>
+                <button id="navRetry" class="driver-btn">Retry route</button>
+            </div>
             <div
                 class="
                     driver-trip-actions
@@ -2593,6 +2567,8 @@ ASIYE_DRIVER.ui = {
             </div>
         `;
 
+
+        ASIYE_DRIVER.navigator?.start(request);
 
         document
             .getElementById(
@@ -2626,6 +2602,8 @@ ASIYE_DRIVER.ui = {
     showTripCompleted(
         request
     ) {
+
+        ASIYE_DRIVER.navigator?.stop();
 
         const overlay =
             document.getElementById(

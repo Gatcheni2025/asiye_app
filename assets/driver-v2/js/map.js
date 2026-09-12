@@ -172,6 +172,8 @@ ASIYE_DRIVER.map = {
 
                     this.instance.resize();
 
+                    ASIYE_DRIVER.navigator?.draw();
+
 
                     const location =
                         ASIYE_DRIVER.state?.location || {};
@@ -293,6 +295,12 @@ ASIYE_DRIVER.map = {
     centerDriver(
         zoom = 16
     ) {
+
+        if (ASIYE_DRIVER.navigator?.target) {
+            ASIYE_DRIVER.navigator.follow = true;
+            ASIYE_DRIVER.navigator.update(ASIYE_DRIVER.state.location);
+            return;
+        }
 
         const location =
             ASIYE_DRIVER.state?.location || {};
@@ -840,6 +848,8 @@ ASIYE_DRIVER.map = {
 
     fitCurrentRoute() {
 
+        if (ASIYE_DRIVER.navigator?.target) ASIYE_DRIVER.navigator.follow = false;
+
         if (
             this.routeGeometry
         ) {
@@ -856,6 +866,8 @@ ASIYE_DRIVER.map = {
        ======================================================== */
 
     clearRoute() {
+
+        ASIYE_DRIVER.navigator?.stop();
 
         if (
             this.targetMarker
