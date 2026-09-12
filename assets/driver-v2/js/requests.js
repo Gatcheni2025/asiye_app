@@ -507,7 +507,7 @@ ASIYE_DRIVER.requests = {
 
 
         /* ========================================================
-           REQUEST TRANSACTION
+           REQUEST REFERENCE + PRE-CHECK
            ======================================================== */
 
         const requestRef =
@@ -519,39 +519,100 @@ ASIYE_DRIVER.requests = {
                 );
 
 
+        const freshSnapshot =
+
+            await requestRef.once(
+                'value'
+            );
+
+
+        const freshRequest =
+            freshSnapshot.val();
+
+
+        console.log(
+            '🔎 Accept pre-check:',
+            {
+                requestId:
+                    id,
+
+                exists:
+                    !!freshRequest,
+
+                status:
+                    freshRequest?.status,
+
+                taxiId:
+                    freshRequest?.taxiId,
+
+                queuedTaxiId:
+                    freshRequest?.queuedTaxiId,
+
+                driverId:
+                    driverId
+            }
+        );
+
+
+        /* ========================================================
+           REQUEST TRANSACTION
+           ======================================================== */
+
         const result =
 
             await requestRef.transaction(
                 request => {
 
+                    /*
+                     * Request disappeared.
+                     */
+
                     if (!request) {
+
+                        console.warn(
+                            'Transaction aborted: request missing.'
+                        );
 
                         return;
                     }
 
 
                     /*
-                     * Terminal request.
+                     * Never accept terminal rides.
                      */
 
+                    const terminalStatuses = [
+
+                        'completed',
+
+                        'cancelled_by_commuter',
+
+                        'cancelled_by_driver',
+
+                        'cancelled_by_admin',
+
+                        'rejected'
+
+                    ];
+
+
                     if (
-                        [
-                            'completed',
-                            'cancelled_by_commuter',
-                            'cancelled_by_driver',
-                            'cancelled_by_admin',
-                            'rejected'
-                        ].includes(
+                        terminalStatuses.includes(
                             request.status
                         )
                     ) {
 
+                        console.warn(
+                            'Transaction aborted: terminal status',
+                            request.status
+                        );
+
                         return;
                     }
 
 
                     /*
-                     * Already owned by another REAL driver.
+                     * Another driver really owns it.
                      */
 
                     if (
@@ -561,28 +622,103 @@ ASIYE_DRIVER.requests = {
                         )
                     ) {
 
+                        console.warn(
+                            'Transaction aborted: owned by another driver',
+                            request.taxiId
+                        );
+
                         return;
                     }
 
 
                     /*
-                     * If this ride was queued for this
-                     * driver, it can now be accepted.
+                     * Queued booking reserved for another driver.
                      */
 
                     if (
                         request.queuedTaxiId &&
-                        request.queuedTaxiId !==
-                            driverId
+                        !validDriverIds.has(
+                            request.queuedTaxiId
+                        )
                     ) {
+
+                        console.warn(
+                            'Transaction aborted: queued for another driver',
+                            request.queuedTaxiId
+                        );
+
+                        return;
+                    }
+
+
+                    /*
+                     * Claimable states.
+                     *
+                     * pending = normal Go request
+                     * searching = still looking for driver
+                     * driver_busy = queued ride becoming available
+                     * pooling / waiting_members = Club
+                     * pool_ready = full Club
+                     * driver_waiting = same driver re-processing Club
+                     */
+
+                    const claimableStatuses = [
+
+                        'pending',
+
+                        'searching',
+
+                        'driver_busy',
+
+                        'pooling',
+
+                        'waiting_members',
+
+                        'waiting_pool',
+
+                        'pool_ready',
+
+                        'driver_waiting'
+
+                    ];
+
+
+                    /*
+                     * If already assigned to this same driver,
+                     * make acceptance idempotent.
+                     */
+
+                    const alreadyMine =
+
+                        request.taxiId &&
+                        validDriverIds.has(
+                            request.taxiId
+                        );
+
+
+                    if (
+                        !alreadyMine &&
+                        !claimableStatuses.includes(
+                            request.status
+                        )
+                    ) {
+
+                        console.warn(
+                            'Transaction aborted: status not claimable',
+                            request.status
+                        );
 
                         return;
                     }
 
 
                     const isClub =
-                        request.type ===
-                        'club';
+
+                        request.type === 'club' ||
+
+                        request.rideType === 'club4' ||
+
+                        request.rideType === 'club7';
 
 
                     let passengerCount =
@@ -614,7 +750,7 @@ ASIYE_DRIVER.requests = {
                                         'rejected'
                                     ]
                                     .includes(
-                                        passenger.status
+                                        passenger?.status
                                     )
                             )
                             .length;
@@ -623,12 +759,17 @@ ASIYE_DRIVER.requests = {
                         capacity =
 
                             Number(
+
                                 request.capacity ||
+
                                 request.maxCapacity ||
+
                                 (
-                                    request.clubMode ===
-                                        'club7'
+                                    request.clubMode === 'club7' ||
+                                    request.rideType === 'club7'
+
                                     ? 7
+
                                     : 4
                                 )
                             );
@@ -638,13 +779,24 @@ ASIYE_DRIVER.requests = {
                     const poolReady =
 
                         isClub
-                        ? passengerCount >= capacity
+
+                        ? passengerCount >=
+                            capacity
+
                         : true;
 
 
                     /*
-                     * This is the moment taxiId
-                     * officially becomes assigned.
+                     * Capture status BEFORE we
+                     * overwrite it.
+                     */
+
+                    const previousStatus =
+                        request.status;
+
+
+                    /*
+                     * OFFICIAL DRIVER CLAIM.
                      */
 
                     request.taxiId =
@@ -676,6 +828,7 @@ ASIYE_DRIVER.requests = {
 
 
                     request.driverRating =
+
                         Number(
                             driver.rating ||
                             5
@@ -718,7 +871,8 @@ ASIYE_DRIVER.requests = {
 
 
                     /*
-                     * Remove queue reservation.
+                     * Clear queue reservation now that
+                     * the driver is actually accepting.
                      */
 
                     request.queuedTaxiId =
@@ -733,10 +887,22 @@ ASIYE_DRIVER.requests = {
                         false;
 
 
+                    request.queueReady =
+                        false;
+
+
                     if (isClub) {
 
                         request.poolReady =
                             poolReady;
+
+
+                        request.passengerCount =
+                            passengerCount;
+
+
+                        request.capacity =
+                            capacity;
 
 
                         request.status =
@@ -752,6 +918,27 @@ ASIYE_DRIVER.requests = {
                         request.status =
                             'accepted';
                     }
+
+
+                    console.log(
+                        '✅ Transaction claiming request:',
+                        {
+                            requestId:
+                                id,
+
+                            driverId:
+                                driverId,
+
+                            previousStatus:
+                                previousStatus,
+
+                            newStatus:
+                                request.status,
+
+                            isClub:
+                                isClub
+                        }
+                    );
 
 
                     return request;
@@ -778,9 +965,32 @@ ASIYE_DRIVER.requests = {
                 latestSnapshot.val();
 
 
+            console.warn(
+                'Request claim rejected:',
+                {
+                    requestId:
+                        id,
+
+                    exists:
+                        !!latest,
+
+                    taxiId:
+                        latest?.taxiId,
+
+                    queuedTaxiId:
+                        latest?.queuedTaxiId,
+
+                    status:
+                        latest?.status,
+
+                    myDriverId:
+                        driverId
+                }
+            );
+
+
             /*
-             * Same driver already accepted it.
-             * Treat duplicate click as success.
+             * Same driver already has it.
              */
 
             if (
@@ -805,7 +1015,7 @@ ASIYE_DRIVER.requests = {
                 );
 
 
-                ASIYE_DRIVER.trip
+                await ASIYE_DRIVER.trip
                     ?.start?.(
                         id
                     );
@@ -815,31 +1025,53 @@ ASIYE_DRIVER.requests = {
             }
 
 
-            console.warn(
-                'Request claim rejected:',
-                {
-                    requestId:
-                        id,
+            /*
+             * Another driver really accepted.
+             */
 
-                    taxiId:
-                        latest?.taxiId,
+            if (
+                latest?.taxiId &&
+                !validDriverIds.has(
+                    latest.taxiId
+                )
+            ) {
 
-                    queuedTaxiId:
-                        latest?.queuedTaxiId,
+                throw new Error(
+                    'Another driver already accepted this request.'
+                );
+            }
 
-                    status:
-                        latest?.status,
 
-                    myDriverId:
-                        driverId
-                }
-            );
+            /*
+             * Request still exists and is pending:
+             * this is a transaction-logic problem,
+             * not an unavailable booking.
+             */
+
+            if (
+                latest &&
+                [
+                    'pending',
+                    'searching',
+                    'driver_busy',
+                    'pooling',
+                    'waiting_members',
+                    'waiting_pool',
+                    'pool_ready',
+                    'driver_waiting'
+                ].includes(
+                    latest.status
+                )
+            ) {
+
+                throw new Error(
+                    `Request is still ${latest.status}, but the claim transaction was rejected.`
+                );
+            }
 
 
             throw new Error(
-                latest?.taxiId
-                    ? 'Another driver already accepted this request.'
-                    : 'This booking is no longer available.'
+                'This booking is no longer available.'
             );
         }
 
