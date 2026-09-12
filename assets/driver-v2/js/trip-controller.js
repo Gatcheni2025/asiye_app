@@ -1645,6 +1645,13 @@ ASIYE_DRIVER.trip = {
 
     /* ========================================================
        RELEASE DRIVER
+
+       Called when a trip completes or is cancelled.
+
+       Order matters:
+       1. Clear the driver's current trip
+       2. Promote the next queued passenger if any
+       3. Only reopen general broadcasting if no queue
        ======================================================== */
 
     async releaseDriver() {
@@ -1654,35 +1661,51 @@ ASIYE_DRIVER.trip = {
                 ?.driverId;
 
 
-        if (driverId) {
+        if (!driverId) {
 
-            await firebase
-                .database()
-                .ref(
-                    `taxis/${driverId}`
-                )
-                .update({
-
-                    currentRequest:
-                        null,
-
-                    isFull:
-                        false,
-
-                    passengerCount:
-                        0,
-
-                    isBroadcasting:
-                        true,
-
-                    lastStatusUpdate:
-
-                        firebase
-                            .database
-                            .ServerValue
-                            .TIMESTAMP
-                });
+            return;
         }
+
+
+        /* ====================================================
+           STEP 1 — Clear the current trip
+           ==================================================== */
+
+        await firebase
+            .database()
+            .ref(
+                `taxis/${driverId}`
+            )
+            .update({
+
+                currentRequest:
+                    null,
+
+                isFull:
+                    false,
+
+                passengerCount:
+                    0,
+
+                updatedAt:
+
+                    firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP
+            });
+
+
+        ASIYE_DRIVER.state
+            .availability
+            .currentRequest =
+            null;
+
+
+        ASIYE_DRIVER.state
+            .availability
+            .isFull =
+            false;
 
 
         if (
@@ -1702,13 +1725,59 @@ ASIYE_DRIVER.trip = {
             ASIYE_DRIVER.state
                 .driver.passengerCount =
                 0;
+        }
 
+
+        /* ====================================================
+           STEP 2 — Give reserved passengers their turn
+           ==================================================== */
+
+        const queuedRequestId =
+
+            await ASIYE_DRIVER
+                .requests
+                ?.promoteNextQueuedRequest?.();
+
+
+        /* ====================================================
+           STEP 3 — Reopen broadcasting only if queue empty
+           ==================================================== */
+
+        const broadcasting =
+            !queuedRequestId;
+
+
+        await firebase
+            .database()
+            .ref(
+                `taxis/${driverId}`
+            )
+            .update({
+
+                isBroadcasting:
+                    broadcasting
+            });
+
+
+        ASIYE_DRIVER.state
+            .availability
+            .isBroadcasting =
+            broadcasting;
+
+
+        if (
+            ASIYE_DRIVER.state.driver
+        ) {
 
             ASIYE_DRIVER.state
                 .driver.isBroadcasting =
-                true;
+                broadcasting;
         }
 
+
+        /* ====================================================
+           STEP 4 — Reset local trip state and UI
+           ==================================================== */
 
         localStorage.removeItem(
             'currentRequestId'

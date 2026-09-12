@@ -396,20 +396,27 @@ ASIYE_DRIVER.requests = {
 
     /* ========================================================
        ACCEPT REQUEST
+
+       Guarantees at most one active trip per driver.
        ======================================================== */
 
-    async accept(
-        requestId = null
-    ) {
+    async accept(requestId = null) {
 
         const driverId =
-            ASIYE_DRIVER.state
-                .driverId;
+            ASIYE_DRIVER.state.driverId;
+
+
+        const authUid =
+            firebase.auth()
+                .currentUser
+                ?.uid ||
+            localStorage.getItem(
+                'authUid'
+            );
 
 
         const driver =
-            ASIYE_DRIVER.state
-                .driver ||
+            ASIYE_DRIVER.state.driver ||
             {};
 
 
@@ -417,9 +424,13 @@ ASIYE_DRIVER.requests = {
 
             requestId ||
 
-            this.activeRequest?.key ||
+            ASIYE_DRIVER.state
+                .incomingRequest
+                ?.requestId ||
 
-            this.activeRequest?.requestId;
+            ASIYE_DRIVER.state
+                .incomingRequest
+                ?.key;
 
 
         if (
@@ -433,6 +444,72 @@ ASIYE_DRIVER.requests = {
         }
 
 
+        const validDriverIds =
+
+            new Set(
+                [
+                    driverId,
+                    authUid,
+                    driver.authUid
+                ]
+                .filter(Boolean)
+            );
+
+
+        /* ========================================================
+           CHECK DRIVER AVAILABILITY FIRST
+           ======================================================== */
+
+        const taxiSnapshot =
+
+            await firebase
+                .database()
+                .ref(
+                    `taxis/${driverId}`
+                )
+                .once(
+                    'value'
+                );
+
+
+        const taxi =
+            taxiSnapshot.val() ||
+            {};
+
+
+        const existingTrip =
+            taxi.currentRequest ||
+            null;
+
+
+        /*
+         * The same request may call Accept twice.
+         * That is okay.
+         *
+         * A DIFFERENT active request is not.
+         */
+
+        if (
+            existingTrip &&
+            existingTrip !== id
+        ) {
+
+            console.warn(
+                '🚫 Driver already has an active trip:',
+                existingTrip
+            );
+
+
+            throw new Error(
+                'Complete your current ride before accepting another booking.'
+            );
+        }
+
+
+        /* ========================================================
+           REQUEST TRANSACTION
+           ======================================================== */
+
         const requestRef =
 
             firebase
@@ -441,15 +518,6 @@ ASIYE_DRIVER.requests = {
                     `requests/${id}`
                 );
 
-
-        /*
-         * =====================================================
-         * IMPORTANT:
-         *
-         * Transaction prevents two drivers accepting
-         * the same booking simultaneously.
-         * =====================================================
-         */
 
         const result =
 
@@ -463,12 +531,48 @@ ASIYE_DRIVER.requests = {
 
 
                     /*
-                     * Another driver won the booking.
+                     * Terminal request.
+                     */
+
+                    if (
+                        [
+                            'completed',
+                            'cancelled_by_commuter',
+                            'cancelled_by_driver',
+                            'cancelled_by_admin',
+                            'rejected'
+                        ].includes(
+                            request.status
+                        )
+                    ) {
+
+                        return;
+                    }
+
+
+                    /*
+                     * Already owned by another REAL driver.
                      */
 
                     if (
                         request.taxiId &&
-                        request.taxiId !==
+                        !validDriverIds.has(
+                            request.taxiId
+                        )
+                    ) {
+
+                        return;
+                    }
+
+
+                    /*
+                     * If this ride was queued for this
+                     * driver, it can now be accepted.
+                     */
+
+                    if (
+                        request.queuedTaxiId &&
+                        request.queuedTaxiId !==
                             driverId
                     ) {
 
@@ -476,107 +580,133 @@ ASIYE_DRIVER.requests = {
                     }
 
 
-                    const type =
-                        request.type;
-
-
                     const isClub =
-                        type === 'club';
+                        request.type ===
+                        'club';
 
 
-                    const passengers =
-                        request.passengers ||
-                        {};
+                    let passengerCount =
+                        1;
 
 
-                    const passengerCount =
-                        isClub
-
-                        ? this.countActivePassengers(
-                            passengers
-                        )
-
-                        : 1;
+                    let capacity =
+                        1;
 
 
-                    const capacity =
+                    if (isClub) {
 
-                        Number(
+                        const passengers =
+                            request.passengers ||
+                            {};
 
-                            request.capacity ||
 
-                            request.maxCapacity ||
+                        passengerCount =
 
-                            (
-                                request.clubMode ===
-                                'club7'
-                                ? 7
-                                : 4
+                            Object.values(
+                                passengers
                             )
-                        );
+                            .filter(
+                                passenger =>
+
+                                    ![
+                                        'cancelled',
+                                        'cancelled_by_commuter',
+                                        'rejected'
+                                    ]
+                                    .includes(
+                                        passenger.status
+                                    )
+                            )
+                            .length;
+
+
+                        capacity =
+
+                            Number(
+                                request.capacity ||
+                                request.maxCapacity ||
+                                (
+                                    request.clubMode ===
+                                        'club7'
+                                    ? 7
+                                    : 4
+                                )
+                            );
+                    }
 
 
                     const poolReady =
 
-                        isClub &&
-                        passengerCount >=
-                            capacity;
+                        isClub
+                        ? passengerCount >= capacity
+                        : true;
 
+
+                    /*
+                     * This is the moment taxiId
+                     * officially becomes assigned.
+                     */
 
                     request.taxiId =
                         driverId;
 
 
+                    request.driverAuthUid =
+                        authUid ||
+                        null;
+
+
                     request.driverName =
 
-                        this.getDriverName();
+                        [
+                            driver.name,
+                            driver.surname
+                        ]
+                        .filter(Boolean)
+                        .join(' ') ||
+
+                        driver.driverName ||
+
+                        'Driver';
 
 
                     request.driverPhone =
-
                         driver.phone ||
-                        driver.phoneNumber ||
                         '';
 
 
                     request.driverRating =
-
                         Number(
                             driver.rating ||
                             5
                         );
 
 
-                    request.vehicleMake =
-
-                        driver.vehicleMake ||
-                        driver.make ||
-                        '';
-
-
-                    request.vehicleModel =
-
-                        driver.vehicleModel ||
-                        driver.model ||
-                        '';
-
-
-                    request.vehicleColor =
-
-                        driver.vehicleColor ||
-                        driver.color ||
-                        '';
-
-
                     request.vehicleReg =
+
+                        driver.vehicleReg ||
 
                         driver.registration ||
 
-                        driver.registrationNumber ||
-
-                        driver.carRegistration ||
+                        driver.taxiRegistrationNumber ||
 
                         '';
+
+
+                    request.vehicleInfo =
+
+                        [
+                            driver.vehicleColor ||
+                                driver.color,
+
+                            driver.vehicleMake ||
+                                driver.make,
+
+                            driver.vehicleModel ||
+                                driver.model
+                        ]
+                        .filter(Boolean)
+                        .join(' ');
 
 
                     request.acceptedAt =
@@ -588,15 +718,26 @@ ASIYE_DRIVER.requests = {
 
 
                     /*
-                     * GO:
-                     * accepted and ready for driver.
-                     *
-                     * CLUB:
-                     * driver may be assigned but must wait
-                     * until all Club seats are filled.
+                     * Remove queue reservation.
                      */
 
+                    request.queuedTaxiId =
+                        null;
+
+
+                    request.queuedAt =
+                        null;
+
+
+                    request.driverBusy =
+                        false;
+
+
                     if (isClub) {
+
+                        request.poolReady =
+                            poolReady;
+
 
                         request.status =
 
@@ -605,25 +746,6 @@ ASIYE_DRIVER.requests = {
                             ? 'pool_ready'
 
                             : 'driver_waiting';
-
-
-                        request.poolReady =
-                            poolReady;
-
-
-                        request.passengerCount =
-                            passengerCount;
-
-
-                        request.remainingSeats =
-
-                            Math.max(
-
-                                0,
-
-                                capacity -
-                                passengerCount
-                            );
 
                     } else {
 
@@ -637,35 +759,98 @@ ASIYE_DRIVER.requests = {
             );
 
 
+        /* ========================================================
+           TRANSACTION FAILED
+           ======================================================== */
+
         if (
             !result.committed
         ) {
 
+            const latestSnapshot =
+
+                await requestRef.once(
+                    'value'
+                );
+
+
+            const latest =
+                latestSnapshot.val();
+
+
+            /*
+             * Same driver already accepted it.
+             * Treat duplicate click as success.
+             */
+
+            if (
+                latest?.taxiId &&
+                validDriverIds.has(
+                    latest.taxiId
+                )
+            ) {
+
+                console.log(
+                    'ℹ️ Request already belongs to this driver.'
+                );
+
+
+                ASIYE_DRIVER.setActiveRequest?.(
+                    {
+                        requestId:
+                            id,
+
+                        ...latest
+                    }
+                );
+
+
+                ASIYE_DRIVER.trip
+                    ?.start?.(
+                        id
+                    );
+
+
+                return latest;
+            }
+
+
+            console.warn(
+                'Request claim rejected:',
+                {
+                    requestId:
+                        id,
+
+                    taxiId:
+                        latest?.taxiId,
+
+                    queuedTaxiId:
+                        latest?.queuedTaxiId,
+
+                    status:
+                        latest?.status,
+
+                    myDriverId:
+                        driverId
+                }
+            );
+
+
             throw new Error(
-                'Another driver already accepted this request.'
+                latest?.taxiId
+                    ? 'Another driver already accepted this request.'
+                    : 'This booking is no longer available.'
             );
         }
 
 
-        const acceptedRequest =
+        const accepted =
             result.snapshot.val();
 
 
-        if (!acceptedRequest) {
-
-            throw new Error(
-                'Request could not be accepted.'
-            );
-        }
-
-
-        acceptedRequest.key =
-            id;
-
-
-        /*
-         * Lock driver.
-         */
+        /* ========================================================
+           DRIVER NOW BUSY
+           ======================================================== */
 
         await firebase
             .database()
@@ -681,22 +866,25 @@ ASIYE_DRIVER.requests = {
                     false,
 
                 isFull:
-                    acceptedRequest.type !==
-                    'club',
+                    accepted.type !==
+                        'club',
 
                 passengerCount:
 
-                    acceptedRequest.type ===
-                    'club'
+                    accepted.type ===
+                        'club'
 
                     ? Number(
-                        acceptedRequest.passengerCount ||
-                        0
+                        accepted.passengerCount ||
+                        Object.keys(
+                            accepted.passengers ||
+                            {}
+                        ).length
                     )
 
                     : 1,
 
-                lastStatusUpdate:
+                updatedAt:
 
                     firebase
                         .database
@@ -705,255 +893,60 @@ ASIYE_DRIVER.requests = {
             });
 
 
-        /*
-         * Mirror local state.
-         */
+        /* ========================================================
+           REMOVE INCOMING NOTIFICATION
+           ======================================================== */
 
-        ASIYE_DRIVER.state
-            .driver.currentRequest =
-            id;
+        await firebase
+            .database()
+            .ref(
+                `notifications/taxis/${driverId}/${id}`
+            )
+            .remove()
+            .catch(
+                () => {}
+            );
 
 
-        ASIYE_DRIVER.state
-            .activeRequest =
-            acceptedRequest;
+        /* ========================================================
+           PASSENGER NOTIFICATION
+           ======================================================== */
+
+        await this.notifyAcceptedPassengers?.(
+            id,
+            accepted,
+            driverId
+        );
 
 
-        localStorage.setItem(
-            'currentRequestId',
+        ASIYE_DRIVER.setActiveRequest?.(
+            {
+                requestId:
+                    id,
+
+                ...accepted
+            }
+        );
+
+
+        ASIYE_DRIVER.setIncomingRequest?.(
+            null
+        );
+
+
+        ASIYE_DRIVER.trip
+            ?.start?.(
+                id
+            );
+
+
+        console.log(
+            '✅ Driver accepted request:',
             id
         );
 
 
-        /*
-         * Notify passenger(s).
-         */
-
-        await this.notifyAcceptance(
-            id,
-            acceptedRequest
-        );
-
-
-        /*
-         * Remove queue notification.
-         */
-
-        await this.removeNotification(
-            this.activeNotificationKey
-        );
-
-
-        /*
-         * Pass ownership to trip controller.
-         */
-
-        if (
-            ASIYE_DRIVER.trip &&
-            typeof ASIYE_DRIVER.trip
-                .start ===
-                'function'
-        ) {
-
-            ASIYE_DRIVER.trip.start(
-                id
-            );
-        }
-
-
-        return acceptedRequest;
-    },
-
-
-    /* ========================================================
-       NOTIFY PASSENGER(S) OF ACCEPTANCE
-       ======================================================== */
-
-    async notifyAcceptance(
-        requestId,
-        request
-    ) {
-
-        const jobs =
-            [];
-
-
-        if (
-            request.type === 'club' &&
-            request.passengers
-        ) {
-
-            const passengerIds =
-
-                Object.keys(
-                    request.passengers
-                );
-
-
-            passengerIds.forEach(
-                commuterId => {
-
-                    const passenger =
-                        request.passengers[
-                            commuterId
-                        ];
-
-
-                    if (
-                        passenger.status ===
-                        'cancelled_by_commuter'
-                    ) {
-
-                        return;
-                    }
-
-
-                    jobs.push(
-
-                        firebase
-                            .database()
-                            .ref(
-                                `notifications/commuters/${commuterId}`
-                            )
-                            .push({
-
-                                type:
-                                    'request_accepted',
-
-                                requestId:
-                                    requestId,
-
-                                driverId:
-                                    ASIYE_DRIVER.state
-                                        .driverId,
-
-                                driverName:
-                                    request.driverName,
-
-                                driverPhone:
-                                    request.driverPhone,
-
-                                driverRating:
-                                    request.driverRating,
-
-                                vehicleInfo:
-                                    `${request.vehicleMake || ''} ${request.vehicleModel || ''}`.trim(),
-
-                                vehicleColor:
-                                    request.vehicleColor ||
-                                    '',
-
-                                vehicleReg:
-                                    request.vehicleReg ||
-                                    '',
-
-                                isClub:
-                                    true,
-
-                                poolCount:
-                                    request.passengerCount,
-
-                                maxCapacity:
-
-                                    request.capacity ||
-                                    request.maxCapacity ||
-                                    4,
-
-                                poolReady:
-                                    request.poolReady ===
-                                    true,
-
-                                pickupPin:
-                                    passenger.pickupPin ||
-                                    '',
-
-                                message:
-
-                                    request.poolReady
-
-                                    ? 'Your Club is ready and your driver has been assigned.'
-
-                                    : 'Your driver is assigned and waiting for the Club to fill.',
-
-                                timestamp:
-
-                                    firebase
-                                        .database
-                                        .ServerValue
-                                        .TIMESTAMP
-                            })
-                    );
-                }
-            );
-
-
-        } else if (
-            request.commuterId
-        ) {
-
-            jobs.push(
-
-                firebase
-                    .database()
-                    .ref(
-                        `notifications/commuters/${request.commuterId}`
-                    )
-                    .push({
-
-                        type:
-                            'request_accepted',
-
-                        requestId:
-                            requestId,
-
-                        driverId:
-                            ASIYE_DRIVER.state
-                                .driverId,
-
-                        driverName:
-                            request.driverName,
-
-                        driverPhone:
-                            request.driverPhone,
-
-                        driverRating:
-                            request.driverRating,
-
-                        vehicleInfo:
-                            `${request.vehicleMake || ''} ${request.vehicleModel || ''}`.trim(),
-
-                        vehicleColor:
-                            request.vehicleColor ||
-                            '',
-
-                        vehicleReg:
-                            request.vehicleReg ||
-                            '',
-
-                        pickupPin:
-                            request.pickupPin ||
-                            '',
-
-                        isClub:
-                            false,
-
-                        message:
-                            'Your Asiye driver has accepted your ride.',
-
-                        timestamp:
-
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP
-                    })
-            );
-        }
-
-
-        await Promise.all(
-            jobs
-        );
+        return accepted;
     },
 
 

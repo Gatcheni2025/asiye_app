@@ -322,6 +322,16 @@ ASIYE.booking = {
 
     /* ========================================================
        FIND + NOTIFY GO DRIVERS
+
+       Idle drivers are notified first.
+
+       If there are none, the nearest busy driver is
+       reserved for this passenger via queuedTaxiId.
+
+       IMPORTANT:
+       taxiId     means the driver has ACCEPTED.
+       queuedTaxiId means the driver is BUSY but this
+                    passenger is queued behind them.
        ======================================================== */
 
     async notifyGoDrivers(
@@ -329,181 +339,420 @@ ASIYE.booking = {
         request
     ) {
 
-        const snapshot =
+        const taxisSnapshot =
 
             await firebase
                 .database()
-                .ref('taxis')
-                .once('value');
+                .ref(
+                    'taxis'
+                )
+                .once(
+                    'value'
+                );
 
 
-        if (!snapshot.exists()) {
+        if (
+            !taxisSnapshot.exists()
+        ) {
 
-            return 0;
+            console.warn(
+                'No drivers found.'
+            );
+
+            return {
+                mode:
+                    'none'
+            };
         }
 
 
-        const jobs = [];
+        const pickupLat =
 
-        let count = 0;
-
-
-        snapshot.forEach(child => {
-
-            const driver =
-                child.val() || {};
-
-
-            const lat =
-                Number(
-                    driver.latitude
-                );
-
-
-            const lng =
-                Number(
-                    driver.longitude
-                );
-
-
-            const available =
-
-                driver.isOnline === true &&
-
-                driver.isBroadcasting === true &&
-
-                driver.isFull !== true &&
-
-                !driver.currentRequest &&
-
-                Number.isFinite(lat) &&
-
-                Number.isFinite(lng);
-
-
-            if (!available) {
-
-                return;
-            }
-
-
-            /*
-             * E-hailing drivers only.
-             *
-             * Adjust these values if your
-             * driver profiles use another field.
-             */
-
-            const vehicleType =
-                String(
-                    driver.vehicleType ||
-                    driver.serviceType ||
-                    ''
-                )
-                .toLowerCase();
-
-
-            if (
-                vehicleType &&
-                ![
-                    'ehailing',
-                    'e-hailing',
-                    'go'
-                ].includes(
-                    vehicleType
-                )
-            ) {
-
-                return;
-            }
-
-
-            const distance =
-
-                this.distanceKm(
-
-                    request
-                        .commuterLocation
-                        .latitude,
-
-                    request
-                        .commuterLocation
-                        .longitude,
-
-                    lat,
-
-                    lng
-                );
-
-
-            /*
-             * Start with 10km radius.
-             */
-
-            if (
-                distance > 10
-            ) {
-
-                return;
-            }
-
-
-            jobs.push(
-
-                firebase
-                    .database()
-                    .ref(
-                        `notifications/taxis/${child.key}`
-                    )
-                    .push({
-
-                        type:
-                            'ride_request',
-
-                        requestType:
-                            'go',
-
-                        requestId:
-                            requestId,
-
-                        title:
-                            'New Asiye Go request',
-
-                        commuterName:
-                            request.commuterName,
-
-                        pickupAddress:
-                            request.pickupAddress,
-
-                        destination:
-                            request.destination,
-
-                        fare:
-                            request.calculatedPrice,
-
-                        distanceToPassengerKm:
-                            distance,
-
-                        timestamp:
-
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP
-                    })
+            Number(
+                request
+                    .commuterLocation
+                    ?.latitude
             );
 
 
-            count++;
-        });
+        const pickupLng =
+
+            Number(
+                request
+                    .commuterLocation
+                    ?.longitude
+            );
 
 
-        await Promise.all(
-            jobs
+        const idleDrivers =
+            [];
+
+
+        const busyDrivers =
+            [];
+
+
+        taxisSnapshot.forEach(
+            child => {
+
+                const taxi =
+                    child.val() ||
+                    {};
+
+
+                const driverId =
+                    child.key;
+
+
+                if (
+                    taxi.isOnline !== true
+                ) {
+
+                    return;
+                }
+
+
+                const lat =
+                    Number(
+                        taxi.latitude
+                    );
+
+
+                const lng =
+                    Number(
+                        taxi.longitude
+                    );
+
+
+                if (
+                    !Number.isFinite(lat) ||
+                    !Number.isFinite(lng)
+                ) {
+
+                    return;
+                }
+
+
+                /*
+                 * Only normal e-hailing-compatible
+                 * drivers for Asiye Go.
+                 */
+
+                const vehicleType =
+
+                    String(
+                        taxi.vehicleType ||
+                        ''
+                    )
+                    .toLowerCase();
+
+
+                if (
+                    vehicleType &&
+                    ![
+                        'ehailing',
+                        'e-hailing',
+                        'go',
+                        'car'
+                    ].includes(
+                        vehicleType
+                    )
+                ) {
+
+                    return;
+                }
+
+
+                const distanceKm =
+
+                    this.distanceKm(
+
+                        pickupLat,
+                        pickupLng,
+
+                        lat,
+                        lng
+                    );
+
+
+                /*
+                 * Keep our local search radius.
+                 */
+
+                if (
+                    distanceKm > 10
+                ) {
+
+                    return;
+                }
+
+
+                const item = {
+
+                    driverId,
+                    taxi,
+                    distanceKm
+                };
+
+
+                if (
+                    taxi.currentRequest
+                ) {
+
+                    busyDrivers.push(
+                        item
+                    );
+
+                } else if (
+                    taxi.isFull !== true
+                ) {
+
+                    idleDrivers.push(
+                        item
+                    );
+                }
+            }
         );
 
 
-        return count;
+        /* ========================================================
+           NEAREST FIRST
+           ======================================================== */
+
+        idleDrivers.sort(
+            (a, b) =>
+                a.distanceKm -
+                b.distanceKm
+        );
+
+
+        busyDrivers.sort(
+            (a, b) =>
+                a.distanceKm -
+                b.distanceKm
+        );
+
+
+        /* ========================================================
+           IDLE DRIVER AVAILABLE
+           ======================================================== */
+
+        if (
+            idleDrivers.length
+        ) {
+
+            const candidates =
+
+                idleDrivers.slice(
+                    0,
+                    8
+                );
+
+
+            await Promise.all(
+
+                candidates.map(
+                    async candidate => {
+
+                        await firebase
+                            .database()
+                            .ref(
+                                `notifications/taxis/${candidate.driverId}/${requestId}`
+                            )
+                            .set({
+
+                                type:
+                                    'ride_request',
+
+                                requestId:
+                                    requestId,
+
+                                rideType:
+                                    'go',
+
+                                commuterId:
+                                    request.commuterId,
+
+                                commuterName:
+                                    request.commuterName ||
+                                    'Passenger',
+
+                                pickupAddress:
+                                    request.pickupAddress ||
+                                    'Pickup',
+
+                                destination:
+                                    request.destination ||
+                                    request.destinationName ||
+                                    'Destination',
+
+                                fare:
+                                    request.finalAmount ||
+                                    request.calculatedPrice ||
+                                    0,
+
+                                distanceKm:
+                                    request.routeDistanceKm ||
+                                    0,
+
+                                timestamp:
+
+                                    firebase
+                                        .database
+                                        .ServerValue
+                                        .TIMESTAMP
+                            });
+                    }
+                )
+            );
+
+
+            console.log(
+                `✅ Go request sent to ${candidates.length} available driver(s)`
+            );
+
+
+            return {
+
+                mode:
+                    'broadcast',
+
+                drivers:
+                    candidates.length
+            };
+        }
+
+
+        /* ========================================================
+           NO IDLE DRIVER — RESERVE BUSY DRIVER
+           ======================================================== */
+
+        if (
+            busyDrivers.length
+        ) {
+
+            const selected =
+                busyDrivers[0];
+
+
+            console.log(
+                '⏳ No free driver. Queuing booking behind:',
+                selected.driverId
+            );
+
+
+            /*
+             * IMPORTANT:
+             *
+             * DO NOT set taxiId here.
+             *
+             * taxiId means the driver has ACCEPTED.
+             */
+
+            await firebase
+                .database()
+                .ref(
+                    `requests/${requestId}`
+                )
+                .update({
+
+                    status:
+                        'driver_busy',
+
+                    queuedTaxiId:
+                        selected.driverId,
+
+                    driverBusy:
+                        true,
+
+                    queuedAt:
+
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+                });
+
+
+            /*
+             * Driver's queue.
+             */
+
+            await firebase
+                .database()
+                .ref(
+                    `taxis/${selected.driverId}/bookingQueue/${requestId}`
+                )
+                .set({
+
+                    requestId:
+                        requestId,
+
+                    commuterId:
+                        request.commuterId,
+
+                    commuterName:
+                        request.commuterName ||
+                        'Passenger',
+
+                    pickupAddress:
+                        request.pickupAddress ||
+                        'Pickup',
+
+                    destination:
+                        request.destination ||
+                        request.destinationName ||
+                        'Destination',
+
+                    fare:
+                        request.finalAmount ||
+                        request.calculatedPrice ||
+                        0,
+
+                    queuedAt:
+
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+                });
+
+
+            return {
+
+                mode:
+                    'queued',
+
+                driverId:
+                    selected.driverId
+            };
+        }
+
+
+        /* ========================================================
+           NO ONLINE DRIVER
+           ======================================================== */
+
+        await firebase
+            .database()
+            .ref(
+                `requests/${requestId}`
+            )
+            .update({
+
+                status:
+                    'searching',
+
+                driverBusy:
+                    false
+            });
+
+
+        return {
+
+            mode:
+                'none'
+        };
     },
 
 
@@ -724,6 +973,26 @@ ASIYE.booking = {
                             .ServerValue
                             .TIMESTAMP
                 });
+        }
+
+
+        /*
+         * Clear queue reservation if any.
+         */
+
+        if (
+            request.queuedTaxiId
+        ) {
+
+            await firebase
+                .database()
+                .ref(
+                    `taxis/${request.queuedTaxiId}/bookingQueue/${requestId}`
+                )
+                .remove()
+                .catch(
+                    () => {}
+                );
         }
 
 

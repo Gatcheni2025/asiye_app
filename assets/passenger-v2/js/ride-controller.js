@@ -219,6 +219,24 @@ ASIYE.ride = {
                 break;
 
 
+            case 'driver_busy':
+
+                this.renderDriverBusy(
+                    request
+                );
+
+                if (
+                    request.queuedTaxiId
+                ) {
+
+                    this.listenDriver(
+                        request.queuedTaxiId
+                    );
+                }
+
+                break;
+
+
             case 'pooling':
 
             case 'waiting_members':
@@ -477,6 +495,188 @@ ASIYE.ride = {
 
 
     /* ========================================================
+       DRIVER BUSY
+
+       Passenger is queued behind a driver who is still
+       finishing another trip.
+       ======================================================== */
+
+    renderDriverBusy(
+        request
+    ) {
+
+        const container =
+            document.getElementById(
+                'sheetContent'
+            );
+
+
+        if (!container) {
+
+            return;
+        }
+
+
+        container.innerHTML = `
+
+            <div class="asiye-row">
+
+                <div
+                    class="
+                        asiye-status-icon
+                        asiye-search-icon
+                    "
+                >
+
+                    <i class="fas fa-car-side"></i>
+
+                </div>
+
+
+                <div>
+
+                    <div class="home-kicker">
+
+                        Asiye Go
+
+                    </div>
+
+
+                    <h2 class="sheet-page-title">
+
+                        Your driver is completing another ride
+
+                    </h2>
+
+
+                    <div class="home-greeting">
+
+                        You're in the queue.
+                        The driver will receive your booking
+                        as soon as the current trip is completed.
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="asiye-search-progress">
+
+                <span></span>
+
+            </div>
+
+
+            <div class="asiye-route-summary">
+
+                <div
+                    style="
+                        font-size:9px;
+                        color:#888;
+                        font-weight:800;
+                        text-transform:uppercase;
+                    "
+                >
+
+                    Your destination
+
+                </div>
+
+
+                <strong
+                    style="
+                        display:block;
+                        margin-top:4px;
+                        font-size:12px;
+                    "
+                >
+
+                    ${ASIYE.ui.escape(
+                        request.destination ||
+                        request.destinationName ||
+                        'Destination'
+                    )}
+
+                </strong>
+
+            </div>
+
+
+            <div
+                style="
+                    margin-top:12px;
+                    padding:13px;
+                    border-radius:15px;
+                    background:#f5f5f5;
+                "
+            >
+
+                <div
+                    style="
+                        font-size:9px;
+                        color:#888;
+                        font-weight:800;
+                        text-transform:uppercase;
+                    "
+                >
+
+                    Booking status
+
+                </div>
+
+
+                <div
+                    style="
+                        margin-top:4px;
+                        font-size:12px;
+                        font-weight:900;
+                        color:#111;
+                    "
+                >
+
+                    <i
+                        class="fas fa-clock"
+                        style="margin-right:5px;"
+                    ></i>
+
+                    Driver finishing current trip
+
+                </div>
+
+            </div>
+
+
+            <button
+                id="cancelQueuedRide"
+                class="secondary-button"
+                style="margin-top:12px;"
+            >
+
+                Cancel booking
+
+            </button>
+
+        `;
+
+
+        document
+            .getElementById(
+                'cancelQueuedRide'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    ASIYE.booking
+                        ?.cancelCurrentRide?.();
+                }
+            );
+    },
+
+
+    /* ========================================================
        POOL READY
        ======================================================== */
 
@@ -530,9 +730,6 @@ ASIYE.ride = {
 
     /* ========================================================
        CLUB WAITING PICKUP
-
-       The Club request has started collection but this
-       particular passenger is not yet being picked up.
        ======================================================== */
 
     renderClubWaitingPickup(
