@@ -136,7 +136,7 @@ ASIYE.ui = {
 
                     <div class="service-icon">
 
-                        <i class="fas fa-car-side"></i>
+                        <img src="../data/car.svg" alt="" class="asiye-ride-image">
 
                     </div>
 
@@ -296,9 +296,7 @@ ASIYE.ui = {
                 'click',
                 () => {
 
-                    ASIYE.ui.toast(
-                        'Wallet screen coming next.'
-                    );
+                    AsiyePages.open('wallet');
                 }
             );
 
@@ -869,7 +867,7 @@ ASIYE.ui = {
 
                 <div class="ride-choice-icon">
 
-                    <i class="fas ${icon}"></i>
+                    <img src="../data/${type === 'go' ? 'car.svg' : '4seater.png'}" alt="" class="asiye-ride-image">
 
                 </div>
 
@@ -1351,7 +1349,7 @@ ASIYE.ui = {
 
             <div class="club-driver-rule">
 
-                <i class="fas fa-car-side"></i>
+                <img src="../data/car.svg" alt="" class="asiye-ride-image">
 
                 <div>
 
@@ -1657,7 +1655,7 @@ ASIYE.ui = {
 
             <div class="club-driver-rule">
 
-                <i class="fas fa-car-side"></i>
+                <img src="../data/car.svg" alt="" class="asiye-ride-image">
 
                 <div>
 
