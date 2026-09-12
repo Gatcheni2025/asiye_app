@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
+    <meta
+        name="theme-color"
+        content="#111111"
+    >
+
+    <title>Sign in | Asiye Driver</title>
+
+
+    <!-- =====================================================
+         FONT
+    ====================================================== -->
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+
+    <!-- =====================================================
+         ICONS
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    >
+
+
+    <!-- =====================================================
+         FIREBASE
+    ====================================================== -->
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js">
+    </script>
+
+
+    <!-- =====================================================
+         LOGIN CSS
+    ====================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="./css/login.css"
+    >
+
+</head>
+
+
+<body>
+
+
+    <main id="driverLoginApp">
+
+
+        <!-- =================================================
+             BACKGROUND
+        ================================================== -->
+
+        <div class="login-background">
+
+            <div class="login-background-circle circle-one"></div>
+
+            <div class="login-background-circle circle-two"></div>
+
+        </div>
+
+
+        <!-- =================================================
+             TOP BRAND
+        ================================================== -->
+
+        <header class="login-topbar">
+
+            <button
+                id="loginBackButton"
+                class="login-circle-button"
+                aria-label="Back"
+            >
+
+                <i class="fas fa-arrow-left"></i>
+
+            </button>
+
+
+            <div class="login-brand-small">
+
+                ASIYE DRIVER
+
+            </div>
+
+        </header>
+
+
+        <!-- =================================================
+             LOGIN CARD
+        ================================================== -->
+
+        <section class="login-card">
+
+
+            <div class="login-logo">
+
+                <i class="fas fa-car-side"></i>
+
+            </div>
+
+
+            <div class="login-kicker">
+
+                Asiye Driver
+
+            </div>
+
+
+            <h1 id="loginTitle">
+
+                Welcome back
+
+            </h1>
+
+
+            <p
+                id="loginSubtitle"
+                class="login-subtitle"
+            >
+
+                Sign in using the mobile number
+                registered to your driver account.
+
+            </p>
+
+
+            <!-- =============================================
+                 PHONE STEP
+            ============================================== -->
+
+            <div
+                id="phoneStep"
+                class="login-step active"
+            >
+
+
+                <label
+                    for="driverPhoneInput"
+                    class="login-label"
+                >
+
+                    Mobile number
+
+                </label>
+
+
+                <div class="phone-input-wrapper">
+
+
+                    <div class="country-code">
+
+                        <span class="flag">
+                            🇿🇦
+                        </span>
+
+                        <span>
+                            +27
+                        </span>
+
+                    </div>
+
+
+                    <input
+                        id="driverPhoneInput"
+                        class="phone-input"
+                        type="tel"
+                        inputmode="numeric"
+                        autocomplete="tel"
+                        maxlength="10"
+                        placeholder="82 123 4567"
+                    >
+
+
+                </div>
+
+
+                <div
+                    id="phoneError"
+                    class="login-error"
+                ></div>
+
+
+                <button
+                    id="sendOtpButton"
+                    class="login-primary-button"
+                >
+
+                    Continue
+
+                </button>
+
+
+                <div class="login-help-text">
+
+                    We'll send you a verification code by SMS.
+
+                </div>
+
+
+            </div>
+
+
+            <!-- =============================================
+                 OTP STEP
+            ============================================== -->
+
+            <div
+                id="otpStep"
+                class="login-step"
+            >
+
+
+                <button
+                    id="changePhoneButton"
+                    class="change-number-button"
+                >
+
+                    <i class="fas fa-pen"></i>
+
+                    Change number
+
+                </button>
+
+
+                <div class="otp-phone-copy">
+
+                    Code sent to
+
+                    <strong id="otpPhoneDisplay">
+
+                        +27
+
+                    </strong>
+
+                </div>
+
+
+                <label
+                    for="driverOtpInput"
+                    class="login-label"
+                >
+
+                    Verification code
+
+                </label>
+
+
+                <input
+                    id="driverOtpInput"
+                    class="otp-input"
+                    type="tel"
+                    inputmode="numeric"
+                    autocomplete="one-time-code"
+                    maxlength="6"
+                    placeholder="000000"
+                >
+
+
+                <div
+                    id="otpError"
+                    class="login-error"
+                ></div>
+
+
+                <button
+                    id="verifyOtpButton"
+                    class="login-primary-button"
+                >
+
+                    Verify & Sign in
+
+                </button>
+
+
+                <button
+                    id="resendOtpButton"
+                    class="login-secondary-button"
+                    disabled
+                >
+
+                    Resend code
+
+                    <span id="resendTimer">
+                        30
+                    </span>
+
+                </button>
+
+
+            </div>
+
+
+            <!-- =============================================
+                 CHECKING PROFILE
+            ============================================== -->
+
+            <div
+                id="profileCheckStep"
+                class="login-step"
+            >
+
+
+                <div class="login-loading"></div>
+
+
+                <h2>
+
+                    Checking your account
+
+                </h2>
+
+
+                <p>
+
+                    Connecting to your Asiye driver profile...
+
+                </p>
+
+
+            </div>
+
+
+            <!-- =============================================
+                 NOT DRIVER
+            ============================================== -->
+
+            <div
+                id="notDriverStep"
+                class="login-step"
+            >
+
+
+                <div class="login-warning-icon">
+
+                    <i class="fas fa-triangle-exclamation"></i>
+
+                </div>
+
+
+                <h2>
+
+                    Driver profile not found
+
+                </h2>
+
+
+                <p>
+
+                    This phone number is signed in,
+                    but it is not connected to a
+                    registered Asiye driver account.
+
+                </p>
+
+
+                <button
+                    id="tryAnotherNumberButton"
+                    class="login-primary-button"
+                >
+
+                    Try another number
+
+                </button>
+
+
+            </div>
+
+
+            <!-- Firebase Recaptcha -->
+
+            <div id="recaptcha-container"></div>
+
+
+        </section>
+
+
+        <!-- =================================================
+             FOOTER
+        ================================================== -->
+
+        <footer class="login-footer">
+
+            By continuing, you agree to the
+            Asiye Driver terms and privacy policy.
+
+        </footer>
+
+
+        <!-- =================================================
+             TOAST
+        ================================================== -->
+
+        <div id="loginToast"></div>
+
+
+    </main>
+
+
+    <!-- =====================================================
+         CONFIG + FIREBASE
+    ====================================================== -->
+
+    <script src="./js/config.js"></script>
+
+    <script src="./js/firebase.js"></script>
+
+
+    <!-- =====================================================
+         LOGIN LOGIC
+    ====================================================== -->
+
+    <script src="./js/login.js"></script>
+
+
+</body>
+
+</html>
