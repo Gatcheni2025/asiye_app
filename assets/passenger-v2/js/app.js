@@ -262,9 +262,17 @@ ASIYE.ui = {
                 'click',
                 () => {
 
-                    ASIYE.ui.toast(
-                        'Asiye Club will be connected next.'
-                    );
+                    /*
+                     * We still need a destination first.
+                     */
+
+                    ASIYE.state.ui
+                        .preferredRideType =
+                        'club4';
+
+
+                    ASIYE.ui
+                        .renderDestinationSearch();
                 }
             );
 
@@ -695,7 +703,16 @@ ASIYE.ui = {
 
 
         ASIYE.state.booking.rideType =
+
+            ASIYE.state.ui
+                .preferredRideType ||
+
             'go';
+
+
+        ASIYE.state.ui
+            .preferredRideType =
+            null;
 
 
         this.updateRideSelection();
@@ -741,12 +758,12 @@ ASIYE.ui = {
                 async () => {
 
                     const type =
-                        ASIYE.state.booking
-                            .rideType;
+                        ASIYE.state.booking.rideType;
 
 
                     /*
-                     * ASIYE CLUB
+                     * Club flow — collect schedule
+                     * first, then book.
                      */
 
                     if (
@@ -754,31 +771,81 @@ ASIYE.ui = {
                         type === 'club7'
                     ) {
 
-                        ASIYE.club.select(
-                            type
-                        );
-
-
-                        ASIYE.ui
-                            .renderClubSchedule();
-
+                        this.renderClubSchedule();
 
                         return;
                     }
 
 
                     /*
-                     * ASIYE GO
+                     * Asiye Go flow.
                      */
 
-                    if (
-                        type === 'go'
-                    ) {
+                    const button =
+                        document.getElementById(
+                            'confirmRideSelection'
+                        );
 
-                        ASIYE.ui
-                            .renderPaymentSelection();
 
-                        return;
+                    if (button) {
+
+                        button.disabled =
+                            true;
+
+                        button.innerHTML = `
+                            <i class="fas fa-circle-notch fa-spin"></i>
+                            Requesting your ride
+                        `;
+                    }
+
+
+                    try {
+
+                        if (
+                            !ASIYE.ride ||
+                            typeof ASIYE.ride.start !==
+                                'function'
+                        ) {
+
+                            throw new Error(
+                                'Ride controller did not load.'
+                            );
+                        }
+
+
+                        const requestId =
+
+                            await ASIYE.booking
+                                .createGoRide();
+
+
+                        await ASIYE.ride.start(
+                            requestId
+                        );
+
+
+                    } catch (error) {
+
+                        console.error(
+                            'Go booking failed:',
+                            error
+                        );
+
+
+                        ASIYE.ui.toast(
+                            error.message ||
+                            'Could not request your ride.'
+                        );
+
+
+                        if (button) {
+
+                            button.disabled =
+                                false;
+
+                            button.textContent =
+                                'Continue with Asiye Go';
+                        }
                     }
                 }
             );
@@ -880,287 +947,6 @@ ASIYE.ui = {
         button.textContent =
             labels[selected] ||
             'Continue';
-    },
-
-
-    /* ========================================================
-       PAYMENT SELECTION (Asiye Go)
-       ======================================================== */
-
-    renderPaymentSelection() {
-
-        const container =
-            document.getElementById(
-                'sheetContent'
-            );
-
-
-        if (!container) {
-
-            return;
-        }
-
-
-        const prices =
-            ASIYE.pricing.calculate();
-
-
-        const fare =
-            prices.go;
-
-
-        ASIYE.state.booking.fare =
-            fare;
-
-
-        container.innerHTML = `
-
-            <div class="sheet-page-header">
-
-                <button
-                    id="paymentBackButton"
-                    class="sheet-back-button"
-                >
-                    <i class="fas fa-arrow-left"></i>
-                </button>
-
-
-                <div>
-
-                    <h2 class="sheet-page-title">
-
-                        Payment
-
-                    </h2>
-
-                    <div class="home-greeting">
-
-                        Choose how you want to pay
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="payment-fare-card">
-
-                <span>
-                    Asiye Go
-                </span>
-
-                <strong>
-                    R${fare.toFixed(2)}
-                </strong>
-
-            </div>
-
-
-            <button
-                class="payment-option selected"
-                data-payment="cash"
-            >
-
-                <div class="payment-icon">
-
-                    <i class="fas fa-money-bill-wave"></i>
-
-                </div>
-
-                <div class="payment-copy">
-
-                    <strong>
-                        Cash
-                    </strong>
-
-                    <span>
-                        Pay your driver after the trip
-                    </span>
-
-                </div>
-
-                <i
-                    class="fas fa-circle-check payment-check"
-                ></i>
-
-            </button>
-
-
-            <button
-                class="payment-option"
-                data-payment="wallet"
-            >
-
-                <div class="payment-icon">
-
-                    <i class="fas fa-wallet"></i>
-
-                </div>
-
-                <div class="payment-copy">
-
-                    <strong>
-                        Asiye Wallet
-                    </strong>
-
-                    <span>
-                        Pay using your Asiye balance
-                    </span>
-
-                </div>
-
-                <i
-                    class="fas fa-circle-check payment-check"
-                ></i>
-
-            </button>
-
-
-            <button
-                id="requestAsiyeGoButton"
-                class="primary-button"
-                style="margin-top:16px;"
-            >
-
-                Request Asiye Go ·
-                R${fare.toFixed(2)}
-
-            </button>
-
-        `;
-
-
-        ASIYE.state.booking
-            .paymentMethod =
-            'cash';
-
-
-        document
-            .getElementById(
-                'paymentBackButton'
-            )
-            ?.addEventListener(
-                'click',
-                () => {
-
-                    this.renderRideSelection();
-                }
-            );
-
-
-        container
-            .querySelectorAll(
-                '[data-payment]'
-            )
-            .forEach(
-                option => {
-
-                    option.addEventListener(
-                        'click',
-                        () => {
-
-                            const payment =
-
-                                option.dataset.payment;
-
-
-                            ASIYE.state.booking
-                                .paymentMethod =
-                                payment;
-
-
-                            container
-                                .querySelectorAll(
-                                    '[data-payment]'
-                                )
-                                .forEach(
-                                    item => {
-
-                                        item.classList
-                                            .toggle(
-
-                                                'selected',
-
-                                                item === option
-                                            );
-                                    }
-                                );
-                        }
-                    );
-                }
-            );
-
-
-        document
-            .getElementById(
-                'requestAsiyeGoButton'
-            )
-            ?.addEventListener(
-                'click',
-                async event => {
-
-                    const button =
-                        event.currentTarget;
-
-
-                    button.disabled =
-                        true;
-
-
-                    button.innerHTML = `
-
-                        <i
-                            class="
-                                fas
-                                fa-circle-notch
-                                fa-spin
-                            "
-                        ></i>
-
-                        Requesting driver...
-
-                    `;
-
-
-                    try {
-
-                        const requestId =
-
-                            await ASIYE.booking
-                                .createGoRide();
-
-
-                        await ASIYE.ride
-                            .start(
-                                requestId
-                            );
-
-
-                    } catch (error) {
-
-                        console.error(
-                            'Asiye Go booking failed:',
-                            error
-                        );
-
-
-                        this.toast(
-                            error.message ||
-                            'Could not request your ride.'
-                        );
-
-
-                        button.disabled =
-                            false;
-
-
-                        button.innerHTML =
-
-                            `Request Asiye Go · R${fare.toFixed(2)}`;
-                    }
-                }
-            );
     },
 
 
@@ -1664,6 +1450,18 @@ ASIYE.ui = {
 
         try {
 
+            if (
+                !ASIYE.ride ||
+                typeof ASIYE.ride.start !==
+                    'function'
+            ) {
+
+                throw new Error(
+                    'Ride controller did not load.'
+                );
+            }
+
+
             const requestId =
 
                 await ASIYE.club.book(
@@ -1674,26 +1472,9 @@ ASIYE.ui = {
                 );
 
 
-            /*
-             * Begin unified ride controller.
-             */
-
-            if (
-                ASIYE.ride &&
-                typeof ASIYE.ride.start ===
-                    'function'
-            ) {
-
-                ASIYE.ride.start(
-                    requestId
-                );
-
-            } else {
-
-                this.renderClubWaiting(
-                    requestId
-                );
-            }
+            await ASIYE.ride.start(
+                requestId
+            );
 
 
         } catch (error) {
@@ -1705,6 +1486,7 @@ ASIYE.ui = {
 
 
             this.toast(
+                error.message ||
                 'Could not create your Club ride.'
             );
 
@@ -1723,252 +1505,234 @@ ASIYE.ui = {
 
     /* ========================================================
        CLUB WAITING
+
+       Pure UI. Receives the request object directly
+       from ride-controller.js. Does NOT open its own
+       Firebase listener — the ride controller owns
+       the single requests/{id} subscription.
        ======================================================== */
 
-    renderClubWaiting(requestId) {
+    renderClubWaiting(request) {
 
-        firebase
-            .database()
-            .ref(
-                `requests/${requestId}`
-            )
-            .on(
-                'value',
-                snapshot => {
+        const container =
+            document.getElementById(
+                'sheetContent'
+            );
 
-                    const request =
-                        snapshot.val();
 
+        if (
+            !container ||
+            !request
+        ) {
 
-                    if (!request) return;
+            return;
+        }
 
 
-                    const progress =
-                        ASIYE.club
-                            .getPoolProgress(
-                                request
-                            );
+        const progress =
+            ASIYE.club
+                .getPoolProgress(
+                    request
+                );
 
 
-                    const container =
-                        document.getElementById(
-                            'sheetContent'
-                        );
+        container.innerHTML = `
 
+            <div class="club-waiting-header">
 
-                    if (!container) return;
+                <div>
 
-
-                    container.innerHTML = `
-
-                        <div class="club-waiting-header">
-
-                            <div>
-
-                                <div class="home-kicker">
-
-                                    ${
-                                        request.clubMode ===
-                                        'club7'
-                                        ?
-                                        'Asiye Club 7'
-                                        :
-                                        'Asiye Club 4'
-                                    }
-
-                                </div>
-
-                                <h2 class="home-title">
-
-                                    ${
-                                        progress.ready
-                                        ?
-                                        'Your Club is ready'
-                                        :
-                                        'Building your Club'
-                                    }
-
-                                </h2>
-
-                            </div>
-
-
-                            <div class="club-count-circle">
-
-                                ${progress.confirmed}
-                                <span>
-                                    /
-                                    ${progress.capacity}
-                                </span>
-
-                            </div>
-
-                        </div>
-
-
-                        <div class="club-progress-track">
-
-                            <div
-                                class="club-progress-fill"
-                                style="
-                                    width:
-                                    ${progress.percent}%;
-                                "
-                            ></div>
-
-                        </div>
-
-
-                        <div class="club-progress-copy">
-
-                            ${
-                                progress.ready
-
-                                ?
-
-                                'All passengers are confirmed.'
-
-                                :
-
-                                `${progress.remaining}
-                                 seat${
-                                    progress.remaining === 1
-                                    ? ''
-                                    : 's'
-                                 }
-                                 remaining`
-                            }
-
-                        </div>
-
-
-                        <div class="club-summary-grid">
-
-                            <div>
-
-                                <span>
-                                    Departure
-                                </span>
-
-                                <strong>
-                                    ${
-                                        request.departureTime ||
-                                        '—'
-                                    }
-                                </strong>
-
-                            </div>
-
-
-                            <div>
-
-                                <span>
-                                    Your seat
-                                </span>
-
-                                <strong>
-                                    R${
-                                        request.pricePerPassenger ||
-                                        0
-                                    }
-                                </strong>
-
-                            </div>
-
-                        </div>
-
-
-                        <div class="club-driver-rule">
-
-                            <i class="fas fa-car-side"></i>
-
-                            <div>
-
-                                <strong>
-
-                                    ${
-                                        progress.ready
-
-                                        ?
-
-                                        'Finding your Club driver'
-
-                                        :
-
-                                        'Driver collection has not started'
-                                    }
-
-                                </strong>
-
-                                <p>
-
-                                    ${
-                                        progress.ready
-
-                                        ?
-
-                                        'Your Club is complete. We are now preparing collection.'
-
-                                        :
-
-                                        `Collection begins once all ${progress.capacity} passengers are confirmed.`
-                                    }
-
-                                </p>
-
-                            </div>
-
-                        </div>
-
+                    <div class="home-kicker">
 
                         ${
-                            !progress.ready
+                            request.clubMode ===
+                            'club7'
+                            ?
+                            'Asiye Club 7'
+                            :
+                            'Asiye Club 4'
+                        }
+
+                    </div>
+
+                    <h2 class="home-title">
+
+                        ${
+                            progress.ready
+                            ?
+                            'Your Club is ready'
+                            :
+                            'Building your Club'
+                        }
+
+                    </h2>
+
+                </div>
+
+
+                <div class="club-count-circle">
+
+                    ${progress.confirmed}
+                    <span>
+                        /
+                        ${progress.capacity}
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="club-progress-track">
+
+                <div
+                    class="club-progress-fill"
+                    style="
+                        width:
+                        ${progress.percent}%;
+                    "
+                ></div>
+
+            </div>
+
+
+            <div class="club-progress-copy">
+
+                ${
+                    progress.ready
+
+                    ?
+
+                    'All passengers are confirmed.'
+
+                    :
+
+                    `${progress.remaining}
+                     seat${
+                        progress.remaining === 1
+                        ? ''
+                        : 's'
+                     }
+                     remaining`
+                }
+
+            </div>
+
+
+            <div class="club-summary-grid">
+
+                <div>
+
+                    <span>
+                        Departure
+                    </span>
+
+                    <strong>
+                        ${
+                            request.departureTime ||
+                            '—'
+                        }
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Your seat
+                    </span>
+
+                    <strong>
+                        R${
+                            request.pricePerPassenger ||
+                            0
+                        }
+                    </strong>
+
+                </div>
+
+            </div>
+
+
+            <div class="club-driver-rule">
+
+                <i class="fas fa-car-side"></i>
+
+                <div>
+
+                    <strong>
+
+                        ${
+                            progress.ready
 
                             ?
 
-                            `
-
-                            <button
-                                class="secondary-button"
-                                id="cancelClubRide"
-                                style="margin-top:12px;"
-                            >
-                                Cancel Club
-                            </button>
-
-                            `
+                            'Finding your Club driver'
 
                             :
 
-                            ''
+                            'Driver collection has not started'
                         }
 
-                    `;
+                    </strong>
 
+                    <p>
 
-                    if (
-                        progress.ready
-                    ) {
+                        ${
+                            progress.ready
 
-                        ASIYE.state.booking
-                            .club.poolReady =
-                            true;
+                            ?
 
+                            'Your Club is complete. We are now preparing collection.'
 
-                        if (
-                            ASIYE.ride &&
-                            typeof ASIYE.ride
-                                .handleClubReady ===
-                                'function'
-                        ) {
+                            :
 
-                            ASIYE.ride
-                                .handleClubReady(
-                                    requestId,
-                                    request
-                                );
+                            `Collection begins once all ${progress.capacity} passengers are confirmed.`
                         }
-                    }
+
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            ${
+                !progress.ready
+
+                ?
+
+                `
+
+                <button
+                    class="secondary-button"
+                    id="cancelClubRide"
+                    style="margin-top:12px;"
+                >
+                    Cancel Club
+                </button>
+
+                `
+
+                :
+
+                ''
+            }
+
+        `;
+
+
+        document
+            .getElementById(
+                'cancelClubRide'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    ASIYE.booking
+                        ?.cancelCurrentRide?.();
                 }
             );
     },
@@ -2086,29 +1850,123 @@ ASIYE.ui = {
 
 document.addEventListener(
     'DOMContentLoaded',
-    function () {
+    async function () {
 
         console.log(
             '🚀 Starting Asiye Passenger V2'
         );
 
 
-        if (!ASIYE.state.user) {
+        /*
+         * Firebase readiness guard.
+         */
 
-            ASIYE.setUser(
+        if (
+            typeof firebase ===
+                'undefined' ||
+            !firebase.apps ||
+            firebase.apps.length === 0
+        ) {
 
-                localStorage.getItem('userId'),
-
-                {
-                    name:
-                        'Passenger',
-
-                    credits:
-                        0
-                }
+            console.error(
+                '❌ Passenger Firebase is not initialized.'
             );
+
+
+            ASIYE.ui.toast(
+                'Unable to connect to Asiye.'
+            );
+
+
+            return;
         }
 
+
+        /*
+         * Authenticated passenger resolution.
+         */
+
+        const authUser =
+            firebase.auth().currentUser;
+
+
+        if (authUser) {
+
+            try {
+
+                const commuterSnapshot =
+
+                    await firebase
+                        .database()
+                        .ref(
+                            `commuters/${authUser.uid}`
+                        )
+                        .once(
+                            'value'
+                        );
+
+
+                const commuter =
+                    commuterSnapshot.val() ||
+                    {};
+
+
+                ASIYE.setUser(
+                    authUser.uid,
+                    commuter
+                );
+
+
+                localStorage.setItem(
+                    'userId',
+                    authUser.uid
+                );
+
+
+            } catch (error) {
+
+                console.error(
+                    'Passenger profile load failed:',
+                    error
+                );
+
+
+                ASIYE.setUser(
+                    authUser.uid,
+                    {
+                        name:
+                            authUser.displayName ||
+                            'Passenger',
+
+                        phone:
+                            authUser.phoneNumber ||
+                            '',
+
+                        credits:
+                            0
+                    }
+                );
+            }
+
+        } else {
+
+            console.warn(
+                'No authenticated passenger session.'
+            );
+
+
+            window.location.replace(
+                './login.html'
+            );
+
+
+            return;
+        }
+
+
+        /*
+         * Map
+         */
 
         if (
             ASIYE.map &&
@@ -2120,6 +1978,10 @@ document.addEventListener(
         }
 
 
+        /*
+         * Location
+         */
+
         if (
             ASIYE.location &&
             typeof ASIYE.location.start ===
@@ -2130,8 +1992,50 @@ document.addEventListener(
         }
 
 
-        ASIYE.ui.renderHome();
+        /*
+         * Restore any in-flight ride
+         * before rendering home.
+         */
 
+        let restored =
+            false;
+
+
+        if (
+            ASIYE.ride &&
+            typeof ASIYE.ride.restore ===
+                'function'
+        ) {
+
+            try {
+
+                restored =
+                    await ASIYE.ride.restore();
+
+            } catch (error) {
+
+                console.warn(
+                    'Ride restore failed:',
+                    error
+                );
+            }
+        }
+
+
+        /*
+         * Home — only if no ride
+         * was restored.
+         */
+
+        if (!restored) {
+
+            ASIYE.ui.renderHome();
+        }
+
+
+        /*
+         * Menu controls
+         */
 
         document
             .getElementById('menuButton')
@@ -2166,6 +2070,10 @@ document.addEventListener(
             );
 
 
+        /*
+         * Current location
+         */
+
         document
             .getElementById('recenterButton')
             ?.addEventListener(
@@ -2176,6 +2084,10 @@ document.addEventListener(
                 }
             );
 
+
+        /*
+         * Menu navigation
+         */
 
         document
             .querySelectorAll('#sideMenu [data-page]')
