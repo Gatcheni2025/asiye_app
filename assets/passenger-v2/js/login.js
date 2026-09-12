@@ -28,7 +28,7 @@ window.ASIYE_PASSENGER_LOGIN = {
        INIT
        ======================================================== */
 
-    init() {
+    async init() {
 
         if (
             typeof firebase ===
@@ -51,32 +51,108 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         this.bindEvents();
 
+
+        /*
+         * Persist passenger sessions across
+         * navigation and browser restarts.
+         */
+
+        try {
+
+            await firebase
+                .auth()
+                .setPersistence(
+                    firebase.auth
+                        .Auth
+                        .Persistence
+                        .LOCAL
+                );
+
+
+            console.log(
+                '✅ Passenger auth persistence: LOCAL'
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                'Could not set auth persistence:',
+                error
+            );
+        }
+
+
         this.prepareRecaptcha();
 
-        this.checkExistingSession();
+
+        await this.checkExistingSession();
     },
 
 
     /* ========================================================
        EXISTING SESSION
+
+       Waits for Firebase to finish restoring the
+       persisted session before deciding whether
+       to redirect the passenger.
        ======================================================== */
 
     async checkExistingSession() {
 
-        const user =
-            firebase.auth()
-                .currentUser;
-
-
-        if (!user) {
-
-            return;
-        }
-
-
         try {
 
+            const user =
+
+                await new Promise(
+                    (resolve, reject) => {
+
+                        const unsubscribe =
+
+                            firebase
+                                .auth()
+                                .onAuthStateChanged(
+
+                                    authUser => {
+
+                                        unsubscribe();
+
+                                        resolve(
+                                            authUser
+                                        );
+                                    },
+
+                                    error => {
+
+                                        unsubscribe();
+
+                                        reject(
+                                            error
+                                        );
+                                    }
+                                );
+                    }
+                );
+
+
+            if (!user) {
+
+                console.log(
+                    'ℹ️ No existing passenger session.'
+                );
+
+                return;
+            }
+
+
+            console.log(
+                '✅ Existing passenger session:',
+                user.uid
+            );
+
+
             const profile =
+
                 await this.resolvePassengerProfile(
                     user
                 );
@@ -85,11 +161,15 @@ window.ASIYE_PASSENGER_LOGIN = {
             if (profile) {
 
                 await this.completeLogin(
+
                     profile.id,
+
                     profile.data,
+
                     user
                 );
             }
+
 
         } catch (error) {
 
