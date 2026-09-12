@@ -60,14 +60,22 @@ ASIYE_DRIVER.map = {
                 ?.mapboxToken;
 
 
-        if (
-            !token ||
-            token ===
-            'pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw'
-        ) {
+        /*
+         * Validate shape only — never compare
+         * against a hardcoded string.
+         */
+
+        const tokenIsValid =
+
+            typeof token === 'string' &&
+            token.startsWith('pk.') &&
+            token.length > 20;
+
+
+        if (!tokenIsValid) {
 
             console.error(
-                '❌ Driver Mapbox token missing.'
+                '❌ Driver Mapbox token missing or invalid.'
             );
 
 
