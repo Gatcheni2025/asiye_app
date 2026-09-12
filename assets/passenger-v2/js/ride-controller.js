@@ -962,7 +962,11 @@ ASIYE.ride = {
         container.querySelectorAll('[data-pickup-action]').forEach(button => {
             button.addEventListener('click', () => {
                 const action = button.dataset.pickupAction;
-                if (action === 'call' || action === 'message') {
+                if (action === 'message') {
+                    AsiyeTripChat.open(request, this.requestId);
+                    return;
+                }
+                if (action === 'call') {
                     if (!phone || !/^\+?\d{7,15}$/.test(phone)) {
                         container.querySelector('.pickup-action-feedback').textContent = 'The driver’s contact number is not available yet.';
                         return;
@@ -1042,13 +1046,14 @@ ASIYE.ride = {
                     Share
                 </button>
 
-                <button class="asiye-action-button">
+                <button class="asiye-action-button" id="inTransitChat">
                     <i class="fas fa-comment"></i>
                     Message
                 </button>
 
             </div>
         `;
+        document.getElementById('inTransitChat')?.addEventListener('click', () => AsiyeTripChat.open(request, this.requestId));
     },
 
 
@@ -1111,11 +1116,8 @@ ASIYE.ride = {
                 </div>
 
                 <div class="asiye-payment-method">
-                    ${
-                        passenger.paymentMethod ||
-                        request.paymentMethod ||
-                        'cash'
-                    }
+                    <span>Payment method</span>
+                    <strong>${ASIYE.ui.escape(passenger.paymentMethod || request.paymentMethod || 'cash')}</strong>
                 </div>
 
             </div>
