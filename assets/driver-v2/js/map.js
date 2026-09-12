@@ -242,10 +242,6 @@ ASIYE_DRIVER.map = {
             Number(longitude);
 
 
-        const rotation =
-            Number(heading) || 0;
-
-
         if (
             !this.instance ||
             !Number.isFinite(lat) ||
@@ -257,79 +253,11 @@ ASIYE_DRIVER.map = {
         }
 
 
-        if (
-            !this.driverMarker
-        ) {
-
-            const element =
-                document.createElement(
-                    'div'
-                );
-
-
-            element.className =
-                'passenger-live-car';
-
-
-            element.innerHTML = `
-
-                <div class="passenger-live-car-shadow"></div>
-
-                <div class="passenger-live-car-body">
-
-                    <div class="car-windscreen"></div>
-
-                    <div class="car-roof"></div>
-
-                    <div class="car-light car-light-left"></div>
-
-                    <div class="car-light car-light-right"></div>
-
-                </div>
-
-            `;
-
-
-            this.driverMarker =
-
-                new mapboxgl.Marker({
-
-                    element:
-                        element,
-
-                    anchor:
-                        'center',
-
-                    rotationAlignment:
-                        'map',
-
-                    pitchAlignment:
-                        'map'
-                })
-
-                .setLngLat([
-                    lng,
-                    lat
-                ])
-
-                .addTo(
-                    this.instance
-                );
+        if (!this.driverMarker) {
+            this.driverMarker = AsiyeLiveCar.create(this.instance, [lng, lat], heading);
+        } else {
+            AsiyeLiveCar.move(this.driverMarker, [lng, lat], heading);
         }
-
-
-        this.driverMarker
-            .setLngLat([
-                lng,
-                lat
-            ]);
-
-
-        this.driverMarker
-            .setRotation(
-                rotation
-            );
-
         if (!this.hasCenteredOnDriver) {
             this.hasCenteredOnDriver = true;
             this.instance.easeTo({ center: [lng, lat], zoom: 16, duration: 650 });
@@ -342,6 +270,7 @@ ASIYE_DRIVER.map = {
        ======================================================== */
 
     removeDriverMarker() {
+        AsiyeLiveCar.stop(this.driverMarker);
 
         if (
             this.driverMarker

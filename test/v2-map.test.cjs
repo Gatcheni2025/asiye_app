@@ -22,14 +22,20 @@ function load(role) {
     }
     const context = {
         console,
-        document: { createElement: () => ({ setAttribute() {} }) },
+        performance: { now: () => context.time },
+        time: 0,
+        requestAnimationFrame: callback => { context.frame = callback; return 1; },
+        cancelAnimationFrame: () => { context.frame = null; },
+        document: { createElement: () => ({ style: {}, setAttribute() {} }) },
         mapboxgl: { Map, Marker, NavigationControl: class {} },
         [namespace]: { state: { location: { latitude: null, longitude: null } } },
         [`${namespace}_CONFIG`]: { mapboxToken: 'pk.test-public-token-for-map' }
     };
     context.window = context;
     vm.createContext(context);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../assets/live-car.js'), 'utf8'), context);
     vm.runInContext(fs.readFileSync(path.join(__dirname, `../assets/${role}-v2/js/map.js`), 'utf8'), context);
+    context[namespace].map.tick = time => { context.time = time; const frame = context.frame; context.frame = null; frame?.(time); };
     return context[namespace].map;
 }
 
@@ -66,6 +72,26 @@ test('passenger retains early driver updates, moves one car, and cleans it up', 
 });
 
 for (const role of ['driver', 'passenger']) {
+    test(`${role} animates GPS updates and takes the short turn across north`, () => {
+        const map = load(role);
+        map.init();
+        map.showDriverLocation(-29.8, 31, 350);
+        map.showDriverLocation(-29.799, 31.001, 10);
+        assert.deepEqual(Array.from(map.driverMarker.coordinates), [31, -29.8]);
+        map.tick(500);
+        assert.ok(Math.abs(map.driverMarker.coordinates[0] - 31.0005) < 1e-8);
+        assert.equal(map.driverMarker.rotation, 360);
+        // A fresh fix continues from the rendered position instead of jumping back.
+        map.showDriverLocation(-29.798, 31.002, 20);
+        map.tick(1000);
+        assert.deepEqual(Array.from(map.driverMarker.coordinates), [31.002, -29.798]);
+        map.showDriverLocation(-29.797, 31.003, 25);
+        const marker = map.driverMarker;
+        map.removeDriverMarker();
+        const last = Array.from(marker.coordinates);
+        map.tick(2000);
+        assert.deepEqual(Array.from(marker.coordinates), last);
+    });
     test(`${role} rejects missing and out-of-range driver coordinates`, () => {
         const map = load(role);
         map.init();

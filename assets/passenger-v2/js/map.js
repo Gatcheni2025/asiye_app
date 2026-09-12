@@ -132,26 +132,15 @@ ASIYE.map = {
 
         this.driverLocation = [lat, lng, heading];
         if (!this.instance) return;
-
         if (!this.driverMarker) {
-            const element = document.createElement('div');
-            element.className = 'passenger-live-car';
-            element.setAttribute('aria-label', 'Driver location');
-            element.innerHTML = `<div class="passenger-live-car-shadow"></div>
-                <div class="passenger-live-car-body">
-                    <div class="car-windscreen"></div><div class="car-roof"></div>
-                    <div class="car-light car-light-left"></div>
-                    <div class="car-light car-light-right"></div>
-                </div>`;
-            this.driverMarker = new mapboxgl.Marker({
-                element, anchor: 'center', rotationAlignment: 'map', pitchAlignment: 'map'
-            }).setLngLat([lng, lat]).addTo(this.instance);
+            this.driverMarker = AsiyeLiveCar.create(this.instance, [lng, lat], heading);
+        } else {
+            AsiyeLiveCar.move(this.driverMarker, [lng, lat], heading);
         }
-        this.driverMarker.setLngLat([lng, lat]);
-        this.driverMarker.setRotation(Number.isFinite(Number(heading)) ? Number(heading) : 0);
     },
 
     removeDriverMarker() {
+        AsiyeLiveCar.stop(this.driverMarker);
         this.driverMarker?.remove();
         this.driverMarker = null;
         this.driverLocation = null;
