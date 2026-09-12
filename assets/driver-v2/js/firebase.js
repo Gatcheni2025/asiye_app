@@ -1,25 +1,26 @@
 /* ============================================================
-   ASIYE PASSENGER V2
+   ASIYE DRIVER V2
    FIREBASE INITIALIZATION
    ============================================================ */
 
-window.ASIYE =
-    window.ASIYE || {};
+window.ASIYE_DRIVER =
+    window.ASIYE_DRIVER || {};
 
+
+/* ============================================================
+   FIREBASE CONFIG
+   ============================================================ */
 
 /*
  * IMPORTANT:
  *
- * Copy the SAME Firebase Web configuration
- * from your existing working Asiye app.
- *
- * Firebase Web API keys are client configuration,
- * but your Realtime Database / Firestore rules
- * must still protect your data.
+ * Use the SAME Firebase project used by
+ * Passenger V2 and the original Asiye apps.
  */
 
-  const firebaseConfig = {
-              apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
+const DRIVER_FIREBASE_CONFIG = {
+
+    apiKey: "AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",
               authDomain: "asiye-80386.firebaseapp.com",
               databaseURL: "https://asiye-80386-default-rtdb.firebaseio.com",
               projectId: "asiye-80386",
@@ -27,8 +28,9 @@ window.ASIYE =
               appId: "1:531902350858:web:f8a4a246bf350d50e3c1f3"
           };
 
+
 /* ============================================================
-   INITIALIZE ONLY ONCE
+   INITIALIZE FIREBASE
    ============================================================ */
 
 try {
@@ -49,7 +51,7 @@ try {
         firebase.apps.length > 0
     ) {
 
-        ASIYE.firebaseApp =
+        ASIYE_DRIVER.firebaseApp =
             firebase.app();
 
 
@@ -59,15 +61,15 @@ try {
 
     } else {
 
-        ASIYE.firebaseApp =
+        ASIYE_DRIVER.firebaseApp =
 
             firebase.initializeApp(
-                ASIYE_FIREBASE_CONFIG
+                DRIVER_FIREBASE_CONFIG
             );
 
 
         console.log(
-            "✅ Firebase initialized"
+            "✅ Driver Firebase initialized"
         );
     }
 
@@ -76,35 +78,44 @@ try {
        FIREBASE SERVICES
        ======================================================== */
 
-    ASIYE.auth =
+    ASIYE_DRIVER.auth =
         firebase.auth();
 
 
-    ASIYE.database =
+    ASIYE_DRIVER.database =
         firebase.database();
 
 
-    ASIYE.storage =
+    ASIYE_DRIVER.storage =
         firebase.storage();
 
 
+    /*
+     * Compatibility helper.
+     *
+     * requests.js and trip-controller.js
+     * currently use firebase.database()
+     * directly, so no additional changes
+     * are required.
+     */
+
     window.database =
-        ASIYE.database;
+        ASIYE_DRIVER.database;
 
 
     console.log(
-        "✅ Firebase Realtime Database ready"
+        "✅ Driver Firebase Database ready"
     );
 
 
 } catch (error) {
 
     console.error(
-        "❌ Firebase initialization failed:",
+        "❌ Driver Firebase initialization failed:",
         error
     );
 
 
-    window.ASIYE_FIREBASE_ERROR =
+    window.ASIYE_DRIVER_FIREBASE_ERROR =
         error;
 }
