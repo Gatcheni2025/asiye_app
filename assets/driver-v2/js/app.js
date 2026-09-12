@@ -2066,6 +2066,270 @@ ASIYE_DRIVER.ui = {
 
 
     /* ========================================================
+       NAVIGATOR
+       ======================================================== */
+
+    renderNavigator(
+        target,
+        request,
+        route = null
+    ) {
+
+        const container =
+
+            document.getElementById(
+                'sheetContent'
+            );
+
+
+        if (!container) {
+
+            return;
+        }
+
+
+        const distance =
+
+            route?.distanceKm ??
+
+            ASIYE_DRIVER.state
+                ?.navigation
+                ?.distanceKm ??
+            null;
+
+
+        const duration =
+
+            route?.durationMinutes ??
+
+            ASIYE_DRIVER.state
+                ?.navigation
+                ?.durationMinutes ??
+            null;
+
+
+        container.innerHTML = `
+
+            <div class="driver-navigation-card">
+
+                <div class="navigator-top">
+
+                    <div class="navigator-turn-icon">
+
+                        <i class="fas fa-location-arrow"></i>
+
+                    </div>
+
+
+                    <div class="navigator-heading">
+
+                        <small>
+                            PICKUP
+                        </small>
+
+                        <strong>
+                            ${this.escape(
+                                target.label ||
+                                'Passenger'
+                            )}
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="navigator-stats">
+
+                    <div>
+
+                        <span>
+                            Distance
+                        </span>
+
+                        <strong>
+
+                            ${
+                                Number.isFinite(
+                                    Number(distance)
+                                )
+
+                                ? `${Number(distance).toFixed(1)} km`
+
+                                : '—'
+                            }
+
+                        </strong>
+
+                    </div>
+
+
+                    <div>
+
+                        <span>
+                            ETA
+                        </span>
+
+                        <strong>
+
+                            ${
+                                Number.isFinite(
+                                    Number(duration)
+                                )
+
+                                ? `${Math.max(
+                                    1,
+                                    Math.round(
+                                        Number(duration)
+                                    )
+                                )} min`
+
+                                : '—'
+                            }
+
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <div class="navigator-passenger">
+
+                    <div class="navigator-avatar">
+
+                        <i class="fas fa-user"></i>
+
+                    </div>
+
+
+                    <div>
+
+                        <small>
+                            PASSENGER
+                        </small>
+
+                        <strong>
+
+                            ${this.escape(
+                                request.commuterName ||
+                                'Passenger'
+                            )}
+
+                        </strong>
+
+                    </div>
+
+                </div>
+
+
+                <button
+                    id="openExternalNavigator"
+                    class="secondary-button"
+                >
+
+                    <i class="fas fa-route"></i>
+
+                    Open full navigation
+
+                </button>
+
+
+                <button
+                    id="driverArrivedButton"
+                    class="primary-button"
+                >
+
+                    <i class="fas fa-location-dot"></i>
+
+                    I've arrived
+
+                </button>
+
+            </div>
+
+        `;
+
+
+        /*
+         * External navigation.
+         */
+
+        document
+            .getElementById(
+                'openExternalNavigator'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    const url =
+
+                        `https://www.google.com/maps/dir/?api=1` +
+
+                        `&destination=${encodeURIComponent(
+                            target.latitude +
+                            ',' +
+                            target.longitude
+                        )}` +
+
+                        `&travelmode=driving`;
+
+
+                    window.open(
+                        url,
+                        '_blank'
+                    );
+                }
+            );
+
+
+        /*
+         * Driver arrived.
+         */
+
+        document
+            .getElementById(
+                'driverArrivedButton'
+            )
+            ?.addEventListener(
+                'click',
+                async () => {
+
+                    if (
+                        ASIYE_DRIVER.trip &&
+                        typeof ASIYE_DRIVER.trip
+                            .markArrived ===
+                            'function'
+                    ) {
+
+                        await ASIYE_DRIVER.trip
+                            .markArrived();
+                    }
+                }
+            );
+
+
+        /*
+         * Make sure map displays route.
+         */
+
+        setTimeout(
+            () => {
+
+                ASIYE_DRIVER.map
+                    ?.resize?.();
+
+                ASIYE_DRIVER.map
+                    ?.fitCurrentRoute?.();
+
+            },
+            150
+        );
+    },
+
+
+    /* ========================================================
        PIN
        ======================================================== */
 

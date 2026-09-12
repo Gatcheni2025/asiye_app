@@ -1,13 +1,16 @@
 /* ============================================================
-   ASIYE DRIVER V2
-   MAP + NAVIGATION
+   ASIYE PASSENGER V2
+   MAP + LIVE DRIVER CAR
    ============================================================ */
 
-window.ASIYE_DRIVER =
-    window.ASIYE_DRIVER || {};
+window.ASIYE = window.ASIYE || {};
 
 
-ASIYE_DRIVER.map = {
+ASIYE.map = {
+
+    /* ========================================================
+       STATE
+       ======================================================== */
 
     instance:
         null,
@@ -56,7 +59,7 @@ ASIYE_DRIVER.map = {
 
         const token =
 
-            window.ASIYE_DRIVER_CONFIG
+            window.ASIYE_CONFIG
                 ?.mapboxToken;
 
 
@@ -75,11 +78,11 @@ ASIYE_DRIVER.map = {
         if (!tokenIsValid) {
 
             console.error(
-                '❌ Driver Mapbox token missing or invalid.'
+                '❌ Passenger Mapbox token missing or invalid.'
             );
 
 
-            ASIYE_DRIVER.ui?.toast(
+            ASIYE.ui?.toast(
                 'Map configuration is missing.',
                 'danger'
             );
@@ -93,7 +96,7 @@ ASIYE_DRIVER.map = {
 
 
         const stateLocation =
-            ASIYE_DRIVER.state.location;
+            ASIYE.state?.location || {};
 
 
         const lat =
@@ -163,7 +166,7 @@ ASIYE_DRIVER.map = {
 
 
                     console.log(
-                        '✅ Driver Mapbox ready'
+                        '✅ Passenger Mapbox ready'
                     );
 
 
@@ -171,7 +174,7 @@ ASIYE_DRIVER.map = {
 
 
                     const location =
-                        ASIYE_DRIVER.state.location;
+                        ASIYE.state?.location || {};
 
 
                     if (
@@ -212,7 +215,7 @@ ASIYE_DRIVER.map = {
         } catch (error) {
 
             console.error(
-                '❌ Driver map initialization failed:',
+                '❌ Passenger map initialization failed:',
                 error
             );
         }
@@ -220,7 +223,7 @@ ASIYE_DRIVER.map = {
 
 
     /* ========================================================
-       DRIVER MARKER
+       LIVE DRIVER CAR
        ======================================================== */
 
     showDriverLocation(
@@ -235,6 +238,10 @@ ASIYE_DRIVER.map = {
 
         const lng =
             Number(longitude);
+
+
+        const rotation =
+            Number(heading) || 0;
 
 
         if (
@@ -258,14 +265,22 @@ ASIYE_DRIVER.map = {
 
 
             element.className =
-                'asiye-driver-map-car';
+                'passenger-live-car';
 
 
             element.innerHTML = `
 
-                <div class="asiye-driver-car-inner">
+                <div class="passenger-live-car-shadow"></div>
 
-                    <i class="fas fa-car-side"></i>
+                <div class="passenger-live-car-body">
+
+                    <div class="car-windscreen"></div>
+
+                    <div class="car-roof"></div>
+
+                    <div class="car-light car-light-left"></div>
+
+                    <div class="car-light car-light-right"></div>
 
                 </div>
 
@@ -307,22 +322,35 @@ ASIYE_DRIVER.map = {
             ]);
 
 
+        this.driverMarker
+            .setRotation(
+                rotation
+            );
+    },
+
+
+    /* ========================================================
+       REMOVE DRIVER CAR
+       ======================================================== */
+
+    removeDriverMarker() {
+
         if (
-            Number.isFinite(
-                Number(heading)
-            )
+            this.driverMarker
         ) {
 
             this.driverMarker
-                .setRotation(
-                    Number(heading)
-                );
+                .remove();
+
+
+            this.driverMarker =
+                null;
         }
     },
 
 
     /* ========================================================
-       CENTER DRIVER
+       CENTER ON DRIVER
        ======================================================== */
 
     centerDriver(
@@ -330,7 +358,7 @@ ASIYE_DRIVER.map = {
     ) {
 
         const location =
-            ASIYE_DRIVER.state.location;
+            ASIYE.state?.location || {};
 
 
         if (
@@ -343,8 +371,8 @@ ASIYE_DRIVER.map = {
             )
         ) {
 
-            ASIYE_DRIVER.ui?.toast(
-                'Waiting for GPS location.'
+            ASIYE.ui?.toast(
+                'Waiting for driver location.'
             );
 
             return;
@@ -396,7 +424,7 @@ ASIYE_DRIVER.map = {
 
 
         const driverLocation =
-            ASIYE_DRIVER.state.location;
+            ASIYE.state?.location || {};
 
 
         if (
@@ -408,8 +436,8 @@ ASIYE_DRIVER.map = {
             )
         ) {
 
-            ASIYE_DRIVER.ui?.toast(
-                'Waiting for your GPS location.',
+            ASIYE.ui?.toast(
+                'Waiting for driver GPS location.',
                 'warning'
             );
 
@@ -419,7 +447,7 @@ ASIYE_DRIVER.map = {
 
         const token =
 
-            window.ASIYE_DRIVER_CONFIG
+            window.ASIYE_CONFIG
                 ?.mapboxToken;
 
 
@@ -514,7 +542,7 @@ ASIYE_DRIVER.map = {
             );
 
 
-            ASIYE_DRIVER.setNavigationTarget({
+            ASIYE.setNavigationTarget({
 
                 type:
                     target.type,
@@ -565,12 +593,12 @@ ASIYE_DRIVER.map = {
         } catch (error) {
 
             console.error(
-                'Driver directions failed:',
+                'Passenger directions failed:',
                 error
             );
 
 
-            ASIYE_DRIVER.ui?.toast(
+            ASIYE.ui?.toast(
                 'Unable to calculate navigation.',
                 'danger'
             );
@@ -683,7 +711,7 @@ ASIYE_DRIVER.map = {
 
 
         const sourceId =
-            'driver-route';
+            'passenger-route';
 
 
         const data = {
@@ -740,7 +768,7 @@ ASIYE_DRIVER.map = {
         this.instance.addLayer({
 
             id:
-                'driver-route-outline',
+                'passenger-route-outline',
 
             type:
                 'line',
@@ -778,7 +806,7 @@ ASIYE_DRIVER.map = {
         this.instance.addLayer({
 
             id:
-                'driver-route-line',
+                'passenger-route-line',
 
             type:
                 'line',
@@ -905,36 +933,36 @@ ASIYE_DRIVER.map = {
 
         if (
             this.instance?.getLayer(
-                'driver-route-line'
+                'passenger-route-line'
             )
         ) {
 
             this.instance.removeLayer(
-                'driver-route-line'
+                'passenger-route-line'
             );
         }
 
 
         if (
             this.instance?.getLayer(
-                'driver-route-outline'
+                'passenger-route-outline'
             )
         ) {
 
             this.instance.removeLayer(
-                'driver-route-outline'
+                'passenger-route-outline'
             );
         }
 
 
         if (
             this.instance?.getSource(
-                'driver-route'
+                'passenger-route'
             )
         ) {
 
             this.instance.removeSource(
-                'driver-route'
+                'passenger-route'
             );
         }
 
@@ -943,7 +971,7 @@ ASIYE_DRIVER.map = {
             null;
 
 
-        ASIYE_DRIVER.clearNavigation();
+        ASIYE.clearNavigation?.();
     }
 
 };

@@ -338,9 +338,234 @@ ASIYE_DRIVER.trip = {
         );
 
 
-        this.routeToPassenger(
+        /* ====================================================
+           DRIVER MAP — PICKUP NAVIGATION
+           ==================================================== */
+
+        await this.startPickupNavigation(
             this.request
         );
+    },
+
+
+    /* ========================================================
+       START PICKUP NAVIGATION
+       ======================================================== */
+
+    async startPickupNavigation(
+        request
+    ) {
+
+        if (!request) {
+
+            return;
+        }
+
+
+        const pickup =
+
+            request.commuterLocation ||
+
+            request.pickupLocation ||
+
+            request.passengerLocation;
+
+
+        const latitude =
+
+            Number(
+                pickup?.latitude ??
+                pickup?.lat
+            );
+
+
+        const longitude =
+
+            Number(
+                pickup?.longitude ??
+                pickup?.lng
+            );
+
+
+        if (
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+
+            ASIYE_DRIVER.ui
+                ?.toast?.(
+                    'Passenger location is unavailable.'
+                );
+
+
+            return;
+        }
+
+
+        const target = {
+
+            type:
+                'pickup',
+
+            id:
+                request.commuterId,
+
+            label:
+                request.pickupAddress ||
+                request.commuterName ||
+                'Passenger pickup',
+
+            latitude:
+                latitude,
+
+            longitude:
+                longitude
+        };
+
+
+        /*
+         * Draw the route on the driver map.
+         */
+
+        const route =
+
+            await ASIYE_DRIVER.map
+                ?.routeTo?.(
+                    target
+                );
+
+
+        /*
+         * Switch Driver UI into navigation mode.
+         */
+
+        ASIYE_DRIVER.ui
+            ?.renderNavigator?.(
+
+                target,
+
+                request,
+
+                route
+            );
+
+
+        ASIYE_DRIVER.ui
+            ?.showPickupNavigation?.(
+
+                request,
+
+                target,
+
+                route
+            );
+    },
+
+
+    /* ========================================================
+       START DESTINATION NAVIGATION
+
+       Called when the passenger is onboard and the trip
+       moves to in_transit. Swaps the driver's route from
+       "Driver → Passenger" to "Driver → Destination".
+       ======================================================== */
+
+    async startDestinationNavigation(
+        request
+    ) {
+
+        if (!request) {
+
+            return;
+        }
+
+
+        const destination =
+
+            request.destinationCoords ||
+
+            request.dropoffLocation;
+
+
+        const latitude =
+
+            Number(
+                destination?.latitude ??
+                destination?.lat
+            );
+
+
+        const longitude =
+
+            Number(
+                destination?.longitude ??
+                destination?.lng
+            );
+
+
+        if (
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+
+            ASIYE_DRIVER.ui
+                ?.toast?.(
+                    'Destination location is unavailable.'
+                );
+
+
+            return;
+        }
+
+
+        const target = {
+
+            type:
+                'dropoff',
+
+            id:
+                request.requestId ||
+                request.key,
+
+            label:
+                request.destinationName ||
+                request.destination ||
+                'Destination',
+
+            latitude:
+                latitude,
+
+            longitude:
+                longitude
+        };
+
+
+        /*
+         * Replace the pickup route with a
+         * destination route on the driver map.
+         */
+
+        const route =
+
+            await ASIYE_DRIVER.map
+                ?.routeTo?.(
+                    target
+                );
+
+
+        /*
+         * Switch Driver UI into navigation mode.
+         */
+
+        ASIYE_DRIVER.ui
+            ?.renderNavigator?.(
+
+                target,
+
+                request,
+
+                route
+            );
     },
 
 
@@ -548,7 +773,11 @@ ASIYE_DRIVER.trip = {
         });
 
 
-        this.routeToDestination(
+        /*
+         * Driver → Destination.
+         */
+
+        await this.startDestinationNavigation(
             this.request
         );
     },
@@ -909,9 +1138,39 @@ ASIYE_DRIVER.trip = {
         );
 
 
-        this.routeToClubPassenger(
-            next
-        );
+        /*
+         * Navigate driver to this Club passenger.
+         */
+
+        await this.startPickupNavigation({
+
+            ...req,
+
+            commuterId:
+                next.id,
+
+            commuterName:
+
+                next.name ||
+                next.commuterName ||
+                'Passenger',
+
+            pickupAddress:
+                next.pickupAddress,
+
+            commuterLocation: {
+
+                latitude:
+
+                    next.pickupLat ??
+                    next.latitude,
+
+                longitude:
+
+                    next.pickupLng ??
+                    next.longitude
+            }
+        });
 
 
         if (
@@ -1291,7 +1550,11 @@ ASIYE_DRIVER.trip = {
         );
 
 
-        this.routeToDestination(
+        /*
+         * Driver → Destination.
+         */
+
+        await this.startDestinationNavigation(
             request
         );
     },
@@ -1314,9 +1577,11 @@ ASIYE_DRIVER.trip = {
         }
 
 
-        this.routeToDestination(
-            request
-        );
+        /*
+         * For GO, verifyGoPin already
+         * advances to in_transit and drives
+         * destination navigation.
+         */
     },
 
 
@@ -1797,6 +2062,10 @@ ASIYE_DRIVER.trip = {
 
         this.currentPassengerId =
             null;
+
+
+        ASIYE_DRIVER.map
+            ?.clearRoute?.();
 
 
         if (

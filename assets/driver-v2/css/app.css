@@ -3570,3 +3570,477 @@ and
         0 5px 16px
         rgba(0,0,0,.2);
 }
+
+/* ============================================================
+   LIVE DRIVER CAR
+   ============================================================ */
+
+.passenger-live-car {
+
+    position:
+        relative;
+
+    width:
+        46px;
+
+    height:
+        58px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    transition:
+        transform .25s ease;
+
+    pointer-events:
+        none;
+}
+
+
+.passenger-live-car-shadow {
+
+    position:
+        absolute;
+
+    width:
+        29px;
+
+    height:
+        39px;
+
+    border-radius:
+        50%;
+
+    background:
+        rgba(0, 0, 0, .22);
+
+    filter:
+        blur(5px);
+
+    transform:
+        translateY(5px);
+}
+
+
+.passenger-live-car-body {
+
+    position:
+        relative;
+
+    width:
+        31px;
+
+    height:
+        48px;
+
+    border-radius:
+        11px 11px 9px 9px;
+
+    background:
+        #111;
+
+    border:
+        3px solid
+        #fff;
+
+    box-shadow:
+        0 5px 15px
+        rgba(0,0,0,.28);
+}
+
+
+.passenger-live-car-body::before,
+.passenger-live-car-body::after {
+
+    content:
+        "";
+
+    position:
+        absolute;
+
+    width:
+        4px;
+
+    height:
+        11px;
+
+    background:
+        #222;
+
+    border-radius:
+        3px;
+}
+
+
+.passenger-live-car-body::before {
+
+    left:
+        -5px;
+
+    top:
+        13px;
+}
+
+
+.passenger-live-car-body::after {
+
+    right:
+        -5px;
+
+    top:
+        13px;
+}
+
+
+.car-windscreen {
+
+    position:
+        absolute;
+
+    top:
+        7px;
+
+    left:
+        5px;
+
+    right:
+        5px;
+
+    height:
+        12px;
+
+    border-radius:
+        5px 5px 3px 3px;
+
+    background:
+        linear-gradient(
+            180deg,
+            #d9e6ea,
+            #8fa4aa
+        );
+}
+
+
+.car-roof {
+
+    position:
+        absolute;
+
+    left:
+        7px;
+
+    right:
+        7px;
+
+    top:
+        22px;
+
+    height:
+        14px;
+
+    border-radius:
+        4px;
+
+    background:
+        #292929;
+}
+
+
+.car-light {
+
+    position:
+        absolute;
+
+    bottom:
+        4px;
+
+    width:
+        5px;
+
+    height:
+        3px;
+
+    border-radius:
+        2px;
+
+    background:
+        #ffef9c;
+}
+
+
+.car-light-left {
+
+    left:
+        5px;
+}
+
+
+.car-light-right {
+
+    right:
+        5px;
+}
+
+/* ============================================================
+   DRIVER NAVIGATOR
+   ============================================================ */
+
+.driver-navigation-card {
+
+    width:
+        100%;
+}
+
+
+.navigator-top {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        13px;
+
+    margin-bottom:
+        14px;
+}
+
+
+.navigator-turn-icon {
+
+    width:
+        54px;
+
+    height:
+        54px;
+
+    flex:
+        0 0 54px;
+
+    border-radius:
+        17px;
+
+    background:
+        #111;
+
+    color:
+        white;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        19px;
+}
+
+
+.navigator-heading {
+
+    min-width:
+        0;
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+}
+
+
+.navigator-heading small {
+
+    font-size:
+        8px;
+
+    font-weight:
+        900;
+
+    color:
+        #999;
+
+    letter-spacing:
+        .8px;
+}
+
+
+.navigator-heading strong {
+
+    margin-top:
+        3px;
+
+    font-size:
+        16px;
+
+    line-height:
+        1.15;
+
+    overflow:
+        hidden;
+
+    text-overflow:
+        ellipsis;
+
+    white-space:
+        nowrap;
+}
+
+
+.navigator-stats {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:
+        9px;
+
+    margin-bottom:
+        12px;
+}
+
+
+.navigator-stats > div {
+
+    padding:
+        13px;
+
+    border-radius:
+        15px;
+
+    background:
+        #f5f5f5;
+}
+
+
+.navigator-stats span {
+
+    display:
+        block;
+
+    font-size:
+        8px;
+
+    font-weight:
+        800;
+
+    color:
+        #999;
+
+    text-transform:
+        uppercase;
+}
+
+
+.navigator-stats strong {
+
+    display:
+        block;
+
+    margin-top:
+        4px;
+
+    font-size:
+        17px;
+
+    font-weight:
+        900;
+}
+
+
+.navigator-passenger {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        11px;
+
+    padding:
+        12px;
+
+    margin-bottom:
+        10px;
+
+    border:
+        1px solid
+        #eee;
+
+    border-radius:
+        15px;
+}
+
+
+.navigator-avatar {
+
+    width:
+        39px;
+
+    height:
+        39px;
+
+    border-radius:
+        50%;
+
+    background:
+        #efefef;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+}
+
+
+.navigator-passenger small {
+
+    display:
+        block;
+
+    font-size:
+        8px;
+
+    color:
+        #999;
+
+    font-weight:
+        800;
+}
+
+
+.navigator-passenger strong {
+
+    display:
+        block;
+
+    margin-top:
+        2px;
+
+    font-size:
+        11px;
+
+    font-weight:
+        900;
+}

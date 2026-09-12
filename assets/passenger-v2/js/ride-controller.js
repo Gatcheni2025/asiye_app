@@ -6,6 +6,7 @@
 window.ASIYE =
     window.ASIYE || {};
 
+
 ASIYE.ride = {
 
     requestId:
@@ -1346,7 +1347,9 @@ ASIYE.ride = {
        DRIVER LOCATION LISTENER
        ======================================================== */
 
-    listenDriver(driverId) {
+    listenDriver(
+        driverId
+    ) {
 
         if (!driverId) {
 
@@ -1359,14 +1362,19 @@ ASIYE.ride = {
          */
 
         if (
-            this.driverRef &&
             this.currentDriverId ===
-                driverId
+                driverId &&
+            this.driverRef &&
+            this.driverListener
         ) {
 
             return;
         }
 
+
+        /*
+         * Stop old driver listener.
+         */
 
         this.stopDriver();
 
@@ -1387,7 +1395,9 @@ ASIYE.ride = {
         this.driverListener =
 
             this.driverRef.on(
+
                 'value',
+
                 snapshot => {
 
                     const driver =
@@ -1400,44 +1410,63 @@ ASIYE.ride = {
                     }
 
 
-                    const lat =
+                    const latitude =
+
                         Number(
-                            driver.latitude
+                            driver.latitude ??
+                            driver.location?.latitude ??
+                            driver.location?.lat
                         );
 
 
-                    const lng =
+                    const longitude =
+
                         Number(
-                            driver.longitude
+                            driver.longitude ??
+                            driver.location?.longitude ??
+                            driver.location?.lng
                         );
 
 
                     const heading =
+
                         Number(
-                            driver.heading ||
+                            driver.heading ??
+                            driver.location?.heading ??
                             0
                         );
 
 
                     if (
-                        Number.isFinite(lat) &&
-                        Number.isFinite(lng)
+                        !Number.isFinite(
+                            latitude
+                        ) ||
+                        !Number.isFinite(
+                            longitude
+                        )
                     ) {
 
-                        ASIYE.map
-                            ?.showDriverLocation?.(
-
-                                lat,
-
-                                lng,
-
-                                heading
-                            );
+                        return;
                     }
+
+
+                    ASIYE.map
+                        ?.showDriverLocation?.(
+
+                            latitude,
+
+                            longitude,
+
+                            heading
+                        );
                 }
             );
     },
 
+
+    /* ========================================================
+       STOP DRIVER LISTENER
+       ======================================================== */
 
     stopDriver() {
 
@@ -1447,7 +1476,9 @@ ASIYE.ride = {
         ) {
 
             this.driverRef.off(
+
                 'value',
+
                 this.driverListener
             );
         }
