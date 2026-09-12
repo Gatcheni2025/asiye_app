@@ -1,0 +1,3458 @@
+/* ============================================================
+   ASIYE DRIVER V2
+   COMPLETE APP STYLES
+   ============================================================ */
+
+
+/* ============================================================
+   ROOT VARIABLES
+   ============================================================ */
+
+:root {
+
+    --asiye-black:
+        #111111;
+
+    --asiye-black-soft:
+        #1b1b1b;
+
+    --asiye-black-light:
+        #2a2a2a;
+
+    --asiye-white:
+        #ffffff;
+
+    --asiye-bg:
+        #f5f5f5;
+
+    --asiye-surface:
+        #ffffff;
+
+    --asiye-surface-soft:
+        #f4f4f4;
+
+    --asiye-border:
+        #e7e7e7;
+
+    --asiye-border-dark:
+        #d2d2d2;
+
+    --asiye-text:
+        #111111;
+
+    --asiye-text-soft:
+        #777777;
+
+    --asiye-text-muted:
+        #9b9b9b;
+
+    --asiye-success:
+        #28a745;
+
+    --asiye-success-soft:
+        #eaf7ee;
+
+    --asiye-danger:
+        #dc3545;
+
+    --asiye-danger-soft:
+        #fff0f1;
+
+    --asiye-warning:
+        #f59e0b;
+
+    --asiye-warning-soft:
+        #fff7e8;
+
+    --asiye-info:
+        #2563eb;
+
+    --asiye-info-soft:
+        #eef4ff;
+
+    --asiye-shadow:
+        0 8px 30px
+        rgba(0, 0, 0, .08);
+
+    --asiye-shadow-strong:
+        0 18px 50px
+        rgba(0, 0, 0, .16);
+
+    --asiye-radius-sm:
+        10px;
+
+    --asiye-radius:
+        16px;
+
+    --asiye-radius-lg:
+        24px;
+
+    --asiye-safe-top:
+        env(
+            safe-area-inset-top,
+            0px
+        );
+
+    --asiye-safe-bottom:
+        env(
+            safe-area-inset-bottom,
+            0px
+        );
+
+    --asiye-font:
+        "Manrope",
+        sans-serif;
+}
+
+
+/* ============================================================
+   RESET
+   ============================================================ */
+
+* {
+
+    box-sizing:
+        border-box;
+
+    margin:
+        0;
+
+    padding:
+        0;
+}
+
+
+html,
+body {
+
+    width:
+        100%;
+
+    height:
+        100%;
+
+    overflow:
+        hidden;
+
+    font-family:
+        var(--asiye-font);
+
+    background:
+        var(--asiye-bg);
+
+    color:
+        var(--asiye-text);
+
+    -webkit-font-smoothing:
+        antialiased;
+}
+
+
+button,
+input,
+select,
+textarea {
+
+    font:
+        inherit;
+}
+
+
+button {
+
+    border:
+        none;
+
+    outline:
+        none;
+
+    cursor:
+        pointer;
+}
+
+
+input {
+
+    outline:
+        none;
+}
+
+
+/* ============================================================
+   APP ROOT
+   ============================================================ */
+
+#driverApp {
+
+    position:
+        relative;
+
+    width:
+        100vw;
+
+    height:
+        100vh;
+
+    overflow:
+        hidden;
+
+    background:
+        var(--asiye-bg);
+}
+
+
+/* ============================================================
+   MAP
+   ============================================================ */
+
+#map {
+
+    position:
+        absolute;
+
+    inset:
+        0;
+
+    width:
+        100%;
+
+    height:
+        100%;
+
+    z-index:
+        1;
+
+    background:
+        #dedede;
+}
+
+
+.mapboxgl-canvas {
+
+    outline:
+        none;
+}
+
+
+.mapboxgl-ctrl-bottom-left,
+.mapboxgl-ctrl-bottom-right {
+
+    z-index:
+        2;
+}
+
+
+/* ============================================================
+   TOP BAR
+   ============================================================ */
+
+#driverTopBar {
+
+    position:
+        fixed;
+
+    top:
+        calc(
+            10px +
+            var(--asiye-safe-top)
+        );
+
+    left:
+        12px;
+
+    right:
+        12px;
+
+    z-index:
+        40;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        9px;
+
+    pointer-events:
+        none;
+}
+
+
+#driverTopBar > * {
+
+    pointer-events:
+        auto;
+}
+
+
+.driver-circle-button,
+.driver-profile-button,
+.driver-small-circle-button,
+.driver-map-control {
+
+    display:
+        inline-flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    flex-shrink:
+        0;
+
+    border-radius:
+        50%;
+
+    background:
+        rgba(
+            255,
+            255,
+            255,
+            .96
+        );
+
+    color:
+        var(--asiye-black);
+
+    box-shadow:
+        var(--asiye-shadow);
+
+    backdrop-filter:
+        blur(14px);
+
+    -webkit-backdrop-filter:
+        blur(14px);
+}
+
+
+.driver-circle-button {
+
+    width:
+        46px;
+
+    height:
+        46px;
+
+    font-size:
+        16px;
+}
+
+
+.driver-profile-button {
+
+    width:
+        46px;
+
+    height:
+        46px;
+
+    font-weight:
+        900;
+
+    font-size:
+        14px;
+
+    border:
+        2px solid
+        rgba(
+            255,
+            255,
+            255,
+            .85
+        );
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+}
+
+
+.driver-small-circle-button {
+
+    width:
+        38px;
+
+    height:
+        38px;
+
+    font-size:
+        14px;
+
+    background:
+        var(--asiye-surface-soft);
+
+    box-shadow:
+        none;
+}
+
+
+.driver-status-pill {
+
+    min-width:
+        0;
+
+    flex:
+        1;
+
+    max-width:
+        250px;
+
+    height:
+        46px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        10px;
+
+    padding:
+        0 14px;
+
+    border-radius:
+        23px;
+
+    background:
+        rgba(
+            255,
+            255,
+            255,
+            .96
+        );
+
+    box-shadow:
+        var(--asiye-shadow);
+
+    backdrop-filter:
+        blur(14px);
+
+    -webkit-backdrop-filter:
+        blur(14px);
+
+    text-align:
+        left;
+}
+
+
+.driver-online-dot {
+
+    width:
+        10px;
+
+    height:
+        10px;
+
+    flex-shrink:
+        0;
+
+    border-radius:
+        50%;
+
+    background:
+        var(--asiye-danger);
+
+    box-shadow:
+        0 0 0 5px
+        rgba(
+            220,
+            53,
+            69,
+            .1
+        );
+}
+
+
+.driver-online-dot.online {
+
+    background:
+        var(--asiye-success);
+
+    box-shadow:
+        0 0 0 5px
+        rgba(
+            40,
+            167,
+            69,
+            .12
+        );
+}
+
+
+.driver-online-dot.busy {
+
+    background:
+        var(--asiye-warning);
+
+    box-shadow:
+        0 0 0 5px
+        rgba(
+            245,
+            158,
+            11,
+            .12
+        );
+}
+
+
+.driver-status-label {
+
+    display:
+        block;
+
+    font-size:
+        8px;
+
+    color:
+        var(--asiye-text-muted);
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .7px;
+
+    font-weight:
+        800;
+
+    line-height:
+        1.1;
+}
+
+
+#driverStatusText {
+
+    display:
+        block;
+
+    margin-top:
+        1px;
+
+    font-size:
+        11px;
+
+    color:
+        var(--asiye-black);
+
+    font-weight:
+        900;
+}
+
+
+/* ============================================================
+   MAP CONTROLS
+   ============================================================ */
+
+#driverMapControls {
+
+    position:
+        fixed;
+
+    right:
+        14px;
+
+    top:
+        104px;
+
+    z-index:
+        35;
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    gap:
+        9px;
+}
+
+
+.driver-map-control {
+
+    width:
+        44px;
+
+    height:
+        44px;
+
+    font-size:
+        15px;
+}
+
+
+/* ============================================================
+   BOTTOM SHEETS
+   ============================================================ */
+
+.driver-bottom-sheet {
+
+    position:
+        fixed;
+
+    left:
+        0;
+
+    right:
+        0;
+
+    bottom:
+        0;
+
+    z-index:
+        30;
+
+    width:
+        100%;
+
+    max-height:
+        min(
+            70vh,
+            620px
+        );
+
+    padding:
+        10px 16px
+        calc(
+            16px +
+            var(--asiye-safe-bottom)
+        );
+
+    border-radius:
+        24px 24px 0 0;
+
+    background:
+        rgba(
+            255,
+            255,
+            255,
+            .98
+        );
+
+    box-shadow:
+        0 -14px 40px
+        rgba(
+            0,
+            0,
+            0,
+            .14
+        );
+
+    backdrop-filter:
+        blur(18px);
+
+    -webkit-backdrop-filter:
+        blur(18px);
+
+    transform:
+        translateY(
+            calc(
+                100% + 20px
+            )
+        );
+
+    opacity:
+        0;
+
+    pointer-events:
+        none;
+
+    transition:
+        transform .28s ease,
+        opacity .22s ease;
+}
+
+
+.driver-bottom-sheet.open {
+
+    transform:
+        translateY(0);
+
+    opacity:
+        1;
+
+    pointer-events:
+        auto;
+}
+
+
+.driver-sheet-handle {
+
+    width:
+        42px;
+
+    height:
+        4px;
+
+    margin:
+        1px auto 13px;
+
+    border-radius:
+        999px;
+
+    background:
+        #d5d5d5;
+}
+
+
+#driverSheetContent,
+#activeTripContent {
+
+    width:
+        100%;
+
+    max-width:
+        620px;
+
+    margin:
+        0 auto;
+
+    max-height:
+        calc(
+            70vh - 40px
+        );
+
+    overflow-y:
+        auto;
+
+    overscroll-behavior:
+        contain;
+
+    scrollbar-width:
+        none;
+}
+
+
+#driverSheetContent::-webkit-scrollbar,
+#activeTripContent::-webkit-scrollbar {
+
+    display:
+        none;
+}
+
+
+/* ============================================================
+   COMMON TYPOGRAPHY
+   ============================================================ */
+
+.driver-kicker,
+.driver-dialog-kicker {
+
+    color:
+        var(--asiye-text-muted);
+
+    font-size:
+        9px;
+
+    font-weight:
+        900;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .8px;
+}
+
+
+.driver-title {
+
+    margin-top:
+        3px;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        22px;
+
+    line-height:
+        1.12;
+
+    font-weight:
+        900;
+
+    letter-spacing:
+        -.5px;
+}
+
+
+.driver-subtitle {
+
+    margin-top:
+        5px;
+
+    color:
+        var(--asiye-text-soft);
+
+    font-size:
+        11px;
+
+    line-height:
+        1.45;
+}
+
+
+/* ============================================================
+   DASHBOARD CARDS
+   ============================================================ */
+
+.driver-dashboard-header {
+
+    display:
+        flex;
+
+    align-items:
+        flex-start;
+
+    justify-content:
+        space-between;
+
+    gap:
+        12px;
+}
+
+
+.driver-dashboard-status {
+
+    min-width:
+        74px;
+
+    padding:
+        8px 10px;
+
+    border-radius:
+        999px;
+
+    background:
+        var(--asiye-surface-soft);
+
+    color:
+        var(--asiye-text-soft);
+
+    text-align:
+        center;
+
+    font-size:
+        9px;
+
+    font-weight:
+        900;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .5px;
+}
+
+
+.driver-dashboard-status.online {
+
+    background:
+        var(--asiye-success-soft);
+
+    color:
+        var(--asiye-success);
+}
+
+
+.driver-dashboard-status.busy {
+
+    background:
+        var(--asiye-warning-soft);
+
+    color:
+        var(--asiye-warning);
+}
+
+
+.driver-stat-grid {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        repeat(
+            3,
+            minmax(
+                0,
+                1fr
+            )
+        );
+
+    gap:
+        8px;
+
+    margin-top:
+        15px;
+}
+
+
+.driver-stat-card {
+
+    min-width:
+        0;
+
+    padding:
+        13px 10px;
+
+    border-radius:
+        15px;
+
+    background:
+        var(--asiye-surface-soft);
+
+    text-align:
+        center;
+}
+
+
+.driver-stat-value {
+
+    display:
+        block;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        16px;
+
+    font-weight:
+        900;
+
+    line-height:
+        1.1;
+}
+
+
+.driver-stat-label {
+
+    display:
+        block;
+
+    margin-top:
+        3px;
+
+    color:
+        var(--asiye-text-muted);
+
+    font-size:
+        8px;
+
+    font-weight:
+        800;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .4px;
+}
+
+
+.driver-main-action {
+
+    width:
+        100%;
+
+    min-height:
+        54px;
+
+    margin-top:
+        14px;
+
+    border-radius:
+        16px;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    gap:
+        9px;
+
+    font-size:
+        12px;
+
+    font-weight:
+        900;
+}
+
+
+.driver-main-action.offline {
+
+    background:
+        #e8e8e8;
+
+    color:
+        #777;
+}
+
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+.driver-btn {
+
+    min-height:
+        48px;
+
+    padding:
+        0 18px;
+
+    border-radius:
+        14px;
+
+    display:
+        inline-flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    gap:
+        8px;
+
+    font-size:
+        11px;
+
+    font-weight:
+        900;
+
+    transition:
+        transform .15s ease,
+        opacity .15s ease,
+        background .15s ease;
+}
+
+
+.driver-btn:active {
+
+    transform:
+        scale(.985);
+}
+
+
+.driver-btn:disabled {
+
+    opacity:
+        .5;
+
+    cursor:
+        not-allowed;
+
+    transform:
+        none;
+}
+
+
+.driver-btn-primary {
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+}
+
+
+.driver-btn-secondary {
+
+    background:
+        var(--asiye-surface-soft);
+
+    color:
+        var(--asiye-black);
+}
+
+
+.driver-btn-danger {
+
+    background:
+        var(--asiye-danger);
+
+    color:
+        white;
+}
+
+
+.driver-btn-success {
+
+    background:
+        var(--asiye-success);
+
+    color:
+        white;
+}
+
+
+.driver-btn-full {
+
+    width:
+        100%;
+}
+
+
+/* ============================================================
+   INCOMING REQUEST OVERLAY
+   ============================================================ */
+
+.driver-overlay {
+
+    position:
+        fixed;
+
+    inset:
+        0;
+
+    z-index:
+        100;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    padding:
+        18px;
+
+    background:
+        rgba(
+            0,
+            0,
+            0,
+            .5
+        );
+
+    backdrop-filter:
+        blur(8px);
+
+    -webkit-backdrop-filter:
+        blur(8px);
+
+    opacity:
+        0;
+
+    visibility:
+        hidden;
+
+    pointer-events:
+        none;
+
+    transition:
+        opacity .2s ease,
+        visibility .2s ease;
+}
+
+
+.driver-overlay.open {
+
+    opacity:
+        1;
+
+    visibility:
+        visible;
+
+    pointer-events:
+        auto;
+}
+
+
+.driver-request-card {
+
+    width:
+        min(
+            100%,
+            440px
+        );
+
+    max-height:
+        86vh;
+
+    overflow-y:
+        auto;
+
+    padding:
+        18px;
+
+    border-radius:
+        24px;
+
+    background:
+        white;
+
+    box-shadow:
+        var(--asiye-shadow-strong);
+
+    scrollbar-width:
+        none;
+
+    animation:
+        driverRequestPop
+        .25s ease;
+}
+
+
+.driver-request-card::-webkit-scrollbar {
+
+    display:
+        none;
+}
+
+
+@keyframes driverRequestPop {
+
+    from {
+
+        opacity:
+            0;
+
+        transform:
+            translateY(16px)
+            scale(.97);
+    }
+
+    to {
+
+        opacity:
+            1;
+
+        transform:
+            translateY(0)
+            scale(1);
+    }
+}
+
+
+.driver-request-topline {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        10px;
+
+    margin-bottom:
+        15px;
+}
+
+
+.driver-request-badge {
+
+    display:
+        inline-flex;
+
+    align-items:
+        center;
+
+    min-height:
+        28px;
+
+    padding:
+        0 10px;
+
+    border-radius:
+        999px;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    font-size:
+        9px;
+
+    font-weight:
+        900;
+
+    letter-spacing:
+        .7px;
+
+    text-transform:
+        uppercase;
+}
+
+
+.driver-request-badge.club {
+
+    background:
+        #2d2d2d;
+}
+
+
+.driver-request-timer {
+
+    width:
+        38px;
+
+    height:
+        38px;
+
+    border-radius:
+        50%;
+
+    background:
+        var(--asiye-surface-soft);
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        12px;
+
+    font-weight:
+        900;
+}
+
+
+.driver-request-heading {
+
+    font-size:
+        20px;
+
+    line-height:
+        1.18;
+
+    color:
+        var(--asiye-black);
+
+    font-weight:
+        900;
+}
+
+
+.driver-request-passenger {
+
+    margin-top:
+        5px;
+
+    color:
+        var(--asiye-text-soft);
+
+    font-size:
+        11px;
+}
+
+
+.driver-request-route {
+
+    margin-top:
+        16px;
+
+    padding:
+        14px;
+
+    border-radius:
+        16px;
+
+    background:
+        var(--asiye-surface-soft);
+}
+
+
+.driver-route-point {
+
+    display:
+        flex;
+
+    align-items:
+        flex-start;
+
+    gap:
+        11px;
+}
+
+
+.driver-route-dot {
+
+    width:
+        10px;
+
+    height:
+        10px;
+
+    flex-shrink:
+        0;
+
+    margin-top:
+        3px;
+
+    border-radius:
+        50%;
+
+    background:
+        var(--asiye-black);
+}
+
+
+.driver-route-dot.destination {
+
+    background:
+        var(--asiye-info);
+}
+
+
+.driver-route-line {
+
+    width:
+        2px;
+
+    height:
+        22px;
+
+    margin:
+        3px 0 3px 4px;
+
+    background:
+        #cccccc;
+}
+
+
+.driver-route-copy small {
+
+    display:
+        block;
+
+    color:
+        var(--asiye-text-muted);
+
+    font-size:
+        8px;
+
+    font-weight:
+        800;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .4px;
+}
+
+
+.driver-route-copy strong {
+
+    display:
+        block;
+
+    margin-top:
+        2px;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        11px;
+
+    line-height:
+        1.35;
+
+    font-weight:
+        800;
+}
+
+
+.driver-request-meta {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        repeat(
+            3,
+            minmax(
+                0,
+                1fr
+            )
+        );
+
+    gap:
+        8px;
+
+    margin-top:
+        12px;
+}
+
+
+.driver-request-meta > div {
+
+    padding:
+        10px;
+
+    border-radius:
+        13px;
+
+    background:
+        var(--asiye-surface-soft);
+
+    text-align:
+        center;
+}
+
+
+.driver-request-meta span {
+
+    display:
+        block;
+
+    color:
+        var(--asiye-text-muted);
+
+    font-size:
+        8px;
+
+    font-weight:
+        800;
+
+    text-transform:
+        uppercase;
+}
+
+
+.driver-request-meta strong {
+
+    display:
+        block;
+
+    margin-top:
+        3px;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        12px;
+
+    font-weight:
+        900;
+}
+
+
+.driver-request-price {
+
+    margin-top:
+        12px;
+
+    padding:
+        14px;
+
+    border-radius:
+        16px;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        10px;
+}
+
+
+.driver-request-price span {
+
+    color:
+        rgba(
+            255,
+            255,
+            255,
+            .65
+        );
+
+    font-size:
+        10px;
+
+    font-weight:
+        800;
+}
+
+
+.driver-request-price strong {
+
+    font-size:
+        21px;
+
+    font-weight:
+        900;
+}
+
+
+.driver-request-actions {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:
+        9px;
+
+    margin-top:
+        15px;
+}
+
+
+/* ============================================================
+   ACTIVE TRIP UI
+   ============================================================ */
+
+.driver-trip-header {
+
+    display:
+        flex;
+
+    align-items:
+        flex-start;
+
+    justify-content:
+        space-between;
+
+    gap:
+        12px;
+}
+
+
+.driver-trip-status-icon {
+
+    width:
+        48px;
+
+    height:
+        48px;
+
+    flex-shrink:
+        0;
+
+    border-radius:
+        15px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    font-size:
+        18px;
+}
+
+
+.driver-trip-status-icon.success {
+
+    background:
+        var(--asiye-success);
+}
+
+
+.driver-trip-status-icon.warning {
+
+    background:
+        var(--asiye-warning);
+}
+
+
+.driver-trip-card {
+
+    margin-top:
+        13px;
+
+    padding:
+        14px;
+
+    border-radius:
+        17px;
+
+    background:
+        var(--asiye-surface-soft);
+}
+
+
+.driver-trip-row {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        10px;
+
+    padding:
+        8px 0;
+}
+
+
+.driver-trip-row + .driver-trip-row {
+
+    border-top:
+        1px solid
+        var(--asiye-border);
+}
+
+
+.driver-trip-row span {
+
+    color:
+        var(--asiye-text-muted);
+
+    font-size:
+        9px;
+
+    font-weight:
+        800;
+}
+
+
+.driver-trip-row strong {
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        11px;
+
+    font-weight:
+        900;
+
+    text-align:
+        right;
+}
+
+
+.driver-trip-actions {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:
+        9px;
+
+    margin-top:
+        13px;
+}
+
+
+.driver-trip-actions.single {
+
+    grid-template-columns:
+        1fr;
+}
+
+
+/* ============================================================
+   CLUB UI
+   ============================================================ */
+
+.driver-club-progress {
+
+    margin-top:
+        13px;
+}
+
+
+.driver-club-progress-track {
+
+    width:
+        100%;
+
+    height:
+        7px;
+
+    overflow:
+        hidden;
+
+    border-radius:
+        999px;
+
+    background:
+        #e9e9e9;
+}
+
+
+.driver-club-progress-fill {
+
+    height:
+        100%;
+
+    border-radius:
+        inherit;
+
+    background:
+        var(--asiye-black);
+
+    transition:
+        width .3s ease;
+}
+
+
+.driver-club-progress-copy {
+
+    margin-top:
+        6px;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        10px;
+
+    color:
+        var(--asiye-text-soft);
+
+    font-size:
+        9px;
+
+    font-weight:
+        800;
+}
+
+
+.driver-club-summary {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        repeat(
+            2,
+            minmax(
+                0,
+                1fr
+            )
+        );
+
+    gap:
+        8px;
+
+    margin-top:
+        12px;
+}
+
+
+.driver-club-summary > div {
+
+    padding:
+        12px;
+
+    border-radius:
+        14px;
+
+    background:
+        var(--asiye-surface-soft);
+}
+
+
+.driver-club-summary span {
+
+    display:
+        block;
+
+    color:
+        var(--asiye-text-muted);
+
+    font-size:
+        8px;
+
+    font-weight:
+        800;
+
+    text-transform:
+        uppercase;
+
+    letter-spacing:
+        .4px;
+}
+
+
+.driver-club-summary strong {
+
+    display:
+        block;
+
+    margin-top:
+        3px;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        13px;
+
+    font-weight:
+        900;
+}
+
+
+.driver-club-wait-card {
+
+    margin-top:
+        12px;
+
+    padding:
+        13px;
+
+    border-radius:
+        15px;
+
+    background:
+        var(--asiye-warning-soft);
+
+    color:
+        #6f4d00;
+
+    display:
+        flex;
+
+    align-items:
+        flex-start;
+
+    gap:
+        10px;
+}
+
+
+.driver-club-wait-card i {
+
+    margin-top:
+        1px;
+}
+
+
+.driver-club-wait-card strong {
+
+    display:
+        block;
+
+    font-size:
+        10px;
+
+    font-weight:
+        900;
+}
+
+
+.driver-club-wait-card p {
+
+    margin-top:
+        3px;
+
+    font-size:
+        9px;
+
+    line-height:
+        1.4;
+}
+
+
+/* ============================================================
+   CLUB PASSENGER LIST
+   ============================================================ */
+
+.driver-dialog-card {
+
+    position:
+        relative;
+
+    width:
+        min(
+            100%,
+            430px
+        );
+
+    max-height:
+        86vh;
+
+    overflow-y:
+        auto;
+
+    padding:
+        18px;
+
+    border-radius:
+        23px;
+
+    background:
+        white;
+
+    box-shadow:
+        var(--asiye-shadow-strong);
+
+    scrollbar-width:
+        none;
+}
+
+
+.driver-dialog-card::-webkit-scrollbar {
+
+    display:
+        none;
+}
+
+
+.driver-dialog-header {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        12px;
+
+    margin-bottom:
+        14px;
+}
+
+
+.driver-dialog-header h2 {
+
+    margin-top:
+        2px;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        20px;
+
+    font-weight:
+        900;
+}
+
+
+.club-passenger-list {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    gap:
+        9px;
+}
+
+
+.club-passenger-item {
+
+    padding:
+        13px;
+
+    border-radius:
+        15px;
+
+    background:
+        var(--asiye-surface-soft);
+}
+
+
+.club-passenger-top {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        10px;
+}
+
+
+.club-passenger-number {
+
+    width:
+        30px;
+
+    height:
+        30px;
+
+    flex-shrink:
+        0;
+
+    border-radius:
+        50%;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        10px;
+
+    font-weight:
+        900;
+}
+
+
+.club-passenger-info {
+
+    min-width:
+        0;
+
+    flex:
+        1;
+}
+
+
+.club-passenger-name {
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        11px;
+
+    font-weight:
+        900;
+}
+
+
+.club-passenger-address {
+
+    margin-top:
+        2px;
+
+    color:
+        var(--asiye-text-soft);
+
+    font-size:
+        9px;
+
+    line-height:
+        1.35;
+}
+
+
+.club-passenger-status {
+
+    flex-shrink:
+        0;
+
+    padding:
+        6px 8px;
+
+    border-radius:
+        999px;
+
+    background:
+        white;
+
+    color:
+        var(--asiye-text-soft);
+
+    font-size:
+        8px;
+
+    font-weight:
+        900;
+
+    text-transform:
+        uppercase;
+}
+
+
+.club-passenger-status.onboard {
+
+    background:
+        var(--asiye-success-soft);
+
+    color:
+        var(--asiye-success);
+}
+
+
+.club-passenger-status.on-way {
+
+    background:
+        var(--asiye-info-soft);
+
+    color:
+        var(--asiye-info);
+}
+
+
+.club-passenger-status.cancelled {
+
+    background:
+        var(--asiye-danger-soft);
+
+    color:
+        var(--asiye-danger);
+}
+
+
+.club-passenger-actions {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:
+        8px;
+
+    margin-top:
+        10px;
+}
+
+
+/* ============================================================
+   PIN VERIFICATION
+   ============================================================ */
+
+.driver-pin-card {
+
+    text-align:
+        center;
+}
+
+
+.driver-dialog-close {
+
+    position:
+        absolute;
+
+    top:
+        12px;
+
+    right:
+        12px;
+}
+
+
+.driver-pin-icon {
+
+    width:
+        58px;
+
+    height:
+        58px;
+
+    margin:
+        5px auto 13px;
+
+    border-radius:
+        18px;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        22px;
+}
+
+
+.driver-pin-card h2 {
+
+    margin-top:
+        4px;
+
+    font-size:
+        21px;
+
+    color:
+        var(--asiye-black);
+
+    font-weight:
+        900;
+}
+
+
+.driver-dialog-copy {
+
+    margin-top:
+        6px;
+
+    color:
+        var(--asiye-text-soft);
+
+    font-size:
+        10px;
+
+    line-height:
+        1.45;
+}
+
+
+.driver-pin-input {
+
+    width:
+        100%;
+
+    height:
+        62px;
+
+    margin-top:
+        16px;
+
+    padding:
+        0 16px;
+
+    border:
+        2px solid
+        var(--asiye-border);
+
+    border-radius:
+        16px;
+
+    background:
+        var(--asiye-surface-soft);
+
+    color:
+        var(--asiye-black);
+
+    text-align:
+        center;
+
+    font-size:
+        26px;
+
+    font-weight:
+        900;
+
+    letter-spacing:
+        12px;
+}
+
+
+.driver-pin-input:focus {
+
+    border-color:
+        var(--asiye-black);
+
+    background:
+        white;
+}
+
+
+.driver-pin-error {
+
+    display:
+        none;
+
+    margin-top:
+        8px;
+
+    color:
+        var(--asiye-danger);
+
+    font-size:
+        9px;
+
+    font-weight:
+        800;
+}
+
+
+.driver-pin-error.show {
+
+    display:
+        block;
+}
+
+
+.driver-pin-card .driver-btn {
+
+    margin-top:
+        13px;
+}
+
+
+/* ============================================================
+   CONFIRM DIALOG
+   ============================================================ */
+
+.driver-confirm-icon {
+
+    width:
+        56px;
+
+    height:
+        56px;
+
+    margin:
+        2px auto 13px;
+
+    border-radius:
+        18px;
+
+    background:
+        var(--asiye-danger-soft);
+
+    color:
+        var(--asiye-danger);
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        20px;
+}
+
+
+#driverConfirmTitle {
+
+    text-align:
+        center;
+
+    font-size:
+        20px;
+
+    font-weight:
+        900;
+
+    color:
+        var(--asiye-black);
+}
+
+
+#driverConfirmMessage {
+
+    text-align:
+        center;
+}
+
+
+.driver-confirm-actions {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        1fr 1fr;
+
+    gap:
+        9px;
+
+    margin-top:
+        15px;
+}
+
+
+/* ============================================================
+   TRIP COMPLETED
+   ============================================================ */
+
+.driver-completed-card {
+
+    text-align:
+        center;
+}
+
+
+.driver-complete-icon {
+
+    width:
+        64px;
+
+    height:
+        64px;
+
+    margin:
+        2px auto 14px;
+
+    border-radius:
+        50%;
+
+    background:
+        var(--asiye-success);
+
+    color:
+        white;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        23px;
+}
+
+
+.driver-completed-card h2 {
+
+    margin-top:
+        3px;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        22px;
+
+    font-weight:
+        900;
+}
+
+
+.driver-completed-fare {
+
+    margin-top:
+        13px;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        31px;
+
+    font-weight:
+        900;
+
+    letter-spacing:
+        -1px;
+}
+
+
+.driver-completed-card
+.driver-btn {
+
+    margin-top:
+        15px;
+}
+
+
+/* ============================================================
+   SIDE MENU
+   ============================================================ */
+
+#driverMenuBackdrop {
+
+    position:
+        fixed;
+
+    inset:
+        0;
+
+    z-index:
+        78;
+
+    background:
+        rgba(
+            0,
+            0,
+            0,
+            .45
+        );
+
+    opacity:
+        0;
+
+    visibility:
+        hidden;
+
+    pointer-events:
+        none;
+
+    transition:
+        opacity .2s ease,
+        visibility .2s ease;
+}
+
+
+#driverMenuBackdrop.open {
+
+    opacity:
+        1;
+
+    visibility:
+        visible;
+
+    pointer-events:
+        auto;
+}
+
+
+#driverSideMenu {
+
+    position:
+        fixed;
+
+    top:
+        0;
+
+    bottom:
+        0;
+
+    left:
+        0;
+
+    z-index:
+        80;
+
+    width:
+        min(
+            86vw,
+            330px
+        );
+
+    padding:
+        calc(
+            18px +
+            var(--asiye-safe-top)
+        )
+        16px
+        calc(
+            18px +
+            var(--asiye-safe-bottom)
+        );
+
+    background:
+        white;
+
+    box-shadow:
+        18px 0 50px
+        rgba(
+            0,
+            0,
+            0,
+            .16
+        );
+
+    transform:
+        translateX(
+            -105%
+        );
+
+    transition:
+        transform .25s ease;
+}
+
+
+#driverSideMenu.open {
+
+    transform:
+        translateX(0);
+}
+
+
+.driver-menu-header {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        10px;
+
+    padding-bottom:
+        16px;
+
+    border-bottom:
+        1px solid
+        var(--asiye-border);
+}
+
+
+.driver-menu-profile {
+
+    min-width:
+        0;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        10px;
+}
+
+
+.driver-menu-avatar {
+
+    width:
+        44px;
+
+    height:
+        44px;
+
+    flex-shrink:
+        0;
+
+    border-radius:
+        50%;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    font-size:
+        13px;
+
+    font-weight:
+        900;
+}
+
+
+#driverMenuName {
+
+    display:
+        block;
+
+    max-width:
+        185px;
+
+    overflow:
+        hidden;
+
+    white-space:
+        nowrap;
+
+    text-overflow:
+        ellipsis;
+
+    color:
+        var(--asiye-black);
+
+    font-size:
+        12px;
+
+    font-weight:
+        900;
+}
+
+
+#driverMenuVehicle {
+
+    display:
+        block;
+
+    max-width:
+        185px;
+
+    margin-top:
+        2px;
+
+    overflow:
+        hidden;
+
+    white-space:
+        nowrap;
+
+    text-overflow:
+        ellipsis;
+
+    color:
+        var(--asiye-text-muted);
+
+    font-size:
+        9px;
+}
+
+
+.driver-menu-list {
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    gap:
+        3px;
+
+    margin-top:
+        14px;
+}
+
+
+.driver-menu-list button {
+
+    width:
+        100%;
+
+    min-height:
+        48px;
+
+    padding:
+        0 12px;
+
+    border-radius:
+        13px;
+
+    background:
+        transparent;
+
+    color:
+        var(--asiye-text-soft);
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        12px;
+
+    text-align:
+        left;
+
+    font-size:
+        11px;
+
+    font-weight:
+        800;
+}
+
+
+.driver-menu-list button i {
+
+    width:
+        20px;
+
+    color:
+        var(--asiye-black);
+
+    text-align:
+        center;
+
+    font-size:
+        13px;
+}
+
+
+.driver-menu-list button:hover,
+.driver-menu-list button.active {
+
+    background:
+        var(--asiye-surface-soft);
+
+    color:
+        var(--asiye-black);
+}
+
+
+/* ============================================================
+   TOASTS
+   ============================================================ */
+
+#driverToastContainer {
+
+    position:
+        fixed;
+
+    left:
+        50%;
+
+    bottom:
+        calc(
+            18px +
+            var(--asiye-safe-bottom)
+        );
+
+    z-index:
+        300;
+
+    width:
+        min(
+            calc(
+                100% -
+                28px
+            ),
+            420px
+        );
+
+    transform:
+        translateX(
+            -50%
+        );
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    gap:
+        7px;
+
+    pointer-events:
+        none;
+}
+
+
+.driver-toast {
+
+    width:
+        100%;
+
+    padding:
+        12px 14px;
+
+    border-radius:
+        14px;
+
+    background:
+        var(--asiye-black);
+
+    color:
+        white;
+
+    box-shadow:
+        var(--asiye-shadow-strong);
+
+    font-size:
+        10px;
+
+    font-weight:
+        700;
+
+    line-height:
+        1.4;
+
+    animation:
+        driverToastIn
+        .22s ease;
+}
+
+
+.driver-toast.success {
+
+    background:
+        var(--asiye-success);
+}
+
+
+.driver-toast.danger {
+
+    background:
+        var(--asiye-danger);
+}
+
+
+.driver-toast.warning {
+
+    background:
+        var(--asiye-warning);
+
+    color:
+        #241700;
+}
+
+
+@keyframes driverToastIn {
+
+    from {
+
+        opacity:
+            0;
+
+        transform:
+            translateY(10px);
+    }
+
+    to {
+
+        opacity:
+            1;
+
+        transform:
+            translateY(0);
+    }
+}
+
+
+/* ============================================================
+   CONNECTION BANNER
+   ============================================================ */
+
+.driver-connection-banner {
+
+    position:
+        fixed;
+
+    top:
+        calc(
+            72px +
+            var(--asiye-safe-top)
+        );
+
+    left:
+        50%;
+
+    z-index:
+        150;
+
+    min-height:
+        36px;
+
+    padding:
+        0 13px;
+
+    border-radius:
+        999px;
+
+    background:
+        var(--asiye-warning);
+
+    color:
+        #241700;
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        7px;
+
+    transform:
+        translate(
+            -50%,
+            -20px
+        );
+
+    opacity:
+        0;
+
+    visibility:
+        hidden;
+
+    font-size:
+        9px;
+
+    font-weight:
+        900;
+
+    box-shadow:
+        var(--asiye-shadow);
+
+    transition:
+        opacity .2s ease,
+        transform .2s ease,
+        visibility .2s ease;
+}
+
+
+.driver-connection-banner.show {
+
+    opacity:
+        1;
+
+    visibility:
+        visible;
+
+    transform:
+        translate(
+            -50%,
+            0
+        );
+}
+
+
+/* ============================================================
+   GENERIC UTILITY CLASSES
+   ============================================================ */
+
+.driver-row {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    gap:
+        10px;
+}
+
+
+.driver-between {
+
+    display:
+        flex;
+
+    align-items:
+        center;
+
+    justify-content:
+        space-between;
+
+    gap:
+        10px;
+}
+
+
+.driver-hidden {
+
+    display:
+        none !important;
+}
+
+
+.driver-text-danger {
+
+    color:
+        var(--asiye-danger) !important;
+}
+
+
+.driver-text-success {
+
+    color:
+        var(--asiye-success) !important;
+}
+
+
+.driver-text-warning {
+
+    color:
+        var(--asiye-warning) !important;
+}
+
+
+/* ============================================================
+   LOADING
+   ============================================================ */
+
+.driver-loading {
+
+    width:
+        30px;
+
+    height:
+        30px;
+
+    border:
+        3px solid
+        #e5e5e5;
+
+    border-top-color:
+        var(--asiye-black);
+
+    border-radius:
+        50%;
+
+    animation:
+        driverSpin
+        .75s linear
+        infinite;
+}
+
+
+@keyframes driverSpin {
+
+    to {
+
+        transform:
+            rotate(
+                360deg
+            );
+    }
+}
+
+
+/* ============================================================
+   MOBILE TWEAKS
+   ============================================================ */
+
+@media
+(
+    max-width:
+        520px
+) {
+
+    #driverTopBar {
+
+        left:
+            10px;
+
+        right:
+            10px;
+    }
+
+
+    .driver-status-pill {
+
+        max-width:
+            none;
+    }
+
+
+    .driver-bottom-sheet {
+
+        padding-left:
+            13px;
+
+        padding-right:
+            13px;
+    }
+
+
+    .driver-request-card,
+    .driver-dialog-card {
+
+        border-radius:
+            20px;
+    }
+
+
+    .driver-title {
+
+        font-size:
+            20px;
+    }
+
+
+    .driver-stat-grid {
+
+        grid-template-columns:
+            repeat(
+                3,
+                1fr
+            );
+    }
+
+}
+
+
+/* ============================================================
+   VERY SMALL DEVICES
+   ============================================================ */
+
+@media
+(
+    max-width:
+        360px
+) {
+
+    .driver-circle-button,
+    .driver-profile-button {
+
+        width:
+            42px;
+
+        height:
+            42px;
+    }
+
+
+    .driver-status-pill {
+
+        height:
+            42px;
+
+        padding:
+            0 10px;
+    }
+
+
+    .driver-request-meta {
+
+        grid-template-columns:
+            1fr 1fr;
+    }
+
+
+    .driver-request-meta > div:last-child {
+
+        grid-column:
+            1 / -1;
+    }
+
+
+    .driver-stat-grid {
+
+        grid-template-columns:
+            1fr 1fr;
+    }
+
+
+    .driver-stat-card:last-child {
+
+        grid-column:
+            1 / -1;
+    }
+
+}
+
+
+/* ============================================================
+   LANDSCAPE MOBILE
+   ============================================================ */
+
+@media
+(
+    max-height:
+        520px
+)
+and
+(
+    orientation:
+        landscape
+) {
+
+    .driver-bottom-sheet {
+
+        max-height:
+            82vh;
+    }
+
+
+    #driverSheetContent,
+    #activeTripContent {
+
+        max-height:
+            calc(
+                82vh -
+                40px
+            );
+    }
+
+
+    .driver-overlay {
+
+        align-items:
+            flex-start;
+
+        overflow-y:
+            auto;
+
+        padding-top:
+            14px;
+
+        padding-bottom:
+            14px;
+    }
+
+}
