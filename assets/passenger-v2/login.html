@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    >
+
+    <meta
+        name="theme-color"
+        content="#111111"
+    >
+
+    <title>Sign in | Asiye</title>
+
+
+    <!-- FONT -->
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+    >
+
+
+    <!-- ICONS -->
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css"
+    >
+
+
+    <!-- FIREBASE -->
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js">
+    </script>
+
+    <script
+        src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js">
+    </script>
+
+
+    <!-- LOGIN CSS -->
+
+    <link
+        rel="stylesheet"
+        href="./css/login.css"
+    >
+
+</head>
+
+
+<body>
+
+
+<main id="passengerLoginApp">
+
+
+    <div class="login-background">
+
+        <div class="login-circle circle-one"></div>
+
+        <div class="login-circle circle-two"></div>
+
+    </div>
+
+
+    <header class="login-topbar">
+
+        <button
+            id="loginBackButton"
+            class="circle-button"
+        >
+
+            <i class="fas fa-arrow-left"></i>
+
+        </button>
+
+
+        <div class="brand-pill">
+
+            ASIYE
+
+        </div>
+
+    </header>
+
+
+    <section class="login-card">
+
+
+        <div class="login-logo">
+
+            <i class="fas fa-location-arrow"></i>
+
+        </div>
+
+
+        <div class="login-kicker">
+
+            Asiye Passenger
+
+        </div>
+
+
+        <h1>
+
+            Let's get you moving
+
+        </h1>
+
+
+        <p class="login-subtitle">
+
+            Sign in to request rides, join Asiye Club
+            and manage your trips.
+
+        </p>
+
+
+        <!-- LOGIN -->
+
+        <div
+            id="loginStep"
+            class="login-step active"
+        >
+
+
+            <!-- GOOGLE -->
+
+            <button
+                id="googleLoginButton"
+                class="social-button"
+            >
+
+                <span class="google-letter">
+                    G
+                </span>
+
+                Continue with Google
+
+            </button>
+
+
+            <!-- APPLE -->
+
+            <button
+                id="appleLoginButton"
+                class="social-button apple-button"
+            >
+
+                <i class="fab fa-apple"></i>
+
+                Continue with Apple
+
+            </button>
+
+
+            <div class="divider">
+
+                <span></span>
+
+                <strong>or</strong>
+
+                <span></span>
+
+            </div>
+
+
+            <!-- PHONE -->
+
+            <label class="login-label">
+
+                Mobile number
+
+            </label>
+
+
+            <div class="phone-wrapper">
+
+                <div class="country-code">
+
+                    🇿🇦
+
+                    <strong>
+                        +27
+                    </strong>
+
+                </div>
+
+
+                <input
+                    id="passengerPhoneInput"
+                    type="tel"
+                    inputmode="numeric"
+                    maxlength="10"
+                    placeholder="82 123 4567"
+                >
+
+            </div>
+
+
+            <div
+                id="phoneError"
+                class="login-error"
+            ></div>
+
+
+            <button
+                id="sendOtpButton"
+                class="primary-button"
+            >
+
+                Continue with phone
+
+            </button>
+
+
+        </div>
+
+
+        <!-- OTP -->
+
+        <div
+            id="otpStep"
+            class="login-step"
+        >
+
+            <button
+                id="changePhoneButton"
+                class="change-number"
+            >
+
+                <i class="fas fa-pen"></i>
+
+                Change number
+
+            </button>
+
+
+            <div class="otp-copy">
+
+                Verification code sent to
+
+                <strong id="otpPhoneDisplay">
+                    +27
+                </strong>
+
+            </div>
+
+
+            <label class="login-label">
+
+                6-digit code
+
+            </label>
+
+
+            <input
+                id="passengerOtpInput"
+                class="otp-input"
+                type="tel"
+                inputmode="numeric"
+                maxlength="6"
+                autocomplete="one-time-code"
+                placeholder="000000"
+            >
+
+
+            <div
+                id="otpError"
+                class="login-error"
+            ></div>
+
+
+            <button
+                id="verifyOtpButton"
+                class="primary-button"
+            >
+
+                Verify & continue
+
+            </button>
+
+
+            <button
+                id="resendOtpButton"
+                class="secondary-button"
+                disabled
+            >
+
+                Resend code
+
+                <span id="resendTimer">
+                    30
+                </span>
+
+            </button>
+
+        </div>
+
+
+        <!-- CHECKING PROFILE -->
+
+        <div
+            id="profileCheckStep"
+            class="login-step center-step"
+        >
+
+            <div class="spinner"></div>
+
+            <h2>
+                Loading your Asiye account
+            </h2>
+
+            <p>
+                Just a moment...
+            </p>
+
+        </div>
+
+
+        <!-- NEW PASSENGER -->
+
+        <div
+            id="newPassengerStep"
+            class="login-step center-step"
+        >
+
+            <div class="welcome-icon">
+
+                <i class="fas fa-user-plus"></i>
+
+            </div>
+
+
+            <h2>
+
+                Welcome to Asiye
+
+            </h2>
+
+
+            <p>
+
+                Your account is ready.
+                Add your name to continue.
+
+            </p>
+
+
+            <input
+                id="newPassengerName"
+                class="name-input"
+                type="text"
+                placeholder="Your full name"
+            >
+
+
+            <button
+                id="createPassengerProfile"
+                class="primary-button"
+            >
+
+                Continue to Asiye
+
+            </button>
+
+        </div>
+
+
+        <div id="recaptcha-container"></div>
+
+
+    </section>
+
+
+    <footer class="login-footer">
+
+        By continuing, you agree to Asiye's
+        terms and privacy policy.
+
+    </footer>
+
+
+    <div id="loginToast"></div>
+
+
+</main>
+
+
+<!-- SAME PASSENGER CONFIG -->
+
+<script src="./js/config.js"></script>
+
+<script src="./js/firebase.js"></script>
+
+<script src="./js/login.js"></script>
+
+
+</body>
+</html>

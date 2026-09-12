@@ -1884,71 +1884,17 @@ document.addEventListener(
 
         /*
          * Authenticated passenger resolution.
+         *
+         * Booking writes must use a real UID.
+         * Unauthenticated sessions redirect to
+         * the Passenger login page.
          */
 
         const authUser =
             firebase.auth().currentUser;
 
 
-        if (authUser) {
-
-            try {
-
-                const commuterSnapshot =
-
-                    await firebase
-                        .database()
-                        .ref(
-                            `commuters/${authUser.uid}`
-                        )
-                        .once(
-                            'value'
-                        );
-
-
-                const commuter =
-                    commuterSnapshot.val() ||
-                    {};
-
-
-                ASIYE.setUser(
-                    authUser.uid,
-                    commuter
-                );
-
-
-                localStorage.setItem(
-                    'userId',
-                    authUser.uid
-                );
-
-
-            } catch (error) {
-
-                console.error(
-                    'Passenger profile load failed:',
-                    error
-                );
-
-
-                ASIYE.setUser(
-                    authUser.uid,
-                    {
-                        name:
-                            authUser.displayName ||
-                            'Passenger',
-
-                        phone:
-                            authUser.phoneNumber ||
-                            '',
-
-                        credits:
-                            0
-                    }
-                );
-            }
-
-        } else {
+        if (!authUser) {
 
             console.warn(
                 'No authenticated passenger session.'
@@ -1961,6 +1907,91 @@ document.addEventListener(
 
 
             return;
+        }
+
+
+        /*
+         * Legacy commuter compatibility.
+         *
+         * Old passengers may have a commuter
+         * record keyed by an ID different from
+         * their Firebase Auth UID. Prefer the
+         * stored commuterId if present.
+         */
+
+        const commuterId =
+            localStorage.getItem(
+                'commuterId'
+            ) ||
+            authUser.uid;
+
+
+        try {
+
+            const commuterSnapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${commuterId}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            const commuter =
+                commuterSnapshot.val() ||
+                {};
+
+
+            ASIYE.setUser(
+                commuterId,
+                commuter
+            );
+
+
+            localStorage.setItem(
+                'userId',
+                commuterId
+            );
+
+
+            localStorage.setItem(
+                'commuterId',
+                commuterId
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                'Passenger profile load failed:',
+                error
+            );
+
+
+            ASIYE.setUser(
+                commuterId,
+                {
+                    name:
+                        authUser.displayName ||
+                        'Passenger',
+
+                    phone:
+                        authUser.phoneNumber ||
+                        '',
+
+                    credits:
+                        0
+                }
+            );
+
+
+            localStorage.setItem(
+                'userId',
+                commuterId
+            );
         }
 
 
