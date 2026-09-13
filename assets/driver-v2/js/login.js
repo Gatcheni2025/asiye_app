@@ -20,6 +20,9 @@ window.ASIYE_DRIVER_LOGIN = {
     currentPhone:
         null,
 
+    nativeVerificationId:
+        null,
+
 
     /* ========================================================
        INIT
@@ -515,6 +518,13 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 this.prepareRecaptcha();
             }
+            if (window.AsiyeNativeAuth?.post({
+                action: 'startPhoneAuth',
+                phone
+            })) {
+                return;
+            }
+
 
 
             this.confirmationResult =
@@ -684,12 +694,16 @@ window.ASIYE_DRIVER_LOGIN = {
 
         try {
 
-            const result =
-
-                await this.confirmationResult
-                    .confirm(
+            const result = this.nativeVerificationId
+                ? await firebase.auth().signInWithCredential(
+                    firebase.auth.PhoneAuthProvider.credential(
+                        this.nativeVerificationId,
                         code
-                    );
+                    )
+                )
+                : await this.confirmationResult.confirm(code);
+
+            this.nativeVerificationId = null;
 
 
             const user =
@@ -777,6 +791,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 `;
             }
+            if (window.AsiyeNativeAuth?.post('triggerGoogleSignIn')) {
+                return;
+            }
+
 
 
             const provider =
@@ -904,6 +922,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 `;
             }
+            if (window.AsiyeNativeAuth?.post('triggerAppleSignIn')) {
+                return;
+            }
+
 
 
             const provider =
@@ -1781,6 +1803,97 @@ window.ASIYE_DRIVER_LOGIN = {
             );
     }
 
+};
+
+
+/* ============================================================
+   NATIVE FLUTTER AUTH BRIDGE
+   ============================================================ */
+
+window.AsiyeNativeAuth = window.AsiyeNativeAuth || {
+    post(message) {
+        const payload = typeof message === 'string'
+            ? message
+            : JSON.stringify(message);
+        const channel = window.Asiye || window.Android;
+        if (!channel || typeof channel.postMessage !== 'function') {
+            return false;
+        }
+        channel.postMessage(payload);
+        return true;
+    }
+};
+
+window.onNativePhoneCodeSent = function (payload) {
+    const login = window.ASIYE_DRIVER_LOGIN;
+    login.nativeVerificationId = payload.verificationId;
+    const display = document.getElementById('otpPhoneDisplay');
+    if (display) display.textContent = login.currentPhone || '+27';
+    login.showStep('otpStep');
+    login.startResendTimer();
+};
+
+window.onNativePhoneAutoVerified = function (payload) {
+    const input = document.getElementById('driverOtpInput');
+    if (input && payload.code) {
+        input.value = payload.code;
+        window.ASIYE_DRIVER_LOGIN.verifyOtp();
+    }
+};
+
+window.onNativePhoneAutoRetrievalTimeout = function (payload) {
+    if (!window.ASIYE_DRIVER_LOGIN.nativeVerificationId) {
+        window.ASIYE_DRIVER_LOGIN.nativeVerificationId = payload.verificationId;
+    }
+};
+
+window.onNativePhoneAuthError = function (payload) {
+    window.ASIYE_DRIVER_LOGIN.handleAuthError(
+        { code: 'auth/' + (payload.code || 'native-phone-auth-failed'), message: payload.message },
+        'phone'
+    );
+};
+
+window.onGoogleNativeLoginSuccess = async function (payload) {
+    try {
+        if (!payload.idToken) throw new Error('Google did not return an ID token.');
+        const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
+        const result = await firebase.auth().signInWithCredential(credential);
+        await window.ASIYE_DRIVER_LOGIN.verifyDriverProfile(result.user);
+    } catch (error) {
+        window.ASIYE_DRIVER_LOGIN.handleSocialError(error, 'Google');
+    }
+};
+
+window.onGoogleNativeLoginError = function (message) {
+    window.ASIYE_DRIVER_LOGIN.handleSocialError(
+        { code: 'auth/native-google-failed', message },
+        'Google'
+    );
+};
+
+window.onAppleNativeLoginSuccess = async function (payload) {
+    try {
+        if (!payload.identityToken || !payload.rawNonce) {
+            throw new Error('Apple did not return the required credentials.');
+        }
+        const provider = new firebase.auth.OAuthProvider('apple.com');
+        const credential = provider.credential({
+            idToken: payload.identityToken,
+            rawNonce: payload.rawNonce
+        });
+        const result = await firebase.auth().signInWithCredential(credential);
+        await window.ASIYE_DRIVER_LOGIN.verifyDriverProfile(result.user);
+    } catch (error) {
+        window.ASIYE_DRIVER_LOGIN.handleSocialError(error, 'Apple');
+    }
+};
+
+window.onAppleNativeLoginError = function (message) {
+    window.ASIYE_DRIVER_LOGIN.handleSocialError(
+        { code: 'auth/native-apple-failed', message },
+        'Apple'
+    );
 };
 
 
