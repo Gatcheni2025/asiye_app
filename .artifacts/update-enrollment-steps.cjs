@@ -1,0 +1,14 @@
+const fs=require('node:fs');
+const html='assets/driver-v2/enrollment.html';
+let s=fs.readFileSync(html,'utf8');
+s=s.replace('<form id="enrollmentForm" hidden>','<form id="enrollmentForm" hidden novalidate><div class="enrollment-progress"><p id="stepLabel" aria-live="polite"></p><progress id="stepProgress" max="6" value="1" aria-label="Enrollment progress"></progress></div><p id="stepError" role="alert" tabindex="-1" hidden></p>');
+s=s.replace('<label class="consent">','<fieldset><legend>6 · Review and submit</legend><p>Check your details before sending your application. Banking account numbers are masked below.</p><div id="enrollmentReview"></div><label class="consent">');
+s=s.replace('<button type="submit" id="submitEnrollment">Submit for verification</button></form>','<button type="submit" id="submitEnrollment">Submit for verification</button></fieldset><div class="step-actions"><button type="button" id="previousStep">Back</button><button type="button" id="nextStep">Continue</button></div><p class="draft-note">Your entries stay while you move between steps. Closing or refreshing this page clears unsent details.</p></form>');
+s=s.replace('<script src="./js/enrollment.js"></script>','<script src="./js/enrollment-validation.js"></script><script src="./js/enrollment.js"></script>');
+s=s.replace('<label>Phone number<input name="phone" type="tel" maxlength="25" required></label>','<label>Phone number<input name="phone" type="tel" maxlength="25" autocomplete="tel" aria-describedby="phoneHelp" required></label><p id="phoneHelp" class="field-help">For example: 082 123 4567 or +27 82 123 4567. Spaces, brackets and hyphens are allowed.</p>');
+s=s.replace('<label>Account number','<p>Use the details from your bank statement. Enter numbers only for your account number and six-digit branch code.</p><label>Account number');
+fs.writeFileSync(html,s);
+const js='assets/driver-v2/js/enrollment.js';
+s=fs.readFileSync(js,'utf8').replace('pattern="[+0-9 ()-]{7,25}"','maxlength="25" aria-describedby="refPhoneHelp${i}"');
+s=s.replace('<label>Relationship<input name="refRelation${i}"','<p id="refPhoneHelp${i}" class="field-help">Example: 082 123 4567 or +27 82 123 4567.</p><label>Relationship<input name="refRelation${i}"');
+fs.writeFileSync(js,s);

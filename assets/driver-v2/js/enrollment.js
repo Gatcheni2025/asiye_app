@@ -28,8 +28,61 @@
         };
         document.getElementById('captureFields').append(row);
     }
-    for (let i=1;i<=3;i++) document.getElementById('referenceFields').insertAdjacentHTML('beforeend', `<div class="reference"><h3>Reference ${i}</h3><label>Full name<input name="refName${i}" maxlength="120" required></label><label>Phone number<input name="refPhone${i}" type="tel" pattern="[+0-9 ()-]{7,25}" required></label><label>Relationship<input name="refRelation${i}" maxlength="80" required></label></div>`);
+    for (let i=1;i<=3;i++) document.getElementById('referenceFields').insertAdjacentHTML('beforeend', `<div class="reference"><h3>Reference ${i}</h3><label>Full name<input name="refName${i}" maxlength="120" required></label><label>Phone number<input name="refPhone${i}" type="tel" maxlength="25" aria-describedby="refPhoneHelp${i}" required></label><p id="refPhoneHelp${i}" class="field-help">Example: 082 123 4567 or +27 82 123 4567.</p><label>Relationship<input name="refRelation${i}" maxlength="80" required></label></div>`);
     document.getElementById('cancelCamera').onclick = stopCamera;
+    const steps = [...form.querySelectorAll('fieldset')];
+    const titles = ['Photos', 'Driver’s licence', 'Your details', 'References', 'Banking details', 'Review'];
+    const errorBox = document.getElementById('stepError');
+    let step = 0, advancing = false;
+    const showError = message => {
+        errorBox.textContent = message; errorBox.hidden = false; errorBox.focus();
+    };
+    const review = () => {
+        const target = document.getElementById('enrollmentReview');
+        target.replaceChildren();
+        const data = new FormData(form);
+        const rows = [['Name', data.get('fullName')], ['Phone', data.get('phone')], ['Vehicle registration',data.get('vehicleReg')], ['Photos','Selfie, car and ID/passport added'], ['Licence',data.get('licence')?.name], ['Bank',data.get('bank')], ['Account holder',data.get('accountHolder')], ['Account number','•••• ' + String(data.get('accountNumber')).slice(-4)], ['Branch code',data.get('branchCode')], ['Account type',data.get('accountType')]];
+        for (let i=1;i<=3;i++) rows.push([`Reference ${i}`,`${data.get(`refName${i}`)} · ${data.get(`refPhone${i}`)}`]);
+        rows.forEach(([label,value])=>{ const row=document.createElement('p');const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(String(value || 'Not provided')));target.append(row); });
+    };
+    const showStep = index => {
+        stopCamera(); step=index;
+        steps.forEach((panel,i)=>panel.hidden=i!==step);
+        errorBox.hidden=true;
+        document.getElementById('stepLabel').textContent=`Step ${step+1} of ${steps.length} · ${titles[step]}`;
+        document.getElementById('stepProgress').value=step+1;
+        document.getElementById('previousStep').hidden=step===0;
+        document.getElementById('nextStep').hidden=step===steps.length-1;
+        if(step===steps.length-1) review();
+        const legend=steps[step].querySelector('legend');legend.tabIndex=-1;legend.focus();
+    };
+    const validateStep = async index => {
+        for(const input of steps[index].querySelectorAll('input,select')) {
+            input.setCustomValidity('');
+            if(input.type==='tel' && !EnrollmentValidation.phone(input.value)) input.setCustomValidity('Enter a valid phone number, for example 082 123 4567 or +27 82 123 4567.');
+            else if(input.required && input.type==='text' && !input.value.trim()) input.setCustomValidity('Please enter this detail.');
+            else if(input.name==='accountNumber' && !/^[0-9]{6,20}$/.test(input.value)) input.setCustomValidity('Enter 6 to 20 digits from your bank account number, without spaces.');
+            else if(input.name==='branchCode' && !/^[0-9]{6}$/.test(input.value)) input.setCustomValidity('Enter your bank’s six-digit branch code.');
+            if(!input.checkValidity()) { showStep(index);showError(input.validationMessage);input.reportValidity();return false; }
+        }
+        if(index===0 && Object.keys(kinds).some(key=>!photos[key])) { showStep(index);showError('Add all three photos: your selfie, your car, and your ID or passport.');return false; }
+        if(index===1) {
+            const file=form.elements.licence.files[0];
+            if(!file || file.size===0 || file.size>10*1024*1024 || new TextDecoder().decode(await file.slice(0,5).arrayBuffer())!=='%PDF-') { showStep(index);showError('Choose a valid PDF of your driver’s licence, no larger than 10 MB.');return false; }
+        }
+        if(index===3 && new Set([1,2,3].map(i=>EnrollmentValidation.phoneKey(form.elements[`refPhone${i}`].value))).size!==3) { showStep(index);showError('Use three different reference phone numbers. The local and +27 versions of a number count as the same person.');return false; }
+        return true;
+    };
+    form.addEventListener('input', event=>event.target.setCustomValidity?.(''));
+    document.getElementById('previousStep').onclick=()=>{if(!busy && !advancing)showStep(Math.max(0,step-1));};
+    const nextStep = async () => {
+        if (busy || advancing) return;
+        advancing = true;
+        try { if (await validateStep(step)) showStep(Math.min(steps.length-1,step+1)); }
+        finally { advancing = false; }
+    };
+    document.getElementById('nextStep').onclick=nextStep;
+    showStep(0);
     document.getElementById('takePhoto').onclick = () => {
         const video = document.getElementById('captureVideo');
         if (!video.videoWidth) return;
@@ -45,18 +98,28 @@
             if (approval.val()?.status === 'approved' && approval.val()?.version === 1) { status.textContent = 'Verified. Sign in to start driving.'; form.hidden = true; return; }
             if (application.exists()) { status.textContent = approval.val()?.status === 'rejected' ? 'Your application was not approved. Contact Asiye support for the review outcome.' : 'Application submitted. Waiting for verification. You cannot start driving yet.'; form.hidden = true; return; }
             status.textContent = 'Complete all sections below to apply.'; form.hidden = false;
-        } catch { status.textContent = 'Enrollment could not load. Check your connection and enrollment access, then retry.'; form.hidden = true; }
+        } catch (error) {
+            const denied = /permission.?denied/i.test(String(error.code || error.message));
+            status.textContent = denied
+                ? 'Enrollment access is not configured. The administrator must publish Realtime Database rules for driverEnrollments and driverApprovals, then you can retry.'
+                : 'Enrollment could not load. Check your connection, then retry.';
+            console.warn('Enrollment database read failed:', error.code || 'unknown');
+            form.hidden = true;
+        }
     };
     document.getElementById('refreshEnrollment').onclick = check;
     firebase.auth().onAuthStateChanged(value => { user = value; if (!user) { window.location.replace('./login.html'); return; } check(); });
     form.onsubmit = async event => {
-        event.preventDefault(); if (!user || busy || !form.reportValidity()) return;
+        event.preventDefault(); if (!user || busy) return;
+        if (step < steps.length-1) { await nextStep(); return; }
+        for(let i=0;i<steps.length;i++) if(!await validateStep(i))return;
         const data = new FormData(form), file = data.get('licence');
         const references = [1,2,3].map(i=>({name:String(data.get(`refName${i}`)).trim(),phone:String(data.get(`refPhone${i}`)).trim(),relationship:String(data.get(`refRelation${i}`)).trim()}));
         if (new Set(references.map(ref=>ref.phone.replace(/\D/g,''))).size !== 3) { status.textContent='Please provide three different reference phone numbers.'; return; }
         if (Object.keys(kinds).some(key=>!photos[key])) { status.textContent='Add your selfie, car photo, and ID/passport photo.'; return; }
         if (!file || file.type !== 'application/pdf' || file.size > 10*1024*1024 || new TextDecoder().decode(await file.slice(0,5).arrayBuffer()) !== '%PDF-') { status.textContent='Upload a valid licence PDF under 10 MB.'; return; }
         busy = true; stopCamera(); document.getElementById('submitEnrollment').disabled = true;
+        steps.forEach(panel=>panel.disabled=true);
         try {
             const documents = {};
             const submissionId = crypto.randomUUID();
@@ -67,8 +130,17 @@
             }
             await firebase.database().ref(`driverEnrollments/${user.uid}`).set({ version:1, status:'pending', fullName:String(data.get('fullName')).trim(),phone:String(data.get('phone')).trim(),vehicleReg:String(data.get('vehicleReg')).trim(),documents,references,banking:{accountHolder:String(data.get('accountHolder')).trim(),bank:String(data.get('bank')).trim(),accountNumber:String(data.get('accountNumber')),branchCode:String(data.get('branchCode')),accountType:String(data.get('accountType'))},consent:true,submittedAt:firebase.database.ServerValue.TIMESTAMP });
             form.reset(); form.hidden = true; status.textContent='Application submitted. Waiting for verification. We will review your details before you can start driving.';
-        } catch { status.textContent='Submission failed. Your entered details are still here. Check your connection and try again.'; }
-        finally { busy=false; document.getElementById('submitEnrollment').disabled=false; }
+        } catch (error) {
+            if (error.code === 'storage/unauthorized') {
+                status.textContent = 'Document upload is not permitted. The administrator must publish the enrollment Storage rules. Your entered details are still here.';
+            } else if (/permission.?denied/i.test(String(error.code || error.message))) {
+                status.textContent = 'The enrollment record could not be saved. Check Realtime Database enrollment permissions or refresh to see whether it was already submitted. Your entered details are still here.';
+            } else {
+                status.textContent = 'Submission failed. Your entered details are still here. Check your connection and try again.';
+            }
+            console.warn('Enrollment submission failed:', error.code || 'unknown');
+        }
+        finally { busy=false; steps.forEach(panel=>panel.disabled=false); document.getElementById('submitEnrollment').disabled=false; }
     };
     window.addEventListener('pagehide',()=>{stopCamera();Object.values(previews).forEach(url=>URL.revokeObjectURL(url));});
 })();
