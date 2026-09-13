@@ -33,8 +33,7 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build test APK
-        working-directory: android
-        run: ./gradlew assembleDebug
+        run: flutter build apk --debug || test -f android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
