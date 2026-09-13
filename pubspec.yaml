@@ -85,7 +85,6 @@ flutter:
     - assets/driver-v2/css/
     - assets/driver-v2/js/
     - assets/passenger-v2/
-    - assets/passenger-v2/assets/images/
     - assets/passenger-v2/css/
     - assets/passenger-v2/js/
 
