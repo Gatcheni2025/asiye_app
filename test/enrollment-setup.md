@@ -1,6 +1,6 @@
 # Driver enrollment rollout
 
-The camera selfie is a photograph for manual review, not biometric verification or a liveness test. Driver licence uploads accept PDF; ID/passport, vehicle, and selfie uploads accept images. Three references and banking details are mandatory. Sensitive documents are stored by private Storage path, never by public download URL or localStorage.
+The camera selfie is a photograph for manual review, not biometric verification or a liveness test. Driver licence uploads accept PDF, JPG, PNG or WebP (up to 10 MB); ID/passport, vehicle, and selfie uploads accept images. Three references and banking details are mandatory. Sensitive documents are stored by private Storage path, never by public download URL or localStorage.
 
 Before collecting real applications:
 
@@ -11,4 +11,6 @@ Before collecting real applications:
 5. Replace public writes on `taxis` and `requests` with trusted backend operations or rules requiring a current `driverApprovals/{auth.uid}` approval before online status, request acceptance, and trip start. The new browser checks alone are NOT server-side enforcement. A complete replacement cannot safely be inferred from the publicly writable multi-role legacy schema.
 6. Establish document retention/deletion and rejection/resubmission procedures. Uploaded files are immutable to clients. Failed submissions can leave orphaned private uploads for an administrator to remove. A rejected applicant sees the waiting/review screen; corrections require a reviewer-managed reset.
 
-Not deployed: database/storage rules, reviewer service, approval provisioning, and server-side trip authorization. No personal documents were uploaded during development. Test native camera permissions and PDF picking in the Flutter WebView, plus pending/approved/rejected flows on real accounts before release.
+Not deployed: database/storage rules, reviewer service, approval provisioning, and server-side trip authorization. No personal documents were uploaded during development. Test native camera permissions and PDF/image picking in the Flutter WebView, plus pending/approved/rejected flows on real accounts before release.
+
+References use named children reference1, reference2 and reference3, matching the supplied database rules. Older array payloads are rejected by those rules. Deploy the updated enrollment page/scripts and publish the updated Storage match block to enable licence images; the supplied Realtime Database enrollment rules already accept the corrected payload.

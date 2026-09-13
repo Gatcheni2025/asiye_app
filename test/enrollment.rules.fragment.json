@@ -4,9 +4,116 @@
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.enrollmentReviewer === true)",
         ".write": "auth != null && auth.uid === $uid && !data.exists()",
-        ".validate": "newData.hasChildren(['version','status','fullName','phone','vehicleReg','documents','references','banking','consent','submittedAt']) && newData.child('version').val() === 1 && newData.child('status').val() === 'pending' && newData.child('consent').val() === true && newData.child('submittedAt').val() === now && newData.child('references').numChildren() === 3 && newData.child('documents').hasChildren(['selfie','car','identity','licence']) && newData.child('banking').hasChildren(['accountHolder','bank','accountNumber','branchCode','accountType'])",
-        "references": { "$reference": { ".validate": "newData.hasChildren(['name','phone','relationship']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('phone').isString() && newData.child('phone').val().length >= 7 && newData.child('relationship').isString() && newData.child('relationship').val().length > 0" } },
-        "documents": { "$document": { ".validate": "newData.isString() && newData.val().beginsWith('driverEnrollments/' + $uid + '/')" } }
+        ".validate": "newData.hasChildren(['version','status','fullName','phone','vehicleReg','documents','references','banking','consent','submittedAt']) && newData.child('version').val() === 1 && newData.child('status').val() === 'pending' && newData.child('consent').val() === true && newData.child('submittedAt').val() === now && newData.child('references').hasChildren(['reference1','reference2','reference3']) && newData.child('documents').hasChildren(['selfie','car','identity','licence']) && newData.child('banking').hasChildren(['accountHolder','bank','accountNumber','branchCode','accountType'])",
+        "fullName": {
+          ".validate": "newData.isString() && newData.val().length > 1 && newData.val().length <= 100"
+        },
+        "phone": {
+          ".validate": "newData.isString() && newData.val().length >= 7 && newData.val().length <= 20"
+        },
+        "vehicleReg": {
+          ".validate": "newData.isString() && newData.val().length > 1 && newData.val().length <= 20"
+        },
+        "version": {
+          ".validate": "newData.isNumber() && newData.val() === 1"
+        },
+        "status": {
+          ".validate": "newData.isString() && newData.val() === 'pending'"
+        },
+        "consent": {
+          ".validate": "newData.isBoolean() && newData.val() === true"
+        },
+        "submittedAt": {
+          ".validate": "newData.isNumber() && newData.val() === now"
+        },
+        "references": {
+          "reference1": {
+            ".validate": "newData.hasChildren(['name','phone','relationship'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            "phone": {
+              ".validate": "newData.isString() && newData.val().length >= 7"
+            },
+            "relationship": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "reference2": {
+            ".validate": "newData.hasChildren(['name','phone','relationship'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            "phone": {
+              ".validate": "newData.isString() && newData.val().length >= 7"
+            },
+            "relationship": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "reference3": {
+            ".validate": "newData.hasChildren(['name','phone','relationship'])",
+            "name": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            "phone": {
+              ".validate": "newData.isString() && newData.val().length >= 7"
+            },
+            "relationship": {
+              ".validate": "newData.isString() && newData.val().length > 0"
+            },
+            "$other": {
+              ".validate": false
+            }
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "documents": {
+          "selfie": {
+            ".validate": "newData.isString() && newData.val().beginsWith('driverEnrollments/' + $uid + '/')"
+          },
+          "car": {
+            ".validate": "newData.isString() && newData.val().beginsWith('driverEnrollments/' + $uid + '/')"
+          },
+          "identity": {
+            ".validate": "newData.isString() && newData.val().beginsWith('driverEnrollments/' + $uid + '/')"
+          },
+          "licence": {
+            ".validate": "newData.isString() && newData.val().beginsWith('driverEnrollments/' + $uid + '/')"
+          },
+          "$other": {
+            ".validate": false
+          }
+        },
+        "banking": {
+          ".validate": "newData.hasChildren(['accountHolder','bank','accountNumber','branchCode','accountType'])",
+          "accountHolder": {
+            ".validate": "newData.isString() && newData.val().length > 1"
+          },
+          "bank": {
+            ".validate": "newData.isString() && newData.val().length > 1"
+          },
+          "accountNumber": {
+            ".validate": "newData.isString() && newData.val().length > 4"
+          },
+          "branchCode": {
+            ".validate": "newData.isString() && newData.val().length > 2"
+          },
+          "accountType": {
+            ".validate": "newData.isString() && newData.val().length > 1"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
       }
     },
     "driverApprovals": {

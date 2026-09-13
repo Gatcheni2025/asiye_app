@@ -59,6 +59,9 @@
     const validateStep = async index => {
         for(const input of steps[index].querySelectorAll('input,select')) {
             input.setCustomValidity('');
+            if (['fullName','vehicleReg','accountHolder','bank'].includes(input.name) && input.value.trim().length < 2) {
+                input.setCustomValidity('Please enter at least two characters for this detail.');
+            } else
             if(input.type==='tel' && !EnrollmentValidation.phone(input.value)) input.setCustomValidity('Enter a valid phone number, for example 082 123 4567 or +27 82 123 4567.');
             else if(input.required && input.type==='text' && !input.value.trim()) input.setCustomValidity('Please enter this detail.');
             else if(input.name==='accountNumber' && !/^[0-9]{6,20}$/.test(input.value)) input.setCustomValidity('Enter 6 to 20 digits from your bank account number, without spaces.');
@@ -68,7 +71,7 @@
         if(index===0 && Object.keys(kinds).some(key=>!photos[key])) { showStep(index);showError('Add all three photos: your selfie, your car, and your ID or passport.');return false; }
         if(index===1) {
             const file=form.elements.licence.files[0];
-            if(!file || file.size===0 || file.size>10*1024*1024 || new TextDecoder().decode(await file.slice(0,5).arrayBuffer())!=='%PDF-') { showStep(index);showError('Choose a valid PDF of your driver’s licence, no larger than 10 MB.');return false; }
+            if(!await EnrollmentValidation.licenceType(file)) { showStep(index);showError('Choose your licence as a PDF, JPG, PNG or WebP file, no larger than 10 MB. Make sure all details are readable.');return false; }
         }
         if(index===3 && new Set([1,2,3].map(i=>EnrollmentValidation.phoneKey(form.elements[`refPhone${i}`].value))).size!==3) { showStep(index);showError('Use three different reference phone numbers. The local and +27 versions of a number count as the same person.');return false; }
         return true;
@@ -114,10 +117,11 @@
         if (step < steps.length-1) { await nextStep(); return; }
         for(let i=0;i<steps.length;i++) if(!await validateStep(i))return;
         const data = new FormData(form), file = data.get('licence');
-        const references = [1,2,3].map(i=>({name:String(data.get(`refName${i}`)).trim(),phone:String(data.get(`refPhone${i}`)).trim(),relationship:String(data.get(`refRelation${i}`)).trim()}));
-        if (new Set(references.map(ref=>ref.phone.replace(/\D/g,''))).size !== 3) { status.textContent='Please provide three different reference phone numbers.'; return; }
+        const references = EnrollmentValidation.references(data);
+        if (new Set(Object.values(references).map(ref=>EnrollmentValidation.phoneKey(ref.phone))).size !== 3) { status.textContent='Please provide three different reference phone numbers.'; return; }
         if (Object.keys(kinds).some(key=>!photos[key])) { status.textContent='Add your selfie, car photo, and ID/passport photo.'; return; }
-        if (!file || file.type !== 'application/pdf' || file.size > 10*1024*1024 || new TextDecoder().decode(await file.slice(0,5).arrayBuffer()) !== '%PDF-') { status.textContent='Upload a valid licence PDF under 10 MB.'; return; }
+        const licenceType = await EnrollmentValidation.licenceType(file);
+        if (!licenceType) { status.textContent='Upload your licence as a PDF, JPG, PNG or WebP file, no larger than 10 MB.'; return; }
         busy = true; stopCamera(); document.getElementById('submitEnrollment').disabled = true;
         steps.forEach(panel=>panel.disabled=true);
         try {
@@ -126,7 +130,7 @@
             for (const [key,blob] of Object.entries({...photos,licence:file})) {
                 status.textContent = `Uploading ${key}…`;
                 const path = `driverEnrollments/${user.uid}/${submissionId}/${key}`;
-                await firebase.storage().ref(path).put(blob,{contentType:blob.type}); documents[key]=path;
+                await firebase.storage().ref(path).put(blob,{contentType:key === 'licence' ? licenceType : blob.type}); documents[key]=path;
             }
             await firebase.database().ref(`driverEnrollments/${user.uid}`).set({ version:1, status:'pending', fullName:String(data.get('fullName')).trim(),phone:String(data.get('phone')).trim(),vehicleReg:String(data.get('vehicleReg')).trim(),documents,references,banking:{accountHolder:String(data.get('accountHolder')).trim(),bank:String(data.get('bank')).trim(),accountNumber:String(data.get('accountNumber')),branchCode:String(data.get('branchCode')),accountType:String(data.get('accountType'))},consent:true,submittedAt:firebase.database.ServerValue.TIMESTAMP });
             form.reset(); form.hidden = true; status.textContent='Application submitted. Waiting for verification. We will review your details before you can start driving.';
