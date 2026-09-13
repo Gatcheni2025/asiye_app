@@ -53,6 +53,9 @@ ASIYE.places = {
 
     search(query) {
 
+        clearTimeout(this.searchTimer);
+        this.activeQuery = String(query || '').trim();
+
         const value =
             String(query || '')
             .trim();
@@ -87,13 +90,11 @@ ASIYE.places = {
 
     performSearch(query) {
 
+        if (this.activeQuery !== query) return;
+
         if (!this.init()) {
 
-            ASIYE.ui?.toast(
-                'Google location search is still loading.'
-            );
-
-            return;
+            return this.searchAddresses(query);
         }
 
 
@@ -104,12 +105,7 @@ ASIYE.places = {
 
             componentRestrictions: {
                 country: 'za'
-            },
-
-            types: [
-                'geocode',
-                'establishment'
-            ]
+            }
         };
 
 
@@ -142,6 +138,9 @@ ASIYE.places = {
         }
 
 
+        const timeout = setTimeout(() => {
+            if (this.activeQuery === query) this.searchAddresses(query);
+        }, 5000);
         this.autocompleteService
             .getPlacePredictions(
                 request,
@@ -150,15 +149,17 @@ ASIYE.places = {
                     status
                 ) => {
 
+                    clearTimeout(timeout);
+
+                    if (this.activeQuery !== query) return;
+
                     if (
                         status !==
                         google.maps.places
                             .PlacesServiceStatus.OK
                     ) {
 
-                        this.renderSuggestions([]);
-
-                        return;
+                        return this.searchAddresses(query);
                     }
 
 
@@ -191,6 +192,30 @@ ASIYE.places = {
             );
     },
 
+
+    async searchAddresses(query) {
+        try {
+            const params = new URLSearchParams({ q: query, country: 'za', limit: '6', access_token: ASIYE_CONFIG.mapboxToken });
+            const response = await fetch(`https://api.mapbox.com/search/geocode/v6/forward?${params}`);
+            if (!response.ok) throw new Error(`Address search: ${response.status}`);
+            const data = await response.json();
+            if (query !== this.activeQuery) return;
+            const results = (data.features || []).map(feature => ({
+                name: feature.properties?.name || feature.properties?.full_address,
+                address: feature.properties?.full_address || feature.properties?.name,
+                latitude: feature.geometry?.coordinates?.[1], longitude: feature.geometry?.coordinates?.[0]
+            })).filter(place => Number.isFinite(place.latitude) && Number.isFinite(place.longitude));
+            this.renderSuggestions(results);
+            if (!results.length) this.searchMessage('No addresses found. Try a street name and suburb.');
+        } catch {
+            if (query === this.activeQuery) this.searchMessage('Location search is unavailable. Check your connection and try again.');
+        }
+    },
+
+    searchMessage(message) {
+        const container = document.getElementById('destinationSuggestions');
+        if (container) container.textContent = message;
+    },
 
     renderSuggestions(results) {
 
@@ -308,6 +333,8 @@ ASIYE.places = {
 
 
     resolvePlaceDetails(place) {
+
+        if (Number.isFinite(place?.latitude) && Number.isFinite(place?.longitude)) return this.selectDestination(place);
 
         if (
             !place?.placeId ||

@@ -30,7 +30,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   RemoteNotification? notification = message.notification;
   AndroidNotification? android = message.notification?.android;
 
-  if (notification != null || message.data.isNotEmpty) {
+  if (notification == null && message.data.isNotEmpty) {
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'asiye_danger_channel',
       'High Priority Alerts',
@@ -45,7 +45,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         ?.createNotificationChannel(channel);
 
     await flutterLocalNotificationsPlugin.show(
-      id: notification.hashCode,
+      id: (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode,
       title: notification?.title ?? message.data['title'] ?? 'Asiye',
       body: notification?.body ?? message.data['message'] ?? message.data['body'] ?? 'New update',
       notificationDetails: NotificationDetails(
@@ -104,7 +104,50 @@ class AsiyeMainShell extends StatefulWidget {
 
 class _AsiyeMainShellState extends State<AsiyeMainShell> {
   WebViewController? _controller;
+  Map<String, dynamic>? _pendingNotification;
+
+  Future<void> _openNotification(Map<String, dynamic> data) async {
+    _pendingNotification = data;
+    try {
+      final result = await _controller?.runJavaScriptReturningResult("""
+        (() => {
+          if (typeof window.onNotificationClicked !== 'function') return false;
+          window.onNotificationClicked(${jsonEncode(data)});
+          return true;
+        })()
+      """);
+      if (result == true || result.toString() == 'true') _pendingNotification = null;
+    } catch (error) { debugPrint('Notification deferred until page ready: $error'); }
+  }
   StreamSubscription<Position>? _positionSubscription;
+  StreamSubscription<String>? _tokenSubscription;
+  StreamSubscription<RemoteMessage>? _messageSubscription;
+  StreamSubscription<RemoteMessage>? _openedSubscription;
+
+  @override
+  void dispose() {
+    _positionSubscription?.cancel();
+    _tokenSubscription?.cancel();
+    _messageSubscription?.cancel();
+    _openedSubscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _savePushToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('fcmToken', token);
+    await _controller?.runJavaScript("""
+      localStorage.setItem('fcmToken', ${jsonEncode(token)});
+      if (typeof firebase !== 'undefined' && firebase.apps.length) {
+        const uid = localStorage.getItem('userId');
+        const type = localStorage.getItem('userType');
+        if (uid && type) {
+          const node = type === 'driver' ? 'taxis' : type === 'handler' ? 'handlers' : 'commuters';
+          firebase.database().ref(node + '/' + uid).update({fcmToken: ${jsonEncode(token)}}).catch(console.warn);
+        }
+      }
+    """);
+  }
 
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
 
@@ -209,9 +252,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
             // 🚨 CRITICAL FIX: Track Navigation to sync SharedPreferences
             final prefs = await SharedPreferences.getInstance();
-            if (url.contains('taxi.html')) {
+            if (url.contains('/driver-v2/') || url.contains('taxi.html')) {
               await prefs.setString('userType', 'driver');
-            } else if (url.contains('index.html') && !url.contains('login.html')) {
+            } else if (url.contains('/passenger-v2/') && !url.contains('login.html')) {
               await prefs.setString('userType', 'commuter');
             } else if (url.contains('handler.html')) {
               await prefs.setString('userType', 'handler');
@@ -254,8 +297,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
               // Hard guard to prevent drivers loading index.html and reverting to commuter
               String protectionLogic = "";
-              if (url.contains('index.html') && userType == 'driver') {
-                protectionLogic = "window.location.replace('taxi.html');";
+              if (url.contains('/passenger-v2/index.html') && userType == 'driver') {
+                protectionLogic = "window.location.replace('../driver-v2/index.html');";
               } else if (url.contains('taxi.html') && userType == 'commuter') {
                 protectionLogic = "window.location.replace('index.html');";
               }
@@ -272,6 +315,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                 }
               """);
             }
+            if (_pendingNotification != null) await _openNotification(_pendingNotification!);
           },
           onNavigationRequest: (request) async {
             if (request.url.contains('success.html') || request.url.contains('cancel.html')) {
@@ -386,7 +430,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       );
     } catch (e) {
       debugPrint("Initial load error: $e");
-      await controller.loadFlutterAsset('assets/login.html').catchError((_) => null);
+      await controller.loadFlutterAsset('assets/passenger-v2/login.html').catchError((_) => null);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -421,8 +465,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       settings: initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse details) {
         if (details.payload != null) {
-          _controller?.runJavaScript(
-              "if(typeof window.onNotificationClicked === 'function') { window.onNotificationClicked(${details.payload}); }");
+          try {
+            final data = jsonDecode(details.payload!);
+            if (data is Map<String, dynamic>) _openNotification(data);
+          } catch (_) { _openNotification({'message': details.payload}); }
         }
       },
     );
@@ -447,12 +493,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
-    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    _tokenSubscription = messaging.onTokenRefresh.listen((token) {
+      _savePushToken(token).catchError((Object error) { debugPrint('Push token refresh failed: $error'); });
+    });
+    _messageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
 
       flutterLocalNotificationsPlugin.show(
-        id: notification.hashCode,
+        id: (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode,
         title: notification?.title ?? message.data['title'] ?? 'Asiye',
         body: notification?.body ?? message.data['message'] ?? message.data['body'] ?? 'New update',
         notificationDetails: NotificationDetails(
@@ -478,9 +527,20 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _controller?.runJavaScript("if(typeof window.onPushNotificationReceived === 'function') { window.onPushNotificationReceived(${jsonEncode(message.data)}); }");
     });
 
-    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-      _controller?.runJavaScript("if(typeof window.onNotificationClicked === 'function') { window.onNotificationClicked(${jsonEncode(message.data)}); }");
+    _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      _openNotification(message.data);
     });
+
+    final initialMessage = await messaging.getInitialMessage();
+    if (initialMessage != null) await _openNotification(initialMessage.data);
+    final launch = await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+    final payload = launch?.notificationResponse?.payload;
+    if (launch?.didNotificationLaunchApp == true && payload != null) {
+      try {
+        final data = jsonDecode(payload);
+        if (data is Map<String, dynamic>) await _openNotification(data);
+      } catch (_) { /* Ignore malformed legacy notification payloads. */ }
+    }
 
     String? token;
     try {
@@ -524,13 +584,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
     if (userType != null) {
       switch (userType) {
-        case 'driver': return 'assets/taxi.html';
+        case 'driver': return 'assets/driver-v2/index.html';
         case 'rank_manager': return 'assets/taxiRank.html';
         case 'handler': return 'assets/handler.html';
-        case 'commuter': return 'assets/index.html';
+        case 'commuter': return 'assets/passenger-v2/index.html';
       }
     }
-    return 'assets/index.html';
+    return 'assets/passenger-v2/index.html';
   }
 
   void _handleNavCalls(String message) async {
@@ -669,7 +729,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
     // Explicitly wipe the JS memory before redirect
     _controller?.runJavaScript("localStorage.clear(); sessionStorage.clear();");
-    _controller?.loadFlutterAsset('assets/login.html');
+    _controller?.loadFlutterAsset('assets/passenger-v2/login.html');
   }
 
   Future<void> _getCurrentLocation({bool highAccuracy = true}) async {
@@ -731,8 +791,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     await prefs.setString('userId', uid);
     await prefs.setString('userType', type);
 
-    String target = 'assets/index.html';
-    if (type == 'driver') target = 'assets/taxi.html';
+    String target = 'assets/passenger-v2/index.html';
+    if (type == 'driver') target = 'assets/driver-v2/index.html';
     if (type == 'handler') target = 'assets/handler.html';
     if (type == 'rank_manager') target = 'assets/taxiRank.html';
 
