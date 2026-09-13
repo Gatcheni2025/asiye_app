@@ -1709,7 +1709,7 @@ window.ASIYE_DRIVER_LOGIN = {
 
         let message =
 
-            `${providerName} sign-in failed. Please try again.`;
+            error?.message || `${providerName} sign-in failed. Please try again.`;
 
 
         switch (
