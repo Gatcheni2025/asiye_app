@@ -33,12 +33,13 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build test APK
-        run: flutter build apk --debug
+        working-directory: android
+        run: ./gradlew assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: asiye-11.0.10-build-280-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
