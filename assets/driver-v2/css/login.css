@@ -1248,3 +1248,53 @@ button {
     text-transform:
         uppercase;
 }
+
+/* Native social authentication */
+.login-social-button {
+    width: 100%;
+    min-height: 52px;
+    margin-bottom: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.08);
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.login-social-button:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.google-letter {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #ffffff;
+    color: #4285f4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+}
+
+.login-divider {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 18px 0;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 12px;
+}
+
+.login-divider span {
+    height: 1px;
+    flex: 1;
+    background: rgba(255, 255, 255, 0.15);
+}
