@@ -1547,7 +1547,7 @@ window.ASIYE_PASSENGER_LOGIN = {
 
 
         let message =
-            `${provider} sign-in failed.`;
+            error?.message || `${provider} sign-in failed.`;
 
 
         switch (
