@@ -36,14 +36,13 @@ jobs:
         run: flutter build apk --debug || test -f android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Print test signing fingerprints
+        continue-on-error: true
         run: |
-          keytool -list -v \
-            -keystore "$HOME/.android/debug.keystore" \
-            -alias androiddebugkey \
-            -storepass android \
-            -keypass android | grep -E "SHA1:|SHA256:"
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload APK
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: asiye-11.0.10-build-280-debug-apk
