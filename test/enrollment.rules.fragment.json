@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "driverEnrollments": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.enrollmentReviewer === true)",
+        ".write": "auth != null && auth.uid === $uid && !data.exists()",
+        ".validate": "newData.hasChildren(['version','status','fullName','phone','vehicleReg','documents','references','banking','consent','submittedAt']) && newData.child('version').val() === 1 && newData.child('status').val() === 'pending' && newData.child('consent').val() === true && newData.child('submittedAt').val() === now && newData.child('references').numChildren() === 3 && newData.child('documents').hasChildren(['selfie','car','identity','licence']) && newData.child('banking').hasChildren(['accountHolder','bank','accountNumber','branchCode','accountType'])",
+        "references": { "$reference": { ".validate": "newData.hasChildren(['name','phone','relationship']) && newData.child('name').isString() && newData.child('name').val().length > 0 && newData.child('phone').isString() && newData.child('phone').val().length >= 7 && newData.child('relationship').isString() && newData.child('relationship').val().length > 0" } },
+        "documents": { "$document": { ".validate": "newData.isString() && newData.val().beginsWith('driverEnrollments/' + $uid + '/')" } }
+      }
+    },
+    "driverApprovals": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || auth.token.enrollmentReviewer === true)",
+        ".write": false
+      }
+    }
+  }
+}

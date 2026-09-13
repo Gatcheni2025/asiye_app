@@ -407,6 +407,8 @@ ASIYE_DRIVER.requests = {
 
     async accept(requestId = null) {
 
+        if (!await AsiyeEnrollment.requireApproval()) return;
+
         const driverId =
             ASIYE_DRIVER.state
                 ?.driverId;

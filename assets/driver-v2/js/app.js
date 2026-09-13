@@ -581,6 +581,8 @@ ASIYE_DRIVER.ui = {
 
     async toggleOnline() {
 
+        if (!await AsiyeEnrollment.requireApproval()) return;
+
         const driverId =
             ASIYE_DRIVER.state.driverId;
 
@@ -3480,6 +3482,8 @@ async function (
 ) {
 
     try {
+
+        if (!await AsiyeEnrollment.requireApproval()) return;
 
         let driver =
             existingDriverData;

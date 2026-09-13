@@ -867,7 +867,7 @@ ASIYE.ui = {
 
                 <div class="ride-choice-icon">
 
-                    <img src="../data/${type === 'go' ? 'car.svg' : '4seater.png'}" alt="" class="asiye-ride-image">
+                    <img src="../data/${type === 'go' ? 'car.svg' : type === 'club7' ? '7seater.png' : '4seater.png'}" alt="" class="asiye-ride-image">
 
                 </div>
 

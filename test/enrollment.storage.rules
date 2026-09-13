@@ -1,0 +1,15 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Merge this match block into existing Storage rules. No public read grants
+    // may overlap it. Reviewers use a trusted Admin SDK, not token download URLs.
+    match /driverEnrollments/{uid}/{submission}/{document} {
+      allow read: if request.auth != null && (request.auth.uid == uid || request.auth.token.enrollmentReviewer == true);
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.size > 0 && request.resource.size <= 10 * 1024 * 1024
+        && ((document == 'licence' && request.resource.contentType == 'application/pdf')
+          || (document in ['selfie', 'car', 'identity'] && request.resource.contentType.matches('image/(jpeg|png|webp)')));
+      allow update, delete: if false;
+    }
+  }
+}

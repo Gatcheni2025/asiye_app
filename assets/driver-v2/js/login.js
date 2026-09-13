@@ -1232,9 +1232,7 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-            this.showStep(
-                'notDriverStep'
-            );
+            window.location.replace('./enrollment.html');
 
 
         } catch (error) {
@@ -1328,6 +1326,8 @@ window.ASIYE_DRIVER_LOGIN = {
         driverData,
         authUser
     ) {
+
+        if (!await AsiyeEnrollment.requireApproval()) return;
 
         localStorage.setItem(
             'driverId',
