@@ -667,11 +667,16 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-        if (
-            !this.confirmationResult ||
-            !input
-        ) {
+        if (!input) {
+            return;
+        }
 
+        if (!this.nativeVerificationId && !this.confirmationResult) {
+            if (errorElement) {
+                errorElement.textContent =
+                    'Your verification session expired. Please resend the code.';
+            }
+            this.hideAuthProgress();
             return;
         }
 
