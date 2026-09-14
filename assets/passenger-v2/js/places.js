@@ -12,6 +12,15 @@ ASIYE.places = {
     geocoder: null,
     searchTimer: null,
     initAttempts: 0,
+    activeQuery: '',
+
+    onGoogleReady() {
+        this.initAttempts = 0;
+        this.init();
+        if (this.activeQuery.length >= 3) {
+            this.performSearch(this.activeQuery);
+        }
+    },
 
     init() {
 
@@ -154,7 +163,10 @@ ASIYE.places = {
         const timeout = setTimeout(() => {
             if (this.activeQuery === query) this.searchWithGoogleGeocoder(query);
         }, 10000);
-        this.autocompleteService
+        this.searchMessage('Searching Google locations…');
+
+        try {
+            this.autocompleteService
             .getPlacePredictions(
                 request,
                 (
@@ -203,6 +215,11 @@ ASIYE.places = {
                     );
                 }
             );
+        } catch (error) {
+            console.error('Google Places search failed:', error);
+            clearTimeout(timeout);
+            this.searchWithGoogleGeocoder(query);
+        }
     },
 
 
