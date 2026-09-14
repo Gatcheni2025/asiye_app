@@ -587,6 +587,8 @@ window.ASIYE_DRIVER_LOGIN = {
             }
 
 
+            this.hideAuthProgress();
+
             this.showStep(
                 'otpStep'
             );
@@ -885,6 +887,8 @@ window.ASIYE_DRIVER_LOGIN = {
 
         } catch (error) {
 
+            this.hideAuthProgress();
+
             console.error(
                 'Google sign-in failed:',
                 error
@@ -1025,6 +1029,8 @@ window.ASIYE_DRIVER_LOGIN = {
 
         } catch (error) {
 
+            this.hideAuthProgress();
+
             console.error(
                 'Apple sign-in failed:',
                 error
@@ -1082,6 +1088,8 @@ window.ASIYE_DRIVER_LOGIN = {
        ======================================================== */
 
     async verifyDriverProfile(user) {
+
+        this.hideAuthProgress();
 
         try {
 
