@@ -26,7 +26,52 @@ window.AsiyePages = {
         if (page === 'account') {
             body.innerHTML = `<div class="member-avatar">${esc((user.name || user.firstName || 'A').charAt(0))}</div><h2>${esc(user.name || user.firstName || 'Your account')}</h2>` + this.row('Phone', user.phone || user.phoneNumber) + this.row('Email', user.email) + this.row('Account type', driver ? 'Driver' : 'Passenger');
         } else if (page === 'wallet') {
-            body.innerHTML = `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` + note('Wallet credits shown from your account. Choose your payment method when booking a ride.') + this.row('Currency', 'South African rand · ZAR');
+            const returnStatus = new URLSearchParams(location.search).get('wallet');
+            body.innerHTML =
+                `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
+                (returnStatus === 'success'
+                    ? note('Payment returned successfully. Your balance will update after PayFast confirms it.')
+                    : returnStatus === 'cancelled'
+                        ? note('The payment was cancelled and no funds were added.')
+                        : note('Add funds securely using PayFast Sandbox.')) +
+                `<form class="wallet-topup" data-wallet-topup>
+                    <label>Amount to add</label>
+                    <div class="wallet-amounts">
+                        <button type="button" data-amount="50">R50</button>
+                        <button type="button" data-amount="100">R100</button>
+                        <button type="button" data-amount="200">R200</button>
+                        <button type="button" data-amount="500">R500</button>
+                    </div>
+                    <div class="wallet-custom">
+                        <span>R</span>
+                        <input name="amount" type="number" inputmode="decimal" min="10" max="5000" step="0.01" placeholder="Enter amount" required>
+                    </div>
+                    <button class="member-primary" type="submit">Add funds with PayFast</button>
+                    <p class="member-note">Sandbox payments use test money. Funds are credited only after secure PayFast confirmation.</p>
+                </form>` +
+                this.row('Currency', 'South African rand · ZAR');
+            const form = body.querySelector('[data-wallet-topup]');
+            const input = form.querySelector('input[name="amount"]');
+            form.querySelectorAll('[data-amount]').forEach(button => {
+                button.onclick = () => {
+                    input.value = button.dataset.amount;
+                    form.querySelectorAll('[data-amount]').forEach(item => item.classList.remove('selected'));
+                    button.classList.add('selected');
+                };
+            });
+            form.onsubmit = async event => {
+                event.preventDefault();
+                const submit = form.querySelector('[type="submit"]');
+                submit.disabled = true;
+                submit.textContent = 'Opening PayFast…';
+                try {
+                    await ASIYE.wallet.startTopup(Number(input.value));
+                } catch (error) {
+                    submit.disabled = false;
+                    submit.textContent = 'Add funds with PayFast';
+                    app.ui?.toast?.(error.message || 'Unable to start payment.');
+                }
+            };
         } else if (page === 'vehicle') {
             body.innerHTML = `<div class="member-balance"><small>Registered vehicle</small><strong>${esc(user.vehicleReg || user.registration || 'Not provided')}</strong></div>` + this.row('Make', user.vehicleMake || user.make) + this.row('Model', user.vehicleModel || user.model) + this.row('Colour', user.vehicleColor || user.color) + this.row('Seats', user.capacity || user.seats) + note('Contact support to correct registered vehicle details.');
         } else if (page === 'safety') {
