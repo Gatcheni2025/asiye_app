@@ -871,6 +871,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
       if (account == null) {
         if (mounted) setState(() => _isLoading = false);
+        _callWeb('onGoogleNativeLoginError', 'Google sign-in was cancelled.');
         return;
       }
 
@@ -887,8 +888,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginSuccess === 'function') { window.onGoogleNativeLoginSuccess(${jsonEncode(userData)}); }");
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
-      if (e.toString().toLowerCase().contains("canceled")) return;
-      _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginError === 'function') { window.onGoogleNativeLoginError('${e.toString().replaceAll("'", "\\'")}'); }");
+      _callWeb('onGoogleNativeLoginError', e.toString());
+      return;
     }
   }
 
