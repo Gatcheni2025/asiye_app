@@ -942,6 +942,12 @@ ASIYE.club = {
             pricePerPassenger:
                 pricing.pricePerPassenger,
 
+            agreedFare:
+                pricing.pricePerPassenger,
+
+            pricingVersion:
+                1,
+
             commuterId:
                 uid,
 
