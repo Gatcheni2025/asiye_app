@@ -45,3 +45,14 @@ ASIYE.wallet = {
         form.submit();
     }
 };
+
+
+document.addEventListener('DOMContentLoaded', () => {
+    const walletReturn = new URLSearchParams(location.search).get('wallet');
+    if (!walletReturn) return;
+    setTimeout(() => {
+        if (window.AsiyePages && window.ASIYE?.state?.userId) {
+            AsiyePages.open('wallet');
+        }
+    }, 1200);
+});
