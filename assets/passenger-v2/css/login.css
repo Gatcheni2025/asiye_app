@@ -1109,3 +1109,31 @@ button:disabled {
 @keyframes authProgressSpin {
     to { transform: rotate(360deg); }
 }
+
+
+.driver-login-link {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 12px;
+    padding: 0 16px;
+    border: 1.5px solid var(--border);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    background: #f7f7f7;
+    color: #111;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 900;
+}
+
+.driver-login-link .fa-arrow-right {
+    margin-left: auto;
+    font-size: 10px;
+}
+
+.driver-login-link:active {
+    transform: scale(.99);
+}
