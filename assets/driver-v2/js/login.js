@@ -23,6 +23,36 @@ window.ASIYE_DRIVER_LOGIN = {
     nativeVerificationId:
         null,
 
+    showAuthProgress(title, message) {
+        let overlay = document.getElementById('authProgressOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'authProgressOverlay';
+            overlay.className = 'auth-progress-overlay';
+            overlay.setAttribute('role', 'status');
+            overlay.setAttribute('aria-live', 'polite');
+            overlay.innerHTML = `
+                <div class="auth-progress-card">
+                    <div class="auth-progress-spinner" aria-hidden="true"></div>
+                    <h2 id="authProgressTitle"></h2>
+                    <p id="authProgressMessage"></p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+        document.getElementById('authProgressTitle').textContent =
+            title || 'Signing you in';
+        document.getElementById('authProgressMessage').textContent =
+            message || 'Please wait while Asiye securely completes authentication.';
+        overlay.classList.add('show');
+        document.body.classList.add('auth-in-progress');
+    },
+
+    hideAuthProgress() {
+        document.getElementById('authProgressOverlay')?.classList.remove('show');
+        document.body.classList.remove('auth-in-progress');
+    },
+
 
     /* ========================================================
        INIT
@@ -487,6 +517,11 @@ window.ASIYE_DRIVER_LOGIN = {
         this.currentPhone =
             phone;
 
+        this.showAuthProgress(
+            'Verifying your number',
+            'Please wait while Asiye securely checks this device and sends your code.'
+        );
+
 
         if (button) {
 
@@ -692,6 +727,11 @@ window.ASIYE_DRIVER_LOGIN = {
         }
 
 
+        this.showAuthProgress(
+            'Signing you in',
+            'Checking your verification code and opening your account.'
+        );
+
         try {
 
             const result = this.nativeVerificationId
@@ -768,6 +808,11 @@ window.ASIYE_DRIVER_LOGIN = {
                 'googleLoginButton'
             );
 
+
+        this.showAuthProgress(
+            'Continue with Google',
+            'Complete Google authentication, then Asiye will open your account.'
+        );
 
         try {
 
@@ -899,6 +944,11 @@ window.ASIYE_DRIVER_LOGIN = {
                 'appleLoginButton'
             );
 
+
+        this.showAuthProgress(
+            'Continue with Apple',
+            'Complete Apple authentication, then Asiye will open your account.'
+        );
 
         try {
 
@@ -1349,6 +1399,9 @@ window.ASIYE_DRIVER_LOGIN = {
         authUser
     ) {
 
+        this.hideAuthProgress();
+
+
         if (!await AsiyeEnrollment.requireApproval()) return;
 
         localStorage.setItem(
@@ -1602,6 +1655,8 @@ window.ASIYE_DRIVER_LOGIN = {
         area
     ) {
 
+        this.hideAuthProgress();
+
         let message =
             'Something went wrong. Please try again.';
 
@@ -1700,6 +1755,8 @@ window.ASIYE_DRIVER_LOGIN = {
         error,
         providerName
     ) {
+
+        this.hideAuthProgress();
 
         console.error(
             `${providerName} authentication error:`,
@@ -1827,6 +1884,7 @@ window.AsiyeNativeAuth = window.AsiyeNativeAuth || {
 window.onNativePhoneCodeSent = function (payload) {
     const login = window.ASIYE_DRIVER_LOGIN;
     login.nativeVerificationId = payload.verificationId;
+    login.hideAuthProgress();
     const display = document.getElementById('otpPhoneDisplay');
     if (display) display.textContent = login.currentPhone || '+27';
     login.showStep('otpStep');
