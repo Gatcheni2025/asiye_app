@@ -861,6 +861,7 @@ ASIYE_DRIVER.ui = {
             )
 
             : Number(
+                request.agreedFare ||
                 request.finalAmount ||
                 request.calculatedPrice ||
                 0
@@ -1366,6 +1367,7 @@ ASIYE_DRIVER.ui = {
                     <strong>
                         R${
                             Number(
+                                request.agreedFare ||
                                 request.finalAmount ||
                                 request.calculatedPrice ||
                                 0
@@ -2651,6 +2653,7 @@ ASIYE_DRIVER.ui = {
             amount =
 
                 Number(
+                    request.agreedFare ||
                     request.pricePerPassenger ||
                     0
                 ) *
@@ -2661,6 +2664,7 @@ ASIYE_DRIVER.ui = {
             amount =
 
                 Number(
+                    request.agreedFare ||
                     request.finalAmount ||
                     request.calculatedPrice ||
                     0
