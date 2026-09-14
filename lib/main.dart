@@ -10,12 +10,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 
 bool _isFirebaseInitialized = false;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -673,7 +676,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         try {
           final Map<String, dynamic> data = jsonDecode(message);
           final action = data['action'];
-          if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
+          if (action == 'startPhoneAuth') {
+            await _startPhoneVerification(data['phone']?.toString() ?? '');
+          }
+          else if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
             await _saveSessionAndRedirect(data['uid'], data['type']);
           }
           else if (action == 'showNotification') {
@@ -799,6 +805,65 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _controller?.loadFlutterAsset(target);
   }
 
+  void _callWeb(String functionName, Object payload) {
+    _controller?.runJavaScript(
+      "if (typeof window.$functionName === 'function') { "
+      "window.$functionName(${jsonEncode(payload)}); }",
+    );
+  }
+
+  Future<void> _startPhoneVerification(String phoneNumber) async {
+    if (phoneNumber.isEmpty) {
+      _callWeb('onNativePhoneAuthError', {
+        'code': 'invalid-phone-number',
+        'message': 'Enter a valid mobile number.',
+      });
+      return;
+    }
+
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (PhoneAuthCredential credential) {
+          final code = credential.smsCode;
+          if (code != null && code.isNotEmpty) {
+            _callWeb('onNativePhoneAutoVerified', {'code': code});
+          }
+        },
+        verificationFailed: (FirebaseAuthException error) {
+          _callWeb('onNativePhoneAuthError', {
+            'code': error.code,
+            'message': error.message ?? 'Phone verification failed.',
+          });
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          _callWeb('onNativePhoneCodeSent', {
+            'verificationId': verificationId,
+            'resendToken': resendToken,
+          });
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _callWeb('onNativePhoneAutoRetrievalTimeout', {
+            'verificationId': verificationId,
+          });
+        },
+      );
+    } catch (error) {
+      _callWeb('onNativePhoneAuthError', {
+        'code': 'native-phone-auth-failed',
+        'message': error.toString(),
+      });
+    }
+  }
+
+  String _generateNonce([int length = 32]) {
+    const chars =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => chars[random.nextInt(chars.length)]).join();
+  }
+
   Future<void> _signInWithGoogle() async {
     try {
       await _googleSignIn.signOut().catchError((_) => null);
@@ -806,6 +871,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
       if (account == null) {
         if (mounted) setState(() => _isLoading = false);
+        _callWeb('onGoogleNativeLoginError', 'Google sign-in was cancelled.');
         return;
       }
 
@@ -822,15 +888,18 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginSuccess === 'function') { window.onGoogleNativeLoginSuccess(${jsonEncode(userData)}); }");
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
-      if (e.toString().toLowerCase().contains("canceled")) return;
-      _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginError === 'function') { window.onGoogleNativeLoginError('${e.toString().replaceAll("'", "\\'")}'); }");
+      _callWeb('onGoogleNativeLoginError', e.toString());
+      return;
     }
   }
 
   Future<void> _signInWithApple() async {
     try {
+      final rawNonce = _generateNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+        nonce: hashedNonce,
       );
 
       final Map<String, dynamic> userData = {
@@ -839,6 +908,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         "identityToken": credential.identityToken ?? "",
         "userIdentifier": credential.userIdentifier ?? "",
         "authorizationCode": credential.authorizationCode ?? "",
+        "rawNonce": rawNonce,
       };
 
       _controller?.runJavaScript("if(typeof window.onAppleNativeLoginSuccess === 'function') { window.onAppleNativeLoginSuccess(${jsonEncode(userData)}); }");

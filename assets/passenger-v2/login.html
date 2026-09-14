@@ -227,6 +227,15 @@
 
             </button>
 
+            <a
+                class="driver-login-link"
+                href="../driver-v2/login.html"
+            >
+                <i class="fas fa-car-side" aria-hidden="true"></i>
+                Sign in as driver
+                <i class="fas fa-arrow-right" aria-hidden="true"></i>
+            </a>
+
 
         </div>
 
@@ -355,8 +364,7 @@
 
             <p>
 
-                Your account is ready.
-                Add your name to continue.
+                Add your name and take a live selfie for your safety profile.
 
             </p>
 
@@ -367,6 +375,23 @@
                 type="text"
                 placeholder="Your full name"
             >
+
+
+            <label for="passengerLiveSelfie"
+                   style="display:block;margin:16px 0 8px;font-weight:800;">
+                Take a live profile selfie
+            </label>
+            <input
+                id="passengerLiveSelfie"
+                type="file"
+                accept="image/*"
+                capture="user"
+                required
+                style="width:100%;margin-bottom:16px;"
+            >
+            <small style="display:block;margin:-8px 0 16px;color:#666;">
+                Camera capture is required; gallery photos are not accepted by the app flow.
+            </small>
 
 
             <button

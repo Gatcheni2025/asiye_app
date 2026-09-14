@@ -1664,6 +1664,41 @@ ASIYE_DRIVER.trip = {
     },
 
 
+    async submitPassengerRating(passengerId, value) {
+        const rating = Number(value);
+        const driverId = ASIYE_DRIVER.state.driverId;
+        if (!this.requestId || !driverId || !passengerId || rating < 1 || rating > 5) {
+            throw new Error('Invalid rating.');
+        }
+
+        const ratingRef = firebase.database().ref(
+            `requests/${this.requestId}/ratings/driverToPassenger/${passengerId}`
+        );
+        const saved = await ratingRef.transaction(current => {
+            if (current) return;
+            return {
+                value: rating,
+                passengerId,
+                driverId,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+        });
+        if (!saved.committed) return;
+
+        const summaryRef = firebase.database().ref(
+            `commuters/${passengerId}/ratingSummary`
+        );
+        const summary = await summaryRef.transaction(current => ({
+            total: Number(current?.total || 0) + rating,
+            count: Number(current?.count || 0) + 1
+        }));
+        const data = summary.snapshot.val();
+        await firebase.database().ref(`commuters/${passengerId}/rating`).set(
+            Number(data.total) / Number(data.count)
+        );
+    },
+
+
     renderCompleted(
         request
     ) {

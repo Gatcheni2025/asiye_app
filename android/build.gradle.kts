@@ -44,6 +44,19 @@ allprojects {
     }
 }
 
+// Keep Gradle output where Flutter tooling expects it: <project>/build.
+val flutterBuildDirectory =
+    rootProject.layout.buildDirectory
+        .dir("../../build")
+        .get()
+rootProject.layout.buildDirectory.value(flutterBuildDirectory)
+
+subprojects {
+    project.layout.buildDirectory.value(
+        flutterBuildDirectory.dir(project.name)
+    )
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }

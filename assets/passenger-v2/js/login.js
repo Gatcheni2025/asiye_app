@@ -23,6 +23,39 @@ window.ASIYE_PASSENGER_LOGIN = {
     pendingUser:
         null,
 
+    nativeVerificationId:
+        null,
+
+    showAuthProgress(title, message) {
+        let overlay = document.getElementById('authProgressOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'authProgressOverlay';
+            overlay.className = 'auth-progress-overlay';
+            overlay.setAttribute('role', 'status');
+            overlay.setAttribute('aria-live', 'polite');
+            overlay.innerHTML = `
+                <div class="auth-progress-card">
+                    <div class="auth-progress-spinner" aria-hidden="true"></div>
+                    <h2 id="authProgressTitle"></h2>
+                    <p id="authProgressMessage"></p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+        document.getElementById('authProgressTitle').textContent =
+            title || 'Signing you in';
+        document.getElementById('authProgressMessage').textContent =
+            message || 'Please wait while Asiye securely completes authentication.';
+        overlay.classList.add('show');
+        document.body.classList.add('auth-in-progress');
+    },
+
+    hideAuthProgress() {
+        document.getElementById('authProgressOverlay')?.classList.remove('show');
+        document.body.classList.remove('auth-in-progress');
+    },
+
 
     /* ========================================================
        INIT
@@ -484,6 +517,11 @@ window.ASIYE_PASSENGER_LOGIN = {
         this.currentPhone =
             phone;
 
+        this.showAuthProgress(
+            'Verifying your number',
+            'Please wait while Asiye securely checks this device and sends your code.'
+        );
+
 
         if (errorElement) {
 
@@ -508,6 +546,13 @@ window.ASIYE_PASSENGER_LOGIN = {
 
 
         try {
+            if (window.AsiyeNativeAuth?.post({
+                action: 'startPhoneAuth',
+                phone
+            })) {
+                return;
+            }
+
 
             this.confirmationResult =
 
@@ -533,6 +578,8 @@ window.ASIYE_PASSENGER_LOGIN = {
                     phone;
             }
 
+
+            this.hideAuthProgress();
 
             this.showStep(
                 'otpStep'
@@ -608,15 +655,23 @@ window.ASIYE_PASSENGER_LOGIN = {
         }
 
 
+        this.showAuthProgress(
+            'Signing you in',
+            'Checking your verification code and opening your account.'
+        );
+
         try {
 
-            const result =
-
-                await this
-                    .confirmationResult
-                    .confirm(
+            const result = this.nativeVerificationId
+                ? await firebase.auth().signInWithCredential(
+                    firebase.auth.PhoneAuthProvider.credential(
+                        this.nativeVerificationId,
                         code
-                    );
+                    )
+                )
+                : await this.confirmationResult.confirm(code);
+
+            this.nativeVerificationId = null;
 
 
             await this.afterAuthentication(
@@ -652,6 +707,11 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
+        this.showAuthProgress(
+            'Continue with Google',
+            'Complete Google authentication, then Asiye will open your account.'
+        );
+
         try {
 
             if (button) {
@@ -667,6 +727,10 @@ window.ASIYE_PASSENGER_LOGIN = {
 
                 `;
             }
+            if (window.AsiyeNativeAuth?.post('triggerGoogleSignIn')) {
+                return;
+            }
+
 
 
             const provider =
@@ -738,6 +802,11 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
+        this.showAuthProgress(
+            'Continue with Apple',
+            'Complete Apple authentication, then Asiye will open your account.'
+        );
+
         try {
 
             if (button) {
@@ -753,6 +822,10 @@ window.ASIYE_PASSENGER_LOGIN = {
 
                 `;
             }
+            if (window.AsiyeNativeAuth?.post('triggerAppleSignIn')) {
+                return;
+            }
+
 
 
             const provider =
@@ -822,6 +895,9 @@ window.ASIYE_PASSENGER_LOGIN = {
         user
     ) {
 
+        this.hideAuthProgress();
+
+
         if (!user) {
 
             throw new Error(
@@ -845,7 +921,7 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-        if (profile) {
+        if (profile && profile.data?.liveSelfieVerifiedAt) {
 
             await this.completeLogin(
 
@@ -860,6 +936,8 @@ window.ASIYE_PASSENGER_LOGIN = {
             return;
         }
 
+        this.pendingProfile = profile || null;
+
 
         /*
          * New passenger.
@@ -871,13 +949,11 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-        if (
-            nameInput &&
-            user.displayName
-        ) {
-
+        if (nameInput) {
             nameInput.value =
-                user.displayName;
+                profile?.data?.name ||
+                user.displayName ||
+                '';
         }
 
 
@@ -1162,7 +1238,44 @@ window.ASIYE_PASSENGER_LOGIN = {
         }
 
 
+        const selfieInput =
+            document.getElementById('passengerLiveSelfie');
+
+        const selfie =
+            selfieInput?.files?.[0];
+
+        if (!selfie || !String(selfie.type || '').startsWith('image/')) {
+            this.toast('Take a live selfie to continue.');
+            return;
+        }
+
+        this.showAuthProgress(
+            'Updating your safety profile',
+            'Uploading your live selfie securely…'
+        );
+
+        let photoURL;
+
+        try {
+            const photoRef = firebase.storage()
+                .ref(`profile_photos/passengers/${user.uid}/live-selfie.jpg`);
+            await photoRef.put(selfie, {
+                contentType: selfie.type,
+                customMetadata: { capture: 'live-selfie' }
+            });
+            photoURL = await photoRef.getDownloadURL();
+        } catch (error) {
+            this.hideAuthProgress();
+            console.error('Passenger selfie upload failed:', error);
+            this.toast('Could not upload your selfie. Check camera and connection permissions.');
+            return;
+        }
+
+        const existingProfile = this.pendingProfile?.data || {};
+
         const profile = {
+
+            ...existingProfile,
 
             name:
                 name,
@@ -1194,28 +1307,39 @@ window.ASIYE_PASSENGER_LOGIN = {
                     ?.providerId ||
                 'phone',
 
-            createdAt:
+            profileImage:
+                photoURL,
 
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP
+            photoURL:
+                photoURL,
+
+            liveSelfieVerifiedAt:
+                firebase.database.ServerValue.TIMESTAMP,
+
+            createdAt:
+                existingProfile.createdAt ||
+                firebase.database.ServerValue.TIMESTAMP,
+
+            updatedAt:
+                firebase.database.ServerValue.TIMESTAMP
         };
 
+
+        const profileId = this.pendingProfile?.id || user.uid;
 
         await firebase
             .database()
             .ref(
-                `commuters/${user.uid}`
+                `commuters/${profileId}`
             )
-            .set(
+            .update(
                 profile
             );
 
 
         await this.completeLogin(
 
-            user.uid,
+            this.pendingProfile?.id || user.uid,
 
             profile,
 
@@ -1449,6 +1573,8 @@ window.ASIYE_PASSENGER_LOGIN = {
         area
     ) {
 
+        this.hideAuthProgress();
+
         let message =
             'Something went wrong. Please try again.';
 
@@ -1526,7 +1652,7 @@ window.ASIYE_PASSENGER_LOGIN = {
 
 
         let message =
-            `${provider} sign-in failed.`;
+            error?.message || `${provider} sign-in failed.`;
 
 
         switch (
@@ -1617,6 +1743,98 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
     }
 
+};
+
+
+/* ============================================================
+   NATIVE FLUTTER AUTH BRIDGE
+   ============================================================ */
+
+window.AsiyeNativeAuth = window.AsiyeNativeAuth || {
+    post(message) {
+        const payload = typeof message === 'string'
+            ? message
+            : JSON.stringify(message);
+        const channel = window.Asiye || window.Android;
+        if (!channel || typeof channel.postMessage !== 'function') {
+            return false;
+        }
+        channel.postMessage(payload);
+        return true;
+    }
+};
+
+window.onNativePhoneCodeSent = function (payload) {
+    const login = window.ASIYE_PASSENGER_LOGIN;
+    login.nativeVerificationId = payload.verificationId;
+    login.hideAuthProgress();
+    const display = document.getElementById('otpPhoneDisplay');
+    if (display) display.textContent = login.currentPhone || '+27';
+    login.showStep('otpStep');
+    login.startResendTimer();
+};
+
+window.onNativePhoneAutoVerified = function (payload) {
+    const input = document.getElementById('passengerOtpInput');
+    if (input && payload.code) {
+        input.value = payload.code;
+        window.ASIYE_PASSENGER_LOGIN.verifyOtp();
+    }
+};
+
+window.onNativePhoneAutoRetrievalTimeout = function (payload) {
+    if (!window.ASIYE_PASSENGER_LOGIN.nativeVerificationId) {
+        window.ASIYE_PASSENGER_LOGIN.nativeVerificationId = payload.verificationId;
+    }
+};
+
+window.onNativePhoneAuthError = function (payload) {
+    window.ASIYE_PASSENGER_LOGIN.handleAuthError(
+        { code: 'auth/' + (payload.code || 'native-phone-auth-failed'), message: payload.message },
+        'phone'
+    );
+};
+
+window.onGoogleNativeLoginSuccess = async function (payload) {
+    try {
+        if (!payload.idToken) throw new Error('Google did not return an ID token.');
+        const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
+        const result = await firebase.auth().signInWithCredential(credential);
+        await window.ASIYE_PASSENGER_LOGIN.afterAuthentication(result.user);
+    } catch (error) {
+        window.ASIYE_PASSENGER_LOGIN.handleSocialError(error, 'Google');
+    }
+};
+
+window.onGoogleNativeLoginError = function (message) {
+    window.ASIYE_PASSENGER_LOGIN.handleSocialError(
+        { code: 'auth/native-google-failed', message },
+        'Google'
+    );
+};
+
+window.onAppleNativeLoginSuccess = async function (payload) {
+    try {
+        if (!payload.identityToken || !payload.rawNonce) {
+            throw new Error('Apple did not return the required credentials.');
+        }
+        const provider = new firebase.auth.OAuthProvider('apple.com');
+        const credential = provider.credential({
+            idToken: payload.identityToken,
+            rawNonce: payload.rawNonce
+        });
+        const result = await firebase.auth().signInWithCredential(credential);
+        await window.ASIYE_PASSENGER_LOGIN.afterAuthentication(result.user);
+    } catch (error) {
+        window.ASIYE_PASSENGER_LOGIN.handleSocialError(error, 'Apple');
+    }
+};
+
+window.onAppleNativeLoginError = function (message) {
+    window.ASIYE_PASSENGER_LOGIN.handleSocialError(
+        { code: 'auth/native-apple-failed', message },
+        'Apple'
+    );
 };
 
 

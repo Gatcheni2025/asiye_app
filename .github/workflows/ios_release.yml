@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - fix/native-authentication
   workflow_dispatch:
 
 jobs:
@@ -22,7 +23,7 @@ jobs:
       - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Build and Upload to TestFlight 
+      - name: Build and Upload to TestFlight
         working-directory: ./ios
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
@@ -32,3 +33,14 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: fastlane beta
+
+      - name: Upload signed IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asiye-11.0.15-build-285-ios
+          path: |
+            ios/*.ipa
+            ios/build/*.ipa
+          if-no-files-found: warn
+          retention-days: 30

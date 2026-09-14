@@ -19,6 +19,12 @@ ASIYE.map = {
 
     driverLocation: null,
 
+    nearbyDriversRef: null,
+
+    nearbyDriversListener: null,
+
+    nearbyDriverMarkers: new Map(),
+
 
     init() {
 
@@ -106,6 +112,8 @@ ASIYE.map = {
                         location.longitude
                     );
                 }
+
+                this.startNearbyDrivers();
             });
 
             if (this.driverLocation) {
@@ -123,6 +131,69 @@ ASIYE.map = {
     /* ========================================================
        USER LOCATION MARKER
        ======================================================== */
+
+    startNearbyDrivers() {
+        if (this.nearbyDriversRef || !firebase?.database) return;
+
+        this.nearbyDriversRef = firebase.database().ref('taxis');
+        this.nearbyDriversListener = this.nearbyDriversRef.on('value', snapshot => {
+            const visible = new Set();
+            const passenger = ASIYE.state.location || {};
+
+            snapshot.forEach(child => {
+                const driver = child.val() || {};
+                const lat = Number(driver.latitude ?? driver.location?.latitude ?? driver.location?.lat);
+                const lng = Number(driver.longitude ?? driver.location?.longitude ?? driver.location?.lng);
+                const lastSeen = Number(driver.lastSeen || 0);
+                const isFresh = !lastSeen || Date.now() - lastSeen < 120000;
+                if (driver.isOnline !== true || !isFresh ||
+                    !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+                if (Number.isFinite(passenger.latitude) && Number.isFinite(passenger.longitude)) {
+                    const dy = (lat - passenger.latitude) * 111;
+                    const dx = (lng - passenger.longitude) * 111 *
+                        Math.cos(passenger.latitude * Math.PI / 180);
+                    if (Math.hypot(dx, dy) > 25) return;
+                }
+
+                visible.add(child.key);
+                const heading = Number(driver.heading ?? driver.location?.heading ?? 0);
+                const existing = this.nearbyDriverMarkers.get(child.key);
+                if (existing) {
+                    AsiyeLiveCar.move(existing, [lng, lat], heading);
+                } else if (this.instance) {
+                    const car = AsiyeLiveCar.create(this.instance, [lng, lat], heading);
+                    car.getElement?.().classList.add('asiye-nearby-car');
+                    this.nearbyDriverMarkers.set(child.key, car);
+                }
+            });
+
+            for (const [id, car] of this.nearbyDriverMarkers) {
+                if (!visible.has(id)) {
+                    AsiyeLiveCar.stop(car);
+                    car.remove();
+                    this.nearbyDriverMarkers.delete(id);
+                }
+            }
+        });
+    },
+
+    stopNearbyDrivers() {
+        if (this.nearbyDriversRef && this.nearbyDriversListener) {
+            this.nearbyDriversRef.off('value', this.nearbyDriversListener);
+        }
+        this.nearbyDriversRef = null;
+        this.nearbyDriversListener = null;
+        for (const car of this.nearbyDriverMarkers.values()) {
+            AsiyeLiveCar.stop(car);
+            car.remove();
+        }
+        this.nearbyDriverMarkers.clear();
+    },
+
+    selectDriver() {
+        this.stopNearbyDrivers();
+    },
 
     showDriverLocation(latitude, longitude, heading = 0) {
         if (latitude == null || longitude == null || latitude === '' || longitude === '') return;

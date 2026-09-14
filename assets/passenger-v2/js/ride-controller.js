@@ -226,15 +226,6 @@ ASIYE.ride = {
                     request
                 );
 
-                if (
-                    request.queuedTaxiId
-                ) {
-
-                    this.listenDriver(
-                        request.queuedTaxiId
-                    );
-                }
-
                 break;
 
 
@@ -282,6 +273,10 @@ ASIYE.ride = {
 
                 this.renderDriverAssigned(
                     request
+                );
+
+                this.listenDriver(
+                    request.taxiId
                 );
 
                 break;
@@ -1129,6 +1124,15 @@ ASIYE.ride = {
                     <strong>${ASIYE.ui.escape(passenger.paymentMethod || request.paymentMethod || 'cash')}</strong>
                 </div>
 
+                ${request.ratings?.passengerToDriver?.[ASIYE.state.userId]
+                    ? '<p style="margin-top:16px;font-weight:800;">Thanks for rating your driver.</p>'
+                    : `<section class="trip-rating" style="margin-top:18px;">
+                        <strong>Rate your driver</strong>
+                        <div data-rating-stars style="display:flex;justify-content:center;gap:8px;margin:12px 0;">
+                            ${[1,2,3,4,5].map(value => `<button type="button" data-rating="${value}" aria-label="${value} stars" style="border:0;background:none;color:#c8c8c8;font-size:30px;">★</button>`).join('')}
+                        </div>
+                        <button type="button" id="submitDriverRating" class="primary-button" disabled>Submit rating</button>
+                    </section>`}
             </div>
 
             <button
@@ -1140,6 +1144,33 @@ ASIYE.ride = {
             </button>
 
         `;
+
+
+        let selectedDriverRating = 0;
+        document.querySelectorAll('[data-rating]').forEach(star => {
+            star.addEventListener('click', () => {
+                selectedDriverRating = Number(star.dataset.rating);
+                document.querySelectorAll('[data-rating]').forEach(item => {
+                    item.style.color = Number(item.dataset.rating) <= selectedDriverRating
+                        ? '#f5b301' : '#c8c8c8';
+                });
+                const submit = document.getElementById('submitDriverRating');
+                if (submit) submit.disabled = false;
+            });
+        });
+        document.getElementById('submitDriverRating')?.addEventListener('click', async event => {
+            event.currentTarget.disabled = true;
+            event.currentTarget.textContent = 'Saving…';
+            try {
+                await this.submitDriverRating(request, selectedDriverRating);
+                event.currentTarget.textContent = 'Rating submitted';
+                ASIYE.ui.toast('Thank you for rating your driver.');
+            } catch (error) {
+                event.currentTarget.disabled = false;
+                event.currentTarget.textContent = 'Submit rating';
+                ASIYE.ui.toast('Could not save your rating.');
+            }
+        });
 
 
         document
@@ -1160,8 +1191,45 @@ ASIYE.ride = {
 
                     ASIYE.ui
                         .renderHome();
+
+                    ASIYE.map
+                        ?.startNearbyDrivers?.();
                 }
             );
+    },
+
+
+    async submitDriverRating(request, value) {
+        const rating = Number(value);
+        const passengerId = ASIYE.state.userId;
+        const driverId = request.taxiId;
+        if (!passengerId || !driverId || rating < 1 || rating > 5) {
+            throw new Error('Invalid rating.');
+        }
+
+        const ratingRef = firebase.database().ref(
+            `requests/${this.requestId}/ratings/passengerToDriver/${passengerId}`
+        );
+        const saved = await ratingRef.transaction(current => {
+            if (current) return;
+            return {
+                value: rating,
+                passengerId,
+                driverId,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+        });
+        if (!saved.committed) return;
+
+        const summaryRef = firebase.database().ref(`taxis/${driverId}/ratingSummary`);
+        const summary = await summaryRef.transaction(current => ({
+            total: Number(current?.total || 0) + rating,
+            count: Number(current?.count || 0) + 1
+        }));
+        const data = summary.snapshot.val();
+        await firebase.database().ref(`taxis/${driverId}/rating`).set(
+            Number(data.total) / Number(data.count)
+        );
     },
 
 
@@ -1295,6 +1363,8 @@ ASIYE.ride = {
             return;
         }
 
+
+        ASIYE.map?.selectDriver?.();
 
         /*
          * Already listening to this driver.
