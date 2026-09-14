@@ -9,7 +9,9 @@ ASIYE.places = {
 
     autocompleteService: null,
     placesService: null,
+    geocoder: null,
     searchTimer: null,
+    initAttempts: 0,
 
     init() {
 
@@ -30,6 +32,10 @@ ASIYE.places = {
 
             this.autocompleteService =
                 new google.maps.places.AutocompleteService();
+        }
+
+        if (!this.geocoder) {
+            this.geocoder = new google.maps.Geocoder();
         }
 
         if (!this.placesService) {
@@ -93,9 +99,16 @@ ASIYE.places = {
         if (this.activeQuery !== query) return;
 
         if (!this.init()) {
-
+            if (this.initAttempts++ < 12) {
+                this.searchMessage('Connecting to Google Places…');
+                return setTimeout(() => {
+                    if (this.activeQuery === query) this.performSearch(query);
+                }, 500);
+            }
             return this.searchAddresses(query);
         }
+
+        this.initAttempts = 0;
 
 
         const request = {
@@ -139,8 +152,8 @@ ASIYE.places = {
 
 
         const timeout = setTimeout(() => {
-            if (this.activeQuery === query) this.searchAddresses(query);
-        }, 5000);
+            if (this.activeQuery === query) this.searchWithGoogleGeocoder(query);
+        }, 10000);
         this.autocompleteService
             .getPlacePredictions(
                 request,
@@ -159,7 +172,7 @@ ASIYE.places = {
                             .PlacesServiceStatus.OK
                     ) {
 
-                        return this.searchAddresses(query);
+                        return this.searchWithGoogleGeocoder(query);
                     }
 
 
@@ -190,6 +203,38 @@ ASIYE.places = {
                     );
                 }
             );
+    },
+
+
+    searchWithGoogleGeocoder(query) {
+        if (!this.geocoder && !this.init()) {
+            return this.searchAddresses(query);
+        }
+
+        this.geocoder.geocode(
+            {
+                address: query,
+                componentRestrictions: { country: 'ZA' },
+                region: 'ZA'
+            },
+            (results, status) => {
+                if (query !== this.activeQuery) return;
+                if (status !== google.maps.GeocoderStatus.OK || !results?.length) {
+                    return this.searchAddresses(query);
+                }
+
+                const places = results.slice(0, 8).map(result => ({
+                    placeId: result.place_id,
+                    name: result.address_components?.[0]?.long_name ||
+                        result.formatted_address,
+                    address: result.formatted_address,
+                    secondary: result.formatted_address,
+                    latitude: result.geometry.location.lat(),
+                    longitude: result.geometry.location.lng()
+                }));
+                this.renderSuggestions(places);
+            }
+        );
     },
 
 
