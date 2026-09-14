@@ -1210,11 +1210,14 @@ ASIYE.ride = {
         const ratingRef = firebase.database().ref(
             `requests/${this.requestId}/ratings/passengerToDriver/${passengerId}`
         );
-        const saved = await ratingRef.transaction(current => current || {
-            value: rating,
-            passengerId,
-            driverId,
-            createdAt: firebase.database.ServerValue.TIMESTAMP
+        const saved = await ratingRef.transaction(current => {
+            if (current) return;
+            return {
+                value: rating,
+                passengerId,
+                driverId,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
         });
         if (!saved.committed) return;
 
