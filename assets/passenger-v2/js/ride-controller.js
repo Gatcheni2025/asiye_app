@@ -226,15 +226,6 @@ ASIYE.ride = {
                     request
                 );
 
-                if (
-                    request.queuedTaxiId
-                ) {
-
-                    this.listenDriver(
-                        request.queuedTaxiId
-                    );
-                }
-
                 break;
 
 
@@ -282,6 +273,10 @@ ASIYE.ride = {
 
                 this.renderDriverAssigned(
                     request
+                );
+
+                this.listenDriver(
+                    request.taxiId
                 );
 
                 break;
@@ -1160,6 +1155,9 @@ ASIYE.ride = {
 
                     ASIYE.ui
                         .renderHome();
+
+                    ASIYE.map
+                        ?.startNearbyDrivers?.();
                 }
             );
     },
@@ -1295,6 +1293,8 @@ ASIYE.ride = {
             return;
         }
 
+
+        ASIYE.map?.selectDriver?.();
 
         /*
          * Already listening to this driver.
