@@ -75,7 +75,47 @@ window.AsiyePages = {
         } else if (page === 'vehicle') {
             body.innerHTML = `<div class="member-balance"><small>Registered vehicle</small><strong>${esc(user.vehicleReg || user.registration || 'Not provided')}</strong></div>` + this.row('Make', user.vehicleMake || user.make) + this.row('Model', user.vehicleModel || user.model) + this.row('Colour', user.vehicleColor || user.color) + this.row('Seats', user.capacity || user.seats) + note('Contact support to correct registered vehicle details.');
         } else if (page === 'safety') {
-            body.innerHTML = `<h2>Every ride, with care</h2><div class="member-info"><h3>Before your ride</h3><p>${driver ? 'Confirm your passenger and their pickup PIN before starting the ride.' : 'Match the vehicle plate and driver details. Share your pickup PIN only when ready to start.'}</p></div><div class="member-info"><h3>During your ride</h3><p>Wear a seat belt. Keep communication in the trip chat. Stop in a safe place if you need assistance.</p></div><button class="member-primary" data-support>Contact support</button>`;
+            if (!id) {
+                body.innerHTML = note('Sign in to manage loved ones.');
+                return;
+            }
+            const root = driver ? 'taxis' : 'commuters';
+            const familyRef = firebase.database().ref(`${root}/${id}/familyMembers`);
+            const familySnapshot = await familyRef.once('value');
+            const members = [];
+            familySnapshot.forEach(child => members.push({ id: child.key, ...child.val() }));
+            body.innerHTML = `
+                <h2>Loved ones & live location</h2>
+                <p class="member-note">Save trusted people, then share your active trip through your phone's secure share sheet.</p>
+                <div data-family-list>${members.length ? members.map(m => `<div class="member-row"><span>${esc(m.name)}</span><strong>${esc(m.phone)}</strong></div>`).join('') : note('No loved one added yet.')}</div>
+                <form data-family-form>
+                    <label>Full name</label><input name="name" required maxlength="80">
+                    <label>Mobile number</label><input name="phone" type="tel" required maxlength="24">
+                    <button class="member-primary" type="submit">Add loved one</button>
+                </form>
+                <button class="member-primary" data-share-live>Share active trip location</button>
+                <button class="member-primary" data-support>Contact support</button>`;
+            body.querySelector('[data-family-form]').onsubmit = async event => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                await familyRef.push({
+                    name: form.name.value.trim(),
+                    phone: form.phone.value.trim(),
+                    addedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+                this.open('safety');
+            };
+            body.querySelector('[data-share-live]').onclick = async () => {
+                const requestId = app.state?.activeRequest?.requestId ||
+                    app.state?.booking?.requestId ||
+                    localStorage.getItem('currentRequestId');
+                if (!requestId) return app.ui?.toast?.('There is no active trip to share.');
+                const url = `https://asiye.cloud/track.html?trip=${encodeURIComponent(requestId)}`;
+                const text = `Follow my Asiye trip live: ${url}`;
+                if (window.AsiyeNativeAuth?.post({ action:'share', text })) return;
+                if (navigator.share) await navigator.share({ title:'My Asiye trip', text, url });
+                else await navigator.clipboard.writeText(text);
+            };
             body.querySelector('[data-support]').onclick = () => this.open('support');
         } else if (page === 'support') {
             const config = driver ? window.ASIYE_DRIVER_CONFIG : window.ASIYE_CONFIG;
