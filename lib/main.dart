@@ -805,7 +805,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _controller?.loadFlutterAsset(target);
   }
 
-  void _callWeb(String functionName, Map<String, dynamic> payload) {
+  void _callWeb(String functionName, Object payload) {
     _controller?.runJavaScript(
       "if (typeof window.$functionName === 'function') { "
       "window.$functionName(${jsonEncode(payload)}); }",
