@@ -231,6 +231,12 @@ ASIYE.booking = {
             finalAmount:
                 fare,
 
+            agreedFare:
+                fare,
+
+            pricingVersion:
+                1,
+
             paymentMethod:
                 ASIYE.state.booking
                     .paymentMethod ||
