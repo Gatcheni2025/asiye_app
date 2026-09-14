@@ -921,7 +921,7 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-        if (profile) {
+        if (profile && profile.data?.liveSelfieVerifiedAt) {
 
             await this.completeLogin(
 
@@ -936,6 +936,8 @@ window.ASIYE_PASSENGER_LOGIN = {
             return;
         }
 
+        this.pendingProfile = profile || null;
+
 
         /*
          * New passenger.
@@ -947,13 +949,11 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-        if (
-            nameInput &&
-            user.displayName
-        ) {
-
+        if (nameInput) {
             nameInput.value =
-                user.displayName;
+                profile?.data?.name ||
+                user.displayName ||
+                '';
         }
 
 
@@ -1238,7 +1238,44 @@ window.ASIYE_PASSENGER_LOGIN = {
         }
 
 
+        const selfieInput =
+            document.getElementById('passengerLiveSelfie');
+
+        const selfie =
+            selfieInput?.files?.[0];
+
+        if (!selfie || !String(selfie.type || '').startsWith('image/')) {
+            this.toast('Take a live selfie to continue.');
+            return;
+        }
+
+        this.showAuthProgress(
+            'Updating your safety profile',
+            'Uploading your live selfie securely…'
+        );
+
+        let photoURL;
+
+        try {
+            const photoRef = firebase.storage()
+                .ref(`profile_photos/passengers/${user.uid}/live-selfie.jpg`);
+            await photoRef.put(selfie, {
+                contentType: selfie.type,
+                customMetadata: { capture: 'live-selfie' }
+            });
+            photoURL = await photoRef.getDownloadURL();
+        } catch (error) {
+            this.hideAuthProgress();
+            console.error('Passenger selfie upload failed:', error);
+            this.toast('Could not upload your selfie. Check camera and connection permissions.');
+            return;
+        }
+
+        const existingProfile = this.pendingProfile?.data || {};
+
         const profile = {
+
+            ...existingProfile,
 
             name:
                 name,
@@ -1270,28 +1307,39 @@ window.ASIYE_PASSENGER_LOGIN = {
                     ?.providerId ||
                 'phone',
 
-            createdAt:
+            profileImage:
+                photoURL,
 
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP
+            photoURL:
+                photoURL,
+
+            liveSelfieVerifiedAt:
+                firebase.database.ServerValue.TIMESTAMP,
+
+            createdAt:
+                existingProfile.createdAt ||
+                firebase.database.ServerValue.TIMESTAMP,
+
+            updatedAt:
+                firebase.database.ServerValue.TIMESTAMP
         };
 
+
+        const profileId = this.pendingProfile?.id || user.uid;
 
         await firebase
             .database()
             .ref(
-                `commuters/${user.uid}`
+                `commuters/${profileId}`
             )
-            .set(
+            .update(
                 profile
             );
 
 
         await this.completeLogin(
 
-            user.uid,
+            this.pendingProfile?.id || user.uid,
 
             profile,
 
