@@ -579,6 +579,8 @@ window.ASIYE_PASSENGER_LOGIN = {
             }
 
 
+            this.hideAuthProgress();
+
             this.showStep(
                 'otpStep'
             );
