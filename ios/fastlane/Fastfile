@@ -29,7 +29,8 @@ platform :ios do
     )
 
     # 3. Generate a unique build number for every CI run and rerun.
-    version_line = File.read("../../pubspec.yaml").match(/^version:\s+[^+]+\+(\d+)/)
+    project_root = File.expand_path("../..", __dir__)
+    version_line = File.read(File.join(project_root, "pubspec.yaml")).match(/^version:\s+[^+]+\+(\d+)/)
     current_build_number = version_line ? version_line[1].to_i : 1
     run_number = ENV.fetch("GITHUB_RUN_NUMBER", "0").to_i
     run_attempt = ENV.fetch("GITHUB_RUN_ATTEMPT", "1").to_i
@@ -37,7 +38,9 @@ platform :ios do
     UI.message("Building iOS version #{build_number}")
 
     # 4. Build Flutter (No Signing)
-    sh("cd ../.. && flutter build ios --release --no-codesign --build-number=#{build_number}")
+    Dir.chdir(project_root) do
+      sh("flutter build ios --release --no-codesign --build-number=#{build_number}")
+    end
 
     # 5. Build and Sign IPA (Workspace)
     ipa_path = build_app(
