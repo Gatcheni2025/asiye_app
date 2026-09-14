@@ -1,5 +1,5 @@
 name: Android Release APK and AAB
-# Release 11.0.13
+# Release 11.0.15
 
 on:
   push:
@@ -51,22 +51,30 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
-        run: flutter build apk --release || test -f android/app/build/outputs/apk/release/app-release.apk
+        run: |
+          flutter build apk --release
+          test -f build/app/outputs/flutter-apk/app-release.apk
 
       - name: Build release AAB
-        run: flutter build appbundle --release || test -f android/app/build/outputs/bundle/release/app-release.aab
+        run: |
+          flutter build appbundle --release
+          test -f build/app/outputs/bundle/release/app-release.aab
 
       - name: Print APK signing fingerprints
         run: |
-          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
-          "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Verify AAB signature
+        run: jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
 
       - name: Upload Android release files
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.13-build-283-android
+          name: asiye-11.0.15-build-285-android
           path: |
-            android/app/build/outputs/apk/release/app-release.apk
-            android/app/build/outputs/bundle/release/app-release.aab
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
           retention-days: 30
