@@ -261,6 +261,11 @@ ASIYE.profile = {
                 '[data-passenger-profile-preview]'
             );
 
+        const accountAvatar =
+            container.querySelector(
+                '.member-avatar'
+            );
+
         if (!button) return;
 
         const saveFile = async file => {
@@ -277,9 +282,29 @@ ASIYE.profile = {
                         status
                     );
 
-                if (preview && url) {
-                    preview.src = url;
-                    preview.hidden = false;
+                if (url) {
+                    if (preview) {
+                        preview.src = url;
+                        preview.hidden = false;
+                    } else if (accountAvatar) {
+                        accountAvatar.classList.add(
+                            'member-avatar-photo'
+                        );
+
+                        accountAvatar.innerHTML = '';
+
+                        const image =
+                            document.createElement('img');
+
+                        image.src = url;
+                        image.alt = 'Profile picture';
+                        image.setAttribute(
+                            'data-passenger-profile-preview',
+                            ''
+                        );
+
+                        accountAvatar.appendChild(image);
+                    }
                 }
 
                 button.textContent =
