@@ -69,7 +69,7 @@ ASIYE.profile = {
     compressImage(file) {
         return new Promise((resolve, reject) => {
             if (!file || !String(file.type || '').startsWith('image/')) {
-                reject(new Error('Please capture or choose an image.'));
+                reject(new Error('Please scan or capture an image.'));
                 return;
             }
 
@@ -137,11 +137,11 @@ ASIYE.profile = {
             throw new Error('Passenger account is not loaded.');
         }
 
-        if (statusEl) statusEl.textContent = 'Preparing photo…';
+        if (statusEl) statusEl.textContent = 'Processing scan…';
 
         const blob = await this.compressImage(file);
 
-        if (statusEl) statusEl.textContent = 'Uploading profile picture…';
+        if (statusEl) statusEl.textContent = 'Saving profile picture…';
 
         const formData = new FormData();
         formData.append('file', blob, 'passenger-profile.jpg');
@@ -213,47 +213,162 @@ ASIYE.profile = {
         return url;
     },
 
+    async _fileFromScan(result) {
+        if (!result?.dataUrl) {
+            throw new Error(
+                'The camera did not return a profile scan.'
+            );
+        }
+
+        const response =
+            await fetch(result.dataUrl);
+
+        const blob =
+            await response.blob();
+
+        return new File(
+            [blob],
+            result.name || 'profile-scan.jpg',
+            {
+                type:
+                    result.mimeType ||
+                    blob.type ||
+                    'image/jpeg'
+            }
+        );
+    },
+
     bindAccount(container) {
         if (!container) return;
 
-        const input = container.querySelector('[data-passenger-profile-file]');
-        const button = container.querySelector('[data-passenger-profile-camera]');
-        const status = container.querySelector('[data-passenger-profile-status]');
-        const preview = container.querySelector('[data-passenger-profile-preview]');
+        const input =
+            container.querySelector(
+                '[data-passenger-profile-file]'
+            );
 
-        if (!input || !button) return;
+        const button =
+            container.querySelector(
+                '[data-passenger-profile-camera]'
+            );
 
-        button.onclick = () => input.click();
+        const status =
+            container.querySelector(
+                '[data-passenger-profile-status]'
+            );
 
-        input.onchange = async () => {
-            const file = input.files?.[0];
+        const preview =
+            container.querySelector(
+                '[data-passenger-profile-preview]'
+            );
 
+        if (!button) return;
+
+        const saveFile = async file => {
             if (!file) return;
 
             button.disabled = true;
-            button.textContent = 'Saving photo…';
+            button.textContent =
+                'Saving scan…';
 
             try {
-                const url = await this.upload(file, status);
+                const url =
+                    await this.upload(
+                        file,
+                        status
+                    );
 
                 if (preview && url) {
                     preview.src = url;
                     preview.hidden = false;
                 }
 
-                button.textContent = 'Change profile picture';
+                button.textContent =
+                    'Rescan profile picture';
             } catch (error) {
-                console.error('Passenger profile photo failed:', error);
+                console.error(
+                    'Passenger profile scan failed:',
+                    error
+                );
+
                 if (status) {
                     status.textContent =
                         error?.message ||
-                        'Could not save the profile picture.';
+                        'Could not save the scanned profile picture.';
                 }
-                button.textContent = 'Take profile picture';
+
+                button.textContent =
+                    'Scan profile picture';
             } finally {
                 button.disabled = false;
-                input.value = '';
+
+                if (input) {
+                    input.value = '';
+                }
             }
         };
+
+        button.onclick = async () => {
+            if (window.AsiyeNativeBridge) {
+                button.disabled = true;
+                button.textContent =
+                    'Opening camera…';
+
+                if (status) {
+                    status.textContent =
+                        'Position your face clearly inside the camera frame.';
+                }
+
+                try {
+                    const result =
+                        await AsiyeNativeBridge.scanImage({
+                            purpose:
+                                'passenger-profile',
+                            facing:
+                                'front'
+                        });
+
+                    if (!result) {
+                        button.disabled = false;
+                        button.textContent =
+                            this.getUrl()
+                                ? 'Rescan profile picture'
+                                : 'Scan profile picture';
+                        return;
+                    }
+
+                    const file =
+                        await this._fileFromScan(
+                            result
+                        );
+
+                    button.disabled = false;
+                    await saveFile(file);
+                } catch (error) {
+                    button.disabled = false;
+                    button.textContent =
+                        this.getUrl()
+                            ? 'Rescan profile picture'
+                            : 'Scan profile picture';
+
+                    if (status) {
+                        status.textContent =
+                            error?.message ||
+                            'Unable to open the camera.';
+                    }
+                }
+
+                return;
+            }
+
+            input?.click();
+        };
+
+        if (input) {
+            input.onchange = async () => {
+                await saveFile(
+                    input.files?.[0]
+                );
+            };
+        }
     }
 };
