@@ -8,11 +8,13 @@ plugins {
     id("com.google.gms.google-services")
 }
 
-// Load the production signing key only when it is available.
-// CI test APKs use Android's standard debug keystore.
+// Production release signing.
+// IMPORTANT: never silently fall back to the Android debug certificate for a
+// release APK. A debug-signed "release" cannot update the production Asiye app.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.exists()
+
 if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
@@ -53,12 +55,15 @@ android {
             // Keep the default Android debug signing configuration.
         }
         getByName("release") {
-            signingConfig = if (hasReleaseKeystore) {
-                signingConfigs.getByName("release")
-            } else {
-                signingConfigs.getByName("debug")
+            if (!hasReleaseKeystore) {
+                throw GradleException(
+                    "Release signing is not configured. " +
+                    "Create android/key.properties and provide the production keystore. " +
+                    "Refusing to build a debug-signed release APK."
+                )
             }
 
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }
