@@ -43,7 +43,7 @@ window.AsiyePages = {
                 body.innerHTML += `
                     <div class="member-profile-photo-actions">
                         <button type="button" class="member-primary" data-passenger-profile-camera>
-                            ${photoUrl ? 'Change profile picture' : 'Take profile picture'}
+                            ${photoUrl ? 'Rescan profile picture' : 'Scan profile picture'}
                         </button>
                         <input
                             type="file"
@@ -53,7 +53,7 @@ window.AsiyePages = {
                             hidden
                         >
                         <p class="member-note" data-passenger-profile-status>
-                            Use the camera to capture a clear face photo. The image is compressed and saved through Asiye's PHP image server.
+                            Scan a clear face photo with the camera. As soon as the scan is captured, Asiye saves it automatically as your profile picture.
                         </p>
                     </div>
                 `;
@@ -166,6 +166,15 @@ window.AsiyePages = {
                 <form data-family-form class="member-family-form">
                     <h3>Add another trusted person</h3>
 
+                    <button
+                        type="button"
+                        class="asiye-safety-secondary asiye-contact-picker"
+                        data-family-pick-contact
+                    >
+                        <i class="fas fa-address-book"></i>
+                        Choose from phone contacts
+                    </button>
+
                     <label>
                         Full name
                         <input name="name" required maxlength="80">
@@ -213,6 +222,33 @@ window.AsiyePages = {
                     Contact support
                 </button>
             `;
+
+            const familyForm =
+                body.querySelector('[data-family-form]');
+
+            body.querySelector(
+                '[data-family-pick-contact]'
+            ).onclick = async event => {
+                const button = event.currentTarget;
+                const original = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML =
+                    '<i class="fas fa-circle-notch fa-spin"></i> Opening contacts…';
+
+                try {
+                    await AsiyeSafetyContact.pickIntoForm(
+                        familyForm
+                    );
+                } catch (error) {
+                    app.ui?.toast?.(
+                        error?.message ||
+                        'Unable to open phone contacts.'
+                    );
+                } finally {
+                    button.disabled = false;
+                    button.innerHTML = original;
+                }
+            };
 
             body.querySelector('[data-family-form]').onsubmit = async event => {
                 event.preventDefault();
