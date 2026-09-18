@@ -579,9 +579,33 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     final platform = controller.platform;
     if (platform is AndroidWebViewController) {
       platform.setGeolocationEnabled(true);
-      platform.setOnPlatformPermissionRequest((request) => request.grant());
+      platform.setOnPlatformPermissionRequest((request) async {
+        final wantsCamera =
+            request.types.contains(WebViewPermissionResourceType.camera);
+        final wantsMicrophone =
+            request.types.contains(WebViewPermissionResourceType.microphone);
+
+        if (wantsCamera && !await _ensureCameraPermission()) {
+          await request.deny();
+          return;
+        }
+
+        if (wantsMicrophone) {
+          var microphoneStatus = await Permission.microphone.status;
+          if (!microphoneStatus.isGranted) {
+            microphoneStatus = await Permission.microphone.request();
+          }
+          if (!microphoneStatus.isGranted) {
+            await request.deny();
+            return;
+          }
+        }
+
+        await request.grant();
+      });
       platform.setGeolocationPermissionsPromptCallbacks(
-        onShowPrompt: (params) async => const GeolocationPermissionsResponse(allow: true, retain: true),
+        onShowPrompt: (params) async =>
+            const GeolocationPermissionsResponse(allow: true, retain: true),
       );
 
       platform.setOnShowFileSelector((FileSelectorParams params) async {
