@@ -34,3 +34,7 @@ body.asiye-safety-modal-open{overflow:hidden}
 .member-family-row strong small{font-weight:500;color:#7b887b}
 .member-safety-badge{display:inline-block;padding:4px 7px;border-radius:999px;background:#e8f3e6;color:#225b3e;font-size:9px;font-style:normal;font-weight:800;white-space:nowrap}
 @media(max-width:430px){.asiye-safety-modal-layer{padding:14px}.asiye-safety-modal{padding:23px;border-radius:24px}.asiye-safety-actions{grid-template-columns:1fr}}
+
+.asiye-contact-picker{width:100%;display:flex;align-items:center;justify-content:center;gap:9px}
+.asiye-safety-or{display:flex;align-items:center;gap:10px;color:#899589;font-size:10px;text-transform:uppercase;letter-spacing:.7px}
+.asiye-safety-or::before,.asiye-safety-or::after{content:"";height:1px;flex:1;background:#e2e9df}
