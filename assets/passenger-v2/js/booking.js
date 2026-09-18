@@ -31,15 +31,8 @@ ASIYE.booking = {
             type === 'club7'
         ) {
 
-            const time =
-                ASIYE.state.booking
-                    .club
-                    .departureTime;
-
-
             return await ASIYE.club.book(
-                type,
-                time
+                type
             );
         }
 
