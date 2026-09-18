@@ -893,7 +893,7 @@ ASIYE.ride = {
 
                     ?
 
-                    'Your driver is assigned and waiting for the Club departure stage.'
+                    'Your driver is assigned and waiting for the Asiye Work departure stage.'
 
                     :
 
