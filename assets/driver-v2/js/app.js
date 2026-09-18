@@ -3628,6 +3628,21 @@ async function (
 
 
         /*
+         * One-time safety setup.
+         * A verified driver must save one trusted family member
+         * before going online or receiving bookings.
+         */
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'driver'
+            })
+        ) {
+            return;
+        }
+
+
+        /*
          * ====================================================
          * SINGLE LIVE DRIVER PROFILE LISTENER
          * ====================================================
