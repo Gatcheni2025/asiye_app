@@ -216,7 +216,7 @@ ASIYE.ui = {
                     </div>
 
                     <span class="service-name">
-                        Work
+                        Asiye Work
                     </span>
 
                 </button>
@@ -800,7 +800,7 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'club4',
                 'Asiye Work 4',
-                'Shared work commute · up to 4 passengers',
+                'To or from work · share with up to 4 passengers',
                 prices.club4,
                 'fa-users'
             )}
@@ -809,7 +809,7 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'club7',
                 'Asiye Work 7',
-                'Shared work commute · up to 7 passengers',
+                'To or from work · share with up to 7 passengers',
                 prices.club7,
                 'fa-van-shuttle'
             )}
@@ -1135,7 +1135,7 @@ ASIYE.ui = {
                             margin-top:2px;
                         "
                     >
-                        Daily shared commute
+                        Shared daily work commute
                     </div>
 
                 </div>
@@ -1181,12 +1181,7 @@ ASIYE.ui = {
                     </strong>
 
                     <p>
-                        Your fare is shared equally
-                        between ${config.capacity}
-                        passengers. The driver begins
-                        collection once all
-                        ${config.capacity} Asiye Work passengers
-                        have joined.
+                        Asiye Work groups passengers travelling a similar route and time to or from work. Your fare is shared between ${config.capacity} passengers, and collection begins once the group is ready.
                     </p>
 
                 </div>
