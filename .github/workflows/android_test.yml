@@ -2,9 +2,6 @@ name: Android Release APK and AAB
 # Release 11.0.21+291
 
 on:
-  push:
-    branches:
-      - fix/native-authentication
   workflow_dispatch:
 
 jobs:
