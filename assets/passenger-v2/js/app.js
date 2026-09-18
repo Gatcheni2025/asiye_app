@@ -8,6 +8,43 @@ window.ASIYE = window.ASIYE || {};
 
 ASIYE.ui = {
 
+    savedPlaceSummary(kind) {
+        const place =
+            ASIYE.places?.getSavedPlace?.(kind);
+
+        return place?.address ||
+            (kind === 'work'
+                ? 'Set your work address'
+                : 'Set your home address');
+    },
+
+    commuteShortcut(kind, label) {
+        const place =
+            ASIYE.places?.getSavedPlace?.(kind);
+
+        return `
+            <button
+                type="button"
+                class="commute-shortcut"
+                data-commute-place="${kind}"
+            >
+                <div class="commute-shortcut-icon">
+                    <i class="fas ${kind === 'work' ? 'fa-briefcase' : 'fa-house'}"></i>
+                </div>
+                <div class="commute-shortcut-copy">
+                    <strong>${this.escape(label)}</strong>
+                    <span>${this.escape(
+                        place?.address ||
+                        (kind === 'work'
+                            ? 'Set your work address'
+                            : 'Set your home address')
+                    )}</span>
+                </div>
+                <i class="fas fa-chevron-right commute-shortcut-arrow"></i>
+            </button>
+        `;
+    },
+
     /* ========================================================
        HOME
        ======================================================== */
@@ -125,6 +162,26 @@ ASIYE.ui = {
             </button>
 
 
+            <!-- WORK COMMUTE SHORTCUTS -->
+
+            <div class="home-commute-block">
+
+                <div class="section-label">
+                    Home & Work
+                </div>
+
+                <div class="home-commute-list">
+                    ${this.commuteShortcut('work', 'To Work')}
+                    ${this.commuteShortcut('home', 'To Home')}
+                </div>
+
+                <div class="commute-hint">
+                    Saved places make Asiye Work faster to book every day.
+                </div>
+
+            </div>
+
+
             <!-- SERVICES -->
 
             <div class="home-services">
@@ -159,7 +216,7 @@ ASIYE.ui = {
                     </div>
 
                     <span class="service-name">
-                        Club
+                        Work
                     </span>
 
                 </button>
@@ -243,6 +300,31 @@ ASIYE.ui = {
                     ASIYE.ui.renderDestinationSearch();
                 }
             );
+
+
+        container
+            .querySelectorAll('[data-commute-place]')
+            .forEach(button => {
+                button.addEventListener(
+                    'click',
+                    async () => {
+                        ASIYE.state.ui.preferredRideType = 'club4';
+                        await ASIYE.places.useSavedPlace(
+                            button.dataset.commutePlace
+                        );
+
+                        if (
+                            ASIYE.state.ui.savedPlaceTarget &&
+                            ASIYE.state.ui.sheet !== 'destination-search'
+                        ) {
+                            this.renderDestinationSearch();
+                            ASIYE.places.beginSavePlace(
+                                button.dataset.commutePlace
+                            );
+                        }
+                    }
+                );
+            });
 
 
         container
@@ -409,18 +491,43 @@ ASIYE.ui = {
 
             <div id="destinationSuggestions">
 
-                ${this.placeRow(
-                    'home',
-                    'Home',
-                    'Set your home address'
-                )}
-
-
-                ${this.placeRow(
-                    'work',
-                    'Work',
-                    'Set your work address'
-                )}
+                ${
+                    ASIYE.places?.getCommuteSuggestion?.() === 'work'
+                    ? this.placeRow(
+                        'work',
+                        'Work',
+                        'Recommended · ' + this.savedPlaceSummary('work'),
+                        'work'
+                    ) + this.placeRow(
+                        'home',
+                        'Home',
+                        this.savedPlaceSummary('home'),
+                        'home'
+                    )
+                    : ASIYE.places?.getCommuteSuggestion?.() === 'home'
+                    ? this.placeRow(
+                        'home',
+                        'Home',
+                        'Recommended · ' + this.savedPlaceSummary('home'),
+                        'home'
+                    ) + this.placeRow(
+                        'work',
+                        'Work',
+                        this.savedPlaceSummary('work'),
+                        'work'
+                    )
+                    : this.placeRow(
+                        'work',
+                        'Work',
+                        this.savedPlaceSummary('work'),
+                        'work'
+                    ) + this.placeRow(
+                        'home',
+                        'Home',
+                        this.savedPlaceSummary('home'),
+                        'home'
+                    )
+                }
 
 
                 ${this.placeRow(
@@ -443,6 +550,21 @@ ASIYE.ui = {
                     this.renderHome();
                 }
             );
+
+
+        container
+            .querySelectorAll('[data-saved-place]')
+            .forEach(button => {
+                button.addEventListener(
+                    'click',
+                    async () => {
+                        ASIYE.state.ui.preferredRideType = 'club4';
+                        await ASIYE.places.useSavedPlace(
+                            button.dataset.savedPlace
+                        );
+                    }
+                );
+            });
 
 
         const input =
@@ -485,7 +607,8 @@ ASIYE.ui = {
     placeRow(
         icon,
         name,
-        address
+        address,
+        savedKind = null
     ) {
 
         let iconClass =
@@ -508,7 +631,10 @@ ASIYE.ui = {
 
         return `
 
-            <button class="place-row">
+            <button
+                class="place-row"
+                ${savedKind ? `data-saved-place="${savedKind}"` : ''}
+            >
 
                 <div class="place-icon">
 
@@ -673,8 +799,8 @@ ASIYE.ui = {
 
             ${this.renderRideCard(
                 'club4',
-                'Asiye Club 4',
-                '4 passengers · Fare split between everyone',
+                'Asiye Work 4',
+                'Shared work commute · up to 4 passengers',
                 prices.club4,
                 'fa-users'
             )}
@@ -682,8 +808,8 @@ ASIYE.ui = {
 
             ${this.renderRideCard(
                 'club7',
-                'Asiye Club 7',
-                '7 passengers · Lowest daily commuter fare',
+                'Asiye Work 7',
+                'Shared work commute · up to 7 passengers',
                 prices.club7,
                 'fa-van-shuttle'
             )}
@@ -935,10 +1061,10 @@ ASIYE.ui = {
                 'Continue with Asiye Go',
 
             club4:
-                'Continue with Club 4',
+                'Continue with Asiye Work 4',
 
             club7:
-                'Continue with Club 7'
+                'Continue with Asiye Work 7'
         };
 
 
@@ -1051,7 +1177,7 @@ ASIYE.ui = {
                 <div>
 
                     <strong>
-                        How Club works
+                        How Asiye Work works
                     </strong>
 
                     <p>
@@ -1059,7 +1185,7 @@ ASIYE.ui = {
                         between ${config.capacity}
                         passengers. The driver begins
                         collection once all
-                        ${config.capacity} Club members
+                        ${config.capacity} Asiye Work passengers
                         have joined.
                     </p>
 
@@ -1124,7 +1250,7 @@ ASIYE.ui = {
                 style="margin-top:16px;"
             >
 
-                Find my Club
+                Find my Asiye Work
 
             </button>
 
@@ -1546,9 +1672,9 @@ ASIYE.ui = {
                             request.clubMode ===
                             'club7'
                             ?
-                            'Asiye Club 7'
+                            'Asiye Work 7'
                             :
-                            'Asiye Club 4'
+                            'Asiye Work 4'
                         }
 
                     </div>
@@ -1558,9 +1684,9 @@ ASIYE.ui = {
                         ${
                             progress.ready
                             ?
-                            'Your Club is ready'
+                            'Your Asiye Work is ready'
                             :
-                            'Building your Club'
+                            'Building your Work ride'
                         }
 
                     </h2>
@@ -1666,7 +1792,7 @@ ASIYE.ui = {
 
                             ?
 
-                            'Finding your Club driver'
+                            'Finding your Asiye Work driver'
 
                             :
 
@@ -1682,7 +1808,7 @@ ASIYE.ui = {
 
                             ?
 
-                            'Your Club is complete. We are now preparing collection.'
+                            'Your Asiye Work group is complete. We are now preparing collection.'
 
                             :
 
@@ -1708,7 +1834,7 @@ ASIYE.ui = {
                     id="cancelClubRide"
                     style="margin-top:12px;"
                 >
-                    Cancel Club
+                    Cancel Asiye Work
                 </button>
 
                 `
