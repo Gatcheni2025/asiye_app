@@ -409,6 +409,15 @@ ASIYE_DRIVER.requests = {
 
         if (!await AsiyeEnrollment.requireApproval()) return;
 
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'driver'
+            })
+        ) {
+            return;
+        }
+
         const driverId =
             ASIYE_DRIVER.state
                 ?.driverId;
