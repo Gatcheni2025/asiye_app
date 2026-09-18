@@ -9,6 +9,17 @@ ASIYE.booking = {
 
     async create() {
 
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'passenger'
+            })
+        ) {
+            throw new Error(
+                'Add a trusted family member before requesting a ride.'
+            );
+        }
+
         const type =
             ASIYE.state.booking.rideType;
 
@@ -323,25 +334,21 @@ ASIYE.booking = {
 
     async offerSafetyShare(requestId) {
         try {
-            const uid = ASIYE.state.userId;
-            const familySnapshot = await firebase.database()
-                .ref(`commuters/${uid}/familyMembers`)
-                .once('value');
-            const hasFamily = familySnapshot.exists();
-            const message = hasFamily
-                ? 'Share this live trip with your saved loved ones?'
-                : 'No loved one is saved yet. Share this trip now for safety, then add them from Safety.';
-            if (!window.confirm(message)) return;
-
-            const url = `https://asiye.cloud/track.html?trip=${encodeURIComponent(requestId)}`;
-            const text = `Follow my Asiye trip live: ${url}`;
-            if (window.AsiyeNativeAuth?.post({ action: 'share', text })) return;
-            if (navigator.share) await navigator.share({ title: 'My Asiye trip', text, url });
-            else await navigator.clipboard.writeText(text);
+            if (window.AsiyeSafetyContact) {
+                await AsiyeSafetyContact.offerTripShare(
+                    requestId,
+                    {
+                        role: 'passenger'
+                    }
+                );
+            }
         } catch (error) {
-            console.warn('Safety sharing was not completed:', error);
+            console.warn(
+                'Safety sharing was not completed:',
+                error
+            );
         }
-    },
+    }
 
 
     /* ========================================================
