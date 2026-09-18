@@ -698,11 +698,11 @@ ASIYE.ride = {
                 <div>
 
                     <div class="home-kicker">
-                        Asiye Club
+                        Asiye Work
                     </div>
 
                     <h2 class="sheet-page-title">
-                        Your Club is ready
+                        Your Asiye Work is ready
                     </h2>
 
                     <div class="home-greeting">
@@ -776,7 +776,7 @@ ASIYE.ride = {
         container.innerHTML = `
 
             <div class="home-kicker">
-                Asiye Club
+                Asiye Work
             </div>
 
 
@@ -876,7 +876,7 @@ ASIYE.ride = {
             <div class="home-kicker">
                 ${
                     isClub
-                    ? 'Asiye Club'
+                    ? 'Asiye Work'
                     : 'Asiye Go'
                 }
             </div>
