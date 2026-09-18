@@ -43,7 +43,7 @@ android {
 
     defaultConfig {
         applicationId = "com.asiyeapp.asiye"
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         multiDexEnabled = true
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
