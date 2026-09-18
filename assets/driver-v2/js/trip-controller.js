@@ -785,7 +785,7 @@ ASIYE_DRIVER.trip = {
 
             throw new Error(
 
-                `Club is not ready. ${progress.remaining} passenger(s) still required.`
+                `Asiye Work is not ready. ${progress.remaining} passenger(s) still required.`
 
             );
         }
@@ -836,7 +836,7 @@ ASIYE_DRIVER.trip = {
                     'Club collection started',
 
                 message:
-                    'Your Asiye Club driver has started collecting passengers.'
+                    'Your Asiye Work driver has started collecting passengers.'
             }
         );
 
@@ -1036,7 +1036,7 @@ ASIYE_DRIVER.trip = {
                     'Driver is coming to you',
 
                 message:
-                    'Your Club driver is heading to your pickup point.',
+                    'Your Asiye Work driver is heading to your pickup point.',
 
                 requestId:
                     this.requestId
@@ -1155,7 +1155,7 @@ ASIYE_DRIVER.trip = {
                     'Driver arrived',
 
                 message:
-                    'Your Club driver has arrived at your pickup point.',
+                    'Your Asiye Work driver has arrived at your pickup point.',
 
                 requestId:
                     this.requestId
@@ -1448,10 +1448,10 @@ ASIYE_DRIVER.trip = {
                     'trip_started',
 
                 title:
-                    'Club trip started',
+                    'Asiye Work trip started',
 
                 message:
-                    'All passengers are onboard. Your Club trip has started.'
+                    'All passengers are onboard. Your Asiye Work trip has started.'
             }
         );
 
@@ -1619,7 +1619,7 @@ ASIYE_DRIVER.trip = {
                         'Trip completed',
 
                     message:
-                        'Your Asiye Club trip is complete.',
+                        'Your Asiye Work trip is complete.',
 
                     amount:
                         request.pricePerPassenger ||
@@ -1770,7 +1770,7 @@ ASIYE_DRIVER.trip = {
                         'Driver cancelled',
 
                     message:
-                        'Your Club driver cancelled this trip.'
+                        'Your Asiye Work driver cancelled this trip.'
                 }
             );
 
