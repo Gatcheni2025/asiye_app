@@ -886,7 +886,7 @@ ASIYE.ui = {
 
 
                     /*
-                     * Club flow — collect schedule
+                     * Asiye Work flow — collect schedule
                      * first, then book.
                      */
 
@@ -1357,7 +1357,7 @@ ASIYE.ui = {
 
 
                 <h2 class="sheet-page-title">
-                    Confirm Club
+                    Confirm Asiye Work
                 </h2>
 
             </div>
@@ -1424,7 +1424,7 @@ ASIYE.ui = {
 
                 <div>
 
-                    <span>Club</span>
+                    <span>Asiye Work</span>
 
                     <strong>
                         ${config.capacity}
@@ -1480,7 +1480,7 @@ ASIYE.ui = {
                 <div>
 
                     <strong>
-                        Driver waits for the Club
+                        Driver waits for the Asiye Work group
                     </strong>
 
                     <p>
@@ -1499,7 +1499,7 @@ ASIYE.ui = {
                 class="primary-button"
                 style="margin-top:16px;"
             >
-                Join Club · R${price}
+                Join Asiye Work · R${price}
             </button>
 
         `;
@@ -1567,7 +1567,7 @@ ASIYE.ui = {
 
             button.innerHTML = `
                 <i class="fas fa-circle-notch fa-spin"></i>
-                Finding your Club
+                Finding your Asiye Work group
             `;
         }
 
@@ -1604,14 +1604,14 @@ ASIYE.ui = {
         } catch (error) {
 
             console.error(
-                'Club booking failed:',
+                'Asiye Work booking failed:',
                 error
             );
 
 
             this.toast(
                 error.message ||
-                'Could not create your Club ride.'
+                'Could not create your Asiye Work ride.'
             );
 
 
@@ -1621,7 +1621,7 @@ ASIYE.ui = {
                     false;
 
                 button.textContent =
-                    'Join Club';
+                    'Join Asiye Work';
             }
         }
     },
