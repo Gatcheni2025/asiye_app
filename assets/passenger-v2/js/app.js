@@ -2143,6 +2143,21 @@ document.addEventListener(
 
 
         /*
+         * One-time safety setup.
+         * Existing passengers with a saved trusted contact continue
+         * immediately. New passengers must save one before using rides.
+         */
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'passenger'
+            })
+        ) {
+            return;
+        }
+
+
+        /*
          * Map
          */
 
