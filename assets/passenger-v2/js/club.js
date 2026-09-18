@@ -264,8 +264,7 @@ ASIYE.club = {
        ======================================================== */
 
     async findCompatiblePool(
-        type,
-        departureTime
+        type
     ) {
 
         this.ensureFirebase();
@@ -465,49 +464,62 @@ ASIYE.club = {
                         poolDestLng
                     );
 
-
-            /*
-             * Departure time comparison.
-             */
-
-            const departureDifference =
-
-                this.timeDifferenceMinutes(
-
-                    departureTime,
-
-                    pool.departureTime
-                );
-
-
             /*
              * Current compatibility rules:
              *
+             * same Asiye Work mode/direction
              * pickup within 3km
              * destination within 5km
-             * departure within 20 minutes
+             * pool still inside its waiting window
              */
+            const createdAt =
+                Number(pool.createdAt || 0);
+
+            const maxWaitMinutes =
+                Number(
+                    pool.maxWaitMinutes ||
+                    config.maxWaitMinutes ||
+                    20
+                );
+
+            const ageMinutes =
+                createdAt > 0
+                ? (
+                    Date.now() -
+                    createdAt
+                  ) / 60000
+                : 0;
 
             if (
                 pickupDistance > 3 ||
                 destinationDistance > 5 ||
-                departureDifference > 20
+                (
+                    createdAt > 0 &&
+                    ageMinutes >
+                    maxWaitMinutes
+                )
             ) {
 
                 return;
             }
 
 
-            const score =
-
-                pickupDistance +
-
-                destinationDistance +
-
+            /*
+             * Prefer the closest route, while giving
+             * fuller pools a small advantage so
+             * passengers can leave sooner.
+             */
+            const fullnessBoost =
                 (
-                    departureDifference /
-                    10
-                );
+                    count /
+                    config.capacity
+                ) * 2;
+
+
+            const score =
+                pickupDistance +
+                destinationDistance -
+                fullnessBoost;
 
 
             if (
@@ -539,8 +551,7 @@ ASIYE.club = {
        ======================================================== */
 
     async joinPool(
-        poolId,
-        departureTime
+        poolId
     ) {
 
         this.ensureFirebase();
@@ -666,8 +677,11 @@ ASIYE.club = {
                         commuteDirection:
                             this.getCommuteDirection(),
 
+                        pickupTiming:
+                            'asap',
+
                         departureTime:
-                            departureTime,
+                            'ASAP',
 
                         paymentMethod:
                             ASIYE.state.booking
@@ -829,8 +843,7 @@ ASIYE.club = {
        ======================================================== */
 
     async createPool(
-        type,
-        departureTime
+        type
     ) {
 
         this.ensureFirebase();
@@ -933,8 +946,11 @@ ASIYE.club = {
             commuteDirection:
                 this.getCommuteDirection(),
 
+            pickupTiming:
+                'asap',
+
             departureTime:
-                departureTime,
+                'ASAP',
 
             price:
                 pricing.pricePerPassenger,
@@ -996,8 +1012,11 @@ ASIYE.club = {
             remainingSeats:
                 config.capacity - 1,
 
+            pickupTiming:
+                'asap',
+
             departureTime:
-                departureTime,
+                'ASAP',
 
             pickupWindowMinutes:
                 config.pickupWindowMinutes,
@@ -1130,8 +1149,7 @@ ASIYE.club = {
        ======================================================== */
 
     async book(
-        type,
-        departureTime
+        type
     ) {
 
         this.ensureFirebase();
@@ -1142,10 +1160,7 @@ ASIYE.club = {
         const existingPool =
 
             await this.findCompatiblePool(
-
-                type,
-
-                departureTime
+                type
             );
 
 
@@ -1157,10 +1172,7 @@ ASIYE.club = {
             requestId =
 
                 await this.joinPool(
-
-                    existingPool.id,
-
-                    departureTime
+                    existingPool.id
                 );
 
 
@@ -1169,10 +1181,7 @@ ASIYE.club = {
             requestId =
 
                 await this.createPool(
-
-                    type,
-
-                    departureTime
+                    type
                 );
         }
 
