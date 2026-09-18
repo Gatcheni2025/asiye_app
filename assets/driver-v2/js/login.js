@@ -465,7 +465,7 @@ window.ASIYE_DRIVER_LOGIN = {
        SEND OTP
        ======================================================== */
 
-    async sendOtp() {
+    async sendOtp(forceResend = false) {
 
         const input =
             document.getElementById(
@@ -555,7 +555,8 @@ window.ASIYE_DRIVER_LOGIN = {
             }
             if (window.AsiyeNativeAuth?.post({
                 action: 'startPhoneAuth',
-                phone
+                phone,
+                forceResend
             })) {
                 return;
             }
@@ -1522,7 +1523,7 @@ window.ASIYE_DRIVER_LOGIN = {
         setTimeout(
             () => {
 
-                this.sendOtp();
+                this.sendOtp(true);
 
             },
             100
@@ -1698,6 +1699,42 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 message =
                     'Too many attempts. Please wait and try again.';
+
+                break;
+
+
+            case 'auth/app-not-authorized':
+
+            case 'auth/invalid-app-credential':
+
+                message =
+                    'This Asiye app build is not authorized for SMS verification yet. Please update the app or contact Asiye support.';
+
+                break;
+
+
+            case 'auth/captcha-check-failed':
+
+            case 'auth/missing-client-identifier':
+
+                message =
+                    'Phone security verification could not be completed. Please try again.';
+
+                break;
+
+
+            case 'auth/quota-exceeded':
+
+                message =
+                    'SMS verification is temporarily unavailable. Please try again later.';
+
+                break;
+
+
+            case 'auth/operation-not-allowed':
+
+                message =
+                    'Phone sign-in is not enabled for this Asiye build.';
 
                 break;
 
@@ -1919,7 +1956,10 @@ window.onNativePhoneAutoRetrievalTimeout = function (payload) {
 };
 
 window.onNativePhoneAuthError = function (payload) {
-    window.ASIYE_DRIVER_LOGIN.handleAuthError(
+    console.error('Native phone auth failed:', payload);
+    const login = window.ASIYE_DRIVER_LOGIN;
+    login.nativeVerificationId = null;
+    login.handleAuthError(
         { code: 'auth/' + (payload.code || 'native-phone-auth-failed'), message: payload.message },
         'phone'
     );
