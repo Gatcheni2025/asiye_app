@@ -3511,6 +3511,38 @@ async function () {
     }
 
 
+    /*
+     * If the profile is keyed by a legacy driver ID, resolve it using the
+     * authenticated identity and persist the canonical driverId locally.
+     */
+    if (
+        authUser?.uid &&
+        window.AsiyeEnrollment?.resolveDriverProfile
+    ) {
+        try {
+            const linked =
+                await AsiyeEnrollment.resolveDriverProfile(authUser);
+
+            if (linked) {
+                localStorage.setItem('driverId', linked.id);
+                localStorage.setItem('userId', linked.id);
+                localStorage.setItem('authUid', authUser.uid);
+                localStorage.setItem('userType', 'driver');
+
+                return {
+                    uid: linked.id,
+                    data: linked.data,
+                    source: 'linked-auth-profile'
+                };
+            }
+        } catch (error) {
+            console.warn(
+                'Could not resolve linked driver profile:',
+                error
+            );
+        }
+    }
+
     return null;
 };
 
@@ -3526,8 +3558,6 @@ async function (
 ) {
 
     try {
-
-        if (!await AsiyeEnrollment.requireApproval()) return;
 
         let driver =
             existingDriverData;
@@ -3565,6 +3595,8 @@ async function (
             driver =
                 snapshot.val();
         }
+
+        if (!await AsiyeEnrollment.requireApproval(driver)) return;
 
 
         /*

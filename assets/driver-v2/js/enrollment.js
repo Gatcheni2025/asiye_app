@@ -98,7 +98,18 @@
         if (!user || busy) return;
         try {
             const [application, approval] = await Promise.all(['driverEnrollments','driverApprovals'].map(node => firebase.database().ref(`${node}/${user.uid}`).once('value')));
-            if (approval.val()?.status === 'approved' && approval.val()?.version === 1) { status.textContent = 'Verified. Sign in to start driving.'; form.hidden = true; return; }
+            if (approval.val()?.status === 'approved' && Number(approval.val()?.version) === 1) {
+                status.textContent = 'Verified. Opening your driver dashboard…';
+                form.hidden = true;
+
+                const activated = await AsiyeEnrollment.activateApprovedDriver();
+
+                if (!activated) {
+                    status.textContent = 'Verified. We are linking your driver profile. Tap “Check verification status” to retry.';
+                }
+
+                return;
+            }
             if (application.exists()) { status.textContent = approval.val()?.status === 'rejected' ? 'Your application was not approved. Contact Asiye support for the review outcome.' : 'Application submitted. Waiting for verification. You cannot start driving yet.'; form.hidden = true; return; }
             status.textContent = 'Complete all sections below to apply.'; form.hidden = false;
         } catch (error) {
@@ -111,7 +122,37 @@
         }
     };
     document.getElementById('refreshEnrollment').onclick = check;
-    firebase.auth().onAuthStateChanged(value => { user = value; if (!user) { window.location.replace('./login.html'); return; } check(); });
+    let approvalRef = null;
+    let approvalListener = null;
+
+    firebase.auth().onAuthStateChanged(value => {
+        user = value;
+
+        if (approvalRef && approvalListener) {
+            approvalRef.off('value', approvalListener);
+            approvalRef = null;
+            approvalListener = null;
+        }
+
+        if (!user) {
+            window.location.replace('./login.html');
+            return;
+        }
+
+        approvalRef = firebase.database().ref(`driverApprovals/${user.uid}`);
+        approvalListener = approvalRef.on('value', snapshot => {
+            const approval = snapshot.val();
+
+            if (
+                approval?.status === 'approved' &&
+                Number(approval.version) === 1
+            ) {
+                check();
+            }
+        });
+
+        check();
+    });
     form.onsubmit = async event => {
         event.preventDefault(); if (!user || busy) return;
         if (step < steps.length-1) { await nextStep(); return; }

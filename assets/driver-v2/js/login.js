@@ -108,64 +108,26 @@ window.ASIYE_DRIVER_LOGIN = {
 
     async checkExistingSession() {
 
-        const user =
-            firebase.auth()
-                .currentUser;
+        const user = firebase.auth().currentUser;
 
-
-        if (!user) {
-
-            return;
-        }
-
+        if (!user) return;
 
         try {
+            const activated = await AsiyeEnrollment.activateApprovedDriver({
+                user
+            });
 
-            const snapshot =
+            if (activated) return;
 
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${user.uid}`
-                    )
-                    .once(
-                        'value'
-                    );
+            const profile = await AsiyeEnrollment.resolveDriverProfile(user);
 
-
-            if (
-                snapshot.exists()
-            ) {
-
-                localStorage.setItem(
-                    'driverId',
-                    user.uid
-                );
-
-
-                localStorage.setItem(
-                    'userId',
-                    user.uid
-                );
-
-
-                localStorage.setItem(
-                    'userType',
-                    'driver'
-                );
-
-
-                window.location.replace(
-                    './index.html'
-                );
+            if (profile) {
+                window.location.replace('./enrollment.html');
             }
-
-
         } catch (error) {
-
             console.warn(
                 'Session check failed:',
-                error
+                error?.code || error
             );
         }
     },
@@ -1098,245 +1060,44 @@ window.ASIYE_DRIVER_LOGIN = {
         this.hideAuthProgress();
 
         try {
+            this.showStep('profileCheckStep');
 
-            this.showStep(
-                'profileCheckStep'
-            );
+            const profile =
+                await AsiyeEnrollment.resolveDriverProfile(user);
 
-
-            /* ====================================================
-               1. NORMAL UID LOOKUP
-            ==================================================== */
-
-            let snapshot =
-
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${user.uid}`
-                    )
-                    .once(
-                        'value'
-                    );
-
-
-            if (
-                snapshot.exists()
-            ) {
-
-                await this.completeDriverLogin(
-
-                    user.uid,
-
-                    snapshot.val(),
-
-                    user
-                );
-
-                return;
-            }
-
-
-            console.log(
-                'ℹ️ No taxi profile under Auth UID. Checking legacy profile...'
-            );
-
-
-            /* ====================================================
-               2. SEARCH BY VERIFIED PHONE
-            ==================================================== */
-
-            const phoneVariants =
-                this.buildPhoneVariants(
-                    user.phoneNumber ||
-                    this.currentPhone
-                );
-
-
-            let legacyMatch =
-                null;
-
-
-            for (
-                const phone
-                of phoneVariants
-            ) {
-
-                const phoneSnapshot =
-
-                    await firebase
-                        .database()
-                        .ref('taxis')
-                        .orderByChild('phone')
-                        .equalTo(phone)
-                        .once(
-                            'value'
-                        );
-
-
-                if (
-                    phoneSnapshot.exists()
-                ) {
-
-                    phoneSnapshot.forEach(
-                        child => {
-
-                            if (!legacyMatch) {
-
-                                legacyMatch = {
-
-                                    id:
-                                        child.key,
-
-                                    data:
-                                        child.val()
-                                };
-                            }
-                        }
-                    );
-
-
-                    if (legacyMatch) {
-
-                        break;
-                    }
-                }
-            }
-
-
-            /* ====================================================
-               3. SEARCH BY EMAIL
-               Useful for Google / Apple
-            ==================================================== */
-
-            if (
-                !legacyMatch &&
-                user.email
-            ) {
-
-                const emailSnapshot =
-
-                    await firebase
-                        .database()
-                        .ref('taxis')
-                        .orderByChild('email')
-                        .equalTo(
-                            user.email
-                        )
-                        .once(
-                            'value'
-                        );
-
-
-                if (
-                    emailSnapshot.exists()
-                ) {
-
-                    emailSnapshot.forEach(
-                        child => {
-
-                            if (!legacyMatch) {
-
-                                legacyMatch = {
-
-                                    id:
-                                        child.key,
-
-                                    data:
-                                        child.val()
-                                };
-                            }
-                        }
-                    );
-                }
-            }
-
-
-            /* ====================================================
-               LEGACY PROFILE FOUND
-            ==================================================== */
-
-            if (
-                legacyMatch
-            ) {
-
+            if (profile) {
                 console.log(
                     '✅ Existing driver profile found:',
-                    legacyMatch.id
+                    profile.id
                 );
 
-
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${legacyMatch.id}`
-                    )
-                    .update({
-
-                        authUid:
-                            user.uid,
-
-                        authPhone:
-                            user.phoneNumber ||
-                            this.currentPhone ||
-                            null,
-
-                        authEmail:
-                            user.email ||
-                            null,
-
-                        authLinkedAt:
-
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP
-                    });
-
-
                 await this.completeDriverLogin(
-
-                    legacyMatch.id,
-
-                    legacyMatch.data,
-
+                    profile.id,
+                    profile.data,
                     user
                 );
 
-
                 return;
             }
-
-
-            /* ====================================================
-               NO DRIVER FOUND
-            ==================================================== */
 
             console.warn(
                 'Authenticated account is not registered as driver:',
                 user.uid
             );
 
-
             window.location.replace('./enrollment.html');
 
-
         } catch (error) {
-
             console.error(
                 'Driver profile check failed:',
                 error
             );
 
-
             this.toast(
                 'Unable to verify your driver account.'
             );
 
-
-            this.showStep(
-                'phoneStep'
-            );
+            this.showStep('phoneStep');
         }
     },
 
@@ -1416,7 +1177,15 @@ window.ASIYE_DRIVER_LOGIN = {
         this.hideAuthProgress();
 
 
-        if (!await AsiyeEnrollment.requireApproval()) return;
+        if (!await AsiyeEnrollment.requireApproval(driverData)) return;
+
+        await AsiyeEnrollment.persistDriverSession(
+            {
+                id: driverProfileId,
+                data: driverData
+            },
+            authUser
+        );
 
         localStorage.setItem(
             'driverId',
