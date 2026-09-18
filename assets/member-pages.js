@@ -181,7 +181,7 @@ window.AsiyePages = {
                     rides = rides.filter(ride => ride.status === 'completed');
                     const known = rides.filter(ride => ride.type !== 'club' && Number.isFinite(Number(ride.finalAmount ?? ride.calculatedPrice ?? ride.price)));
                     const sum = known.reduce((total, ride) => total + Number(ride.finalAmount ?? ride.calculatedPrice ?? ride.price), 0);
-                    html += `<div class="member-balance"><small>Recorded GO fares</small><strong>${this.money(sum)}</strong></div>` + note('Gross fares from loaded completed GO rides, before fees. Club earnings and payouts are not included.');
+                    html += `<div class="member-balance"><small>Recorded GO fares</small><strong>${this.money(sum)}</strong></div>` + note('Gross fares from loaded completed GO rides, before fees. Asiye Work earnings and payouts are not included.');
                 }
                 html += note('Showing up to 100 recent records per booking type.');
                 if (!rides.length) html += `<div class="member-empty"><h2>No ${page === 'parcels' ? 'parcels' : 'trips'} yet</h2><p>Your records will appear here once available.</p></div>`;
