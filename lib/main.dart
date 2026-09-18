@@ -616,8 +616,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
             if (source == null) return [];
 
+            if (source == 'camera' && !await _ensureCameraPermission()) {
+              return [];
+            }
+
             final XFile? photo = await picker.pickImage(
               source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
+              imageQuality: 88,
             );
 
             if (photo != null) return [Uri.file(photo.path).toString()];
@@ -804,14 +809,57 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _requestPermissions() async {
     try {
-      await [
-        Permission.location,
+      final permissions = <Permission>[
         Permission.locationWhenInUse,
-        Permission.camera,
-        Permission.notification,
-        Permission.photos,
-      ].request();
-    } catch (e) {}
+      ];
+
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        permissions.add(Permission.notification);
+      }
+
+      await permissions.request();
+    } catch (e) {
+      debugPrint('Permission request failed: $e');
+    }
+  }
+
+  Future<bool> _ensureCameraPermission() async {
+    var status = await Permission.camera.status;
+    if (status.isGranted) return true;
+
+    status = await Permission.camera.request();
+    if (status.isGranted) return true;
+
+    if (!mounted) return false;
+
+    final permanentlyDenied = status.isPermanentlyDenied;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Camera permission required'),
+        content: Text(
+          permanentlyDenied
+              ? 'Camera access is disabled for Asiye. Open your phone settings and allow Camera access to take a photo.'
+              : 'Allow Camera access when prompted so Asiye can take your photo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Not now'),
+          ),
+          if (permanentlyDenied)
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await openAppSettings();
+              },
+              child: const Text('Open settings'),
+            ),
+        ],
+      ),
+    );
+
+    return false;
   }
 
   Future<String> _determineStartPage() async {

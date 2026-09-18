@@ -574,3 +574,198 @@ exports.notifyOutdatedAppsOnRelease = functions.database
       return null;
     }
   });
+
+
+// =================================================================
+// --- TRIP PUSH NOTIFICATIONS (ANDROID + IOS) ---
+// =================================================================
+
+function money(value) {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+}
+
+function dataStrings(values) {
+  return Object.fromEntries(
+    Object.entries(values || {})
+      .filter(([, value]) => value !== undefined && value !== null)
+      .map(([key, value]) => [
+        key,
+        typeof value === "object" ? JSON.stringify(value) : String(value)
+      ])
+  );
+}
+
+async function sendProfilePush(profileNode, profileId, notification, fallback = {}) {
+  if (!profileId || !notification) return null;
+
+  const tokenRef = admin.database().ref(`/${profileNode}/${profileId}/fcmToken`);
+  const token = (await tokenRef.once("value")).val();
+  if (!token) {
+    console.log(`No FCM token for ${profileNode}/${profileId}`);
+    return null;
+  }
+
+  let request = null;
+  const requestId = notification.requestId || notification.tripId || "";
+  if (requestId) {
+    request = (await admin.database().ref(`/requests/${requestId}`).once("value")).val();
+  }
+
+  const amount = Number(
+    notification.amount ??
+    notification.fare ??
+    request?.finalAmount ??
+    request?.agreedFare ??
+    request?.calculatedPrice ??
+    request?.pricePerPassenger ??
+    0
+  );
+
+  let title = notification.title || fallback.title || "Asiye";
+  let body = notification.message || notification.body || fallback.body || "New Asiye update";
+
+  if (profileNode === "taxis" && notification.type === "ride_request") {
+    const passenger = notification.commuterName || request?.commuterName || "A passenger";
+    const pickup = notification.pickupAddress || request?.pickupAddress || "the pickup point";
+    const destination = notification.destination || request?.destination || "the destination";
+    title = "New Asiye booking";
+    body = `${passenger}: ${pickup} → ${destination}. Fare R${money(amount)}.`;
+  }
+
+  if (profileNode === "commuters" && notification.type === "request_accepted") {
+    const driver = notification.driverName || request?.driverName || "Your driver";
+    title = "Driver confirmed";
+    body = `${driver} accepted your booking. Amount to pay: R${money(amount)}.`;
+  }
+
+  const data = dataStrings({
+    ...notification,
+    title,
+    message: body,
+    requestId,
+    amount: amount > 0 ? money(amount) : ""
+  });
+
+  try {
+    return await admin.messaging().send({
+      token,
+      notification: {
+        title: String(title),
+        body: String(body)
+      },
+      data,
+      android: {
+        priority: "high",
+        notification: {
+          channelId: "asiye_danger_channel",
+          sound: "default",
+          priority: "high"
+        }
+      },
+      apns: {
+        headers: {
+          "apns-priority": "10",
+          "apns-push-type": "alert"
+        },
+        payload: {
+          aps: {
+            sound: "default",
+            badge: 1
+          }
+        }
+      }
+    });
+  } catch (error) {
+    const code = error?.errorInfo?.code || error?.code || "";
+    console.error(
+      `FCM push failed for ${profileNode}/${profileId}`,
+      code,
+      error?.message || error
+    );
+
+    if (
+      code === "messaging/registration-token-not-registered" ||
+      code === "messaging/invalid-registration-token"
+    ) {
+      await tokenRef.remove().catch(() => {});
+    }
+
+    return null;
+  }
+}
+
+exports.pushPassengerNotification = functions.database
+  .ref("/notifications/commuters/{commuterId}/{notificationId}")
+  .onCreate(async (snapshot, context) => {
+    return sendProfilePush(
+      "commuters",
+      context.params.commuterId,
+      snapshot.val()
+    );
+  });
+
+exports.pushDriverNotification = functions.database
+  .ref("/notifications/taxis/{driverId}/{notificationId}")
+  .onCreate(async (snapshot, context) => {
+    return sendProfilePush(
+      "taxis",
+      context.params.driverId,
+      snapshot.val()
+    );
+  });
+
+exports.notifyPassengerOnGoBookingCreated = functions.database
+  .ref("/requests/{requestId}")
+  .onCreate(async (snapshot, context) => {
+    const request = snapshot.val();
+    if (!request || request.type === "club" || !request.commuterId) return null;
+
+    const amount = Number(
+      request.finalAmount ||
+      request.agreedFare ||
+      request.calculatedPrice ||
+      0
+    );
+
+    return admin.database()
+      .ref(`/notifications/commuters/${request.commuterId}`)
+      .push({
+        type: "booking_received",
+        title: "Booking received",
+        message: `We received your booking and are finding you a car. Amount to pay: R${money(amount)}.`,
+        requestId: context.params.requestId,
+        amount,
+        timestamp: admin.database.ServerValue.TIMESTAMP
+      });
+  });
+
+exports.notifyPassengerOnClubJoin = functions.database
+  .ref("/requests/{requestId}/passengers/{commuterId}")
+  .onCreate(async (snapshot, context) => {
+    const passenger = snapshot.val();
+    if (!passenger) return null;
+
+    const request = (
+      await snapshot.ref.parent.parent.once("value")
+    ).val();
+
+    if (!request || request.type !== "club") return null;
+
+    const amount = Number(
+      passenger.price ||
+      request.pricePerPassenger ||
+      0
+    );
+
+    return admin.database()
+      .ref(`/notifications/commuters/${context.params.commuterId}`)
+      .push({
+        type: "booking_received",
+        title: "Asiye Work booking received",
+        message: `Your seat is confirmed while we build your group. Amount to pay: R${money(amount)}.`,
+        requestId: context.params.requestId,
+        amount,
+        timestamp: admin.database.ServerValue.TIMESTAMP
+      });
+  });
