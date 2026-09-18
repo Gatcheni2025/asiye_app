@@ -576,33 +576,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         ),
       );
 
+    await controller.platform.setOnPlatformPermissionRequest(
+      _handleWebViewPermissionRequest,
+    );
+
     final platform = controller.platform;
     if (platform is AndroidWebViewController) {
       platform.setGeolocationEnabled(true);
-      platform.setOnPlatformPermissionRequest((request) async {
-        final wantsCamera =
-            request.types.contains(WebViewPermissionResourceType.camera);
-        final wantsMicrophone =
-            request.types.contains(WebViewPermissionResourceType.microphone);
-
-        if (wantsCamera && !await _ensureCameraPermission()) {
-          await request.deny();
-          return;
-        }
-
-        if (wantsMicrophone) {
-          var microphoneStatus = await Permission.microphone.status;
-          if (!microphoneStatus.isGranted) {
-            microphoneStatus = await Permission.microphone.request();
-          }
-          if (!microphoneStatus.isGranted) {
-            await request.deny();
-            return;
-          }
-        }
-
-        await request.grant();
-      });
       platform.setGeolocationPermissionsPromptCallbacks(
         onShowPrompt: (params) async =>
             const GeolocationPermissionsResponse(allow: true, retain: true),
@@ -845,6 +825,66 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     } catch (e) {
       debugPrint('Permission request failed: $e');
     }
+  }
+
+  Future<void> _handleWebViewPermissionRequest(
+    PlatformWebViewPermissionRequest request,
+  ) async {
+    final wantsCamera =
+        request.types.contains(WebViewPermissionResourceType.camera);
+    final wantsMicrophone =
+        request.types.contains(WebViewPermissionResourceType.microphone);
+
+    if (wantsCamera && !await _ensureCameraPermission()) {
+      await request.deny();
+      return;
+    }
+
+    if (wantsMicrophone && !await _ensureMicrophonePermission()) {
+      await request.deny();
+      return;
+    }
+
+    await request.grant();
+  }
+
+  Future<bool> _ensureMicrophonePermission() async {
+    var status = await Permission.microphone.status;
+    if (status.isGranted) return true;
+
+    status = await Permission.microphone.request();
+    if (status.isGranted) return true;
+
+    if (!mounted) return false;
+
+    final permanentlyDenied = status.isPermanentlyDenied;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Microphone permission required'),
+        content: Text(
+          permanentlyDenied
+              ? 'Microphone access is disabled for Asiye. Open your phone settings and allow Microphone access.'
+              : 'Allow Microphone access when prompted to use camera features that include audio.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Not now'),
+          ),
+          if (permanentlyDenied)
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await openAppSettings();
+              },
+              child: const Text('Open settings'),
+            ),
+        ],
+      ),
+    );
+
+    return false;
   }
 
   Future<bool> _ensureCameraPermission() async {
