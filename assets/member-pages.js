@@ -24,7 +24,47 @@ window.AsiyePages = {
         const esc = value => this.escape(value);
         const note = text => `<p class="member-note">${esc(text)}</p>`;
         if (page === 'account') {
-            body.innerHTML = `<div class="member-avatar">${esc((user.name || user.firstName || 'A').charAt(0))}</div><h2>${esc(user.name || user.firstName || 'Your account')}</h2>` + this.row('Phone', user.phone || user.phoneNumber) + this.row('Email', user.email) + this.row('Account type', driver ? 'Driver' : 'Passenger');
+            const initial = esc((user.name || user.firstName || 'A').charAt(0));
+            const photoUrl = !driver && window.ASIYE?.profile
+                ? ASIYE.profile.getUrl(user)
+                : (user.profile_picture_url || user.profileImageUrl || '');
+            const avatar = photoUrl
+                ? `<div class="member-avatar member-avatar-photo"><img data-passenger-profile-preview src="${esc(photoUrl)}" alt="Profile picture"></div>`
+                : `<div class="member-avatar">${initial}</div>`;
+
+            body.innerHTML =
+                avatar +
+                `<h2>${esc(user.name || user.firstName || 'Your account')}</h2>` +
+                this.row('Phone', user.phone || user.phoneNumber) +
+                this.row('Email', user.email) +
+                this.row('Account type', driver ? 'Driver' : 'Passenger');
+
+            if (!driver) {
+                body.innerHTML += `
+                    <div class="member-profile-photo-actions">
+                        <button type="button" class="member-primary" data-passenger-profile-camera>
+                            ${photoUrl ? 'Change profile picture' : 'Take profile picture'}
+                        </button>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            capture="user"
+                            data-passenger-profile-file
+                            hidden
+                        >
+                        <p class="member-note" data-passenger-profile-status>
+                            Use the camera to capture a clear face photo. The image is compressed and saved through Asiye's PHP image server.
+                        </p>
+                    </div>
+                `;
+
+                if (
+                    window.ASIYE?.profile &&
+                    typeof ASIYE.profile.bindAccount === 'function'
+                ) {
+                    ASIYE.profile.bindAccount(body);
+                }
+            }
         } else if (page === 'wallet') {
             body.innerHTML = `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` + note('Wallet credits shown from your account. Choose your payment method when booking a ride.') + this.row('Currency', 'South African rand · ZAR');
         } else if (page === 'vehicle') {
