@@ -119,44 +119,160 @@ window.AsiyePages = {
                 body.innerHTML = note('Sign in to manage loved ones.');
                 return;
             }
-            const root = driver ? 'taxis' : 'commuters';
-            const familyRef = firebase.database().ref(`${root}/${id}/familyMembers`);
-            const familySnapshot = await familyRef.once('value');
-            const members = [];
-            familySnapshot.forEach(child => members.push({ id: child.key, ...child.val() }));
+
+            const context = {
+                app,
+                id,
+                role: driver ? 'driver' : 'passenger',
+                root: driver ? 'taxis' : 'commuters'
+            };
+
+            const members = window.AsiyeSafetyContact
+                ? await AsiyeSafetyContact.getMembers(context)
+                : [];
+
             body.innerHTML = `
-                <h2>Loved ones & live location</h2>
-                <p class="member-note">Save trusted people, then share your active trip through your phone's secure share sheet.</p>
-                <div data-family-list>${members.length ? members.map(m => `<div class="member-row"><span>${esc(m.name)}</span><strong>${esc(m.phone)}</strong></div>`).join('') : note('No loved one added yet.')}</div>
-                <form data-family-form>
-                    <label>Full name</label><input name="name" required maxlength="80">
-                    <label>Mobile number</label><input name="phone" type="tel" required maxlength="24">
-                    <button class="member-primary" type="submit">Add loved one</button>
+                <h2>Trusted family & live location</h2>
+
+                <p class="member-note">
+                    Your primary safety contact is saved once and stays
+                    connected to your Asiye account. You can add more trusted
+                    people here at any time.
+                </p>
+
+                <div data-family-list>
+                    ${
+                        members.length
+                            ? members.map((member, index) => `
+                                <div class="member-row member-family-row">
+                                    <span>
+                                        ${esc(member.relationship || 'Loved one')}
+                                        ${
+                                            member.isPrimary === true || index === 0
+                                                ? '<em class="member-safety-badge">Primary safety contact</em>'
+                                                : ''
+                                        }
+                                    </span>
+                                    <strong>
+                                        ${esc(member.name)}
+                                        <small>${esc(member.phone)}</small>
+                                    </strong>
+                                </div>
+                            `).join('')
+                            : note('No trusted family member has been added yet.')
+                    }
+                </div>
+
+                <form data-family-form class="member-family-form">
+                    <h3>Add another trusted person</h3>
+
+                    <label>
+                        Full name
+                        <input name="name" required maxlength="80">
+                    </label>
+
+                    <label>
+                        Relationship
+                        <select name="relationship" required>
+                            <option value="">Choose relationship</option>
+                            <option>Spouse / Partner</option>
+                            <option>Parent</option>
+                            <option>Sibling</option>
+                            <option>Child</option>
+                            <option>Relative</option>
+                            <option>Friend</option>
+                            <option>Other</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Mobile number
+                        <input
+                            name="phone"
+                            type="tel"
+                            inputmode="tel"
+                            required
+                            maxlength="24"
+                        >
+                    </label>
+
+                    <p class="member-note">
+                        Only add someone who has agreed to be your safety contact.
+                    </p>
+
+                    <button class="member-primary" type="submit">
+                        Save trusted person
+                    </button>
                 </form>
-                <button class="member-primary" data-share-live>Share active trip location</button>
-                <button class="member-primary" data-support>Contact support</button>`;
+
+                <button class="member-primary" data-share-live>
+                    Share active trip location
+                </button>
+
+                <button class="member-primary" data-support>
+                    Contact support
+                </button>
+            `;
+
             body.querySelector('[data-family-form]').onsubmit = async event => {
                 event.preventDefault();
+
                 const form = event.currentTarget;
-                await familyRef.push({
-                    name: form.name.value.trim(),
-                    phone: form.phone.value.trim(),
-                    addedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-                this.open('safety');
+                const button = form.querySelector('[type="submit"]');
+
+                button.disabled = true;
+                button.textContent = 'Saving…';
+
+                try {
+                    if (!window.AsiyeSafetyContact) {
+                        throw new Error('Safety setup is unavailable.');
+                    }
+
+                    await AsiyeSafetyContact.saveMember({
+                        context,
+                        name: form.elements.name.value,
+                        relationship: form.elements.relationship.value,
+                        phone: form.elements.phone.value
+                    });
+
+                    this.open('safety');
+                } catch (error) {
+                    button.disabled = false;
+                    button.textContent = 'Save trusted person';
+
+                    app.ui?.toast?.(
+                        error?.message ||
+                        'Unable to save this person.'
+                    );
+                }
             };
+
             body.querySelector('[data-share-live]').onclick = async () => {
-                const requestId = app.state?.activeRequest?.requestId ||
+                const requestId =
+                    app.state?.activeRequest?.requestId ||
+                    app.state?.activeRequest?.key ||
                     app.state?.booking?.requestId ||
+                    app.state?.trip?.requestId ||
                     localStorage.getItem('currentRequestId');
-                if (!requestId) return app.ui?.toast?.('There is no active trip to share.');
-                const url = `https://asiye.cloud/track.html?trip=${encodeURIComponent(requestId)}`;
-                const text = `Follow my Asiye trip live: ${url}`;
-                if (window.AsiyeNativeAuth?.post({ action:'share', text })) return;
-                if (navigator.share) await navigator.share({ title:'My Asiye trip', text, url });
-                else await navigator.clipboard.writeText(text);
+
+                if (!requestId) {
+                    return app.ui?.toast?.(
+                        'There is no active trip to share.'
+                    );
+                }
+
+                if (window.AsiyeSafetyContact) {
+                    await AsiyeSafetyContact.offerTripShare(
+                        requestId,
+                        {
+                            role: driver ? 'driver' : 'passenger'
+                        }
+                    );
+                }
             };
-            body.querySelector('[data-support]').onclick = () => this.open('support');
+
+            body.querySelector('[data-support]').onclick =
+                () => this.open('support');
         } else if (page === 'support') {
             const config = driver ? window.ASIYE_DRIVER_CONFIG : window.ASIYE_CONFIG;
             body.innerHTML = `<h2>How can we help?</h2><details class="member-info"><summary>My driver or passenger cannot find me</summary><p>Use Message on your trip to share a nearby landmark and agree on a safe meeting point.</p></details><details class="member-info"><summary>My payment or fare looks incorrect</summary><p>Keep your trip reference and the amount shown on the completed-trip receipt.</p></details><details class="member-info"><summary>Map or location is unavailable</summary><p>Allow location access in your browser or device settings, check your connection, then recenter the map.</p></details>`;
