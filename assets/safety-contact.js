@@ -213,6 +213,40 @@ window.AsiyeSafetyContact = {
         return layer;
     },
 
+    async pickIntoForm(form, errorBox = null) {
+        if (!window.AsiyeNativeBridge) {
+            throw new Error(
+                'Phone contacts are available in the Asiye mobile app.'
+            );
+        }
+
+        const contact =
+            await AsiyeNativeBridge.pickContact();
+
+        if (!contact) return false;
+
+        if (form?.elements?.name && contact.name) {
+            form.elements.name.value =
+                String(contact.name).trim();
+        }
+
+        if (form?.elements?.phone && contact.phone) {
+            form.elements.phone.value =
+                String(contact.phone).trim();
+        }
+
+        if (errorBox) {
+            errorBox.hidden = true;
+            errorBox.textContent = '';
+        }
+
+        if (form?.elements?.relationship) {
+            form.elements.relationship.focus();
+        }
+
+        return true;
+    },
+
     async _showRequiredSetup(ctx) {
         return new Promise(resolve => {
             const layer = this._createLayer(`
@@ -253,6 +287,18 @@ window.AsiyeSafetyContact = {
                         class="asiye-safety-form"
                         data-safety-contact-form
                     >
+                        <button
+                            type="button"
+                            class="asiye-safety-secondary asiye-contact-picker"
+                            data-pick-phone-contact
+                        >
+                            <i class="fas fa-address-book"></i>
+                            Choose from phone contacts
+                        </button>
+
+                        <div class="asiye-safety-or">
+                            <span>or enter manually</span>
+                        </div>
                         <label>
                             Full name
                             <input
@@ -320,6 +366,35 @@ window.AsiyeSafetyContact = {
             const errorBox = layer.querySelector(
                 '[data-safety-error]'
             );
+
+            const pickButton = layer.querySelector(
+                '[data-pick-phone-contact]'
+            );
+
+            pickButton.onclick = async () => {
+                pickButton.disabled = true;
+                const original =
+                    pickButton.innerHTML;
+
+                pickButton.innerHTML =
+                    '<i class="fas fa-circle-notch fa-spin"></i> Opening contacts…';
+
+                try {
+                    await this.pickIntoForm(
+                        form,
+                        errorBox
+                    );
+                } catch (error) {
+                    errorBox.textContent =
+                        error?.message ||
+                        'Unable to open phone contacts.';
+                    errorBox.hidden = false;
+                } finally {
+                    pickButton.disabled = false;
+                    pickButton.innerHTML =
+                        original;
+                }
+            };
 
             form.onsubmit = async event => {
                 event.preventDefault();
