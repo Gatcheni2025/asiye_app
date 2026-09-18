@@ -155,6 +155,16 @@ ASIYE.setUser = function(
 
     ASIYE.state.user =
         data || null;
+
+    if (
+        ASIYE.profile &&
+        typeof ASIYE.profile.syncAvatar ===
+            'function'
+    ) {
+        ASIYE.profile.syncAvatar(
+            ASIYE.state.user || {}
+        );
+    }
 };
 
 
