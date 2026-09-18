@@ -769,3 +769,138 @@ exports.notifyPassengerOnClubJoin = functions.database
         timestamp: admin.database.ServerValue.TIMESTAMP
       });
   });
+
+
+// =================================================================
+// --- ASIYE WORK: NOTIFY NEARBY DRIVERS WHEN THE POOL IS FULL ---
+// =================================================================
+
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const values = [lat1, lng1, lat2, lng2].map(Number);
+  if (!values.every(Number.isFinite)) return Infinity;
+
+  const [aLat, aLng, bLat, bLng] = values;
+  const radians = value => value * Math.PI / 180;
+  const dLat = radians(bLat - aLat);
+  const dLng = radians(bLng - aLng);
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(radians(aLat)) *
+    Math.cos(radians(bLat)) *
+    Math.sin(dLng / 2) ** 2;
+
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+exports.notifyDriversWhenClubReady = functions.database
+  .ref("/requests/{requestId}/poolReady")
+  .onUpdate(async (change, context) => {
+    if (change.before.val() === true || change.after.val() !== true) {
+      return null;
+    }
+
+    const requestId = context.params.requestId;
+    const request = (await change.after.ref.parent.once("value")).val();
+
+    if (
+      !request ||
+      request.type !== "club" ||
+      request.taxiId ||
+      request.status !== "pool_ready"
+    ) {
+      return null;
+    }
+
+    const pickupLat = Number(
+      request.poolCenterLat ??
+      request.commuterLocation?.latitude
+    );
+    const pickupLng = Number(
+      request.poolCenterLng ??
+      request.commuterLocation?.longitude
+    );
+
+    if (!Number.isFinite(pickupLat) || !Number.isFinite(pickupLng)) {
+      console.warn(`Club ${requestId} has no usable pickup coordinates.`);
+      return null;
+    }
+
+    const requiredSeats = Number(
+      request.capacity ||
+      (request.clubMode === "club7" ? 7 : 4)
+    );
+
+    const taxisSnapshot = await admin.database().ref("/taxis").once("value");
+    const candidates = [];
+
+    taxisSnapshot.forEach(child => {
+      const taxi = child.val() || {};
+
+      if (
+        taxi.isOnline !== true ||
+        taxi.currentRequest ||
+        taxi.isFull === true ||
+        !taxi.fcmToken
+      ) {
+        return;
+      }
+
+      const lat = Number(taxi.latitude);
+      const lng = Number(taxi.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+      const declaredSeats = Number(taxi.capacity || taxi.seats || 0);
+      if (
+        Number.isFinite(declaredSeats) &&
+        declaredSeats > 0 &&
+        declaredSeats < requiredSeats
+      ) {
+        return;
+      }
+
+      const distanceKm = haversineKm(
+        pickupLat,
+        pickupLng,
+        lat,
+        lng
+      );
+
+      if (distanceKm > 10) return;
+
+      candidates.push({
+        driverId: child.key,
+        distanceKm
+      });
+    });
+
+    candidates.sort((left, right) => left.distanceKm - right.distanceKm);
+    const selected = candidates.slice(0, 8);
+
+    await Promise.all(
+      selected.map(candidate =>
+        admin.database()
+          .ref(`/notifications/taxis/${candidate.driverId}/${requestId}`)
+          .set({
+            type: "club_request",
+            requestId,
+            rideType: request.clubMode || "club4",
+            serviceName: "Asiye Work",
+            commuterName: request.commuterName || "Asiye Work passengers",
+            pickupAddress: request.pickupAddress || "Pickup",
+            destination: request.destination || "Destination",
+            fare: Number(request.pricePerPassenger || 0),
+            passengerCount: Number(request.passengerCount || requiredSeats),
+            capacity: requiredSeats,
+            distanceKm: candidate.distanceKm,
+            timestamp: admin.database.ServerValue.TIMESTAMP
+          })
+      )
+    );
+
+    console.log(
+      `Asiye Work ${requestId} sent to ${selected.length} nearby driver(s).`
+    );
+
+    return null;
+  });
