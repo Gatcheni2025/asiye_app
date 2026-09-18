@@ -836,9 +836,9 @@ ASIYE_DRIVER.ui = {
                 request.clubMode ===
                 'club7'
 
-                ? 'ASIYE CLUB 7'
+                ? 'ASIYE WORK 7'
 
-                : 'ASIYE CLUB 4'
+                : 'ASIYE WORK 4'
             )
 
             : 'ASIYE GO';
@@ -1476,8 +1476,8 @@ ASIYE_DRIVER.ui = {
                     <div class="driver-kicker">
                         ${
                             capacity === 7
-                            ? 'Asiye Club 7'
-                            : 'Asiye Club 4'
+                            ? 'Asiye Work 7'
+                            : 'Asiye Work 4'
                         }
                     </div>
 
@@ -1594,7 +1594,7 @@ ASIYE_DRIVER.ui = {
 
                     <p>
                         Do not start collecting passengers
-                        until the Club is full.
+                        until the Asiye Work group is full.
                     </p>
 
                 </div>
@@ -1685,8 +1685,8 @@ ASIYE_DRIVER.ui = {
 
                         ${
                             capacity === 7
-                            ? 'Asiye Club 7'
-                            : 'Asiye Club 4'
+                            ? 'Asiye Work 7'
+                            : 'Asiye Work 4'
                         }
 
                     </div>
@@ -2690,7 +2690,7 @@ ASIYE_DRIVER.ui = {
             );
 
             details.innerHTML = `
-                <p>${request.type === 'club' ? 'Club trip completed' : ASIYE_DRIVER.ui.escape(request.paymentMethod || 'cash') + ' payment'}</p>
+                <p>${request.type === 'club' ? 'Asiye Work trip completed' : ASIYE_DRIVER.ui.escape(request.paymentMethod || 'cash') + ' payment'}</p>
                 ${unrated.length ? `
                     <section style="margin-top:16px;">
                         <strong>Rate your passenger</strong>
