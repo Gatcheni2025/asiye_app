@@ -1,6 +1,6 @@
 /* ============================================================
    ASIYE PASSENGER V2
-   ASIYE CLUB SERVICE
+   ASIYE WORK SERVICE
    ============================================================ */
 
 window.ASIYE = window.ASIYE || {};
@@ -12,7 +12,7 @@ ASIYE.club = {
         club4: {
 
             name:
-                'Asiye Club 4',
+                'Asiye Work 4',
 
             capacity:
                 4,
@@ -31,7 +31,7 @@ ASIYE.club = {
         club7: {
 
             name:
-                'Asiye Club 7',
+                'Asiye Work 7',
 
             capacity:
                 7,
@@ -95,7 +95,7 @@ ASIYE.club = {
        PRICE CALCULATION
 
        Total trip value is shared equally between all
-       passengers in the selected Club.
+       passengers in the selected Asiye Work.
        ======================================================== */
 
     calculatePrice(
@@ -158,7 +158,7 @@ ASIYE.club = {
          * Use full Go-equivalent route fare as
          * pool value for now.
          *
-         * Later you can apply a Club multiplier
+         * Later you can apply a Asiye Work multiplier
          * if required.
          */
 
