@@ -219,6 +219,46 @@ ASIYE.club = {
     },
 
 
+    getCommuteDirection() {
+
+        const destination =
+            ASIYE.state.destination || {};
+
+        const home =
+            ASIYE.places?.getSavedPlace?.('home');
+
+        const work =
+            ASIYE.places?.getSavedPlace?.('work');
+
+        const distanceTo = place => {
+
+            if (!place) return Infinity;
+
+            return this.distanceKm(
+                Number(destination.latitude),
+                Number(destination.longitude),
+                Number(place.latitude),
+                Number(place.longitude)
+            );
+        };
+
+
+        if (distanceTo(work) <= 2) {
+
+            return 'to_work';
+        }
+
+
+        if (distanceTo(home) <= 2) {
+
+            return 'to_home';
+        }
+
+
+        return 'other';
+    },
+
+
     /* ========================================================
        FIND COMPATIBLE EXISTING POOL
        ======================================================== */
@@ -241,6 +281,10 @@ ASIYE.club = {
 
         const config =
             this.getConfig(type);
+
+
+        const commuteDirection =
+            this.getCommuteDirection();
 
 
         const snapshot =
@@ -278,6 +322,16 @@ ASIYE.club = {
 
             if (
                 pool.clubMode !== type
+            ) {
+
+                return;
+            }
+
+
+            if (
+                commuteDirection !== 'other' &&
+                pool.commuteDirection &&
+                pool.commuteDirection !== commuteDirection
             ) {
 
                 return;
@@ -502,7 +556,7 @@ ASIYE.club = {
         ) {
 
             throw new Error(
-                'Missing passenger or Club pool.'
+                'Missing passenger or Asiye Work pool.'
             );
         }
 
@@ -608,6 +662,9 @@ ASIYE.club = {
                         destinationLng:
                             ASIYE.state.destination
                                 .longitude,
+
+                        commuteDirection:
+                            this.getCommuteDirection(),
 
                         departureTime:
                             departureTime,
@@ -730,7 +787,7 @@ ASIYE.club = {
         if (!result.committed) {
 
             throw new Error(
-                'Unable to join this Club ride.'
+                'Unable to join this Asiye Work ride.'
             );
         }
 
@@ -873,6 +930,9 @@ ASIYE.club = {
             destinationLng:
                 destination.longitude,
 
+            commuteDirection:
+                this.getCommuteDirection(),
+
             departureTime:
                 departureTime,
 
@@ -905,6 +965,15 @@ ASIYE.club = {
 
             type:
                 'club',
+
+            service:
+                'asiye_work',
+
+            serviceName:
+                'Asiye Work',
+
+            commuteDirection:
+                this.getCommuteDirection(),
 
             clubMode:
                 type,
