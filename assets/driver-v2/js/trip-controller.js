@@ -833,7 +833,7 @@ ASIYE_DRIVER.trip = {
                     'driver_on_way',
 
                 title:
-                    'Club collection started',
+                    'Asiye Work collection started',
 
                 message:
                     'Your Asiye Work driver has started collecting passengers.'
