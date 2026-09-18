@@ -886,8 +886,8 @@ ASIYE.ui = {
 
 
                     /*
-                     * Asiye Work flow — collect schedule
-                     * first, then book.
+                     * Asiye Work flow — show the shared-ride
+                     * details, then confirm the booking.
                      */
 
                     if (
@@ -1181,28 +1181,23 @@ ASIYE.ui = {
                     </strong>
 
                     <p>
-                        Asiye Work groups passengers travelling a similar route and time to or from work. Your fare is shared between ${config.capacity} passengers, and collection begins once the group is ready.
+                        Asiye Work groups passengers travelling a similar route to or from work. We start finding a nearby car while your group fills, and collection begins as soon as all ${config.capacity} passengers are confirmed.
                     </p>
 
                 </div>
 
             </div>
 
+            <div class="club-info-box" style="margin-top:12px;">
 
-            <label
-                class="club-field-label"
-                for="clubDepartureTime"
-            >
-                What time do you leave?
-            </label>
+                <i class="fas fa-clock"></i>
 
+                <div>
+                    <strong>Ready when your group is ready</strong>
+                    <p>No departure time needed. We start matching passengers and looking for a car immediately.</p>
+                </div>
 
-            <input
-                id="clubDepartureTime"
-                class="club-time-input"
-                type="time"
-                required
-            >
+            </div>
 
 
             <div class="club-wait-details">
@@ -1212,11 +1207,11 @@ ASIYE.ui = {
                     <i class="fas fa-clock"></i>
 
                     <span>
-                        Pickup window
+                        Estimated wait
                     </span>
 
                     <strong>
-                        ±${config.pickupWindowMinutes} min
+                        Up to ${config.maxWaitMinutes} min
                     </strong>
 
                 </div>
@@ -1269,28 +1264,9 @@ ASIYE.ui = {
                 'click',
                 async () => {
 
-                    const time =
-
-                        document
-                            .getElementById(
-                                'clubDepartureTime'
-                            )
-                            ?.value;
-
-
-                    if (!time) {
-
-                        this.toast(
-                            'Choose your departure time.'
-                        );
-
-                        return;
-                    }
-
-
                     ASIYE.state.booking.club
                         .departureTime =
-                        time;
+                        'ASAP';
 
 
                     this.renderClubConfirmation();
@@ -1332,14 +1308,7 @@ ASIYE.ui = {
 
             : prices.club4;
 
-
-        const time =
-            ASIYE.state.booking
-                .club
-                .departureTime;
-
-
-        container.innerHTML = `
+container.innerHTML = `
 
             <div class="sheet-page-header">
 
@@ -1431,10 +1400,10 @@ ASIYE.ui = {
 
                 <div>
 
-                    <span>Departure</span>
+                    <span>Collection</span>
 
                     <strong>
-                        ${time}
+                        As soon as your group is ready
                     </strong>
 
                 </div>
@@ -1475,13 +1444,13 @@ ASIYE.ui = {
                 <div>
 
                     <strong>
-                        Driver waits for the Asiye Work group
+                        We start finding your car immediately
                     </strong>
 
                     <p>
-                        Collection only starts once
-                        all ${config.capacity}
-                        passenger seats are confirmed.
+                        Your car can fetch you as soon as all
+                        ${config.capacity} passenger seats are confirmed.
+                        Estimated wait is up to ${config.maxWaitMinutes} minutes.
                     </p>
 
                 </div>
@@ -1533,23 +1502,13 @@ ASIYE.ui = {
             ASIYE.state.booking
                 .rideType;
 
-
-        const time =
-            ASIYE.state.booking
-                .club
-                .departureTime;
-
-
-        const button =
+const button =
             document.getElementById(
                 'bookClubNow'
             );
 
 
-        if (
-            !type ||
-            !time
-        ) {
+        if (!type) {
 
             return;
         }
@@ -1584,10 +1543,7 @@ ASIYE.ui = {
             const requestId =
 
                 await ASIYE.club.book(
-
-                    type,
-
-                    time
+                    type
                 );
 
 
@@ -1653,6 +1609,44 @@ ASIYE.ui = {
                 .getPoolProgress(
                     request
                 );
+
+
+        const config =
+            ASIYE.club.getConfig(
+                request.clubMode
+            );
+
+
+        const maxWaitMinutes =
+            Number(
+                request.maxWaitMinutes ||
+                config.maxWaitMinutes ||
+                20
+            );
+
+
+        const createdAt =
+            Number(request.createdAt || 0);
+
+
+        const elapsedMinutes =
+            createdAt > 0
+            ? Math.max(
+                0,
+                Math.floor(
+                    (Date.now() - createdAt) /
+                    60000
+                )
+            )
+            : 0;
+
+
+        const estimatedWaitMinutes =
+            Math.max(
+                1,
+                maxWaitMinutes -
+                elapsedMinutes
+            );
 
 
         container.innerHTML = `
@@ -1743,14 +1737,11 @@ ASIYE.ui = {
                 <div>
 
                     <span>
-                        Departure
+                        Estimated wait
                     </span>
 
                     <strong>
-                        ${
-                            request.departureTime ||
-                            '—'
-                        }
+                        Up to ${estimatedWaitMinutes} min
                     </strong>
 
                 </div>
@@ -1791,7 +1782,7 @@ ASIYE.ui = {
 
                             :
 
-                            'Driver collection has not started'
+                            'We’re finding you a car'
                         }
 
                     </strong>
@@ -1807,7 +1798,7 @@ ASIYE.ui = {
 
                             :
 
-                            `Collection begins once all ${progress.capacity} passengers are confirmed.`
+                            `In the meantime, we’re finding you a car to fetch you as soon as ${progress.capacity} passengers are confirmed. Hang in there — estimated wait is up to ${estimatedWaitMinutes} min.`
                         }
 
                     </p>
