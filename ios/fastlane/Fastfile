@@ -3,14 +3,14 @@ require 'base64'
 default_platform(:ios)
 
 platform :ios do
-  desc "Push a new beta build to TestFlight"
+  desc "Build, sign and upload the current Flutter release to TestFlight"
   lane :beta do
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
     setup_ci
 
-    # 1. Fetch certificates
+    # 1. Fetch App Store signing certificate/profile from the private match repo.
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -19,7 +19,7 @@ platform :ios do
       readonly: true
     )
 
-    # 2. Update signing settings
+    # 2. Force the Runner target to use the match App Store profile.
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -28,26 +28,41 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 3. Generate a unique build number for every CI run and rerun.
+    # 3. Read Flutter marketing version/build and create a CI-safe build number.
     project_root = File.expand_path("../..", __dir__)
-    version_line = File.read(File.join(project_root, "pubspec.yaml")).match(/^version:\s+[^+]+\+(\d+)/)
-    current_build_number = version_line ? version_line[1].to_i : 1
+    version_match = File.read(File.join(project_root, "pubspec.yaml")).match(/^version:\s+([^+]+)\+(\d+)/)
+
+    UI.user_error!("Could not read Flutter version from pubspec.yaml") unless version_match
+
+    version_name = version_match[1]
+    current_build_number = version_match[2].to_i
     run_number = ENV.fetch("GITHUB_RUN_NUMBER", "0").to_i
     run_attempt = ENV.fetch("GITHUB_RUN_ATTEMPT", "1").to_i
-    build_number = [current_build_number + 1, current_build_number + (run_number * 100) + run_attempt].max
-    UI.message("Building iOS version #{build_number}")
 
-    # 4. Build Flutter (No Signing)
+    # Keep the checked-in Flutter build number as the floor, while ensuring
+    # reruns cannot reuse an App Store Connect build number.
+    ci_build_number = current_build_number + (run_number * 10) + run_attempt
+    build_number = [current_build_number, ci_build_number].max
+
+    UI.message("Building Asiye iOS #{version_name} (#{build_number})")
+
+    # 4. Generate Flutter iOS release output before Xcode signing/archive.
     Dir.chdir(project_root) do
-      sh("flutter build ios --release --no-codesign --build-number=#{build_number}")
+      sh(
+        "flutter build ios --release --no-codesign " \
+        "--build-name=#{version_name} --build-number=#{build_number}"
+      )
     end
 
-    # 5. Build and Sign IPA (Workspace)
+    # 5. Archive and export a signed App Store IPA.
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
+      output_directory: "build/ipa",
+      output_name: "Asiye-#{version_name}-#{build_number}.ipa",
+      clean: true,
       xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye'",
       export_options: {
         provisioningProfiles: {
@@ -56,21 +71,22 @@ platform :ios do
       }
     )
 
-    # 6. SMART AUTHENTICATION (Fixes the nil error and Bearer Token error)
+    # 6. Build App Store Connect API key from the encrypted GitHub secret.
     key_secret = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].to_s.strip
+    UI.user_error!("APP_STORE_CONNECT_PRIVATE_KEY is empty") if key_secret.empty?
 
-    # If the secret doesn't have the "BEGIN" header, it's Base64. Decode it.
     if !key_secret.include?("BEGIN")
       key_secret = Base64.decode64(key_secret)
     end
 
-    # Clean up the key data and enforce 64-character line breaks (Apple requirement)
-    clean_data = key_secret.gsub(/-----(BEGIN|END) PRIVATE KEY-----/, "").gsub(/\s+/, "")
+    clean_data = key_secret
+      .gsub(/-----(BEGIN|END) PRIVATE KEY-----/, "")
+      .gsub(/\s+/, "")
+
     formatted_key = "-----BEGIN PRIVATE KEY-----\n" +
                     clean_data.scan(/.{1,64}/).join("\n") +
                     "\n-----END PRIVATE KEY-----"
 
-    # Use 'key_content' directly to avoid the 'IO.binread' crash
     api_key = app_store_connect_api_key(
       key_id: ENV["APP_STORE_CONNECT_KEY_ID"].to_s.strip,
       issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s.strip,
@@ -78,7 +94,7 @@ platform :ios do
       in_house: false
     )
 
-    # 7. Upload to TestFlight
+    # 7. Upload the signed IPA to TestFlight.
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
