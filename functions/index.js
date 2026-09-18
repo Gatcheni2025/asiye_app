@@ -373,3 +373,204 @@ exports.notifyDriverOnNewRequest = functions.database
       return null;
     }
   });
+
+// =================================================================
+// --- APP RELEASE UPDATE NOTIFICATIONS ---
+// =================================================================
+
+function compareReleaseVersions(left, right) {
+  const leftParts = String(left || "").split(".").map(value => Number(value) || 0);
+  const rightParts = String(right || "").split(".").map(value => Number(value) || 0);
+  const length = Math.max(leftParts.length, rightParts.length);
+
+  for (let index = 0; index < length; index += 1) {
+    const leftValue = leftParts[index] || 0;
+    const rightValue = rightParts[index] || 0;
+    if (leftValue !== rightValue) return leftValue - rightValue;
+  }
+  return 0;
+}
+
+function profileNeedsAppUpdate(profile, release) {
+  if (!profile || !profile.fcmToken) return false;
+
+  const platform = String(profile.appPlatform || "").toLowerCase();
+  const latestVersion = String(
+    platform === "ios"
+      ? (release.latestVersionIos || release.latestVersion || "")
+      : (release.latestVersionAndroid || release.latestVersion || "")
+  );
+
+  if (platform === "ios" && latestVersion) {
+    return !profile.appVersion ||
+      compareReleaseVersions(profile.appVersion, latestVersion) < 0;
+  }
+
+  const latestBuild = Number(
+    release.latestBuildAndroid ||
+    release.latestBuild ||
+    0
+  );
+
+  if (latestBuild > 0) {
+    return Number(profile.appBuild || 0) < latestBuild;
+  }
+
+  return latestVersion
+    ? (!profile.appVersion ||
+      compareReleaseVersions(profile.appVersion, latestVersion) < 0)
+    : false;
+}
+
+async function sendAppUpdateNotifications(recipients, release) {
+  const uniqueTokens = [...new Set(
+    recipients
+      .map(recipient => recipient.token)
+      .filter(Boolean)
+  )];
+
+  if (uniqueTokens.length === 0) {
+    return { successCount: 0, failureCount: 0 };
+  }
+
+  const latestBuild = String(
+    release.latestBuildAndroid ||
+    release.latestBuild ||
+    ""
+  );
+
+  const latestVersion = String(
+    release.latestVersion ||
+    release.latestVersionAndroid ||
+    release.latestVersionIos ||
+    ""
+  );
+
+  const data = {
+    type: "app_update",
+    title: String(release.title || "A new Asiye update is available"),
+    message: String(
+      release.message ||
+      "Update Asiye to get the latest improvements and fixes."
+    ),
+    latestBuild,
+    latestBuildAndroid: latestBuild,
+    latestVersion,
+    latestVersionAndroid: String(
+      release.latestVersionAndroid ||
+      latestVersion
+    ),
+    latestVersionIos: String(
+      release.latestVersionIos ||
+      latestVersion
+    ),
+    androidUrl: String(
+      release.androidUrl ||
+      "https://play.google.com/store/apps/details?id=com.asiyeapp.asiye"
+    ),
+    iosUrl: String(release.iosUrl || ""),
+    updateUrl: String(release.updateUrl || ""),
+    forceUpdate: String(Boolean(release.forceUpdate))
+  };
+
+  let successCount = 0;
+  let failureCount = 0;
+
+  for (let start = 0; start < uniqueTokens.length; start += 500) {
+    const tokens = uniqueTokens.slice(start, start + 500);
+
+    const result = await admin.messaging().sendEachForMulticast({
+      tokens,
+      data,
+      android: {
+        priority: "high"
+      },
+      apns: {
+        headers: {
+          "apns-push-type": "background",
+          "apns-priority": "5"
+        },
+        payload: {
+          aps: {
+            contentAvailable: true
+          }
+        }
+      }
+    });
+
+    successCount += result.successCount;
+    failureCount += result.failureCount;
+  }
+
+  return { successCount, failureCount };
+}
+
+exports.notifyOutdatedAppsOnRelease = functions.database
+  .ref("/appRelease/current")
+  .onWrite(async (change) => {
+    if (!change.after.exists()) return null;
+
+    const release = change.after.val() || {};
+    const previous = change.before.exists() ? (change.before.val() || {}) : {};
+
+    const releaseKey = [
+      release.latestBuildAndroid || release.latestBuild || "",
+      release.latestVersion || "",
+      release.notificationRevision || 0
+    ].join(":");
+
+    const previousKey = [
+      previous.latestBuildAndroid || previous.latestBuild || "",
+      previous.latestVersion || "",
+      previous.notificationRevision || 0
+    ].join(":");
+
+    if (!releaseKey.replace(/:/g, "") || releaseKey === previousKey) {
+      return null;
+    }
+
+    try {
+      const [commutersSnapshot, taxisSnapshot, handlersSnapshot] =
+        await Promise.all([
+          admin.database().ref("/commuters").once("value"),
+          admin.database().ref("/taxis").once("value"),
+          admin.database().ref("/handlers").once("value")
+        ]);
+
+      const recipients = [];
+
+      const collect = (snapshot, node) => {
+        snapshot.forEach(child => {
+          const profile = child.val();
+          if (!profileNeedsAppUpdate(profile, release)) return;
+
+          recipients.push({
+            token: profile.fcmToken,
+            path: `${node}/${child.key}`
+          });
+        });
+      };
+
+      collect(commutersSnapshot, "commuters");
+      collect(taxisSnapshot, "taxis");
+      collect(handlersSnapshot, "handlers");
+
+      const result = await sendAppUpdateNotifications(recipients, release);
+
+      await change.after.ref.update({
+        lastNotificationAt: admin.database.ServerValue.TIMESTAMP,
+        lastRecipientCount: recipients.length,
+        lastSuccessCount: result.successCount,
+        lastFailureCount: result.failureCount
+      });
+
+      console.log(
+        `App update notification sent to ${result.successCount}/${recipients.length} outdated devices.`
+      );
+
+      return null;
+    } catch (error) {
+      console.error("App update notification failed:", error);
+      return null;
+    }
+  });

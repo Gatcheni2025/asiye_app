@@ -1,5 +1,5 @@
 name: Android Release APK and AAB
-# Release 11.0.18+288
+# Release 11.0.19+289
 
 on:
   push:
@@ -74,7 +74,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep '^version: 11.0.18+288$' pubspec.yaml
+          grep '^version: 11.0.19+289$' pubspec.yaml
 
       - name: Analyze Flutter code
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -98,8 +98,8 @@ jobs:
           test -n "$AAPT"
 
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='288'"
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.18'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='289'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.19'"
 
       - name: Verify AAB signature
         run: jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
@@ -107,7 +107,7 @@ jobs:
       - name: Upload Android release files
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.18-build-288-android
+          name: asiye-11.0.19-build-289-android
           path: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab

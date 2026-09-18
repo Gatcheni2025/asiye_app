@@ -15,6 +15,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -25,9 +26,57 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterL
 
 const bool isTest = bool.fromEnvironment('FLUTTER_TEST', defaultValue: false);
 
+int _compareVersions(String left, String right) {
+  final leftParts = left.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+  final rightParts = right.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+  final length = max(leftParts.length, rightParts.length);
+
+  for (var index = 0; index < length; index++) {
+    final leftValue = index < leftParts.length ? leftParts[index] : 0;
+    final rightValue = index < rightParts.length ? rightParts[index] : 0;
+    if (leftValue != rightValue) return leftValue.compareTo(rightValue);
+  }
+  return 0;
+}
+
+Future<bool> _isAppUpdateRequired(Map<String, dynamic> data) async {
+  if (data['type']?.toString() != 'app_update') return false;
+
+  final info = await PackageInfo.fromPlatform();
+
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    final latestVersion =
+        data['latestVersionIos']?.toString() ??
+        data['latestVersion']?.toString() ??
+        '';
+    return latestVersion.isNotEmpty &&
+        _compareVersions(info.version, latestVersion) < 0;
+  }
+
+  final currentBuild = int.tryParse(info.buildNumber) ?? 0;
+  final latestBuild = int.tryParse(
+        data['latestBuildAndroid']?.toString() ??
+        data['latestBuild']?.toString() ??
+        '0',
+      ) ??
+      0;
+  return latestBuild > currentBuild;
+}
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+
+  if (message.data['type']?.toString() == 'app_update') {
+    try {
+      if (!await _isAppUpdateRequired(message.data)) {
+        debugPrint('Ignoring app update notification: installed version is current.');
+        return;
+      }
+    } catch (error) {
+      debugPrint('Unable to compare app update version in background: $error');
+    }
+  }
 
   // Show local notification for background data messages
   RemoteNotification? notification = message.notification;
@@ -110,6 +159,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Map<String, dynamic>? _pendingNotification;
 
   Future<void> _openNotification(Map<String, dynamic> data) async {
+    if (data['type']?.toString() == 'app_update') {
+      await _handleAppReleaseConfig(data, fromNotification: true);
+      return;
+    }
+
     _pendingNotification = data;
     try {
       final result = await _controller?.runJavaScriptReturningResult("""
@@ -127,6 +181,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   StreamSubscription<RemoteMessage>? _messageSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
   int? _phoneResendToken;
+  int? _lastPromptedReleaseBuild;
+  String? _lastPromptedReleaseVersion;
 
   @override
   void dispose() {
@@ -154,6 +210,173 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   }
 
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+
+  String _currentPlatformName() {
+    return defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+  }
+
+  String _selectUpdateUrl(Map<String, dynamic> release) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return release['iosUrl']?.toString() ??
+          release['updateUrl']?.toString() ??
+          '';
+    }
+
+    return release['androidUrl']?.toString() ??
+        release['updateUrl']?.toString() ??
+        'https://play.google.com/store/apps/details?id=com.asiyeapp.asiye';
+  }
+
+  bool _readBool(dynamic value) {
+    if (value is bool) return value;
+    return value?.toString().toLowerCase() == 'true';
+  }
+
+  Future<void> _openAppUpdate(Map<String, dynamic> release) async {
+    final url = _selectUpdateUrl(release);
+    if (url.isEmpty) {
+      debugPrint('No update URL configured for ${_currentPlatformName()}.');
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _handleAppReleaseConfig(
+    Map<String, dynamic> release, {
+    bool fromNotification = false,
+  }) async {
+    try {
+      final data = <String, dynamic>{'type': 'app_update', ...release};
+      if (!await _isAppUpdateRequired(data)) return;
+
+      final info = await PackageInfo.fromPlatform();
+      final latestBuild = int.tryParse(
+            release['latestBuildAndroid']?.toString() ??
+            release['latestBuild']?.toString() ??
+            '0',
+          ) ??
+          0;
+      final latestVersion =
+          release['latestVersionIos']?.toString() ??
+          release['latestVersion']?.toString() ??
+          '';
+
+      if (!fromNotification) {
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
+          if (_lastPromptedReleaseVersion == latestVersion) return;
+          _lastPromptedReleaseVersion = latestVersion;
+        } else {
+          if (_lastPromptedReleaseBuild == latestBuild) return;
+          _lastPromptedReleaseBuild = latestBuild;
+        }
+      }
+
+      if (!mounted) return;
+
+      final title =
+          release['title']?.toString() ??
+          'A new Asiye update is available';
+      final message =
+          release['message']?.toString() ??
+          'Update Asiye to get the latest improvements and fixes.';
+      final forceUpdate = _readBool(release['forceUpdate']);
+
+      final shouldUpdate = await showDialog<bool>(
+        context: context,
+        barrierDismissible: !forceUpdate,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: Text(
+            '$message\n\nInstalled: ${info.version}\nLatest: '
+            '${latestVersion.isNotEmpty ? latestVersion : 'new version'}',
+          ),
+          actions: [
+            if (!forceUpdate)
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Later'),
+              ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Update now'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldUpdate == true) {
+        await _openAppUpdate(release);
+      }
+    } catch (error) {
+      debugPrint('App update check failed: $error');
+    }
+  }
+
+  Future<void> _syncAppVersionAndCheckRelease() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final build = int.tryParse(info.buildNumber) ?? 0;
+      final platform = _currentPlatformName();
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setString('appVersion', info.version);
+      await prefs.setInt('appBuild', build);
+      await prefs.setString('appPlatform', platform);
+
+      await _controller?.runJavaScript("""
+        (() => {
+          const version = ${jsonEncode(info.version)};
+          const build = ${jsonEncode(build)};
+          const platform = ${jsonEncode(platform)};
+
+          localStorage.setItem('appVersion', version);
+          localStorage.setItem('appBuild', String(build));
+          localStorage.setItem('appPlatform', platform);
+
+          if (typeof firebase === 'undefined' || !firebase.apps?.length || !firebase.database) {
+            return;
+          }
+
+          const uid = localStorage.getItem('userId');
+          const type = localStorage.getItem('userType');
+
+          if (uid && type) {
+            const node =
+              type === 'driver'
+                ? 'taxis'
+                : type === 'handler'
+                  ? 'handlers'
+                  : 'commuters';
+
+            firebase.database().ref(node + '/' + uid).update({
+              appVersion: version,
+              appBuild: build,
+              appPlatform: platform,
+              appVersionUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(error => console.warn('App version sync failed', error?.code || error));
+          }
+
+          firebase.database().ref('appRelease/current').once('value')
+            .then(snapshot => {
+              const config = snapshot.val();
+              const channel = window.Asiye || window.Android;
+              if (!config || !channel || typeof channel.postMessage !== 'function') return;
+              channel.postMessage(JSON.stringify({
+                action: 'appReleaseConfig',
+                config
+              }));
+            })
+            .catch(error => console.warn('App release check failed', error?.code || error));
+        })();
+      """);
+    } catch (error) {
+      debugPrint('App version sync failed: $error');
+    }
+  }
 
   bool _isLoading = true;
 
@@ -319,6 +542,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                 }
               """);
             }
+            await _syncAppVersionAndCheckRelease();
             if (_pendingNotification != null) await _openNotification(_pendingNotification!);
           },
           onNavigationRequest: (request) async {
@@ -500,7 +724,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _tokenSubscription = messaging.onTokenRefresh.listen((token) {
       _savePushToken(token).catchError((Object error) { debugPrint('Push token refresh failed: $error'); });
     });
-    _messageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    _messageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      if (message.data['type']?.toString() == 'app_update') {
+        try {
+          if (!await _isAppUpdateRequired(message.data)) return;
+        } catch (error) {
+          debugPrint('Foreground app update comparison failed: $error');
+        }
+      }
+
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
 
@@ -682,6 +914,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               data['phone']?.toString() ?? '',
               forceResend: data['forceResend'] == true,
             );
+          }
+          else if (action == 'appReleaseConfig' && data['config'] is Map) {
+            await _handleAppReleaseConfig(
+              Map<String, dynamic>.from(data['config'] as Map),
+            );
+          }
+          else if (action == 'openAppUpdate') {
+            await _openAppUpdate(Map<String, dynamic>.from(data));
           }
           else if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
             await _saveSessionAndRedirect(data['uid'], data['type']);

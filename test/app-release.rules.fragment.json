@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "appRelease": {
+      ".read": true,
+      ".write": false
+    }
+  }
+}

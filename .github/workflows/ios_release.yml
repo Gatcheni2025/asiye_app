@@ -53,7 +53,7 @@ jobs:
         run: flutter pub get
 
       - name: Verify release version
-        run: grep '^version: 11.0.18+288$' pubspec.yaml
+        run: grep '^version: 11.0.19+289$' pubspec.yaml
 
       - name: Build, sign and upload to TestFlight
         working-directory: ./ios
@@ -71,7 +71,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.18-ios
+          name: asiye-11.0.19-ios
           path: |
             ios/build/ipa/*.ipa
             ios/*.ipa
