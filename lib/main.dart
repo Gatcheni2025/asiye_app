@@ -16,6 +16,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:system_contact_picker/system_contact_picker.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -1002,6 +1003,136 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     } catch (e) {}
   }
 
+  void _sendBridgeResult(
+    String callbackId, {
+    bool ok = true,
+    bool cancelled = false,
+    Object? result,
+    String? error,
+  }) {
+    if (callbackId.isEmpty) return;
+
+    _callWeb('onAsiyeBridgeResult', {
+      'callbackId': callbackId,
+      'ok': ok,
+      'cancelled': cancelled,
+      'result': result,
+      if (error != null) 'error': error,
+    });
+  }
+
+  Future<void> _pickContactForWeb(Map<String, dynamic> data) async {
+    final callbackId = data['callbackId']?.toString() ?? '';
+
+    try {
+      const picker = SystemContactPicker();
+      final contact = await picker.pickContact();
+
+      if (contact == null) {
+        _sendBridgeResult(callbackId, cancelled: true);
+        return;
+      }
+
+      final phone = contact.phones.isNotEmpty
+          ? contact.phones.first.value.trim()
+          : '';
+
+      if (phone.isEmpty) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'The selected contact does not have a mobile number.',
+        );
+        return;
+      }
+
+      _sendBridgeResult(
+        callbackId,
+        result: {
+          'name': contact.displayName.trim(),
+          'phone': phone,
+        },
+      );
+    } catch (error) {
+      debugPrint('Contact picker failed: $error');
+      _sendBridgeResult(
+        callbackId,
+        ok: false,
+        error: 'Unable to open your phone contacts. Please try again.',
+      );
+    }
+  }
+
+  Future<void> _scanImageForWeb(Map<String, dynamic> data) async {
+    final callbackId = data['callbackId']?.toString() ?? '';
+
+    try {
+      if (!await _ensureCameraPermission()) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'Camera permission is required to scan this image.',
+        );
+        return;
+      }
+
+      final facing =
+          data['facing']?.toString().toLowerCase() == 'front'
+              ? CameraDevice.front
+              : CameraDevice.rear;
+
+      final picker = ImagePicker();
+
+      final photo = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: facing,
+        imageQuality: 88,
+        maxWidth: 1600,
+        maxHeight: 2000,
+      );
+
+      if (photo == null) {
+        _sendBridgeResult(callbackId, cancelled: true);
+        return;
+      }
+
+      final bytes = await photo.readAsBytes();
+
+      if (bytes.isEmpty) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'The camera did not return a usable image.',
+        );
+        return;
+      }
+
+      final lowerPath = photo.path.toLowerCase();
+      final mimeType = lowerPath.endsWith('.png')
+          ? 'image/png'
+          : lowerPath.endsWith('.webp')
+              ? 'image/webp'
+              : 'image/jpeg';
+
+      _sendBridgeResult(
+        callbackId,
+        result: {
+          'dataUrl': 'data:$mimeType;base64,${base64Encode(bytes)}',
+          'mimeType': mimeType,
+          'name': photo.name.isNotEmpty ? photo.name : 'asiye-scan.jpg',
+          'purpose': data['purpose']?.toString() ?? 'image',
+        },
+      );
+    } catch (error) {
+      debugPrint('Native image scan failed: $error');
+      _sendBridgeResult(
+        callbackId,
+        ok: false,
+        error: 'Unable to scan the image. Check camera permission and try again.',
+      );
+    }
+  }
+
   void _handleJsCalls(String message) async {
     try {
       if (message == "triggerGoogleSignIn" || message == "startGoogleSignIn") {
@@ -1043,6 +1174,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           }
           else if (action == 'hidePreloader') {
             if (mounted) setState(() => _isLoading = false);
+          }
+          else if (action == 'pickContact') {
+            await _pickContactForWeb(data);
+          }
+          else if (action == 'scanImage') {
+            await _scanImageForWeb(data);
           }
           else if (action == 'share') {
             final String text = data['text'] ?? '';
