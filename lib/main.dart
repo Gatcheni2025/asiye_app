@@ -126,6 +126,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
+  int? _phoneResendToken;
 
   @override
   void dispose() {
@@ -677,7 +678,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           final Map<String, dynamic> data = jsonDecode(message);
           final action = data['action'];
           if (action == 'startPhoneAuth') {
-            await _startPhoneVerification(data['phone']?.toString() ?? '');
+            await _startPhoneVerification(
+              data['phone']?.toString() ?? '',
+              forceResend: data['forceResend'] == true,
+            );
           }
           else if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
             await _saveSessionAndRedirect(data['uid'], data['type']);
@@ -812,7 +816,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     );
   }
 
-  Future<void> _startPhoneVerification(String phoneNumber) async {
+  Future<void> _startPhoneVerification(
+    String phoneNumber, {
+    bool forceResend = false,
+  }) async {
     if (phoneNumber.isEmpty) {
       _callWeb('onNativePhoneAuthError', {
         'code': 'invalid-phone-number',
@@ -821,10 +828,27 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       return;
     }
 
+    if (!_isFirebaseInitialized) {
+      _callWeb('onNativePhoneAuthError', {
+        'code': 'firebase-not-initialized',
+        'message': 'Firebase could not initialize on this device.',
+      });
+      return;
+    }
+
     try {
+      final maskedPhone = phoneNumber.length > 5
+          ? '${phoneNumber.substring(0, 3)}*****${phoneNumber.substring(phoneNumber.length - 2)}'
+          : '***';
+      debugPrint(
+        'Starting phone verification for $maskedPhone (forceResend: $forceResend)',
+      );
+
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         timeout: const Duration(seconds: 60),
+        forceResendingToken:
+            forceResend ? _phoneResendToken : null,
         verificationCompleted: (PhoneAuthCredential credential) {
           final code = credential.smsCode;
           if (code != null && code.isNotEmpty) {
@@ -832,12 +856,17 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           }
         },
         verificationFailed: (FirebaseAuthException error) {
+          debugPrint(
+            'Phone verification failed [${error.code}]: ${error.message}',
+          );
           _callWeb('onNativePhoneAuthError', {
             'code': error.code,
             'message': error.message ?? 'Phone verification failed.',
           });
         },
         codeSent: (String verificationId, int? resendToken) {
+          _phoneResendToken = resendToken;
+          debugPrint('Phone verification code sent successfully.');
           _callWeb('onNativePhoneCodeSent', {
             'verificationId': verificationId,
             'resendToken': resendToken,
@@ -850,6 +879,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         },
       );
     } catch (error) {
+      debugPrint('Native phone auth exception: $error');
       _callWeb('onNativePhoneAuthError', {
         'code': 'native-phone-auth-failed',
         'message': error.toString(),
