@@ -21,7 +21,7 @@ if (hasReleaseKeystore) {
 
 android {
     namespace = "com.asiyeapp.asiye"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     signingConfigs {
@@ -45,7 +45,7 @@ android {
         applicationId = "com.asiyeapp.asiye"
         minSdk = 24
         multiDexEnabled = true
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
