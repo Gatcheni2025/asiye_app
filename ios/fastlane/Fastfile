@@ -12,8 +12,13 @@ platform :ios do
 
     setup_ci
 
+    gh_pat = ENV["GH_PAT"].to_s.strip
+    UI.user_error!("GH_PAT is empty") if gh_pat.empty?
+    ENV["MATCH_GIT_BASIC_AUTHORIZATION"] =
+      Base64.strict_encode64("x-access-token:#{gh_pat}")
+
     match(
-      git_url: "https://github.com/Gatcheni2025/asiye-certs",
+      git_url: "https://github.com/Gatcheni2025/asiye-certs.git",
       type: "appstore",
       app_identifier: "com.asiyeapp.asiye",
       team_id: "AC775BUGG5",
