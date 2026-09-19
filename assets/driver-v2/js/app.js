@@ -150,7 +150,7 @@ ASIYE_DRIVER.ui = {
                     "
                 >
 
-                    <i class="fas fa-car-side"></i>
+                    <i class="fas ${isDelivery ? 'fa-box' : 'fa-car-side'}"></i>
 
                 </div>
 
@@ -828,6 +828,11 @@ ASIYE_DRIVER.ui = {
             request.type === 'club';
 
 
+        const isDelivery =
+            request.type ===
+            'delivery';
+
+
         typeBadge.textContent =
 
             isClub
@@ -841,7 +846,9 @@ ASIYE_DRIVER.ui = {
                 : 'ASIYE WORK 4'
             )
 
-            : 'ASIYE GO';
+            : isDelivery
+                ? 'ASIYE DELIVERY'
+                : 'ASIYE GO';
 
 
         typeBadge.classList.toggle(
@@ -924,7 +931,9 @@ ASIYE_DRIVER.ui = {
                 ${
                     isClub
                     ? 'New Asiye Work request'
-                    : 'New ride request'
+                    : isDelivery
+                        ? 'New delivery request'
+                        : 'New ride request'
                 }
 
             </h2>
@@ -938,8 +947,16 @@ ASIYE_DRIVER.ui = {
                     ? `${passengerCount} of ${capacity} passengers confirmed`
 
                     : this.escape(
-                        request.commuterName ||
-                        'Passenger'
+                        isDelivery
+                            ? (
+                                request.recipientName
+                                    ? `Parcel for ${request.recipientName}`
+                                    : 'Parcel delivery'
+                            )
+                            : (
+                                request.commuterName ||
+                                'Passenger'
+                            )
                     )
                 }
 
@@ -1128,7 +1145,9 @@ ASIYE_DRIVER.ui = {
                     ${
                         isClub
                         ? 'Per passenger'
-                        : 'Trip fare'
+                        : isDelivery
+                            ? 'Delivery fare'
+                            : 'Trip fare'
                     }
                 </span>
 
@@ -1283,6 +1302,11 @@ ASIYE_DRIVER.ui = {
         if (!container) return;
 
 
+        const isDelivery =
+            request.type ===
+            'delivery';
+
+
         container.innerHTML = `
 
             <div class="driver-trip-header">
@@ -1290,19 +1314,31 @@ ASIYE_DRIVER.ui = {
                 <div>
 
                     <div class="driver-kicker">
-                        Asiye Go
+                        ${isDelivery
+                            ? 'Asiye Delivery'
+                            : 'Asiye Go'}
                     </div>
 
                     <h2 class="driver-title">
-                        Ride accepted
+                        ${isDelivery
+                            ? 'Delivery accepted'
+                            : 'Ride accepted'}
                     </h2>
 
                     <div class="driver-subtitle">
 
                         ${
                             this.escape(
-                                request.commuterName ||
-                                'Passenger'
+                                isDelivery
+                                    ? (
+                                        request.recipientName
+                                            ? `Delivering to ${request.recipientName}`
+                                            : 'Parcel delivery'
+                                    )
+                                    : (
+                                        request.commuterName ||
+                                        'Passenger'
+                                    )
                             )
                         }
 
@@ -1398,7 +1434,9 @@ ASIYE_DRIVER.ui = {
 
                     <i class="fas fa-location-arrow"></i>
 
-                    Start pickup
+                    ${isDelivery
+                        ? 'Collect parcel'
+                        : 'Start pickup'}
 
                 </button>
 
@@ -1992,6 +2030,11 @@ ASIYE_DRIVER.ui = {
         if (!container) return;
 
 
+        const isDelivery =
+            request.type ===
+            'delivery';
+
+
         container.innerHTML = `
 
             <div class="driver-trip-header">
@@ -1999,11 +2042,15 @@ ASIYE_DRIVER.ui = {
                 <div>
 
                     <div class="driver-kicker">
-                        Passenger pickup
+                        ${isDelivery
+                            ? 'Parcel pickup'
+                            : 'Passenger pickup'}
                     </div>
 
                     <h2 class="driver-title">
-                        Drive to passenger
+                        ${isDelivery
+                            ? 'Drive to sender'
+                            : 'Drive to passenger'}
                     </h2>
 
                     <div class="driver-subtitle">
@@ -2564,7 +2611,9 @@ ASIYE_DRIVER.ui = {
 
                     <i class="fas fa-check"></i>
 
-                    Complete trip
+                    ${request.type === 'delivery'
+                        ? 'Complete delivery'
+                        : 'Complete trip'}
 
                 </button>
 
@@ -2584,9 +2633,13 @@ ASIYE_DRIVER.ui = {
 
                     this.confirm(
 
-                        'Complete trip',
+                        request.type === 'delivery'
+                            ? 'Complete delivery'
+                            : 'Complete trip',
 
-                        'Confirm that you have reached the destination.',
+                        request.type === 'delivery'
+                            ? 'Confirm that the parcel has reached the recipient.'
+                            : 'Confirm that you have reached the destination.',
 
                         async () => {
 
@@ -2680,6 +2733,25 @@ ASIYE_DRIVER.ui = {
 
 
         if (details) {
+            if (
+                request.type ===
+                'delivery'
+            ) {
+                details.innerHTML =
+                    '<p>Delivery completed · ' +
+                    ASIYE_DRIVER.ui.escape(
+                        request.paymentMethod ||
+                        'cash'
+                    ) +
+                    ' payment</p>';
+
+                overlay.classList.add(
+                    'open'
+                );
+
+                return;
+            }
+
             const passengers = request.type === 'club'
                 ? Object.entries(request.passengers || {})
                     .filter(([, passenger]) => !String(passenger.status || '').includes('cancelled'))
