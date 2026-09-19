@@ -47,16 +47,28 @@ jobs:
 
           if [ "$STATUS" != "200" ]; then
             echo "::error::GH_PAT repository check failed with GitHub HTTP $STATUS."
-            echo "::error::401 = invalid/old token. 403/404 = token lacks access to Gatcheni2025/asiye-certs."
             exit 1
           fi
 
-          AUTH="$(printf 'Gatcheni2025:%s' "$GH_PAT" | base64 | tr -d '\n')"
+          cat > /tmp/asiye-git-askpass.sh <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' "$GIT_USERNAME" ;;
+            *Password*) printf '%s\n' "$GIT_PASSWORD" ;;
+          esac
+          SH
 
-          if ! git -c http.extraheader="AUTHORIZATION: Basic $AUTH" \
-            ls-remote https://github.com/Gatcheni2025/asiye-certs.git HEAD \
+          chmod 700 /tmp/asiye-git-askpass.sh
+
+          export GIT_ASKPASS=/tmp/asiye-git-askpass.sh
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_USERNAME=Gatcheni2025
+          export GIT_PASSWORD="$GH_PAT"
+
+          if ! git ls-remote \
+            https://github.com/Gatcheni2025/asiye-certs.git HEAD \
             >/dev/null 2>&1; then
-            echo "::error::GitHub API access succeeded, but Git clone authentication still failed."
+            echo "::error::GitHub API access succeeded, but Git HTTPS authentication still failed."
             exit 1
           fi
 
@@ -92,7 +104,21 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
-          export MATCH_GIT_BASIC_AUTHORIZATION="$(printf 'Gatcheni2025:%s' "$GH_PAT" | base64 | tr -d '\n')"
+          cat > /tmp/asiye-git-askpass.sh <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' "$GIT_USERNAME" ;;
+            *Password*) printf '%s\n' "$GIT_PASSWORD" ;;
+          esac
+          SH
+
+          chmod 700 /tmp/asiye-git-askpass.sh
+
+          export GIT_ASKPASS=/tmp/asiye-git-askpass.sh
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_USERNAME=Gatcheni2025
+          export GIT_PASSWORD="$GH_PAT"
+
           fastlane beta
 
       - name: Upload signed IPA artifact
