@@ -47,21 +47,7 @@ jobs:
 
           if [ "$STATUS" != "200" ]; then
             echo "::error::GH_PAT repository check failed with GitHub HTTP $STATUS."
-            echo "::error::If this is 401, replace GH_PAT with the current token value. If this is 404/403, the token lacks access to Gatcheni2025/asiye-certs."
-            exit 1
-          fi
-
-          PERMISSION="$(python3 - <<'PY'
-import json
-with open('/tmp/asiye-certs-repo.json', 'r', encoding='utf-8') as handle:
-    data = json.load(handle)
-permissions = data.get('permissions') or {}
-print('read' if permissions.get('pull') else 'none')
-PY
-)"
-
-          if [ "$PERMISSION" != "read" ]; then
-            echo "::error::GH_PAT authenticated, but GitHub did not grant read access to Gatcheni2025/asiye-certs."
+            echo "::error::401 = invalid/old token. 403/404 = token lacks access to Gatcheni2025/asiye-certs."
             exit 1
           fi
 
