@@ -2324,6 +2324,12 @@ document.addEventListener(
         };
 
 
+        setTimeout(
+            signalReady,
+            6000
+        );
+
+
         if (
             ASIYE.map?.instance?.loaded?.()
         ) {
