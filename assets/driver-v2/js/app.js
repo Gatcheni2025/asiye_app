@@ -3793,6 +3793,38 @@ async function (
         );
 
 
+        const signalReady = () => {
+            window.AsiyeNativeBridge
+                ?.notify?.(
+                    'hidePreloader'
+                );
+        };
+
+
+        if (
+            ASIYE_DRIVER.map?.instance?.loaded?.()
+        ) {
+            requestAnimationFrame(
+                () => requestAnimationFrame(
+                    signalReady
+                )
+            );
+        } else if (
+            ASIYE_DRIVER.map?.instance?.once
+        ) {
+            ASIYE_DRIVER.map.instance.once(
+                'load',
+                () => requestAnimationFrame(
+                    () => requestAnimationFrame(
+                        signalReady
+                    )
+                )
+            );
+        } else {
+            signalReady();
+        }
+
+
     } catch (error) {
 
         console.error(
@@ -4118,8 +4150,8 @@ document.addEventListener(
                     }
 
 
-                    ASIYE_DRIVER.map
-                        ?.fitCurrentRoute?.();
+                    ASIYE_DRIVER.navigator
+                        ?.toggleNavigationMode?.();
                 }
             );
 
