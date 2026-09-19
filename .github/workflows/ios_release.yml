@@ -92,7 +92,7 @@ jobs:
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
         run: |
-          export MATCH_GIT_BASIC_AUTHORIZATION="$(printf 'x-access-token:%s' "$GH_PAT" | base64 | tr -d '\n')"
+          export MATCH_GIT_BASIC_AUTHORIZATION="$(printf 'Gatcheni2025:%s' "$GH_PAT" | base64 | tr -d '\n')"
           fastlane beta
 
       - name: Upload signed IPA artifact
