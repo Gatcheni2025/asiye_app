@@ -3801,6 +3801,12 @@ async function (
         };
 
 
+        setTimeout(
+            signalReady,
+            6000
+        );
+
+
         if (
             ASIYE_DRIVER.map?.instance?.loaded?.()
         ) {
@@ -4139,7 +4145,9 @@ document.addEventListener(
 
 
                     if (
-                        !nav.active
+                        !nav.active &&
+                        !ASIYE_DRIVER.navigator
+                            ?.target
                     ) {
 
                         ASIYE_DRIVER.ui.toast(
