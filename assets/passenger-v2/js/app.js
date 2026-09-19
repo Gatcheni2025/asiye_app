@@ -234,7 +234,7 @@ ASIYE.ui = {
                     </div>
 
                     <span class="service-name">
-                        Parcel
+                        Delivery
                     </span>
 
                 </button>
