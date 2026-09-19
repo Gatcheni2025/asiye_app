@@ -460,20 +460,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       return; 
     }
 
-   Future.delayed(const Duration(seconds: 5), () {
-      if (mounted && _isLoading) {
-        setState(() => _isLoading = false);
-      }
-    });
-
     final controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setBackgroundColor(Colors.black)
+      ..setBackgroundColor(Colors.white)
       ..setNavigationDelegate(
         NavigationDelegate(
           onWebResourceError: (error) {
             debugPrint("WebView Error: ${error.description}");
-            if (mounted) setState(() => _isLoading = false);
           },
           onPageStarted: (url) async {
             if (mounted) setState(() => _isLoading = true);
@@ -489,7 +482,22 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             }
           },
           onPageFinished: (url) async {
-            if (mounted) setState(() => _isLoading = false);
+            final bool waitsForInteractiveReady =
+                url.contains('/passenger-v2/index.html') ||
+                url.contains('/driver-v2/index.html');
+
+            /*
+             * Main passenger/driver shells keep the native Asiye logo
+             * visible until their JS map/UI explicitly sends
+             * { action: 'hidePreloader' }. Static/login pages can reveal
+             * as soon as WebView reports that the page has finished.
+             */
+            if (
+              !waitsForInteractiveReady &&
+              mounted
+            ) {
+              setState(() => _isLoading = false);
+            }
 
             final prefs = await SharedPreferences.getInstance();
 
