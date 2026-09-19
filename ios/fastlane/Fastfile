@@ -15,7 +15,7 @@ platform :ios do
     gh_pat = ENV["GH_PAT"].to_s.strip
     UI.user_error!("GH_PAT is empty") if gh_pat.empty?
     ENV["MATCH_GIT_BASIC_AUTHORIZATION"] =
-      Base64.strict_encode64("x-access-token:#{gh_pat}")
+      Base64.strict_encode64("Gatcheni2025:#{gh_pat}")
 
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs.git",
