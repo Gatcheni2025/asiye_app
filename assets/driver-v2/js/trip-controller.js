@@ -113,10 +113,115 @@ ASIYE_DRIVER.trip = {
                         request;
 
 
+                    if (
+                        request.type ===
+                        'delivery'
+                    ) {
+                        this.syncDeliveryState(
+                            request
+                        ).catch(
+                            error =>
+                                console.warn(
+                                    'Delivery status mirror failed:',
+                                    error
+                                )
+                        );
+                    }
+
+
                     this.handleState(
                         request
                     );
                 }
+            );
+    },
+
+
+    async syncDeliveryState(
+        request
+    ) {
+
+        if (
+            request?.type !==
+                'delivery' ||
+            !this.requestId
+        ) {
+            return;
+        }
+
+
+        const mirror = {
+
+            status:
+                request.status ||
+                'pending',
+
+            taxiId:
+                request.taxiId ||
+                null,
+
+            assignedTaxiId:
+                request.taxiId ||
+                null,
+
+            driverName:
+                request.driverName ||
+                null,
+
+            driverPhone:
+                request.driverPhone ||
+                null,
+
+            vehicleInfo:
+                request.vehicleInfo ||
+                null,
+
+            vehicleReg:
+                request.vehicleReg ||
+                null,
+
+            acceptedAt:
+                request.acceptedAt ||
+                null,
+
+            driverOnWayAt:
+                request.driverOnWayAt ||
+                null,
+
+            arrivedAt:
+                request.arrivedAt ||
+                null,
+
+            onboardAt:
+                request.onboardAt ||
+                request.passengerOnboardAt ||
+                null,
+
+            startedAt:
+                request.startedAt ||
+                request.inTransitAt ||
+                null,
+
+            completedAt:
+                request.completedAt ||
+                null,
+
+            updatedAt:
+
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP
+        };
+
+
+        await firebase
+            .database()
+            .ref(
+                `delivery_requests/${this.requestId}`
+            )
+            .update(
+                mirror
             );
     },
 
