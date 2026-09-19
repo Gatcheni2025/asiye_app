@@ -299,6 +299,20 @@ ASIYE_DRIVER.location = {
 
             accuracy
         );
+
+
+        ASIYE_DRIVER.trip
+            ?.maybeNotifyPassengerOneMinute?.(
+                latitude,
+                longitude,
+                speed
+            )
+            ?.catch?.(
+                error => console.warn(
+                    'Passenger ETA notification check failed:',
+                    error
+                )
+            );
     },
 
 

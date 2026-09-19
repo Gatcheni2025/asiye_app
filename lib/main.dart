@@ -10,21 +10,74 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:system_contact_picker/system_contact_picker.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
+import 'package:crypto/crypto.dart';
 
 bool _isFirebaseInitialized = false;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
 const bool isTest = bool.fromEnvironment('FLUTTER_TEST', defaultValue: false);
 
+int _compareVersions(String left, String right) {
+  final leftParts = left.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+  final rightParts = right.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+  final length = max(leftParts.length, rightParts.length);
+
+  for (var index = 0; index < length; index++) {
+    final leftValue = index < leftParts.length ? leftParts[index] : 0;
+    final rightValue = index < rightParts.length ? rightParts[index] : 0;
+    if (leftValue != rightValue) return leftValue.compareTo(rightValue);
+  }
+  return 0;
+}
+
+Future<bool> _isAppUpdateRequired(Map<String, dynamic> data) async {
+  if (data['type']?.toString() != 'app_update') return false;
+
+  final info = await PackageInfo.fromPlatform();
+
+  if (defaultTargetPlatform == TargetPlatform.iOS) {
+    final latestVersion =
+        data['latestVersionIos']?.toString() ??
+        data['latestVersion']?.toString() ??
+        '';
+    return latestVersion.isNotEmpty &&
+        _compareVersions(info.version, latestVersion) < 0;
+  }
+
+  final currentBuild = int.tryParse(info.buildNumber) ?? 0;
+  final latestBuild = int.tryParse(
+        data['latestBuildAndroid']?.toString() ??
+        data['latestBuild']?.toString() ??
+        '0',
+      ) ??
+      0;
+  return latestBuild > currentBuild;
+}
+
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
+
+  if (message.data['type']?.toString() == 'app_update') {
+    try {
+      if (!await _isAppUpdateRequired(message.data)) {
+        debugPrint('Ignoring app update notification: installed version is current.');
+        return;
+      }
+    } catch (error) {
+      debugPrint('Unable to compare app update version in background: $error');
+    }
+  }
 
   // Show local notification for background data messages
   RemoteNotification? notification = message.notification;
@@ -107,6 +160,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Map<String, dynamic>? _pendingNotification;
 
   Future<void> _openNotification(Map<String, dynamic> data) async {
+    if (data['type']?.toString() == 'app_update') {
+      await _handleAppReleaseConfig(data, fromNotification: true);
+      return;
+    }
+
     _pendingNotification = data;
     try {
       final result = await _controller?.runJavaScriptReturningResult("""
@@ -123,6 +181,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
+  int? _phoneResendToken;
+  int? _lastPromptedReleaseBuild;
+  String? _lastPromptedReleaseVersion;
 
   @override
   void dispose() {
@@ -150,6 +211,173 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   }
 
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+
+  String _currentPlatformName() {
+    return defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+  }
+
+  String _selectUpdateUrl(Map<String, dynamic> release) {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return release['iosUrl']?.toString() ??
+          release['updateUrl']?.toString() ??
+          '';
+    }
+
+    return release['androidUrl']?.toString() ??
+        release['updateUrl']?.toString() ??
+        'https://play.google.com/store/apps/details?id=com.asiyeapp.asiye';
+  }
+
+  bool _readBool(dynamic value) {
+    if (value is bool) return value;
+    return value?.toString().toLowerCase() == 'true';
+  }
+
+  Future<void> _openAppUpdate(Map<String, dynamic> release) async {
+    final url = _selectUpdateUrl(release);
+    if (url.isEmpty) {
+      debugPrint('No update URL configured for ${_currentPlatformName()}.');
+      return;
+    }
+
+    final uri = Uri.tryParse(url);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _handleAppReleaseConfig(
+    Map<String, dynamic> release, {
+    bool fromNotification = false,
+  }) async {
+    try {
+      final data = <String, dynamic>{'type': 'app_update', ...release};
+      if (!await _isAppUpdateRequired(data)) return;
+
+      final info = await PackageInfo.fromPlatform();
+      final latestBuild = int.tryParse(
+            release['latestBuildAndroid']?.toString() ??
+            release['latestBuild']?.toString() ??
+            '0',
+          ) ??
+          0;
+      final latestVersion =
+          release['latestVersionIos']?.toString() ??
+          release['latestVersion']?.toString() ??
+          '';
+
+      if (!fromNotification) {
+        if (defaultTargetPlatform == TargetPlatform.iOS) {
+          if (_lastPromptedReleaseVersion == latestVersion) return;
+          _lastPromptedReleaseVersion = latestVersion;
+        } else {
+          if (_lastPromptedReleaseBuild == latestBuild) return;
+          _lastPromptedReleaseBuild = latestBuild;
+        }
+      }
+
+      if (!mounted) return;
+
+      final title =
+          release['title']?.toString() ??
+          'A new Asiye update is available';
+      final message =
+          release['message']?.toString() ??
+          'Update Asiye to get the latest improvements and fixes.';
+      final forceUpdate = _readBool(release['forceUpdate']);
+
+      final shouldUpdate = await showDialog<bool>(
+        context: context,
+        barrierDismissible: !forceUpdate,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(title),
+          content: Text(
+            '$message\n\nInstalled: ${info.version}\nLatest: '
+            '${latestVersion.isNotEmpty ? latestVersion : 'new version'}',
+          ),
+          actions: [
+            if (!forceUpdate)
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Later'),
+              ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Update now'),
+            ),
+          ],
+        ),
+      );
+
+      if (shouldUpdate == true) {
+        await _openAppUpdate(release);
+      }
+    } catch (error) {
+      debugPrint('App update check failed: $error');
+    }
+  }
+
+  Future<void> _syncAppVersionAndCheckRelease() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final build = int.tryParse(info.buildNumber) ?? 0;
+      final platform = _currentPlatformName();
+      final prefs = await SharedPreferences.getInstance();
+
+      await prefs.setString('appVersion', info.version);
+      await prefs.setInt('appBuild', build);
+      await prefs.setString('appPlatform', platform);
+
+      await _controller?.runJavaScript("""
+        (() => {
+          const version = ${jsonEncode(info.version)};
+          const build = ${jsonEncode(build)};
+          const platform = ${jsonEncode(platform)};
+
+          localStorage.setItem('appVersion', version);
+          localStorage.setItem('appBuild', String(build));
+          localStorage.setItem('appPlatform', platform);
+
+          if (typeof firebase === 'undefined' || !firebase.apps?.length || !firebase.database) {
+            return;
+          }
+
+          const uid = localStorage.getItem('userId');
+          const type = localStorage.getItem('userType');
+
+          if (uid && type) {
+            const node =
+              type === 'driver'
+                ? 'taxis'
+                : type === 'handler'
+                  ? 'handlers'
+                  : 'commuters';
+
+            firebase.database().ref(node + '/' + uid).update({
+              appVersion: version,
+              appBuild: build,
+              appPlatform: platform,
+              appVersionUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+            }).catch(error => console.warn('App version sync failed', error?.code || error));
+          }
+
+          firebase.database().ref('appRelease/current').once('value')
+            .then(snapshot => {
+              const config = snapshot.val();
+              const channel = window.Asiye || window.Android;
+              if (!config || !channel || typeof channel.postMessage !== 'function') return;
+              channel.postMessage(JSON.stringify({
+                action: 'appReleaseConfig',
+                config
+              }));
+            })
+            .catch(error => console.warn('App release check failed', error?.code || error));
+        })();
+      """);
+    } catch (error) {
+      debugPrint('App version sync failed: $error');
+    }
+  }
 
   bool _isLoading = true;
 
@@ -315,6 +543,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                 }
               """);
             }
+            await _syncAppVersionAndCheckRelease();
             if (_pendingNotification != null) await _openNotification(_pendingNotification!);
           },
           onNavigationRequest: (request) async {
@@ -348,12 +577,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         ),
       );
 
+    await controller.platform.setOnPlatformPermissionRequest(
+      _handleWebViewPermissionRequest,
+    );
+
     final platform = controller.platform;
     if (platform is AndroidWebViewController) {
       platform.setGeolocationEnabled(true);
-      platform.setOnPlatformPermissionRequest((request) => request.grant());
       platform.setGeolocationPermissionsPromptCallbacks(
-        onShowPrompt: (params) async => const GeolocationPermissionsResponse(allow: true, retain: true),
+        onShowPrompt: (params) async =>
+            const GeolocationPermissionsResponse(allow: true, retain: true),
       );
 
       platform.setOnShowFileSelector((FileSelectorParams params) async {
@@ -388,8 +621,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
             if (source == null) return [];
 
+            if (source == 'camera' && !await _ensureCameraPermission()) {
+              return [];
+            }
+
             final XFile? photo = await picker.pickImage(
               source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
+              imageQuality: 88,
             );
 
             if (photo != null) return [Uri.file(photo.path).toString()];
@@ -496,7 +734,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _tokenSubscription = messaging.onTokenRefresh.listen((token) {
       _savePushToken(token).catchError((Object error) { debugPrint('Push token refresh failed: $error'); });
     });
-    _messageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    _messageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+      if (message.data['type']?.toString() == 'app_update') {
+        try {
+          if (!await _isAppUpdateRequired(message.data)) return;
+        } catch (error) {
+          debugPrint('Foreground app update comparison failed: $error');
+        }
+      }
+
       RemoteNotification? notification = message.notification;
       AndroidNotification? android = message.notification?.android;
 
@@ -568,14 +814,117 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _requestPermissions() async {
     try {
-      await [
-        Permission.location,
+      final permissions = <Permission>[
         Permission.locationWhenInUse,
-        Permission.camera,
-        Permission.notification,
-        Permission.photos,
-      ].request();
-    } catch (e) {}
+      ];
+
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        permissions.add(Permission.notification);
+      }
+
+      await permissions.request();
+    } catch (e) {
+      debugPrint('Permission request failed: $e');
+    }
+  }
+
+  Future<void> _handleWebViewPermissionRequest(
+    PlatformWebViewPermissionRequest request,
+  ) async {
+    final wantsCamera =
+        request.types.contains(WebViewPermissionResourceType.camera);
+    final wantsMicrophone =
+        request.types.contains(WebViewPermissionResourceType.microphone);
+
+    if (wantsCamera && !await _ensureCameraPermission()) {
+      await request.deny();
+      return;
+    }
+
+    if (wantsMicrophone && !await _ensureMicrophonePermission()) {
+      await request.deny();
+      return;
+    }
+
+    await request.grant();
+  }
+
+  Future<bool> _ensureMicrophonePermission() async {
+    var status = await Permission.microphone.status;
+    if (status.isGranted) return true;
+
+    status = await Permission.microphone.request();
+    if (status.isGranted) return true;
+
+    if (!mounted) return false;
+
+    final permanentlyDenied = status.isPermanentlyDenied;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Microphone permission required'),
+        content: Text(
+          permanentlyDenied
+              ? 'Microphone access is disabled for Asiye. Open your phone settings and allow Microphone access.'
+              : 'Allow Microphone access when prompted to use camera features that include audio.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Not now'),
+          ),
+          if (permanentlyDenied)
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await openAppSettings();
+              },
+              child: const Text('Open settings'),
+            ),
+        ],
+      ),
+    );
+
+    return false;
+  }
+
+  Future<bool> _ensureCameraPermission() async {
+    var status = await Permission.camera.status;
+    if (status.isGranted) return true;
+
+    status = await Permission.camera.request();
+    if (status.isGranted) return true;
+
+    if (!mounted) return false;
+
+    final permanentlyDenied = status.isPermanentlyDenied;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Camera permission required'),
+        content: Text(
+          permanentlyDenied
+              ? 'Camera access is disabled for Asiye. Open your phone settings and allow Camera access to take a photo.'
+              : 'Allow Camera access when prompted so Asiye can take your photo.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Not now'),
+          ),
+          if (permanentlyDenied)
+            TextButton(
+              onPressed: () async {
+                Navigator.of(dialogContext).pop();
+                await openAppSettings();
+              },
+              child: const Text('Open settings'),
+            ),
+        ],
+      ),
+    );
+
+    return false;
   }
 
   Future<String> _determineStartPage() async {
@@ -654,6 +1003,136 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     } catch (e) {}
   }
 
+  void _sendBridgeResult(
+    String callbackId, {
+    bool ok = true,
+    bool cancelled = false,
+    Object? result,
+    String? error,
+  }) {
+    if (callbackId.isEmpty) return;
+
+    _callWeb('onAsiyeBridgeResult', {
+      'callbackId': callbackId,
+      'ok': ok,
+      'cancelled': cancelled,
+      'result': result,
+      if (error != null) 'error': error,
+    });
+  }
+
+  Future<void> _pickContactForWeb(Map<String, dynamic> data) async {
+    final callbackId = data['callbackId']?.toString() ?? '';
+
+    try {
+      const picker = SystemContactPicker();
+      final contact = await picker.pickContact();
+
+      if (contact == null) {
+        _sendBridgeResult(callbackId, cancelled: true);
+        return;
+      }
+
+      final phone = contact.phones.isNotEmpty
+          ? contact.phones.first.value.trim()
+          : '';
+
+      if (phone.isEmpty) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'The selected contact does not have a mobile number.',
+        );
+        return;
+      }
+
+      _sendBridgeResult(
+        callbackId,
+        result: {
+          'name': contact.displayName.trim(),
+          'phone': phone,
+        },
+      );
+    } catch (error) {
+      debugPrint('Contact picker failed: $error');
+      _sendBridgeResult(
+        callbackId,
+        ok: false,
+        error: 'Unable to open your phone contacts. Please try again.',
+      );
+    }
+  }
+
+  Future<void> _scanImageForWeb(Map<String, dynamic> data) async {
+    final callbackId = data['callbackId']?.toString() ?? '';
+
+    try {
+      if (!await _ensureCameraPermission()) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'Camera permission is required to scan this image.',
+        );
+        return;
+      }
+
+      final facing =
+          data['facing']?.toString().toLowerCase() == 'front'
+              ? CameraDevice.front
+              : CameraDevice.rear;
+
+      final picker = ImagePicker();
+
+      final photo = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: facing,
+        imageQuality: 88,
+        maxWidth: 1600,
+        maxHeight: 2000,
+      );
+
+      if (photo == null) {
+        _sendBridgeResult(callbackId, cancelled: true);
+        return;
+      }
+
+      final bytes = await photo.readAsBytes();
+
+      if (bytes.isEmpty) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'The camera did not return a usable image.',
+        );
+        return;
+      }
+
+      final lowerPath = photo.path.toLowerCase();
+      final mimeType = lowerPath.endsWith('.png')
+          ? 'image/png'
+          : lowerPath.endsWith('.webp')
+              ? 'image/webp'
+              : 'image/jpeg';
+
+      _sendBridgeResult(
+        callbackId,
+        result: {
+          'dataUrl': 'data:$mimeType;base64,${base64Encode(bytes)}',
+          'mimeType': mimeType,
+          'name': photo.name.isNotEmpty ? photo.name : 'asiye-scan.jpg',
+          'purpose': data['purpose']?.toString() ?? 'image',
+        },
+      );
+    } catch (error) {
+      debugPrint('Native image scan failed: $error');
+      _sendBridgeResult(
+        callbackId,
+        ok: false,
+        error: 'Unable to scan the image. Check camera permission and try again.',
+      );
+    }
+  }
+
   void _handleJsCalls(String message) async {
     try {
       if (message == "triggerGoogleSignIn" || message == "startGoogleSignIn") {
@@ -673,7 +1152,21 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         try {
           final Map<String, dynamic> data = jsonDecode(message);
           final action = data['action'];
-          if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
+          if (action == 'startPhoneAuth') {
+            await _startPhoneVerification(
+              data['phone']?.toString() ?? '',
+              forceResend: data['forceResend'] == true,
+            );
+          }
+          else if (action == 'appReleaseConfig' && data['config'] is Map) {
+            await _handleAppReleaseConfig(
+              Map<String, dynamic>.from(data['config'] as Map),
+            );
+          }
+          else if (action == 'openAppUpdate') {
+            await _openAppUpdate(Map<String, dynamic>.from(data));
+          }
+          else if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
             await _saveSessionAndRedirect(data['uid'], data['type']);
           }
           else if (action == 'showNotification') {
@@ -681,6 +1174,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           }
           else if (action == 'hidePreloader') {
             if (mounted) setState(() => _isLoading = false);
+          }
+          else if (action == 'pickContact') {
+            await _pickContactForWeb(data);
+          }
+          else if (action == 'scanImage') {
+            await _scanImageForWeb(data);
           }
           else if (action == 'share') {
             final String text = data['text'] ?? '';
@@ -799,6 +1298,91 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _controller?.loadFlutterAsset(target);
   }
 
+  void _callWeb(String functionName, Object payload) {
+    _controller?.runJavaScript(
+      "if (typeof window.$functionName === 'function') { "
+      "window.$functionName(${jsonEncode(payload)}); }",
+    );
+  }
+
+  Future<void> _startPhoneVerification(
+    String phoneNumber, {
+    bool forceResend = false,
+  }) async {
+    if (phoneNumber.isEmpty) {
+      _callWeb('onNativePhoneAuthError', {
+        'code': 'invalid-phone-number',
+        'message': 'Enter a valid mobile number.',
+      });
+      return;
+    }
+
+    if (!_isFirebaseInitialized) {
+      _callWeb('onNativePhoneAuthError', {
+        'code': 'firebase-not-initialized',
+        'message': 'Firebase could not initialize on this device.',
+      });
+      return;
+    }
+
+    try {
+      final maskedPhone = phoneNumber.length > 5
+          ? '${phoneNumber.substring(0, 3)}*****${phoneNumber.substring(phoneNumber.length - 2)}'
+          : '***';
+      debugPrint(
+        'Starting phone verification for $maskedPhone (forceResend: $forceResend)',
+      );
+
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: phoneNumber,
+        timeout: const Duration(seconds: 60),
+        forceResendingToken:
+            forceResend ? _phoneResendToken : null,
+        verificationCompleted: (PhoneAuthCredential credential) {
+          final code = credential.smsCode;
+          if (code != null && code.isNotEmpty) {
+            _callWeb('onNativePhoneAutoVerified', {'code': code});
+          }
+        },
+        verificationFailed: (FirebaseAuthException error) {
+          debugPrint(
+            'Phone verification failed [${error.code}]: ${error.message}',
+          );
+          _callWeb('onNativePhoneAuthError', {
+            'code': error.code,
+            'message': error.message ?? 'Phone verification failed.',
+          });
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          _phoneResendToken = resendToken;
+          debugPrint('Phone verification code sent successfully.');
+          _callWeb('onNativePhoneCodeSent', {
+            'verificationId': verificationId,
+            'resendToken': resendToken,
+          });
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _callWeb('onNativePhoneAutoRetrievalTimeout', {
+            'verificationId': verificationId,
+          });
+        },
+      );
+    } catch (error) {
+      debugPrint('Native phone auth exception: $error');
+      _callWeb('onNativePhoneAuthError', {
+        'code': 'native-phone-auth-failed',
+        'message': error.toString(),
+      });
+    }
+  }
+
+  String _generateNonce([int length = 32]) {
+    const chars =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List.generate(length, (_) => chars[random.nextInt(chars.length)]).join();
+  }
+
   Future<void> _signInWithGoogle() async {
     try {
       await _googleSignIn.signOut().catchError((_) => null);
@@ -806,6 +1390,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
       if (account == null) {
         if (mounted) setState(() => _isLoading = false);
+        _callWeb('onGoogleNativeLoginError', 'Google sign-in was cancelled.');
         return;
       }
 
@@ -822,15 +1407,18 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginSuccess === 'function') { window.onGoogleNativeLoginSuccess(${jsonEncode(userData)}); }");
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
-      if (e.toString().toLowerCase().contains("canceled")) return;
-      _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginError === 'function') { window.onGoogleNativeLoginError('${e.toString().replaceAll("'", "\\'")}'); }");
+      _callWeb('onGoogleNativeLoginError', e.toString());
+      return;
     }
   }
 
   Future<void> _signInWithApple() async {
     try {
+      final rawNonce = _generateNonce();
+      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
       final credential = await SignInWithApple.getAppleIDCredential(
         scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+        nonce: hashedNonce,
       );
 
       final Map<String, dynamic> userData = {
@@ -839,6 +1427,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         "identityToken": credential.identityToken ?? "",
         "userIdentifier": credential.userIdentifier ?? "",
         "authorizationCode": credential.authorizationCode ?? "",
+        "rawNonce": rawNonce,
       };
 
       _controller?.runJavaScript("if(typeof window.onAppleNativeLoginSuccess === 'function') { window.onAppleNativeLoginSuccess(${jsonEncode(userData)}); }");

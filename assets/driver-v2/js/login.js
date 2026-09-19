@@ -20,6 +20,39 @@ window.ASIYE_DRIVER_LOGIN = {
     currentPhone:
         null,
 
+    nativeVerificationId:
+        null,
+
+    showAuthProgress(title, message) {
+        let overlay = document.getElementById('authProgressOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'authProgressOverlay';
+            overlay.className = 'auth-progress-overlay';
+            overlay.setAttribute('role', 'status');
+            overlay.setAttribute('aria-live', 'polite');
+            overlay.innerHTML = `
+                <div class="auth-progress-card">
+                    <div class="auth-progress-spinner" aria-hidden="true"></div>
+                    <h2 id="authProgressTitle"></h2>
+                    <p id="authProgressMessage"></p>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+        }
+        document.getElementById('authProgressTitle').textContent =
+            title || 'Signing you in';
+        document.getElementById('authProgressMessage').textContent =
+            message || 'Please wait while Asiye securely completes authentication.';
+        overlay.classList.add('show');
+        document.body.classList.add('auth-in-progress');
+    },
+
+    hideAuthProgress() {
+        document.getElementById('authProgressOverlay')?.classList.remove('show');
+        document.body.classList.remove('auth-in-progress');
+    },
+
 
     /* ========================================================
        INIT
@@ -75,64 +108,26 @@ window.ASIYE_DRIVER_LOGIN = {
 
     async checkExistingSession() {
 
-        const user =
-            firebase.auth()
-                .currentUser;
+        const user = firebase.auth().currentUser;
 
-
-        if (!user) {
-
-            return;
-        }
-
+        if (!user) return;
 
         try {
+            const activated = await AsiyeEnrollment.activateApprovedDriver({
+                user
+            });
 
-            const snapshot =
+            if (activated) return;
 
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${user.uid}`
-                    )
-                    .once(
-                        'value'
-                    );
+            const profile = await AsiyeEnrollment.resolveDriverProfile(user);
 
-
-            if (
-                snapshot.exists()
-            ) {
-
-                localStorage.setItem(
-                    'driverId',
-                    user.uid
-                );
-
-
-                localStorage.setItem(
-                    'userId',
-                    user.uid
-                );
-
-
-                localStorage.setItem(
-                    'userType',
-                    'driver'
-                );
-
-
-                window.location.replace(
-                    './index.html'
-                );
+            if (profile) {
+                window.location.replace('./enrollment.html');
             }
-
-
         } catch (error) {
-
             console.warn(
                 'Session check failed:',
-                error
+                error?.code || error
             );
         }
     },
@@ -432,7 +427,7 @@ window.ASIYE_DRIVER_LOGIN = {
        SEND OTP
        ======================================================== */
 
-    async sendOtp() {
+    async sendOtp(forceResend = false) {
 
         const input =
             document.getElementById(
@@ -484,6 +479,11 @@ window.ASIYE_DRIVER_LOGIN = {
         this.currentPhone =
             phone;
 
+        this.showAuthProgress(
+            'Verifying your number',
+            'Please wait while Asiye securely checks this device and sends your code.'
+        );
+
 
         if (button) {
 
@@ -515,6 +515,14 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 this.prepareRecaptcha();
             }
+            if (window.AsiyeNativeAuth?.post({
+                action: 'startPhoneAuth',
+                phone,
+                forceResend
+            })) {
+                return;
+            }
+
 
 
             this.confirmationResult =
@@ -541,6 +549,8 @@ window.ASIYE_DRIVER_LOGIN = {
                     phone;
             }
 
+
+            this.hideAuthProgress();
 
             this.showStep(
                 'otpStep'
@@ -620,11 +630,16 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-        if (
-            !this.confirmationResult ||
-            !input
-        ) {
+        if (!input) {
+            return;
+        }
 
+        if (!this.nativeVerificationId && !this.confirmationResult) {
+            if (errorElement) {
+                errorElement.textContent =
+                    'Your verification session expired. Please resend the code.';
+            }
+            this.hideAuthProgress();
             return;
         }
 
@@ -682,14 +697,23 @@ window.ASIYE_DRIVER_LOGIN = {
         }
 
 
+        this.showAuthProgress(
+            'Signing you in',
+            'Checking your verification code and opening your account.'
+        );
+
         try {
 
-            const result =
-
-                await this.confirmationResult
-                    .confirm(
+            const result = this.nativeVerificationId
+                ? await firebase.auth().signInWithCredential(
+                    firebase.auth.PhoneAuthProvider.credential(
+                        this.nativeVerificationId,
                         code
-                    );
+                    )
+                )
+                : await this.confirmationResult.confirm(code);
+
+            this.nativeVerificationId = null;
 
 
             const user =
@@ -755,6 +779,11 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
+        this.showAuthProgress(
+            'Continue with Google',
+            'Complete Google authentication, then Asiye will open your account.'
+        );
+
         try {
 
             if (button) {
@@ -777,6 +806,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 `;
             }
+            if (window.AsiyeNativeAuth?.post('triggerGoogleSignIn')) {
+                return;
+            }
+
 
 
             const provider =
@@ -821,6 +854,8 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
         } catch (error) {
+
+            this.hideAuthProgress();
 
             console.error(
                 'Google sign-in failed:',
@@ -882,6 +917,11 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
+        this.showAuthProgress(
+            'Continue with Apple',
+            'Complete Apple authentication, then Asiye will open your account.'
+        );
+
         try {
 
             if (button) {
@@ -904,6 +944,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 `;
             }
+            if (window.AsiyeNativeAuth?.post('triggerAppleSignIn')) {
+                return;
+            }
+
 
 
             const provider =
@@ -952,6 +996,8 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
         } catch (error) {
+
+            this.hideAuthProgress();
 
             console.error(
                 'Apple sign-in failed:',
@@ -1011,246 +1057,47 @@ window.ASIYE_DRIVER_LOGIN = {
 
     async verifyDriverProfile(user) {
 
+        this.hideAuthProgress();
+
         try {
+            this.showStep('profileCheckStep');
 
-            this.showStep(
-                'profileCheckStep'
-            );
+            const profile =
+                await AsiyeEnrollment.resolveDriverProfile(user);
 
-
-            /* ====================================================
-               1. NORMAL UID LOOKUP
-            ==================================================== */
-
-            let snapshot =
-
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${user.uid}`
-                    )
-                    .once(
-                        'value'
-                    );
-
-
-            if (
-                snapshot.exists()
-            ) {
-
-                await this.completeDriverLogin(
-
-                    user.uid,
-
-                    snapshot.val(),
-
-                    user
-                );
-
-                return;
-            }
-
-
-            console.log(
-                'ℹ️ No taxi profile under Auth UID. Checking legacy profile...'
-            );
-
-
-            /* ====================================================
-               2. SEARCH BY VERIFIED PHONE
-            ==================================================== */
-
-            const phoneVariants =
-                this.buildPhoneVariants(
-                    user.phoneNumber ||
-                    this.currentPhone
-                );
-
-
-            let legacyMatch =
-                null;
-
-
-            for (
-                const phone
-                of phoneVariants
-            ) {
-
-                const phoneSnapshot =
-
-                    await firebase
-                        .database()
-                        .ref('taxis')
-                        .orderByChild('phone')
-                        .equalTo(phone)
-                        .once(
-                            'value'
-                        );
-
-
-                if (
-                    phoneSnapshot.exists()
-                ) {
-
-                    phoneSnapshot.forEach(
-                        child => {
-
-                            if (!legacyMatch) {
-
-                                legacyMatch = {
-
-                                    id:
-                                        child.key,
-
-                                    data:
-                                        child.val()
-                                };
-                            }
-                        }
-                    );
-
-
-                    if (legacyMatch) {
-
-                        break;
-                    }
-                }
-            }
-
-
-            /* ====================================================
-               3. SEARCH BY EMAIL
-               Useful for Google / Apple
-            ==================================================== */
-
-            if (
-                !legacyMatch &&
-                user.email
-            ) {
-
-                const emailSnapshot =
-
-                    await firebase
-                        .database()
-                        .ref('taxis')
-                        .orderByChild('email')
-                        .equalTo(
-                            user.email
-                        )
-                        .once(
-                            'value'
-                        );
-
-
-                if (
-                    emailSnapshot.exists()
-                ) {
-
-                    emailSnapshot.forEach(
-                        child => {
-
-                            if (!legacyMatch) {
-
-                                legacyMatch = {
-
-                                    id:
-                                        child.key,
-
-                                    data:
-                                        child.val()
-                                };
-                            }
-                        }
-                    );
-                }
-            }
-
-
-            /* ====================================================
-               LEGACY PROFILE FOUND
-            ==================================================== */
-
-            if (
-                legacyMatch
-            ) {
-
+            if (profile) {
                 console.log(
                     '✅ Existing driver profile found:',
-                    legacyMatch.id
+                    profile.id
                 );
 
-
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${legacyMatch.id}`
-                    )
-                    .update({
-
-                        authUid:
-                            user.uid,
-
-                        authPhone:
-                            user.phoneNumber ||
-                            this.currentPhone ||
-                            null,
-
-                        authEmail:
-                            user.email ||
-                            null,
-
-                        authLinkedAt:
-
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP
-                    });
-
-
                 await this.completeDriverLogin(
-
-                    legacyMatch.id,
-
-                    legacyMatch.data,
-
+                    profile.id,
+                    profile.data,
                     user
                 );
 
-
                 return;
             }
-
-
-            /* ====================================================
-               NO DRIVER FOUND
-            ==================================================== */
 
             console.warn(
                 'Authenticated account is not registered as driver:',
                 user.uid
             );
 
-
             window.location.replace('./enrollment.html');
 
-
         } catch (error) {
-
             console.error(
                 'Driver profile check failed:',
                 error
             );
 
-
             this.toast(
                 'Unable to verify your driver account.'
             );
 
-
-            this.showStep(
-                'phoneStep'
-            );
+            this.showStep('phoneStep');
         }
     },
 
@@ -1327,7 +1174,18 @@ window.ASIYE_DRIVER_LOGIN = {
         authUser
     ) {
 
-        if (!await AsiyeEnrollment.requireApproval()) return;
+        this.hideAuthProgress();
+
+
+        if (!await AsiyeEnrollment.requireApproval(driverData)) return;
+
+        await AsiyeEnrollment.persistDriverSession(
+            {
+                id: driverProfileId,
+                data: driverData
+            },
+            authUser
+        );
 
         localStorage.setItem(
             'driverId',
@@ -1434,7 +1292,7 @@ window.ASIYE_DRIVER_LOGIN = {
         setTimeout(
             () => {
 
-                this.sendOtp();
+                this.sendOtp(true);
 
             },
             100
@@ -1580,6 +1438,8 @@ window.ASIYE_DRIVER_LOGIN = {
         area
     ) {
 
+        this.hideAuthProgress();
+
         let message =
             'Something went wrong. Please try again.';
 
@@ -1608,6 +1468,42 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 message =
                     'Too many attempts. Please wait and try again.';
+
+                break;
+
+
+            case 'auth/app-not-authorized':
+
+            case 'auth/invalid-app-credential':
+
+                message =
+                    'This Asiye app build is not authorized for SMS verification yet. Please update the app or contact Asiye support.';
+
+                break;
+
+
+            case 'auth/captcha-check-failed':
+
+            case 'auth/missing-client-identifier':
+
+                message =
+                    'Phone security verification could not be completed. Please try again.';
+
+                break;
+
+
+            case 'auth/quota-exceeded':
+
+                message =
+                    'SMS verification is temporarily unavailable. Please try again later.';
+
+                break;
+
+
+            case 'auth/operation-not-allowed':
+
+                message =
+                    'Phone sign-in is not enabled for this Asiye build.';
 
                 break;
 
@@ -1679,6 +1575,8 @@ window.ASIYE_DRIVER_LOGIN = {
         providerName
     ) {
 
+        this.hideAuthProgress();
+
         console.error(
             `${providerName} authentication error:`,
             error
@@ -1687,7 +1585,7 @@ window.ASIYE_DRIVER_LOGIN = {
 
         let message =
 
-            `${providerName} sign-in failed. Please try again.`;
+            error?.message || `${providerName} sign-in failed. Please try again.`;
 
 
         switch (
@@ -1781,6 +1679,101 @@ window.ASIYE_DRIVER_LOGIN = {
             );
     }
 
+};
+
+
+/* ============================================================
+   NATIVE FLUTTER AUTH BRIDGE
+   ============================================================ */
+
+window.AsiyeNativeAuth = window.AsiyeNativeAuth || {
+    post(message) {
+        const payload = typeof message === 'string'
+            ? message
+            : JSON.stringify(message);
+        const channel = window.Asiye || window.Android;
+        if (!channel || typeof channel.postMessage !== 'function') {
+            return false;
+        }
+        channel.postMessage(payload);
+        return true;
+    }
+};
+
+window.onNativePhoneCodeSent = function (payload) {
+    const login = window.ASIYE_DRIVER_LOGIN;
+    login.nativeVerificationId = payload.verificationId;
+    login.hideAuthProgress();
+    const display = document.getElementById('otpPhoneDisplay');
+    if (display) display.textContent = login.currentPhone || '+27';
+    login.showStep('otpStep');
+    login.startResendTimer();
+};
+
+window.onNativePhoneAutoVerified = function (payload) {
+    const input = document.getElementById('driverOtpInput');
+    if (input && payload.code) {
+        input.value = payload.code;
+        window.ASIYE_DRIVER_LOGIN.verifyOtp();
+    }
+};
+
+window.onNativePhoneAutoRetrievalTimeout = function (payload) {
+    if (!window.ASIYE_DRIVER_LOGIN.nativeVerificationId) {
+        window.ASIYE_DRIVER_LOGIN.nativeVerificationId = payload.verificationId;
+    }
+};
+
+window.onNativePhoneAuthError = function (payload) {
+    console.error('Native phone auth failed:', payload);
+    const login = window.ASIYE_DRIVER_LOGIN;
+    login.nativeVerificationId = null;
+    login.handleAuthError(
+        { code: 'auth/' + (payload.code || 'native-phone-auth-failed'), message: payload.message },
+        'phone'
+    );
+};
+
+window.onGoogleNativeLoginSuccess = async function (payload) {
+    try {
+        if (!payload.idToken) throw new Error('Google did not return an ID token.');
+        const credential = firebase.auth.GoogleAuthProvider.credential(payload.idToken);
+        const result = await firebase.auth().signInWithCredential(credential);
+        await window.ASIYE_DRIVER_LOGIN.verifyDriverProfile(result.user);
+    } catch (error) {
+        window.ASIYE_DRIVER_LOGIN.handleSocialError(error, 'Google');
+    }
+};
+
+window.onGoogleNativeLoginError = function (message) {
+    window.ASIYE_DRIVER_LOGIN.handleSocialError(
+        { code: 'auth/native-google-failed', message },
+        'Google'
+    );
+};
+
+window.onAppleNativeLoginSuccess = async function (payload) {
+    try {
+        if (!payload.identityToken || !payload.rawNonce) {
+            throw new Error('Apple did not return the required credentials.');
+        }
+        const provider = new firebase.auth.OAuthProvider('apple.com');
+        const credential = provider.credential({
+            idToken: payload.identityToken,
+            rawNonce: payload.rawNonce
+        });
+        const result = await firebase.auth().signInWithCredential(credential);
+        await window.ASIYE_DRIVER_LOGIN.verifyDriverProfile(result.user);
+    } catch (error) {
+        window.ASIYE_DRIVER_LOGIN.handleSocialError(error, 'Apple');
+    }
+};
+
+window.onAppleNativeLoginError = function (message) {
+    window.ASIYE_DRIVER_LOGIN.handleSocialError(
+        { code: 'auth/native-apple-failed', message },
+        'Apple'
+    );
 };
 
 

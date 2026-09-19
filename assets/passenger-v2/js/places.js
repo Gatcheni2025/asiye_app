@@ -9,7 +9,197 @@ ASIYE.places = {
 
     autocompleteService: null,
     placesService: null,
+    geocoder: null,
     searchTimer: null,
+    initAttempts: 0,
+    activeQuery: '',
+
+    /* Saved commuter places intentionally keep the existing database
+       structure compatible: the richer object lives in savedPlaces,
+       while homeAddress/workAddress remain simple strings for older UI. */
+    getSavedPlace(kind) {
+        const key = kind === 'work' ? 'work' : 'home';
+        const user = ASIYE.state?.user || {};
+        const saved = user.savedPlaces?.[key] || user[`${key}Location`] || user[`${key}Place`] || null;
+        const address = (
+            saved?.address ||
+            saved?.formattedAddress ||
+            user[`${key}Address`] ||
+            ''
+        );
+
+        const latitude = Number(
+            saved?.latitude ??
+            saved?.lat ??
+            user[`${key}Latitude`] ??
+            user[`${key}Lat`]
+        );
+        const longitude = Number(
+            saved?.longitude ??
+            saved?.lng ??
+            saved?.lon ??
+            user[`${key}Longitude`] ??
+            user[`${key}Lng`]
+        );
+
+        if (!address && !Number.isFinite(latitude) && !Number.isFinite(longitude)) {
+            return null;
+        }
+
+        return {
+            name: key === 'work' ? 'Work' : 'Home',
+            address: address || (key === 'work' ? 'Saved work location' : 'Saved home location'),
+            latitude,
+            longitude,
+            placeId: saved?.placeId || null,
+            kind: key
+        };
+    },
+
+    distanceKm(a, b) {
+        if (
+            !Number.isFinite(Number(a?.latitude)) ||
+            !Number.isFinite(Number(a?.longitude)) ||
+            !Number.isFinite(Number(b?.latitude)) ||
+            !Number.isFinite(Number(b?.longitude))
+        ) return Infinity;
+
+        const toRad = value => Number(value) * Math.PI / 180;
+        const earthKm = 6371;
+        const dLat = toRad(Number(b.latitude) - Number(a.latitude));
+        const dLon = toRad(Number(b.longitude) - Number(a.longitude));
+        const lat1 = toRad(a.latitude);
+        const lat2 = toRad(b.latitude);
+
+        const h =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(lat1) * Math.cos(lat2) *
+            Math.sin(dLon / 2) ** 2;
+
+        return earthKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+    },
+
+    getCommuteSuggestion() {
+        const current = ASIYE.state?.location || {};
+        const home = this.getSavedPlace('home');
+        const work = this.getSavedPlace('work');
+
+        if (home && work) {
+            const homeDistance = this.distanceKm(current, home);
+            const workDistance = this.distanceKm(current, work);
+
+            if (homeDistance <= 3) return 'work';
+            if (workDistance <= 3) return 'home';
+        }
+
+        return null;
+    },
+
+    async useSavedPlace(kind) {
+        const key = kind === 'work' ? 'work' : 'home';
+        const saved = this.getSavedPlace(key);
+
+        if (
+            saved &&
+            Number.isFinite(saved.latitude) &&
+            Number.isFinite(saved.longitude)
+        ) {
+            ASIYE.state.ui.preferredRideType = 'club4';
+            return this.selectDestination(saved);
+        }
+
+        this.beginSavePlace(key);
+        return null;
+    },
+
+    beginSavePlace(kind) {
+        const key = kind === 'work' ? 'work' : 'home';
+        ASIYE.state.ui.savedPlaceTarget = key;
+
+        const input = document.getElementById('destinationInput');
+        if (input) {
+            input.value = '';
+            input.placeholder = key === 'work'
+                ? 'Search your work address'
+                : 'Search your home address';
+            input.focus();
+        }
+
+        const container = document.getElementById('destinationSuggestions');
+        if (container) {
+            container.innerHTML = `
+                <div class="saved-place-setup">
+                    <i class="fas ${key === 'work' ? 'fa-briefcase' : 'fa-house'}"></i>
+                    <div>
+                        <strong>Set your ${key} location</strong>
+                        <span>Search and choose the exact address. We will save it for faster work trips.</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        ASIYE.ui?.toast(
+            key === 'work'
+                ? 'Search and select your work address.'
+                : 'Search and select your home address.'
+        );
+    },
+
+    async savePlace(kind, place) {
+        const key = kind === 'work' ? 'work' : 'home';
+        const passengerId = ASIYE.state?.userId;
+
+        if (
+            !passengerId ||
+            !Number.isFinite(Number(place?.latitude)) ||
+            !Number.isFinite(Number(place?.longitude))
+        ) {
+            throw new Error('This saved place is missing its map location.');
+        }
+
+        const saved = {
+            name: key === 'work' ? 'Work' : 'Home',
+            address: place.address || place.name || '',
+            latitude: Number(place.latitude),
+            longitude: Number(place.longitude),
+            placeId: place.placeId || null,
+            updatedAt: firebase.database.ServerValue.TIMESTAMP
+        };
+
+        const updates = {
+            [`savedPlaces/${key}`]: saved,
+            [`${key}Address`]: saved.address,
+            [`${key}Latitude`]: saved.latitude,
+            [`${key}Longitude`]: saved.longitude
+        };
+
+        await firebase
+            .database()
+            .ref(`commuters/${passengerId}`)
+            .update(updates);
+
+        const user = ASIYE.state.user || {};
+        ASIYE.state.user = {
+            ...user,
+            savedPlaces: {
+                ...(user.savedPlaces || {}),
+                [key]: saved
+            },
+            [`${key}Address`]: saved.address,
+            [`${key}Latitude`]: saved.latitude,
+            [`${key}Longitude`]: saved.longitude
+        };
+
+        return saved;
+    },
+
+    onGoogleReady() {
+        this.initAttempts = 0;
+        this.init();
+        if (this.activeQuery.length >= 3) {
+            this.performSearch(this.activeQuery);
+        }
+    },
 
     init() {
 
@@ -30,6 +220,10 @@ ASIYE.places = {
 
             this.autocompleteService =
                 new google.maps.places.AutocompleteService();
+        }
+
+        if (!this.geocoder) {
+            this.geocoder = new google.maps.Geocoder();
         }
 
         if (!this.placesService) {
@@ -93,9 +287,16 @@ ASIYE.places = {
         if (this.activeQuery !== query) return;
 
         if (!this.init()) {
-
+            if (this.initAttempts++ < 12) {
+                this.searchMessage('Connecting to Google Places…');
+                return setTimeout(() => {
+                    if (this.activeQuery === query) this.performSearch(query);
+                }, 500);
+            }
             return this.searchAddresses(query);
         }
+
+        this.initAttempts = 0;
 
 
         const request = {
@@ -139,9 +340,12 @@ ASIYE.places = {
 
 
         const timeout = setTimeout(() => {
-            if (this.activeQuery === query) this.searchAddresses(query);
-        }, 5000);
-        this.autocompleteService
+            if (this.activeQuery === query) this.searchWithGoogleGeocoder(query);
+        }, 10000);
+        this.searchMessage('Searching Google locations…');
+
+        try {
+            this.autocompleteService
             .getPlacePredictions(
                 request,
                 (
@@ -159,7 +363,7 @@ ASIYE.places = {
                             .PlacesServiceStatus.OK
                     ) {
 
-                        return this.searchAddresses(query);
+                        return this.searchWithGoogleGeocoder(query);
                     }
 
 
@@ -190,6 +394,43 @@ ASIYE.places = {
                     );
                 }
             );
+        } catch (error) {
+            console.error('Google Places search failed:', error);
+            clearTimeout(timeout);
+            this.searchWithGoogleGeocoder(query);
+        }
+    },
+
+
+    searchWithGoogleGeocoder(query) {
+        if (!this.geocoder && !this.init()) {
+            return this.searchAddresses(query);
+        }
+
+        this.geocoder.geocode(
+            {
+                address: query,
+                componentRestrictions: { country: 'ZA' },
+                region: 'ZA'
+            },
+            (results, status) => {
+                if (query !== this.activeQuery) return;
+                if (status !== google.maps.GeocoderStatus.OK || !results?.length) {
+                    return this.searchAddresses(query);
+                }
+
+                const places = results.slice(0, 8).map(result => ({
+                    placeId: result.place_id,
+                    name: result.address_components?.[0]?.long_name ||
+                        result.formatted_address,
+                    address: result.formatted_address,
+                    secondary: result.formatted_address,
+                    latitude: result.geometry.location.lat(),
+                    longitude: result.geometry.location.lng()
+                }));
+                this.renderSuggestions(places);
+            }
+        );
     },
 
 
@@ -415,6 +656,32 @@ ASIYE.places = {
 
 
     async selectDestination(place) {
+
+        const saveTarget =
+            ASIYE.state?.ui?.savedPlaceTarget || null;
+
+        if (saveTarget) {
+            try {
+                place = await this.savePlace(
+                    saveTarget,
+                    place
+                );
+
+                ASIYE.state.ui.savedPlaceTarget = null;
+                ASIYE.state.ui.preferredRideType = 'club4';
+
+                ASIYE.ui?.toast(
+                    `${saveTarget === 'work' ? 'Work' : 'Home'} saved for Asiye Work.`
+                );
+            } catch (error) {
+                console.error('Could not save commuter place:', error);
+                ASIYE.ui?.toast(
+                    error?.message ||
+                    'Could not save this location.'
+                );
+                return;
+            }
+        }
 
         ASIYE.setDestination(
             place

@@ -9,7 +9,7 @@ window.AsiyePages = {
         const app = driver ? ASIYE_DRIVER : ASIYE;
         const user = (driver ? app.state.driver : app.state.user) || {};
         const id = driver ? app.state.driverId : app.state.userId;
-        const titles = { trips: driver ? 'Trip history' : 'My trips', wallet:'Wallet', parcels:'Parcels', safety:'Safety', support:'Support', account:'Account', earnings:'Earnings', club:'Club rides', vehicle:'Vehicle' };
+        const titles = { trips: driver ? 'Trip history' : 'My trips', wallet:'Wallet', parcels:'Parcels', safety:'Safety', support:'Support', account:'Account', earnings:'Earnings', club:'Work rides', vehicle:'Vehicle' };
         if (!titles[page]) return;
         const dialog = document.createElement('dialog');
         this.dialog = dialog;
@@ -24,14 +24,291 @@ window.AsiyePages = {
         const esc = value => this.escape(value);
         const note = text => `<p class="member-note">${esc(text)}</p>`;
         if (page === 'account') {
-            body.innerHTML = `<div class="member-avatar">${esc((user.name || user.firstName || 'A').charAt(0))}</div><h2>${esc(user.name || user.firstName || 'Your account')}</h2>` + this.row('Phone', user.phone || user.phoneNumber) + this.row('Email', user.email) + this.row('Account type', driver ? 'Driver' : 'Passenger');
+            const initial = esc((user.name || user.firstName || 'A').charAt(0));
+            const photoUrl = !driver && window.ASIYE?.profile
+                ? ASIYE.profile.getUrl(user)
+                : (user.profile_picture_url || user.profileImageUrl || '');
+            const avatar = photoUrl
+                ? `<div class="member-avatar member-avatar-photo"><img data-passenger-profile-preview src="${esc(photoUrl)}" alt="Profile picture"></div>`
+                : `<div class="member-avatar">${initial}</div>`;
+
+            body.innerHTML =
+                avatar +
+                `<h2>${esc(user.name || user.firstName || 'Your account')}</h2>` +
+                this.row('Phone', user.phone || user.phoneNumber) +
+                this.row('Email', user.email) +
+                this.row('Account type', driver ? 'Driver' : 'Passenger');
+
+            if (!driver) {
+                body.innerHTML += `
+                    <div class="member-profile-photo-actions">
+                        <button type="button" class="member-primary" data-passenger-profile-camera>
+                            ${photoUrl ? 'Rescan profile picture' : 'Scan profile picture'}
+                        </button>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            capture="user"
+                            data-passenger-profile-file
+                            hidden
+                        >
+                        <p class="member-note" data-passenger-profile-status>
+                            Scan a clear face photo with the camera. As soon as the scan is captured, Asiye saves it automatically as your profile picture.
+                        </p>
+                    </div>
+                `;
+
+                if (
+                    window.ASIYE?.profile &&
+                    typeof ASIYE.profile.bindAccount === 'function'
+                ) {
+                    ASIYE.profile.bindAccount(body);
+                }
+            }
         } else if (page === 'wallet') {
-            body.innerHTML = `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` + note('Wallet credits shown from your account. Choose your payment method when booking a ride.') + this.row('Currency', 'South African rand · ZAR');
+            const returnStatus = new URLSearchParams(location.search).get('wallet');
+            body.innerHTML =
+                `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
+                (returnStatus === 'success'
+                    ? note('Payment returned successfully. Your balance will update after PayFast confirms it.')
+                    : returnStatus === 'cancelled'
+                        ? note('The payment was cancelled and no funds were added.')
+                        : note('Add funds securely using PayFast Sandbox.')) +
+                `<form class="wallet-topup" data-wallet-topup>
+                    <label>Amount to add</label>
+                    <div class="wallet-amounts">
+                        <button type="button" data-amount="50">R50</button>
+                        <button type="button" data-amount="100">R100</button>
+                        <button type="button" data-amount="200">R200</button>
+                        <button type="button" data-amount="500">R500</button>
+                    </div>
+                    <div class="wallet-custom">
+                        <span>R</span>
+                        <input name="amount" type="number" inputmode="decimal" min="10" max="5000" step="0.01" placeholder="Enter amount" required>
+                    </div>
+                    <button class="member-primary" type="submit">Add funds with PayFast</button>
+                    <p class="member-note">Sandbox payments use test money. Funds are credited only after secure PayFast confirmation.</p>
+                </form>` +
+                this.row('Currency', 'South African rand · ZAR');
+            const form = body.querySelector('[data-wallet-topup]');
+            const input = form.querySelector('input[name="amount"]');
+            form.querySelectorAll('[data-amount]').forEach(button => {
+                button.onclick = () => {
+                    input.value = button.dataset.amount;
+                    form.querySelectorAll('[data-amount]').forEach(item => item.classList.remove('selected'));
+                    button.classList.add('selected');
+                };
+            });
+            form.onsubmit = async event => {
+                event.preventDefault();
+                const submit = form.querySelector('[type="submit"]');
+                submit.disabled = true;
+                submit.textContent = 'Opening PayFast…';
+                try {
+                    await ASIYE.wallet.startTopup(Number(input.value));
+                } catch (error) {
+                    submit.disabled = false;
+                    submit.textContent = 'Add funds with PayFast';
+                    app.ui?.toast?.(error.message || 'Unable to start payment.');
+                }
+            };
         } else if (page === 'vehicle') {
             body.innerHTML = `<div class="member-balance"><small>Registered vehicle</small><strong>${esc(user.vehicleReg || user.registration || 'Not provided')}</strong></div>` + this.row('Make', user.vehicleMake || user.make) + this.row('Model', user.vehicleModel || user.model) + this.row('Colour', user.vehicleColor || user.color) + this.row('Seats', user.capacity || user.seats) + note('Contact support to correct registered vehicle details.');
         } else if (page === 'safety') {
-            body.innerHTML = `<h2>Every ride, with care</h2><div class="member-info"><h3>Before your ride</h3><p>${driver ? 'Confirm your passenger and their pickup PIN before starting the ride.' : 'Match the vehicle plate and driver details. Share your pickup PIN only when ready to start.'}</p></div><div class="member-info"><h3>During your ride</h3><p>Wear a seat belt. Keep communication in the trip chat. Stop in a safe place if you need assistance.</p></div><button class="member-primary" data-support>Contact support</button>`;
-            body.querySelector('[data-support]').onclick = () => this.open('support');
+            if (!id) {
+                body.innerHTML = note('Sign in to manage loved ones.');
+                return;
+            }
+
+            const context = {
+                app,
+                id,
+                role: driver ? 'driver' : 'passenger',
+                root: driver ? 'taxis' : 'commuters'
+            };
+
+            const members = window.AsiyeSafetyContact
+                ? await AsiyeSafetyContact.getMembers(context)
+                : [];
+
+            body.innerHTML = `
+                <h2>Trusted family & live location</h2>
+
+                <p class="member-note">
+                    Your primary safety contact is saved once and stays
+                    connected to your Asiye account. You can add more trusted
+                    people here at any time.
+                </p>
+
+                <div data-family-list>
+                    ${
+                        members.length
+                            ? members.map((member, index) => `
+                                <div class="member-row member-family-row">
+                                    <span>
+                                        ${esc(member.relationship || 'Loved one')}
+                                        ${
+                                            member.isPrimary === true || index === 0
+                                                ? '<em class="member-safety-badge">Primary safety contact</em>'
+                                                : ''
+                                        }
+                                    </span>
+                                    <strong>
+                                        ${esc(member.name)}
+                                        <small>${esc(member.phone)}</small>
+                                    </strong>
+                                </div>
+                            `).join('')
+                            : note('No trusted family member has been added yet.')
+                    }
+                </div>
+
+                <form data-family-form class="member-family-form">
+                    <h3>Add another trusted person</h3>
+
+                    <button
+                        type="button"
+                        class="asiye-safety-secondary asiye-contact-picker"
+                        data-family-pick-contact
+                    >
+                        <i class="fas fa-address-book"></i>
+                        Choose from phone contacts
+                    </button>
+
+                    <label>
+                        Full name
+                        <input name="name" required maxlength="80">
+                    </label>
+
+                    <label>
+                        Relationship
+                        <select name="relationship" required>
+                            <option value="">Choose relationship</option>
+                            <option>Spouse / Partner</option>
+                            <option>Parent</option>
+                            <option>Sibling</option>
+                            <option>Child</option>
+                            <option>Relative</option>
+                            <option>Friend</option>
+                            <option>Other</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Mobile number
+                        <input
+                            name="phone"
+                            type="tel"
+                            inputmode="tel"
+                            required
+                            maxlength="24"
+                        >
+                    </label>
+
+                    <p class="member-note">
+                        Only add someone who has agreed to be your safety contact.
+                    </p>
+
+                    <button class="member-primary" type="submit">
+                        Save trusted person
+                    </button>
+                </form>
+
+                <button class="member-primary" data-share-live>
+                    Share active trip location
+                </button>
+
+                <button class="member-primary" data-support>
+                    Contact support
+                </button>
+            `;
+
+            const familyForm =
+                body.querySelector('[data-family-form]');
+
+            body.querySelector(
+                '[data-family-pick-contact]'
+            ).onclick = async event => {
+                const button = event.currentTarget;
+                const original = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML =
+                    '<i class="fas fa-circle-notch fa-spin"></i> Opening contacts…';
+
+                try {
+                    await AsiyeSafetyContact.pickIntoForm(
+                        familyForm
+                    );
+                } catch (error) {
+                    app.ui?.toast?.(
+                        error?.message ||
+                        'Unable to open phone contacts.'
+                    );
+                } finally {
+                    button.disabled = false;
+                    button.innerHTML = original;
+                }
+            };
+
+            body.querySelector('[data-family-form]').onsubmit = async event => {
+                event.preventDefault();
+
+                const form = event.currentTarget;
+                const button = form.querySelector('[type="submit"]');
+
+                button.disabled = true;
+                button.textContent = 'Saving…';
+
+                try {
+                    if (!window.AsiyeSafetyContact) {
+                        throw new Error('Safety setup is unavailable.');
+                    }
+
+                    await AsiyeSafetyContact.saveMember({
+                        context,
+                        name: form.elements.name.value,
+                        relationship: form.elements.relationship.value,
+                        phone: form.elements.phone.value
+                    });
+
+                    this.open('safety');
+                } catch (error) {
+                    button.disabled = false;
+                    button.textContent = 'Save trusted person';
+
+                    app.ui?.toast?.(
+                        error?.message ||
+                        'Unable to save this person.'
+                    );
+                }
+            };
+
+            body.querySelector('[data-share-live]').onclick = async () => {
+                const requestId =
+                    app.state?.activeRequest?.requestId ||
+                    app.state?.activeRequest?.key ||
+                    app.state?.booking?.requestId ||
+                    app.state?.trip?.requestId ||
+                    localStorage.getItem('currentRequestId');
+
+                if (!requestId) {
+                    return app.ui?.toast?.(
+                        'There is no active trip to share.'
+                    );
+                }
+
+                if (window.AsiyeSafetyContact) {
+                    await AsiyeSafetyContact.offerTripShare(
+                        requestId,
+                        {
+                            role: driver ? 'driver' : 'passenger'
+                        }
+                    );
+                }
+            };
+
+            body.querySelector('[data-support]').onclick =
+                () => this.open('support');
         } else if (page === 'support') {
             const config = driver ? window.ASIYE_DRIVER_CONFIG : window.ASIYE_CONFIG;
             body.innerHTML = `<h2>How can we help?</h2><details class="member-info"><summary>My driver or passenger cannot find me</summary><p>Use Message on your trip to share a nearby landmark and agree on a safe meeting point.</p></details><details class="member-info"><summary>My payment or fare looks incorrect</summary><p>Keep your trip reference and the amount shown on the completed-trip receipt.</p></details><details class="member-info"><summary>Map or location is unavailable</summary><p>Allow location access in your browser or device settings, check your connection, then recenter the map.</p></details>`;
@@ -56,7 +333,7 @@ window.AsiyePages = {
                     rides = rides.filter(ride => ride.status === 'completed');
                     const known = rides.filter(ride => ride.type !== 'club' && Number.isFinite(Number(ride.finalAmount ?? ride.calculatedPrice ?? ride.price)));
                     const sum = known.reduce((total, ride) => total + Number(ride.finalAmount ?? ride.calculatedPrice ?? ride.price), 0);
-                    html += `<div class="member-balance"><small>Recorded GO fares</small><strong>${this.money(sum)}</strong></div>` + note('Gross fares from loaded completed GO rides, before fees. Club earnings and payouts are not included.');
+                    html += `<div class="member-balance"><small>Recorded GO fares</small><strong>${this.money(sum)}</strong></div>` + note('Gross fares from loaded completed GO rides, before fees. Asiye Work earnings and payouts are not included.');
                 }
                 html += note('Showing up to 100 recent records per booking type.');
                 if (!rides.length) html += `<div class="member-empty"><h2>No ${page === 'parcels' ? 'parcels' : 'trips'} yet</h2><p>Your records will appear here once available.</p></div>`;

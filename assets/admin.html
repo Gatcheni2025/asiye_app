@@ -1281,8 +1281,18 @@
         // ================================================================
         // SHOW CREATE PASSWORD MODAL
         // ================================================================
-        function showCreatePassword(key) {
-            pendingCreateDriver = key;
+        function showCreatePassword(key, driverId = null) {
+            const record = allApplications.find(item => item.key === key);
+            const resolvedDriverId =
+                driverId ||
+                record?.driverId ||
+                (record?._source === 'taxis' ? record.key : null) ||
+                (record?.email ? record.email.replace(/[^a-zA-Z0-9]/g, '_') : key);
+
+            pendingCreateDriver = {
+                applicationKey: key,
+                driverId: resolvedDriverId
+            };
             document.getElementById('newPasswordInput').value = '';
             document.getElementById('confirmPasswordInput').value = '';
             document.getElementById('strengthBar').className = 'password-strength';
@@ -1387,7 +1397,19 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
 
-            const driver = allApplications.find(a => a.key === pendingCreateDriver);
+            const applicationKey =
+                typeof pendingCreateDriver === 'string'
+                    ? pendingCreateDriver
+                    : pendingCreateDriver.applicationKey;
+
+            const driverId =
+                typeof pendingCreateDriver === 'string'
+                    ? pendingCreateDriver
+                    : pendingCreateDriver.driverId;
+
+            const driver = allApplications.find(
+                a => a.key === applicationKey || a.key === driverId
+            );
             if (!driver) {
                 showToast('Driver not found', 'error');
                 btn.disabled = false;
@@ -1395,7 +1417,7 @@
                 return;
             }
 
-            const email = driver.email || `driver_${pendingCreateDriver}@asiye.com`;
+            const email = driver.email || `driver_${driverId}@asiye.com`;
             const name = driver.fullName || driver.name || 'Driver';
             const phone = driver.phone || '';
 
@@ -1408,14 +1430,16 @@
                 })
                 .then((user) => {
                     return Promise.all([
-                        database.ref(`taxis/${pendingCreateDriver}`).update({
+                        database.ref(`taxis/${driverId}`).update({
                             hasLogin: true,
                             userUid: user.uid,
+                            authUid: user.uid,
                             passwordLastReset: firebase.database.ServerValue.TIMESTAMP
                         }),
-                        database.ref(`driver_applications/${pendingCreateDriver}`).update({
+                        database.ref(`driver_applications/${applicationKey}`).update({
                             hasLogin: true,
                             userUid: user.uid,
+                            driverId: driverId,
                             passwordLastReset: firebase.database.ServerValue.TIMESTAMP
                         })
                     ]);
@@ -1433,7 +1457,7 @@
                         auth.sendPasswordResetEmail(email)
                             .then(() => {
                                 showToast(`Password reset email sent to ${email}`, 'info');
-                                database.ref(`taxis/${pendingCreateDriver}`).update({
+                                database.ref(`taxis/${driverId}`).update({
                                     hasLogin: true,
                                     passwordLastReset: firebase.database.ServerValue.TIMESTAMP
                                 });
@@ -1487,6 +1511,7 @@
             }
 
             const driverId = app.email ? app.email.replace(/[^a-zA-Z0-9]/g, '_') : `driver_${Date.now()}`;
+            const existingAuthUid = app.userUid || app.authUid || null;
 
             const driverData = {
                 name: app.fullName || app.name || 'Driver',
@@ -1517,7 +1542,9 @@
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 trainingStatus: 'completed',
                 documents: app.documents || {},
-                hasLogin: false
+                userUid: existingAuthUid,
+                authUid: existingAuthUid,
+                hasLogin: Boolean(existingAuthUid || app.hasLogin)
             };
 
             database.ref(`taxis/${driverId}`).set(driverData)
@@ -1532,8 +1559,20 @@
                 })
                 .then(() => {
                     showToast(`✅ Driver ${app.fullName || 'Driver'} verified!`, 'success');
-                    // Show create password modal
-                    setTimeout(() => showCreatePassword(key), 500);
+
+                    if (existingAuthUid || app.hasLogin) {
+                        sendDriverNotification(
+                            app.phone,
+                            app.fullName || app.name || 'Driver',
+                            'approved'
+                        );
+                    } else {
+                        setTimeout(
+                            () => showCreatePassword(key, driverId),
+                            500
+                        );
+                    }
+
                     loadApplications();
                 })
                 .catch((error) => {

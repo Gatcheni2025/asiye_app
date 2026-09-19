@@ -836,9 +836,9 @@ ASIYE_DRIVER.ui = {
                 request.clubMode ===
                 'club7'
 
-                ? 'ASIYE CLUB 7'
+                ? 'ASIYE WORK 7'
 
-                : 'ASIYE CLUB 4'
+                : 'ASIYE WORK 4'
             )
 
             : 'ASIYE GO';
@@ -861,6 +861,7 @@ ASIYE_DRIVER.ui = {
             )
 
             : Number(
+                request.agreedFare ||
                 request.finalAmount ||
                 request.calculatedPrice ||
                 0
@@ -922,7 +923,7 @@ ASIYE_DRIVER.ui = {
 
                 ${
                     isClub
-                    ? 'New Club request'
+                    ? 'New Asiye Work request'
                     : 'New ride request'
                 }
 
@@ -1366,6 +1367,7 @@ ASIYE_DRIVER.ui = {
                     <strong>
                         R${
                             Number(
+                                request.agreedFare ||
                                 request.finalAmount ||
                                 request.calculatedPrice ||
                                 0
@@ -1474,8 +1476,8 @@ ASIYE_DRIVER.ui = {
                     <div class="driver-kicker">
                         ${
                             capacity === 7
-                            ? 'Asiye Club 7'
-                            : 'Asiye Club 4'
+                            ? 'Asiye Work 7'
+                            : 'Asiye Work 4'
                         }
                     </div>
 
@@ -1592,7 +1594,7 @@ ASIYE_DRIVER.ui = {
 
                     <p>
                         Do not start collecting passengers
-                        until the Club is full.
+                        until the Asiye Work group is full.
                     </p>
 
                 </div>
@@ -1683,8 +1685,8 @@ ASIYE_DRIVER.ui = {
 
                         ${
                             capacity === 7
-                            ? 'Asiye Club 7'
-                            : 'Asiye Club 4'
+                            ? 'Asiye Work 7'
+                            : 'Asiye Work 4'
                         }
 
                     </div>
@@ -2651,6 +2653,7 @@ ASIYE_DRIVER.ui = {
             amount =
 
                 Number(
+                    request.agreedFare ||
                     request.pricePerPassenger ||
                     0
                 ) *
@@ -2661,6 +2664,7 @@ ASIYE_DRIVER.ui = {
             amount =
 
                 Number(
+                    request.agreedFare ||
                     request.finalAmount ||
                     request.calculatedPrice ||
                     0
@@ -2676,15 +2680,55 @@ ASIYE_DRIVER.ui = {
 
 
         if (details) {
+            const passengers = request.type === 'club'
+                ? Object.entries(request.passengers || {})
+                    .filter(([, passenger]) => !String(passenger.status || '').includes('cancelled'))
+                    .map(([id, passenger]) => ({ id, name: passenger.name || passenger.commuterName || 'Passenger' }))
+                : [{ id: request.commuterId, name: request.commuterName || 'Passenger' }];
+            const unrated = passengers.filter(passenger =>
+                passenger.id && !request.ratings?.driverToPassenger?.[passenger.id]
+            );
 
-            details.textContent =
+            details.innerHTML = `
+                <p>${request.type === 'club' ? 'Asiye Work trip completed' : ASIYE_DRIVER.ui.escape(request.paymentMethod || 'cash') + ' payment'}</p>
+                ${unrated.length ? `
+                    <section style="margin-top:16px;">
+                        <strong>Rate your passenger</strong>
+                        ${unrated.length > 1 ? `<select id="ratingPassengerId" style="width:100%;margin:10px 0;padding:11px;border-radius:10px;"><option value="">Choose passenger</option>${unrated.map(item => `<option value="${ASIYE_DRIVER.ui.escape(item.id)}">${ASIYE_DRIVER.ui.escape(item.name)}</option>`).join('')}</select>` : ''}
+                        <div data-passenger-rating-stars style="display:flex;justify-content:center;gap:7px;margin:10px 0;">
+                            ${[1,2,3,4,5].map(value => `<button type="button" data-passenger-rating="${value}" style="border:0;background:none;color:#c8c8c8;font-size:28px;">★</button>`).join('')}
+                        </div>
+                        <button type="button" id="submitPassengerRating" class="driver-btn driver-btn-primary driver-btn-full" disabled>Submit rating</button>
+                    </section>` : '<p style="margin-top:12px;font-weight:800;">Passenger rating submitted.</p>'}
+            `;
 
-                request.type ===
-                'club'
-
-                ? 'Club trip completed'
-
-                : `${request.paymentMethod || 'cash'} payment`;
+            let selectedRating = 0;
+            details.querySelectorAll('[data-passenger-rating]').forEach(star => {
+                star.onclick = () => {
+                    selectedRating = Number(star.dataset.passengerRating);
+                    details.querySelectorAll('[data-passenger-rating]').forEach(item => {
+                        item.style.color = Number(item.dataset.passengerRating) <= selectedRating
+                            ? '#f5b301' : '#c8c8c8';
+                    });
+                    const submit = details.querySelector('#submitPassengerRating');
+                    if (submit) submit.disabled = false;
+                };
+            });
+            details.querySelector('#submitPassengerRating')?.addEventListener('click', async event => {
+                const passengerId = details.querySelector('#ratingPassengerId')?.value || unrated[0]?.id;
+                if (!passengerId) return this.toast('Choose a passenger first.', 'warning');
+                event.currentTarget.disabled = true;
+                event.currentTarget.textContent = 'Saving…';
+                try {
+                    await ASIYE_DRIVER.trip.submitPassengerRating(passengerId, selectedRating);
+                    event.currentTarget.textContent = 'Rating submitted';
+                    this.toast('Passenger rating saved.', 'success');
+                } catch {
+                    event.currentTarget.disabled = false;
+                    event.currentTarget.textContent = 'Submit rating';
+                    this.toast('Could not save the rating.', 'danger');
+                }
+            });
         }
 
 
@@ -3467,6 +3511,38 @@ async function () {
     }
 
 
+    /*
+     * If the profile is keyed by a legacy driver ID, resolve it using the
+     * authenticated identity and persist the canonical driverId locally.
+     */
+    if (
+        authUser?.uid &&
+        window.AsiyeEnrollment?.resolveDriverProfile
+    ) {
+        try {
+            const linked =
+                await AsiyeEnrollment.resolveDriverProfile(authUser);
+
+            if (linked) {
+                localStorage.setItem('driverId', linked.id);
+                localStorage.setItem('userId', linked.id);
+                localStorage.setItem('authUid', authUser.uid);
+                localStorage.setItem('userType', 'driver');
+
+                return {
+                    uid: linked.id,
+                    data: linked.data,
+                    source: 'linked-auth-profile'
+                };
+            }
+        } catch (error) {
+            console.warn(
+                'Could not resolve linked driver profile:',
+                error
+            );
+        }
+    }
+
     return null;
 };
 
@@ -3482,8 +3558,6 @@ async function (
 ) {
 
     try {
-
-        if (!await AsiyeEnrollment.requireApproval()) return;
 
         let driver =
             existingDriverData;
@@ -3522,6 +3596,8 @@ async function (
                 snapshot.val();
         }
 
+        if (!await AsiyeEnrollment.requireApproval(driver)) return;
+
 
         /*
          * Establish Driver V2 identity.
@@ -3549,6 +3625,21 @@ async function (
             '✅ Driver profile loaded:',
             driverId
         );
+
+
+        /*
+         * One-time safety setup.
+         * A verified driver must save one trusted family member
+         * before going online or receiving bookings.
+         */
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'driver'
+            })
+        ) {
+            return;
+        }
 
 
         /*

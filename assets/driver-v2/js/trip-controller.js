@@ -554,7 +554,20 @@ ASIYE_DRIVER.trip = {
                     'Driver arrived',
 
                 message:
-                    'Your driver has arrived at your pickup location.',
+                    `Your driver has arrived. Amount to pay: R${Number(
+                        this.request.finalAmount ||
+                        this.request.agreedFare ||
+                        this.request.calculatedPrice ||
+                        0
+                    ).toFixed(2)}.`,
+
+                amount:
+                    Number(
+                        this.request.finalAmount ||
+                        this.request.agreedFare ||
+                        this.request.calculatedPrice ||
+                        0
+                    ),
 
                 requestId:
                     this.requestId
@@ -785,7 +798,7 @@ ASIYE_DRIVER.trip = {
 
             throw new Error(
 
-                `Club is not ready. ${progress.remaining} passenger(s) still required.`
+                `Asiye Work is not ready. ${progress.remaining} passenger(s) still required.`
 
             );
         }
@@ -833,10 +846,10 @@ ASIYE_DRIVER.trip = {
                     'driver_on_way',
 
                 title:
-                    'Club collection started',
+                    'Asiye Work collection started',
 
                 message:
-                    'Your Asiye Club driver has started collecting passengers.'
+                    'Your Asiye Work driver has started collecting passengers.'
             }
         );
 
@@ -1036,7 +1049,7 @@ ASIYE_DRIVER.trip = {
                     'Driver is coming to you',
 
                 message:
-                    'Your Club driver is heading to your pickup point.',
+                    'Your Asiye Work driver is heading to your pickup point.',
 
                 requestId:
                     this.requestId
@@ -1155,7 +1168,7 @@ ASIYE_DRIVER.trip = {
                     'Driver arrived',
 
                 message:
-                    'Your Club driver has arrived at your pickup point.',
+                    'Your Asiye Work driver has arrived at your pickup point.',
 
                 requestId:
                     this.requestId
@@ -1448,10 +1461,10 @@ ASIYE_DRIVER.trip = {
                     'trip_started',
 
                 title:
-                    'Club trip started',
+                    'Asiye Work trip started',
 
                 message:
-                    'All passengers are onboard. Your Club trip has started.'
+                    'All passengers are onboard. Your Asiye Work trip has started.'
             }
         );
 
@@ -1619,7 +1632,7 @@ ASIYE_DRIVER.trip = {
                         'Trip completed',
 
                     message:
-                        'Your Asiye Club trip is complete.',
+                        'Your Asiye Work trip is complete.',
 
                     amount:
                         request.pricePerPassenger ||
@@ -1661,6 +1674,41 @@ ASIYE_DRIVER.trip = {
 
 
         await this.releaseDriver();
+    },
+
+
+    async submitPassengerRating(passengerId, value) {
+        const rating = Number(value);
+        const driverId = ASIYE_DRIVER.state.driverId;
+        if (!this.requestId || !driverId || !passengerId || rating < 1 || rating > 5) {
+            throw new Error('Invalid rating.');
+        }
+
+        const ratingRef = firebase.database().ref(
+            `requests/${this.requestId}/ratings/driverToPassenger/${passengerId}`
+        );
+        const saved = await ratingRef.transaction(current => {
+            if (current) return;
+            return {
+                value: rating,
+                passengerId,
+                driverId,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+        });
+        if (!saved.committed) return;
+
+        const summaryRef = firebase.database().ref(
+            `commuters/${passengerId}/ratingSummary`
+        );
+        const summary = await summaryRef.transaction(current => ({
+            total: Number(current?.total || 0) + rating,
+            count: Number(current?.count || 0) + 1
+        }));
+        const data = summary.snapshot.val();
+        await firebase.database().ref(`commuters/${passengerId}/rating`).set(
+            Number(data.total) / Number(data.count)
+        );
     },
 
 
@@ -1735,7 +1783,7 @@ ASIYE_DRIVER.trip = {
                         'Driver cancelled',
 
                     message:
-                        'Your Club driver cancelled this trip.'
+                        'Your Asiye Work driver cancelled this trip.'
                 }
             );
 
@@ -2144,6 +2192,271 @@ ASIYE_DRIVER.trip = {
                 type:
                     'dropoff'
             });
+    },
+
+
+    /* ========================================================
+       PASSENGER ETA PUSH
+
+       Runs from the driver's live GPS updates. A deterministic
+       notification key makes the alert idempotent even if the
+       driver app reconnects or reloads.
+       ======================================================== */
+
+    async maybeNotifyPassengerOneMinute(
+        latitude,
+        longitude,
+        speed = 0
+    ) {
+
+        const request =
+            this.request;
+
+        if (
+            !request ||
+            !this.requestId
+        ) {
+
+            return;
+        }
+
+
+        let passengerId =
+            null;
+
+        let pickupLat =
+            null;
+
+        let pickupLng =
+            null;
+
+        let amount =
+            0;
+
+
+        if (
+            request.type ===
+            'club'
+        ) {
+
+            if (
+                request.status !==
+                    'collecting_passengers' ||
+                !this.currentPassengerId
+            ) {
+
+                return;
+            }
+
+
+            const passenger =
+                request.passengers
+                    ?.[this.currentPassengerId];
+
+
+            if (
+                !passenger ||
+                passenger.status !==
+                    'driver_on_way'
+            ) {
+
+                return;
+            }
+
+
+            passengerId =
+                this.currentPassengerId;
+
+            pickupLat =
+                Number(
+                    passenger.pickupLat ??
+                    passenger.latitude
+                );
+
+            pickupLng =
+                Number(
+                    passenger.pickupLng ??
+                    passenger.longitude
+                );
+
+            amount =
+                Number(
+                    passenger.price ||
+                    request.pricePerPassenger ||
+                    0
+                );
+
+        } else {
+
+            if (
+                request.status !==
+                    'driver_on_way'
+            ) {
+
+                return;
+            }
+
+
+            passengerId =
+                request.commuterId;
+
+            pickupLat =
+                Number(
+                    request.commuterLocation
+                        ?.latitude
+                );
+
+            pickupLng =
+                Number(
+                    request.commuterLocation
+                        ?.longitude
+                );
+
+            amount =
+                Number(
+                    request.finalAmount ||
+                    request.agreedFare ||
+                    request.calculatedPrice ||
+                    0
+                );
+        }
+
+
+        const driverLat =
+            Number(latitude);
+
+        const driverLng =
+            Number(longitude);
+
+
+        if (
+            !passengerId ||
+            !Number.isFinite(driverLat) ||
+            !Number.isFinite(driverLng) ||
+            !Number.isFinite(pickupLat) ||
+            !Number.isFinite(pickupLng)
+        ) {
+
+            return;
+        }
+
+
+        const distanceMetres =
+
+            this.distanceKm(
+                driverLat,
+                driverLng,
+                pickupLat,
+                pickupLng
+            ) * 1000;
+
+
+        const speedMetresPerSecond =
+
+            Math.max(
+                5,
+                Number(speed || 0)
+            );
+
+
+        const estimatedSeconds =
+
+            distanceMetres /
+            speedMetresPerSecond;
+
+
+        if (
+            estimatedSeconds > 75 ||
+            distanceMetres > 650
+        ) {
+
+            return;
+        }
+
+
+        const safeRequestId =
+            String(this.requestId)
+                .replace(
+                    /[.#$\[\]\/]/g,
+                    '_'
+                );
+
+
+        const notificationRef =
+
+            firebase
+                .database()
+                .ref(
+                    `notifications/commuters/${passengerId}/${safeRequestId}_one_minute`
+                );
+
+
+        const existing =
+            await notificationRef
+                .once(
+                    'value'
+                );
+
+
+        if (
+            existing.exists()
+        ) {
+
+            return;
+        }
+
+
+        const roundedAmount =
+            Math.max(
+                0,
+                Math.round(
+                    amount * 100
+                ) / 100
+            );
+
+
+        await notificationRef.set({
+
+            type:
+                'driver_one_minute',
+
+            title:
+                'Your car is about 1 minute away',
+
+            message:
+
+                roundedAmount > 0
+
+                ? `Get ready for pickup. Amount to pay: R${roundedAmount.toFixed(2)}.`
+
+                : 'Get ready for pickup. Your driver is almost there.',
+
+            requestId:
+                this.requestId,
+
+            driverId:
+                ASIYE_DRIVER.state
+                    ?.driverId ||
+                '',
+
+            amount:
+                roundedAmount,
+
+            estimatedSeconds:
+                Math.max(
+                    1,
+                    Math.round(
+                        estimatedSeconds
+                    )
+                ),
+
+            timestamp:
+
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP
+        });
     },
 
 

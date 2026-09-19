@@ -8,10 +8,14 @@ plugins {
     id("com.google.gms.google-services")
 }
 
-// 1. LOAD THE KEY PROPERTIES
+// Production release signing.
+// IMPORTANT: never silently fall back to the Android debug certificate for a
+// release APK. A debug-signed "release" cannot update the production Asiye app.
 val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
-if (keystorePropertiesFile.exists()) {
+val hasReleaseKeystore = keystorePropertiesFile.exists()
+
+if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
@@ -20,13 +24,14 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
-    // 2. CONFIGURE SIGNING
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+        if (hasReleaseKeystore) {
+            create("release") {
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+            }
         }
     }
 
@@ -38,7 +43,7 @@ android {
 
     defaultConfig {
         applicationId = "com.asiyeapp.asiye"
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         multiDexEnabled = true
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -47,13 +52,19 @@ android {
 
     buildTypes {
         getByName("debug") {
-            signingConfig = signingConfigs.getByName("release")
+            // Keep the default Android debug signing configuration.
         }
         getByName("release") {
-            // 3. SWITCH FROM "debug" TO "release"
-            signingConfig = signingConfigs.getByName("release")
+            if (!hasReleaseKeystore) {
+                throw GradleException(
+                    "Release signing is not configured. " +
+                    "Create android/key.properties and provide the production keystore. " +
+                    "Refusing to build a debug-signed release APK."
+                )
+            }
 
-            isMinifyEnabled = false // Usually false for debug/initial builds
+            signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = false
             isShrinkResources = false
         }
     }

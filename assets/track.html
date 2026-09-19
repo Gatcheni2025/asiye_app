@@ -113,7 +113,14 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    mapboxgl.accessToken = '__MAPBOX_PUBLIC_TOKEN__"<h3>Invalid Tracking Link</h3>";
+    mapboxgl.accessToken = 'pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw';
+
+    let map;
+    let taxiMarker;
+    const tripId = new URLSearchParams(window.location.search).get('trip');
+
+    if (!tripId || !/^[A-Za-z0-9_-]+$/.test(tripId)) {
+        document.getElementById('loader').innerHTML = '<h3>Invalid Tracking Link</h3>';
     } else {
         initMap();
     }

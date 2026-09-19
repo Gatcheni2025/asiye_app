@@ -2,32 +2,149 @@
     const form = document.getElementById('enrollmentForm');
     const status = document.getElementById('enrollmentStatus');
     const photos = {}, previews = {};
+    let licenceScan = null;
     let stream, current, user, busy = false;
-    const kinds = { selfie: 'Camera selfie', car: 'Photo of your car', identity: 'ID or passport copy' };
+    const kinds = { selfie: 'Selfie scan', car: 'Vehicle scan', identity: 'ID / passport scan' };
     const stopCamera = () => { stream?.getTracks().forEach(track => track.stop()); stream = null; document.getElementById('captureVideo').hidden = true; document.getElementById('takePhoto').hidden = true; document.getElementById('cancelCamera').hidden = true; };
     const savePhoto = (key, file) => {
-        if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 10 * 1024 * 1024) throw Error('Use a JPG, PNG or WebP image under 10 MB.');
-        photos[key] = file;
+        if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 10 * 1024 * 1024) {
+            throw Error('The scan must be a clear JPG, PNG or WebP image under 10 MB.');
+        }
+
+        if (key === 'licence') {
+            licenceScan = file;
+        } else {
+            photos[key] = file;
+        }
+
         if (previews[key]) URL.revokeObjectURL(previews[key]);
         previews[key] = URL.createObjectURL(file);
-        document.getElementById(`preview-${key}`).src = previews[key];
-        document.getElementById(`preview-${key}`).hidden = false;
+
+        const preview = document.getElementById(`preview-${key}`);
+        if (preview) {
+            preview.src = previews[key];
+            preview.hidden = false;
+        }
     };
-    for (const [key,label] of Object.entries(kinds)) {
-        const row = document.createElement('div'); row.className = 'capture-row';
-        row.innerHTML = `<strong>${label}</strong><br><button type="button">Open camera</button><label>Or use device camera / select a clear photo<input type="file" accept="image/jpeg,image/png,image/webp" capture="${key === 'selfie' ? 'user' : 'environment'}"></label><img id="preview-${key}" alt="${label} preview" hidden>`;
-        row.querySelector('input').onchange = event => { try { savePhoto(key, event.target.files[0]); } catch(error) { status.textContent = error.message; } };
-        row.querySelector('button').onclick = async () => {
-            stopCamera(); current = key;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({video:{facingMode:key === 'selfie' ? 'user' : 'environment'},audio:false});
-                const video = document.getElementById('captureVideo'); video.srcObject = stream; video.hidden = false;
-                document.getElementById('takePhoto').hidden = false; document.getElementById('cancelCamera').hidden = false;
-                video.scrollIntoView({block:'center'});
-            } catch { status.textContent = 'Camera unavailable. Enable camera permission or use the device camera field.'; }
-        };
+
+    const fileFromNativeScan = async result => {
+        if (!result?.dataUrl) {
+            throw Error('The camera did not return a scan.');
+        }
+
+        const response = await fetch(result.dataUrl);
+        const blob = await response.blob();
+
+        return new File(
+            [blob],
+            result.name || 'asiye-scan.jpg',
+            {
+                type: result.mimeType || blob.type || 'image/jpeg'
+            }
+        );
+    };
+
+    const openWebCameraFallback = async key => {
+        stopCamera();
+        current = key;
+
+        stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+                facingMode:
+                    key === 'selfie'
+                        ? 'user'
+                        : 'environment'
+            },
+            audio: false
+        });
+
+        const video = document.getElementById('captureVideo');
+        video.srcObject = stream;
+        video.hidden = false;
+
+        document.getElementById('takePhoto').hidden = false;
+        document.getElementById('cancelCamera').hidden = false;
+
+        video.scrollIntoView({ block: 'center' });
+    };
+
+    const openScan = async key => {
+        status.textContent =
+            key === 'licence'
+                ? 'Opening licence scanner…'
+                : `Opening ${kinds[key] || 'camera scan'}…`;
+
+        try {
+            if (window.AsiyeNativeBridge) {
+                const result =
+                    await AsiyeNativeBridge.scanImage({
+                        purpose: `driver-enrollment-${key}`,
+                        facing:
+                            key === 'selfie'
+                                ? 'front'
+                                : 'rear'
+                    });
+
+                if (!result) {
+                    status.textContent =
+                        'Scan cancelled. You can try again.';
+                    return;
+                }
+
+                const file =
+                    await fileFromNativeScan(result);
+
+                savePhoto(key, file);
+
+                status.textContent =
+                    key === 'licence'
+                        ? 'Driver’s licence scan captured.'
+                        : `${kinds[key]} captured.`;
+
+                return;
+            }
+
+            await openWebCameraFallback(key);
+        } catch (error) {
+            console.warn('Image scan failed:', error);
+            status.textContent =
+                error?.message ||
+                'Camera unavailable. Check camera permission and try again.';
+        }
+    };
+
+    for (const [key, label] of Object.entries(kinds)) {
+        const row = document.createElement('div');
+        row.className = 'capture-row';
+
+        row.innerHTML = `
+            <strong>${label}</strong>
+            <p class="field-help">
+                ${key === 'selfie'
+                    ? 'Face the camera in good light and keep your full face visible.'
+                    : key === 'car'
+                        ? 'Keep the full vehicle visible inside the camera frame.'
+                        : 'Place the whole document inside the frame with readable details.'}
+            </p>
+            <button type="button" class="scan-action">
+                Scan now
+            </button>
+            <img
+                id="preview-${key}"
+                class="scan-preview"
+                alt="${label} preview"
+                hidden
+            >
+        `;
+
+        row.querySelector('button').onclick =
+            () => openScan(key);
+
         document.getElementById('captureFields').append(row);
     }
+
+    document.getElementById('scanLicence').onclick =
+        () => openScan('licence');
     for (let i=1;i<=3;i++) document.getElementById('referenceFields').insertAdjacentHTML('beforeend', `<div class="reference"><h3>Reference ${i}</h3><label>Full name<input name="refName${i}" maxlength="120" required></label><label>Phone number<input name="refPhone${i}" type="tel" maxlength="25" aria-describedby="refPhoneHelp${i}" required></label><p id="refPhoneHelp${i}" class="field-help">Example: 082 123 4567 or +27 82 123 4567.</p><label>Relationship<input name="refRelation${i}" maxlength="80" required></label></div>`);
     document.getElementById('cancelCamera').onclick = stopCamera;
     const steps = [...form.querySelectorAll('fieldset')];
@@ -41,7 +158,7 @@
         const target = document.getElementById('enrollmentReview');
         target.replaceChildren();
         const data = new FormData(form);
-        const rows = [['Name', data.get('fullName')], ['Phone', data.get('phone')], ['Vehicle registration',data.get('vehicleReg')], ['Photos','Selfie, car and ID/passport added'], ['Licence',data.get('licence')?.name], ['Bank',data.get('bank')], ['Account holder',data.get('accountHolder')], ['Account number','•••• ' + String(data.get('accountNumber')).slice(-4)], ['Branch code',data.get('branchCode')], ['Account type',data.get('accountType')]];
+        const rows = [['Name', data.get('fullName')], ['Phone', data.get('phone')], ['Vehicle registration',data.get('vehicleReg')], ['Scans','Selfie, vehicle and ID/passport captured'], ['Licence',licenceScan ? 'Scanned' : 'Not scanned'], ['Bank',data.get('bank')], ['Account holder',data.get('accountHolder')], ['Account number','•••• ' + String(data.get('accountNumber')).slice(-4)], ['Branch code',data.get('branchCode')], ['Account type',data.get('accountType')]];
         for (let i=1;i<=3;i++) rows.push([`Reference ${i}`,`${data.get(`refName${i}`)} · ${data.get(`refPhone${i}`)}`]);
         rows.forEach(([label,value])=>{ const row=document.createElement('p');const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(String(value || 'Not provided')));target.append(row); });
     };
@@ -68,11 +185,8 @@
             else if(input.name==='branchCode' && !/^[0-9]{6}$/.test(input.value)) input.setCustomValidity('Enter your bank’s six-digit branch code.');
             if(!input.checkValidity()) { showStep(index);showError(input.validationMessage);input.reportValidity();return false; }
         }
-        if(index===0 && Object.keys(kinds).some(key=>!photos[key])) { showStep(index);showError('Add all three photos: your selfie, your car, and your ID or passport.');return false; }
-        if(index===1) {
-            const file=form.elements.licence.files[0];
-            if(!await EnrollmentValidation.licenceType(file)) { showStep(index);showError('Choose your licence as a PDF, JPG, PNG or WebP file, no larger than 10 MB. Make sure all details are readable.');return false; }
-        }
+        if(index===0 && Object.keys(kinds).some(key=>!photos[key])) { showStep(index);showError('Scan all three items: your selfie, your vehicle, and your ID or passport.');return false; }
+        if(index===1 && !licenceScan) { showStep(index);showError('Scan your driver’s licence before continuing.');return false; }
         if(index===3 && new Set([1,2,3].map(i=>EnrollmentValidation.phoneKey(form.elements[`refPhone${i}`].value))).size!==3) { showStep(index);showError('Use three different reference phone numbers. The local and +27 versions of a number count as the same person.');return false; }
         return true;
     };
@@ -98,7 +212,18 @@
         if (!user || busy) return;
         try {
             const [application, approval] = await Promise.all(['driverEnrollments','driverApprovals'].map(node => firebase.database().ref(`${node}/${user.uid}`).once('value')));
-            if (approval.val()?.status === 'approved' && approval.val()?.version === 1) { status.textContent = 'Verified. Sign in to start driving.'; form.hidden = true; return; }
+            if (approval.val()?.status === 'approved' && Number(approval.val()?.version) === 1) {
+                status.textContent = 'Verified. Opening your driver dashboard…';
+                form.hidden = true;
+
+                const activated = await AsiyeEnrollment.activateApprovedDriver();
+
+                if (!activated) {
+                    status.textContent = 'Verified. We are linking your driver profile. Tap “Check verification status” to retry.';
+                }
+
+                return;
+            }
             if (application.exists()) { status.textContent = approval.val()?.status === 'rejected' ? 'Your application was not approved. Contact Asiye support for the review outcome.' : 'Application submitted. Waiting for verification. You cannot start driving yet.'; form.hidden = true; return; }
             status.textContent = 'Complete all sections below to apply.'; form.hidden = false;
         } catch (error) {
@@ -111,32 +236,61 @@
         }
     };
     document.getElementById('refreshEnrollment').onclick = check;
-    firebase.auth().onAuthStateChanged(value => { user = value; if (!user) { window.location.replace('./login.html'); return; } check(); });
+    let approvalRef = null;
+    let approvalListener = null;
+
+    firebase.auth().onAuthStateChanged(value => {
+        user = value;
+
+        if (approvalRef && approvalListener) {
+            approvalRef.off('value', approvalListener);
+            approvalRef = null;
+            approvalListener = null;
+        }
+
+        if (!user) {
+            window.location.replace('./login.html');
+            return;
+        }
+
+        approvalRef = firebase.database().ref(`driverApprovals/${user.uid}`);
+        approvalListener = approvalRef.on('value', snapshot => {
+            const approval = snapshot.val();
+
+            if (
+                approval?.status === 'approved' &&
+                Number(approval.version) === 1
+            ) {
+                check();
+            }
+        });
+
+        check();
+    });
     form.onsubmit = async event => {
         event.preventDefault(); if (!user || busy) return;
         if (step < steps.length-1) { await nextStep(); return; }
         for(let i=0;i<steps.length;i++) if(!await validateStep(i))return;
-        const data = new FormData(form), file = data.get('licence');
+        const data = new FormData(form);
         const references = EnrollmentValidation.references(data);
         if (new Set(Object.values(references).map(ref=>EnrollmentValidation.phoneKey(ref.phone))).size !== 3) { status.textContent='Please provide three different reference phone numbers.'; return; }
-        if (Object.keys(kinds).some(key=>!photos[key])) { status.textContent='Add your selfie, car photo, and ID/passport photo.'; return; }
-        const licenceType = await EnrollmentValidation.licenceType(file);
-        if (!licenceType) { status.textContent='Upload your licence as a PDF, JPG, PNG or WebP file, no larger than 10 MB.'; return; }
+        if (Object.keys(kinds).some(key=>!photos[key])) { status.textContent='Scan your selfie, vehicle, and ID/passport before submitting.'; return; }
+        if (!licenceScan) { status.textContent='Scan your driver’s licence before submitting.'; return; }
         busy = true; stopCamera(); document.getElementById('submitEnrollment').disabled = true;
         steps.forEach(panel=>panel.disabled=true);
         try {
             const documents = {};
             const submissionId = crypto.randomUUID();
-            for (const [key,blob] of Object.entries({...photos,licence:file})) {
-                status.textContent = `Uploading ${key}…`;
+            for (const [key,blob] of Object.entries({...photos,licence:licenceScan})) {
+                status.textContent = `Securing ${key} scan…`;
                 const path = `driverEnrollments/${user.uid}/${submissionId}/${key}`;
-                await firebase.storage().ref(path).put(blob,{contentType:key === 'licence' ? licenceType : blob.type}); documents[key]=path;
+                await firebase.storage().ref(path).put(blob,{contentType:blob.type || 'image/jpeg'}); documents[key]=path;
             }
             await firebase.database().ref(`driverEnrollments/${user.uid}`).set({ version:1, status:'pending', fullName:String(data.get('fullName')).trim(),phone:String(data.get('phone')).trim(),vehicleReg:String(data.get('vehicleReg')).trim(),documents,references,banking:{accountHolder:String(data.get('accountHolder')).trim(),bank:String(data.get('bank')).trim(),accountNumber:String(data.get('accountNumber')),branchCode:String(data.get('branchCode')),accountType:String(data.get('accountType'))},consent:true,submittedAt:firebase.database.ServerValue.TIMESTAMP });
             form.reset(); form.hidden = true; status.textContent='Application submitted. Waiting for verification. We will review your details before you can start driving.';
         } catch (error) {
             if (error.code === 'storage/unauthorized') {
-                status.textContent = 'Document upload is not permitted. The administrator must publish the enrollment Storage rules. Your entered details are still here.';
+                status.textContent = 'The scanned documents could not be submitted. Enrollment storage permissions must be enabled before you try again.';
             } else if (/permission.?denied/i.test(String(error.code || error.message))) {
                 status.textContent = 'The enrollment record could not be saved. Check Realtime Database enrollment permissions or refresh to see whether it was already submitted. Your entered details are still here.';
             } else {

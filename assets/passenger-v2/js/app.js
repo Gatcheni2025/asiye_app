@@ -8,6 +8,43 @@ window.ASIYE = window.ASIYE || {};
 
 ASIYE.ui = {
 
+    savedPlaceSummary(kind) {
+        const place =
+            ASIYE.places?.getSavedPlace?.(kind);
+
+        return place?.address ||
+            (kind === 'work'
+                ? 'Set your work address'
+                : 'Set your home address');
+    },
+
+    commuteShortcut(kind, label) {
+        const place =
+            ASIYE.places?.getSavedPlace?.(kind);
+
+        return `
+            <button
+                type="button"
+                class="commute-shortcut"
+                data-commute-place="${kind}"
+            >
+                <div class="commute-shortcut-icon">
+                    <i class="fas ${kind === 'work' ? 'fa-briefcase' : 'fa-house'}"></i>
+                </div>
+                <div class="commute-shortcut-copy">
+                    <strong>${this.escape(label)}</strong>
+                    <span>${this.escape(
+                        place?.address ||
+                        (kind === 'work'
+                            ? 'Set your work address'
+                            : 'Set your home address')
+                    )}</span>
+                </div>
+                <i class="fas fa-chevron-right commute-shortcut-arrow"></i>
+            </button>
+        `;
+    },
+
     /* ========================================================
        HOME
        ======================================================== */
@@ -125,6 +162,26 @@ ASIYE.ui = {
             </button>
 
 
+            <!-- WORK COMMUTE SHORTCUTS -->
+
+            <div class="home-commute-block">
+
+                <div class="section-label">
+                    Home & Work
+                </div>
+
+                <div class="home-commute-list">
+                    ${this.commuteShortcut('work', 'To Work')}
+                    ${this.commuteShortcut('home', 'To Home')}
+                </div>
+
+                <div class="commute-hint">
+                    Saved places make Asiye Work faster to book every day.
+                </div>
+
+            </div>
+
+
             <!-- SERVICES -->
 
             <div class="home-services">
@@ -159,7 +216,7 @@ ASIYE.ui = {
                     </div>
 
                     <span class="service-name">
-                        Club
+                        Asiye Work
                     </span>
 
                 </button>
@@ -243,6 +300,31 @@ ASIYE.ui = {
                     ASIYE.ui.renderDestinationSearch();
                 }
             );
+
+
+        container
+            .querySelectorAll('[data-commute-place]')
+            .forEach(button => {
+                button.addEventListener(
+                    'click',
+                    async () => {
+                        ASIYE.state.ui.preferredRideType = 'club4';
+                        await ASIYE.places.useSavedPlace(
+                            button.dataset.commutePlace
+                        );
+
+                        if (
+                            ASIYE.state.ui.savedPlaceTarget &&
+                            ASIYE.state.ui.sheet !== 'destination-search'
+                        ) {
+                            this.renderDestinationSearch();
+                            ASIYE.places.beginSavePlace(
+                                button.dataset.commutePlace
+                            );
+                        }
+                    }
+                );
+            });
 
 
         container
@@ -409,18 +491,43 @@ ASIYE.ui = {
 
             <div id="destinationSuggestions">
 
-                ${this.placeRow(
-                    'home',
-                    'Home',
-                    'Set your home address'
-                )}
-
-
-                ${this.placeRow(
-                    'work',
-                    'Work',
-                    'Set your work address'
-                )}
+                ${
+                    ASIYE.places?.getCommuteSuggestion?.() === 'work'
+                    ? this.placeRow(
+                        'work',
+                        'Work',
+                        'Recommended · ' + this.savedPlaceSummary('work'),
+                        'work'
+                    ) + this.placeRow(
+                        'home',
+                        'Home',
+                        this.savedPlaceSummary('home'),
+                        'home'
+                    )
+                    : ASIYE.places?.getCommuteSuggestion?.() === 'home'
+                    ? this.placeRow(
+                        'home',
+                        'Home',
+                        'Recommended · ' + this.savedPlaceSummary('home'),
+                        'home'
+                    ) + this.placeRow(
+                        'work',
+                        'Work',
+                        this.savedPlaceSummary('work'),
+                        'work'
+                    )
+                    : this.placeRow(
+                        'work',
+                        'Work',
+                        this.savedPlaceSummary('work'),
+                        'work'
+                    ) + this.placeRow(
+                        'home',
+                        'Home',
+                        this.savedPlaceSummary('home'),
+                        'home'
+                    )
+                }
 
 
                 ${this.placeRow(
@@ -443,6 +550,21 @@ ASIYE.ui = {
                     this.renderHome();
                 }
             );
+
+
+        container
+            .querySelectorAll('[data-saved-place]')
+            .forEach(button => {
+                button.addEventListener(
+                    'click',
+                    async () => {
+                        ASIYE.state.ui.preferredRideType = 'club4';
+                        await ASIYE.places.useSavedPlace(
+                            button.dataset.savedPlace
+                        );
+                    }
+                );
+            });
 
 
         const input =
@@ -485,7 +607,8 @@ ASIYE.ui = {
     placeRow(
         icon,
         name,
-        address
+        address,
+        savedKind = null
     ) {
 
         let iconClass =
@@ -508,7 +631,10 @@ ASIYE.ui = {
 
         return `
 
-            <button class="place-row">
+            <button
+                class="place-row"
+                ${savedKind ? `data-saved-place="${savedKind}"` : ''}
+            >
 
                 <div class="place-icon">
 
@@ -673,8 +799,8 @@ ASIYE.ui = {
 
             ${this.renderRideCard(
                 'club4',
-                'Asiye Club 4',
-                '4 passengers · Fare split between everyone',
+                'Asiye Work 4',
+                'To or from work · share with up to 4 passengers',
                 prices.club4,
                 'fa-users'
             )}
@@ -682,8 +808,8 @@ ASIYE.ui = {
 
             ${this.renderRideCard(
                 'club7',
-                'Asiye Club 7',
-                '7 passengers · Lowest daily commuter fare',
+                'Asiye Work 7',
+                'To or from work · share with up to 7 passengers',
                 prices.club7,
                 'fa-van-shuttle'
             )}
@@ -760,8 +886,8 @@ ASIYE.ui = {
 
 
                     /*
-                     * Club flow — collect schedule
-                     * first, then book.
+                     * Asiye Work flow — show the shared-ride
+                     * details, then confirm the booking.
                      */
 
                     if (
@@ -935,10 +1061,10 @@ ASIYE.ui = {
                 'Continue with Asiye Go',
 
             club4:
-                'Continue with Club 4',
+                'Continue with Asiye Work 4',
 
             club7:
-                'Continue with Club 7'
+                'Continue with Asiye Work 7'
         };
 
 
@@ -1009,7 +1135,7 @@ ASIYE.ui = {
                             margin-top:2px;
                         "
                     >
-                        Daily shared commute
+                        Shared daily work commute
                     </div>
 
                 </div>
@@ -1051,37 +1177,27 @@ ASIYE.ui = {
                 <div>
 
                     <strong>
-                        How Club works
+                        How Asiye Work works
                     </strong>
 
                     <p>
-                        Your fare is shared equally
-                        between ${config.capacity}
-                        passengers. The driver begins
-                        collection once all
-                        ${config.capacity} Club members
-                        have joined.
+                        Asiye Work groups passengers travelling a similar route to or from work. We start finding a nearby car while your group fills, and collection begins as soon as all ${config.capacity} passengers are confirmed.
                     </p>
 
                 </div>
 
             </div>
 
+            <div class="club-info-box" style="margin-top:12px;">
 
-            <label
-                class="club-field-label"
-                for="clubDepartureTime"
-            >
-                What time do you leave?
-            </label>
+                <i class="fas fa-clock"></i>
 
+                <div>
+                    <strong>Ready when your group is ready</strong>
+                    <p>No departure time needed. We start matching passengers and looking for a car immediately.</p>
+                </div>
 
-            <input
-                id="clubDepartureTime"
-                class="club-time-input"
-                type="time"
-                required
-            >
+            </div>
 
 
             <div class="club-wait-details">
@@ -1091,11 +1207,11 @@ ASIYE.ui = {
                     <i class="fas fa-clock"></i>
 
                     <span>
-                        Pickup window
+                        Estimated wait
                     </span>
 
                     <strong>
-                        ±${config.pickupWindowMinutes} min
+                        Up to ${config.maxWaitMinutes} min
                     </strong>
 
                 </div>
@@ -1124,7 +1240,7 @@ ASIYE.ui = {
                 style="margin-top:16px;"
             >
 
-                Find my Club
+                Find my Asiye Work
 
             </button>
 
@@ -1148,28 +1264,9 @@ ASIYE.ui = {
                 'click',
                 async () => {
 
-                    const time =
-
-                        document
-                            .getElementById(
-                                'clubDepartureTime'
-                            )
-                            ?.value;
-
-
-                    if (!time) {
-
-                        this.toast(
-                            'Choose your departure time.'
-                        );
-
-                        return;
-                    }
-
-
                     ASIYE.state.booking.club
                         .departureTime =
-                        time;
+                        'ASAP';
 
 
                     this.renderClubConfirmation();
@@ -1211,14 +1308,7 @@ ASIYE.ui = {
 
             : prices.club4;
 
-
-        const time =
-            ASIYE.state.booking
-                .club
-                .departureTime;
-
-
-        container.innerHTML = `
+container.innerHTML = `
 
             <div class="sheet-page-header">
 
@@ -1231,7 +1321,7 @@ ASIYE.ui = {
 
 
                 <h2 class="sheet-page-title">
-                    Confirm Club
+                    Confirm Asiye Work
                 </h2>
 
             </div>
@@ -1298,7 +1388,7 @@ ASIYE.ui = {
 
                 <div>
 
-                    <span>Club</span>
+                    <span>Asiye Work</span>
 
                     <strong>
                         ${config.capacity}
@@ -1310,10 +1400,10 @@ ASIYE.ui = {
 
                 <div>
 
-                    <span>Departure</span>
+                    <span>Collection</span>
 
                     <strong>
-                        ${time}
+                        As soon as your group is ready
                     </strong>
 
                 </div>
@@ -1354,13 +1444,13 @@ ASIYE.ui = {
                 <div>
 
                     <strong>
-                        Driver waits for the Club
+                        We start finding your car immediately
                     </strong>
 
                     <p>
-                        Collection only starts once
-                        all ${config.capacity}
-                        passenger seats are confirmed.
+                        Your car can fetch you as soon as all
+                        ${config.capacity} passenger seats are confirmed.
+                        Estimated wait is up to ${config.maxWaitMinutes} minutes.
                     </p>
 
                 </div>
@@ -1373,7 +1463,7 @@ ASIYE.ui = {
                 class="primary-button"
                 style="margin-top:16px;"
             >
-                Join Club · R${price}
+                Join Asiye Work · R${price}
             </button>
 
         `;
@@ -1412,23 +1502,13 @@ ASIYE.ui = {
             ASIYE.state.booking
                 .rideType;
 
-
-        const time =
-            ASIYE.state.booking
-                .club
-                .departureTime;
-
-
-        const button =
+const button =
             document.getElementById(
                 'bookClubNow'
             );
 
 
-        if (
-            !type ||
-            !time
-        ) {
+        if (!type) {
 
             return;
         }
@@ -1441,7 +1521,7 @@ ASIYE.ui = {
 
             button.innerHTML = `
                 <i class="fas fa-circle-notch fa-spin"></i>
-                Finding your Club
+                Finding your Asiye Work group
             `;
         }
 
@@ -1463,10 +1543,7 @@ ASIYE.ui = {
             const requestId =
 
                 await ASIYE.club.book(
-
-                    type,
-
-                    time
+                    type
                 );
 
 
@@ -1478,14 +1555,14 @@ ASIYE.ui = {
         } catch (error) {
 
             console.error(
-                'Club booking failed:',
+                'Asiye Work booking failed:',
                 error
             );
 
 
             this.toast(
                 error.message ||
-                'Could not create your Club ride.'
+                'Could not create your Asiye Work ride.'
             );
 
 
@@ -1495,7 +1572,7 @@ ASIYE.ui = {
                     false;
 
                 button.textContent =
-                    'Join Club';
+                    'Join Asiye Work';
             }
         }
     },
@@ -1534,6 +1611,44 @@ ASIYE.ui = {
                 );
 
 
+        const config =
+            ASIYE.club.getConfig(
+                request.clubMode
+            );
+
+
+        const maxWaitMinutes =
+            Number(
+                request.maxWaitMinutes ||
+                config.maxWaitMinutes ||
+                20
+            );
+
+
+        const createdAt =
+            Number(request.createdAt || 0);
+
+
+        const elapsedMinutes =
+            createdAt > 0
+            ? Math.max(
+                0,
+                Math.floor(
+                    (Date.now() - createdAt) /
+                    60000
+                )
+            )
+            : 0;
+
+
+        const estimatedWaitMinutes =
+            Math.max(
+                1,
+                maxWaitMinutes -
+                elapsedMinutes
+            );
+
+
         container.innerHTML = `
 
             <div class="club-waiting-header">
@@ -1546,9 +1661,9 @@ ASIYE.ui = {
                             request.clubMode ===
                             'club7'
                             ?
-                            'Asiye Club 7'
+                            'Asiye Work 7'
                             :
-                            'Asiye Club 4'
+                            'Asiye Work 4'
                         }
 
                     </div>
@@ -1558,9 +1673,9 @@ ASIYE.ui = {
                         ${
                             progress.ready
                             ?
-                            'Your Club is ready'
+                            'Your Asiye Work is ready'
                             :
-                            'Building your Club'
+                            'Building your Work ride'
                         }
 
                     </h2>
@@ -1622,14 +1737,11 @@ ASIYE.ui = {
                 <div>
 
                     <span>
-                        Departure
+                        Estimated wait
                     </span>
 
                     <strong>
-                        ${
-                            request.departureTime ||
-                            '—'
-                        }
+                        Up to ${estimatedWaitMinutes} min
                     </strong>
 
                 </div>
@@ -1666,11 +1778,11 @@ ASIYE.ui = {
 
                             ?
 
-                            'Finding your Club driver'
+                            'Finding your Asiye Work driver'
 
                             :
 
-                            'Driver collection has not started'
+                            'We’re finding you a car'
                         }
 
                     </strong>
@@ -1682,11 +1794,11 @@ ASIYE.ui = {
 
                             ?
 
-                            'Your Club is complete. We are now preparing collection.'
+                            'Your Asiye Work group is complete. We are now preparing collection.'
 
                             :
 
-                            `Collection begins once all ${progress.capacity} passengers are confirmed.`
+                            `In the meantime, we’re finding you a car to fetch you as soon as ${progress.capacity} passengers are confirmed. Hang in there — estimated wait is up to ${estimatedWaitMinutes} min.`
                         }
 
                     </p>
@@ -1708,7 +1820,7 @@ ASIYE.ui = {
                     id="cancelClubRide"
                     style="margin-top:12px;"
                 >
-                    Cancel Club
+                    Cancel Asiye Work
                 </button>
 
                 `
@@ -2028,6 +2140,21 @@ document.addEventListener(
             'commuterId',
             commuterId
         );
+
+
+        /*
+         * One-time safety setup.
+         * Existing passengers with a saved trusted contact continue
+         * immediately. New passengers must save one before using rides.
+         */
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'passenger'
+            })
+        ) {
+            return;
+        }
 
 
         /*
