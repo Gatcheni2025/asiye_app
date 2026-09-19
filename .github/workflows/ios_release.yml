@@ -35,6 +35,19 @@ jobs:
             exit 1
           fi
 
+      - name: Verify certificate repository access
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          AUTH="$(printf 'x-access-token:%s' "$GH_PAT" | base64 | tr -d '\n')"
+          if ! git -c http.extraheader="AUTHORIZATION: basic $AUTH" \
+            ls-remote https://github.com/Gatcheni2025/asiye-certs.git HEAD \
+            >/dev/null 2>&1; then
+            echo "::error::GH_PAT cannot access the private certificate repository Gatcheni2025/asiye-certs."
+            exit 1
+          fi
+          echo "Certificate repository access confirmed."
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
