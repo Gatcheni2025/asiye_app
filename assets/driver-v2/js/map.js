@@ -27,6 +27,9 @@ ASIYE_DRIVER.map = {
     routeGeometry:
         null,
 
+    followDriver:
+        true,
+
 
     /* ========================================================
        INITIALIZE
@@ -158,6 +161,21 @@ ASIYE_DRIVER.map = {
 
 
             this.instance.on(
+                'dragstart',
+                () => {
+                    this.followDriver = false;
+
+                    if (
+                        ASIYE_DRIVER.navigator
+                    ) {
+                        ASIYE_DRIVER.navigator.follow =
+                            false;
+                    }
+                }
+            );
+
+
+            this.instance.on(
                 'load',
                 () => {
 
@@ -256,13 +274,37 @@ ASIYE_DRIVER.map = {
 
 
         if (!this.driverMarker) {
-            this.driverMarker = AsiyeLiveCar.create(this.instance, [lng, lat], heading);
+            this.driverMarker = AsiyeLiveCar.create(
+                this.instance,
+                [lng, lat],
+                heading
+            );
         } else {
-            AsiyeLiveCar.move(this.driverMarker, [lng, lat], heading);
+            AsiyeLiveCar.move(
+                this.driverMarker,
+                [lng, lat],
+                heading
+            );
         }
-        if (!this.hasCenteredOnDriver) {
-            this.hasCenteredOnDriver = true;
-            this.instance.easeTo({ center: [lng, lat], zoom: 16, duration: 650 });
+
+        this.updateRoadAccess(
+            lat,
+            lng
+        );
+
+        /*
+         * Keep the live car centred whenever the driver has not
+         * deliberately panned away. Navigation mode owns the
+         * pitched/bearing camera while it is active.
+         */
+        if (
+            !ASIYE_DRIVER.navigator?.navigationMode &&
+            this.followDriver
+        ) {
+            this.followDriverTopView(
+                lat,
+                lng
+            );
         }
     },
 
@@ -296,9 +338,18 @@ ASIYE_DRIVER.map = {
         zoom = 16
     ) {
 
-        if (ASIYE_DRIVER.navigator?.target) {
-            ASIYE_DRIVER.navigator.follow = true;
-            ASIYE_DRIVER.navigator.update(ASIYE_DRIVER.state.location);
+        this.followDriver = true;
+
+        if (
+            ASIYE_DRIVER.navigator?.navigationMode
+        ) {
+            ASIYE_DRIVER.navigator.follow =
+                true;
+
+            ASIYE_DRIVER.navigator.update(
+                ASIYE_DRIVER.state.location
+            );
+
             return;
         }
 
@@ -336,9 +387,78 @@ ASIYE_DRIVER.map = {
             zoom:
                 zoom,
 
+            pitch:
+                0,
+
+            bearing:
+                0,
+
+            padding:
+                0,
+
             duration:
                 650
         });
+    },
+
+
+    followDriverTopView(
+        latitude,
+        longitude,
+        zoom = 16
+    ) {
+
+        if (
+            !this.instance ||
+            !Number.isFinite(latitude) ||
+            !Number.isFinite(longitude)
+        ) {
+            return;
+        }
+
+        this.instance.easeTo({
+            center: [
+                longitude,
+                latitude
+            ],
+            zoom,
+            pitch: 0,
+            bearing: 0,
+            padding: 0,
+            duration: 650,
+            essential: true
+        });
+    },
+
+
+    updateRoadAccess(
+        latitude,
+        longitude
+    ) {
+
+        if (
+            !window.AsiyeRoadGuidance ||
+            !this.instance
+        ) {
+            return;
+        }
+
+        if (!this.routeGeometry) {
+            AsiyeRoadGuidance.clear(
+                this.instance
+            );
+
+            return;
+        }
+
+        AsiyeRoadGuidance.update(
+            this.instance,
+            [
+                Number(longitude),
+                Number(latitude)
+            ],
+            this.routeGeometry
+        );
     },
 
 
@@ -475,6 +595,12 @@ ASIYE_DRIVER.map = {
 
             this.routeGeometry =
                 route.geometry;
+
+
+            this.updateRoadAccess(
+                driverLocation.latitude,
+                driverLocation.longitude
+            );
 
 
             this.drawRoute(
@@ -848,6 +974,8 @@ ASIYE_DRIVER.map = {
 
     fitCurrentRoute() {
 
+        this.followDriver = false;
+
         if (ASIYE_DRIVER.navigator?.target) ASIYE_DRIVER.navigator.follow = false;
 
         if (
@@ -918,6 +1046,12 @@ ASIYE_DRIVER.map = {
 
         this.routeGeometry =
             null;
+
+
+        window.AsiyeRoadGuidance
+            ?.clear?.(
+                this.instance
+            );
 
 
         ASIYE_DRIVER.clearNavigation?.();
