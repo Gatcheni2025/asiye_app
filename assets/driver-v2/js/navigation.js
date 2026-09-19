@@ -55,12 +55,13 @@ ASIYE_DRIVER.navigator = {
 
         if (!button) return;
 
-        button.classList.toggle(
-            'active',
-            this.navigationMode
-        );
+        button.classList
+            ?.toggle?.(
+                'active',
+                this.navigationMode
+            );
 
-        button.setAttribute(
+        button.setAttribute?.(
             'aria-label',
             this.navigationMode
                 ? 'Exit navigation'
