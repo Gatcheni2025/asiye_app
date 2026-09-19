@@ -15,6 +15,30 @@ window.AsiyeNativeBridge = {
         return null;
     },
 
+    notify(action, payload = {}) {
+        const channel = this._channel();
+
+        if (!channel) return false;
+
+        try {
+            channel.postMessage(
+                JSON.stringify({
+                    action,
+                    ...payload
+                })
+            );
+
+            return true;
+        } catch (error) {
+            console.warn(
+                'Native bridge notification failed:',
+                error
+            );
+
+            return false;
+        }
+    },
+
     request(action, payload = {}) {
         return new Promise((resolve, reject) => {
             const channel = this._channel();
