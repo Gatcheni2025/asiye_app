@@ -593,13 +593,17 @@ ASIYE.booking = {
                             .set({
 
                                 type:
-                                    'ride_request',
+                                    request.type === 'delivery'
+                                        ? 'delivery_request'
+                                        : 'ride_request',
 
                                 requestId:
                                     requestId,
 
                                 rideType:
-                                    'go',
+                                    request.type === 'delivery'
+                                        ? 'delivery'
+                                        : 'go',
 
                                 commuterId:
                                     request.commuterId,
@@ -950,6 +954,12 @@ ASIYE.booking = {
              * GO
              */
 
+            const cancelledAt =
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP;
+
             await firebase
                 .database()
                 .ref(
@@ -961,12 +971,26 @@ ASIYE.booking = {
                         'cancelled_by_commuter',
 
                     cancelledAt:
-
-                        firebase
-                            .database
-                            .ServerValue
-                            .TIMESTAMP
+                        cancelledAt
                 });
+
+
+            if (
+                request.type ===
+                'delivery'
+            ) {
+                await firebase
+                    .database()
+                    .ref(
+                        `delivery_requests/${requestId}`
+                    )
+                    .update({
+                        status:
+                            'cancelled_by_commuter',
+                        cancelledAt:
+                            cancelledAt
+                    });
+            }
         }
 
 
