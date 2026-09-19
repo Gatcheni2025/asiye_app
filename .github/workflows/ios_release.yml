@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout app
         uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Validate iOS release secrets
         env:
@@ -65,7 +67,7 @@ jobs:
           export GIT_USERNAME=Gatcheni2025
           export GIT_PASSWORD="$GH_PAT"
 
-          if ! git ls-remote \
+          if ! git -c http.https://github.com/.extraheader= ls-remote \
             https://github.com/Gatcheni2025/asiye-certs.git HEAD \
             >/dev/null 2>&1; then
             echo "::error::GitHub API access succeeded, but Git HTTPS authentication still failed."
@@ -118,6 +120,8 @@ jobs:
           export GIT_TERMINAL_PROMPT=0
           export GIT_USERNAME=Gatcheni2025
           export GIT_PASSWORD="$GH_PAT"
+
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
 
           fastlane beta
 
