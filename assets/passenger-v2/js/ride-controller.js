@@ -409,6 +409,11 @@ ASIYE.ride = {
         if (!container) return;
 
 
+        const isDelivery =
+            request.type ===
+            'delivery';
+
+
         container.innerHTML = `
 
             <div class="asiye-row">
@@ -417,21 +422,27 @@ ASIYE.ride = {
                     asiye-status-icon
                     asiye-search-icon
                 ">
-                    <i class="fas fa-car-side"></i>
+                    <i class="fas ${isDelivery ? 'fa-box' : 'fa-car-side'}"></i>
                 </div>
 
                 <div>
 
                     <div class="home-kicker">
-                        Asiye Go
+                        ${isDelivery
+                            ? 'Asiye Delivery'
+                            : 'Asiye Go'}
                     </div>
 
                     <h2 class="sheet-page-title">
-                        Finding your driver
+                        ${isDelivery
+                            ? 'Finding your delivery driver'
+                            : 'Finding your driver'}
                     </h2>
 
                     <div class="home-greeting">
-                        Connecting you with nearby Asiye drivers.
+                        ${isDelivery
+                            ? 'Connecting your parcel with a nearby Asiye driver.'
+                            : 'Connecting you with nearby Asiye drivers.'}
                     </div>
 
                 </div>
@@ -464,6 +475,31 @@ ASIYE.ride = {
                 </strong>
 
             </div>
+
+            ${isDelivery
+                ? `
+                    <div class="pickup-pin" style="margin-top:12px;">
+                        <div class="pickup-pin-heading">
+                            <span>Parcel collection PIN</span>
+                        </div>
+                        <div class="pickup-pin-digits">
+                            ${Array.from(
+                                String(
+                                    request.pickupPin ||
+                                    '----'
+                                )
+                            ).map(
+                                digit =>
+                                    `<span>${ASIYE.ui.escape(digit)}</span>`
+                            ).join('')}
+                        </div>
+                        <p>
+                            Give this PIN to the driver only when
+                            they collect your parcel.
+                        </p>
+                    </div>
+                `
+                : ''}
 
             <button
                 id="cancelCurrentRideBtn"
@@ -513,6 +549,11 @@ ASIYE.ride = {
         }
 
 
+        const isDelivery =
+            request.type ===
+            'delivery';
+
+
         container.innerHTML = `
 
             <div class="asiye-row">
@@ -533,23 +574,27 @@ ASIYE.ride = {
 
                     <div class="home-kicker">
 
-                        Asiye Go
+                        ${isDelivery
+                            ? 'Asiye Delivery'
+                            : 'Asiye Go'}
 
                     </div>
 
 
                     <h2 class="sheet-page-title">
 
-                        Your driver is completing another ride
+                        ${isDelivery
+                            ? 'Your delivery driver is finishing another trip'
+                            : 'Your driver is completing another ride'}
 
                     </h2>
 
 
                     <div class="home-greeting">
 
-                        You're in the queue.
-                        The driver will receive your booking
-                        as soon as the current trip is completed.
+                        ${isDelivery
+                            ? 'Your parcel request is queued. The driver will receive it as soon as the current trip is completed.'
+                            : "You're in the queue. The driver will receive your booking as soon as the current trip is completed."}
 
                     </div>
 
@@ -871,19 +916,27 @@ ASIYE.ride = {
             request.type === 'club';
 
 
+        const isDelivery =
+            request.type ===
+            'delivery';
+
+
         container.innerHTML = `
 
             <div class="home-kicker">
                 ${
                     isClub
                     ? 'Asiye Work'
-                    : 'Asiye Go'
+                    : isDelivery
+                        ? 'Asiye Delivery'
+                        : 'Asiye Go'
                 }
             </div>
 
             <h2 class="home-title">
-                ${ASIYE.ui.escape(name)}
-                accepted your ride
+                ${isDelivery
+                    ? `${ASIYE.ui.escape(name)} accepted your delivery`
+                    : `${ASIYE.ui.escape(name)} accepted your ride`}
             </h2>
 
             <div class="home-greeting">
@@ -897,7 +950,9 @@ ASIYE.ride = {
 
                     :
 
-                    'Your driver is preparing to come to you.'
+                    isDelivery
+                        ? 'Your driver is preparing to collect the parcel from you.'
+                        : 'Your driver is preparing to come to you.'
                 }
 
             </div>
@@ -916,6 +971,9 @@ ASIYE.ride = {
         const container = document.getElementById('sheetContent');
         if (!container) return;
         const escape = value => ASIYE.ui.escape(value);
+        const isDelivery =
+            request.type ===
+            'delivery';
         const passenger = this.getPassengerData(request);
         const pin = String(passenger.pickupPin ?? request.pickupPin ?? '----');
         const name = request.driverName || 'Your driver';
@@ -930,9 +988,45 @@ ASIYE.ride = {
         container.innerHTML = `
             <section class="pickup-card ${arrived ? 'pickup-card--arrived' : ''}">
                 <header class="pickup-heading">
-                    <span class="pickup-status"><span></span>${arrived ? 'Driver arrived' : 'Driver on the way'}</span>
-                    <h2>${arrived ? 'Your driver is here' : `${escape(name)} is coming`}</h2>
-                    <p ${arrived ? '' : 'id="passengerDriverEta"'}>${arrived ? 'Meet your driver at the pickup point.' : 'Your driver is heading to your pickup.'}</p>
+                    <span class="pickup-status"><span></span>${
+                        isDelivery
+                            ? (
+                                arrived
+                                    ? 'Driver ready to collect'
+                                    : 'Delivery driver on the way'
+                            )
+                            : (
+                                arrived
+                                    ? 'Driver arrived'
+                                    : 'Driver on the way'
+                            )
+                    }</span>
+                    <h2>${
+                        isDelivery
+                            ? (
+                                arrived
+                                    ? 'Your parcel driver is here'
+                                    : `${escape(name)} is coming to collect`
+                            )
+                            : (
+                                arrived
+                                    ? 'Your driver is here'
+                                    : `${escape(name)} is coming`
+                            )
+                    }</h2>
+                    <p ${arrived ? '' : 'id="passengerDriverEta"'}>${
+                        isDelivery
+                            ? (
+                                arrived
+                                    ? 'Meet the driver at the parcel pickup point.'
+                                    : 'Your driver is heading to collect your parcel.'
+                            )
+                            : (
+                                arrived
+                                    ? 'Meet your driver at the pickup point.'
+                                    : 'Your driver is heading to your pickup.'
+                            )
+                    }</p>
                 </header>
                 <div class="pickup-progress" aria-hidden="true"><span></span><span></span><span></span></div>
                 <div class="pickup-driver">
@@ -943,9 +1037,33 @@ ASIYE.ride = {
                     <div class="pickup-vehicle"><span>Vehicle plate</span><strong>${escape(request.vehicleReg || 'Not available')}</strong></div>
                 </div>
                 <div class="pickup-pin">
-                    <div class="pickup-pin-heading"><span>${arrived ? 'Give your driver this PIN' : 'Your pickup PIN'}</span>${icon('safety')}</div>
+                    <div class="pickup-pin-heading"><span>${
+                        isDelivery
+                            ? (
+                                arrived
+                                    ? 'Give this parcel PIN to the driver'
+                                    : 'Your parcel collection PIN'
+                            )
+                            : (
+                                arrived
+                                    ? 'Give your driver this PIN'
+                                    : 'Your pickup PIN'
+                            )
+                    }</span>${icon('safety')}</div>
                     <div class="pickup-pin-digits" aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
-                    <p>${arrived ? 'Share when you are ready to start your ride.' : 'Share with your driver when they arrive.'}</p>
+                    <p>${
+                        isDelivery
+                            ? (
+                                arrived
+                                    ? 'Share only when the driver has the correct parcel.'
+                                    : 'Share with the driver when they arrive to collect the parcel.'
+                            )
+                            : (
+                                arrived
+                                    ? 'Share when you are ready to start your ride.'
+                                    : 'Share with your driver when they arrive.'
+                            )
+                    }</p>
                 </div>
                 <div class="pickup-actions">
                     <button type="button" data-pickup-action="call">${icon('call')}<span>Call</span></button>
@@ -999,6 +1117,11 @@ ASIYE.ride = {
             );
 
 
+        const isDelivery =
+            request.type ===
+            'delivery';
+
+
         container.innerHTML = `
 
             <div class="passenger-transit-card"><div class="asiye-between">
@@ -1006,11 +1129,15 @@ ASIYE.ride = {
                 <div>
 
                     <div class="home-kicker">
-                        Trip underway
+                        ${isDelivery
+                            ? 'Delivery underway'
+                            : 'Trip underway'}
                     </div>
 
                     <h2 class="home-title">
-                        On the way
+                        ${isDelivery
+                            ? 'Your parcel is on the way'
+                            : 'On the way'}
                     </h2>
 
                     <div class="home-greeting">
@@ -1052,7 +1179,9 @@ ASIYE.ride = {
         document.getElementById('inTransitChat')?.addEventListener('click', () => AsiyeTripChat.open(request, this.requestId));
         document.getElementById('transitSafety')?.addEventListener('click', () => AsiyePages.open('safety'));
         document.getElementById('transitShare')?.addEventListener('click', async () => {
-            const text = `I'm on an Asiye ride to ${request.destination || request.destinationName || 'my destination'}. Driver: ${request.driverName || 'Not available'}. Vehicle: ${request.vehicleReg || 'Not available'}.`;
+            const text = isDelivery
+                ? `My Asiye parcel is on the way to ${request.destination || request.destinationName || 'the delivery address'}. Driver: ${request.driverName || 'Not available'}. Vehicle: ${request.vehicleReg || 'Not available'}.`
+                : `I'm on an Asiye ride to ${request.destination || request.destinationName || 'my destination'}. Driver: ${request.driverName || 'Not available'}. Vehicle: ${request.vehicleReg || 'Not available'}.`;
             try {
                 if (navigator.share) await navigator.share({ title: 'My Asiye trip', text });
                 else { await navigator.clipboard.writeText(text); ASIYE.ui.toast('Trip details copied.'); }
@@ -1066,6 +1195,11 @@ ASIYE.ride = {
        ======================================================== */
 
     renderCompleted(request) {
+
+        const isDelivery =
+            request.type ===
+            'delivery';
+
 
         const passenger =
             this.getPassengerData(
@@ -1106,13 +1240,19 @@ ASIYE.ride = {
                 </div>
 
                 <h2 class="home-title">
-                    You've arrived
+                    ${isDelivery
+                        ? 'Delivery complete'
+                        : "You've arrived"}
                 </h2>
 
                 <div class="home-greeting">
-                    ${ASIYE.ui.escape(
-                        request.destination
-                    )}
+                    ${
+                        isDelivery
+                            ? `Parcel delivered to ${ASIYE.ui.escape(request.destination || 'the recipient')}`
+                            : ASIYE.ui.escape(
+                                request.destination
+                            )
+                    }
                 </div>
 
                 <div class="asiye-complete-price">
