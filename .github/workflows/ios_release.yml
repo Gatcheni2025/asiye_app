@@ -54,33 +54,9 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep '^version: 11.0.21+291
+          grep '^version: 11.0.21+291$' pubspec.yaml
 
-      - name: Build, sign and upload to TestFlight
-        working-directory: ./ios
-        env:
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          GH_PAT: ${{ secrets.GH_PAT }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: |
-          export MATCH_GIT_BASIC_AUTHORIZATION="$(printf 'x-access-token:%s' "$GH_PAT" | base64 | tr -d '\n')"
-          fastlane beta
-
-      - name: Upload signed IPA artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: asiye-11.0.21-ios
-          path: |
-            ios/build/ipa/*.ipa
-            ios/*.ipa
-          if-no-files-found: warn
-          retention-days: 30
- pubspec.yaml
-
-      - name: Build, sign and upload to TestFlight
+      - name: Build, verify and upload to TestFlight
         working-directory: ./ios
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
