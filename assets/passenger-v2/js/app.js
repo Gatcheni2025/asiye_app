@@ -2314,5 +2314,37 @@ document.addEventListener(
         console.log(
             '✅ Asiye Passenger V2 started'
         );
+
+
+        const signalReady = () => {
+            window.AsiyeNativeBridge
+                ?.notify?.(
+                    'hidePreloader'
+                );
+        };
+
+
+        if (
+            ASIYE.map?.instance?.loaded?.()
+        ) {
+            requestAnimationFrame(
+                () => requestAnimationFrame(
+                    signalReady
+                )
+            );
+        } else if (
+            ASIYE.map?.instance?.once
+        ) {
+            ASIYE.map.instance.once(
+                'load',
+                () => requestAnimationFrame(
+                    () => requestAnimationFrame(
+                        signalReady
+                    )
+                )
+            );
+        } else {
+            signalReady();
+        }
     }
 );
