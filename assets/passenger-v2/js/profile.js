@@ -143,38 +143,27 @@ ASIYE.profile = {
 
         if (statusEl) statusEl.textContent = 'Saving profile picture…';
 
-        const formData = new FormData();
-        formData.append('file', blob, 'passenger-profile.jpg');
-        formData.append('api_key', this.uploadApiKey);
-        formData.append('userId', passengerId);
-
-        const response = await fetch(this.uploadEndpoint, {
-            method: 'POST',
-            body: formData
-        });
-
-        let data = null;
-
-        try {
-            data = await response.json();
-        } catch (_) {
-            throw new Error('The image server returned an invalid response.');
-        }
-
-        const url =
-            data?.url ||
-            data?.file_url ||
-            data?.fileUrl ||
-            data?.location ||
-            '';
-
-        if (!response.ok || !url) {
+        if (!window.AsiyePhpImageUpload) {
             throw new Error(
-                data?.message ||
-                data?.error ||
-                'Profile picture upload failed.'
+                'Image upload service is unavailable.'
             );
         }
+
+        const uploaded =
+            await AsiyePhpImageUpload.upload(
+                blob,
+                {
+                    userId:
+                        passengerId,
+                    purpose:
+                        'passenger-profile',
+                    filename:
+                        'passenger-profile.jpg'
+                }
+            );
+
+        const url =
+            uploaded.url;
 
         if (statusEl) statusEl.textContent = 'Saving profile picture…';
 
@@ -214,28 +203,16 @@ ASIYE.profile = {
     },
 
     async _fileFromScan(result) {
-        if (!result?.dataUrl) {
+        if (!window.AsiyePhpImageUpload) {
             throw new Error(
-                'The camera did not return a profile scan.'
+                'Image upload service is unavailable.'
             );
         }
 
-        const response =
-            await fetch(result.dataUrl);
-
-        const blob =
-            await response.blob();
-
-        return new File(
-            [blob],
-            result.name || 'profile-scan.jpg',
-            {
-                type:
-                    result.mimeType ||
-                    blob.type ||
-                    'image/jpeg'
-            }
-        );
+        return AsiyePhpImageUpload
+            .toBlob(
+                result
+            );
     },
 
     bindAccount(container) {
