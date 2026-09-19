@@ -1,16 +1,17 @@
 require 'base64'
+require 'fileutils'
+require 'shellwords'
 
 default_platform(:ios)
 
 platform :ios do
-  desc "Build, sign and upload the current Flutter release to TestFlight"
+  desc "Build, verify, sign and upload the current Flutter release to TestFlight"
   lane :beta do
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
 
     setup_ci
 
-    # 1. Fetch App Store signing certificate/profile from the private match repo.
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
@@ -19,7 +20,6 @@ platform :ios do
       readonly: true
     )
 
-    # 2. Force the Runner target to use the match App Store profile.
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -28,9 +28,9 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 3. Read Flutter marketing version/build and create a CI-safe build number.
     project_root = File.expand_path("../..", __dir__)
-    version_match = File.read(File.join(project_root, "pubspec.yaml")).match(/^version:\s+([^+]+)\+(\d+)/)
+    pubspec_path = File.join(project_root, "pubspec.yaml")
+    version_match = File.read(pubspec_path).match(/^version:\s+([^+]+)\+(\d+)/)
 
     UI.user_error!("Could not read Flutter version from pubspec.yaml") unless version_match
 
@@ -39,22 +39,22 @@ platform :ios do
     run_number = ENV.fetch("GITHUB_RUN_NUMBER", "0").to_i
     run_attempt = ENV.fetch("GITHUB_RUN_ATTEMPT", "1").to_i
 
-    # Keep the checked-in Flutter build number as the floor, while ensuring
-    # reruns cannot reuse an App Store Connect build number.
+    # Use a unique monotonically increasing CI build while keeping pubspec as the floor.
     ci_build_number = current_build_number + (run_number * 10) + run_attempt
     build_number = [current_build_number, ci_build_number].max
 
-    UI.message("Building Asiye iOS #{version_name} (#{build_number})")
+    UI.message("Preparing Asiye iOS #{version_name} (#{build_number})")
 
-    # 4. Generate Flutter iOS release output before Xcode signing/archive.
+    # Generate Flutter iOS build settings/assets using the exact release version.
     Dir.chdir(project_root) do
       sh(
         "flutter build ios --release --no-codesign " \
-        "--build-name=#{version_name} --build-number=#{build_number}"
+        "--build-name=#{Shellwords.escape(version_name)} " \
+        "--build-number=#{Shellwords.escape(build_number.to_s)}"
       )
     end
 
-    # 5. Archive and export a signed App Store IPA.
+    # Archive with the same version passed explicitly to Xcode.
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
@@ -63,7 +63,14 @@ platform :ios do
       output_directory: "build/ipa",
       output_name: "Asiye-#{version_name}-#{build_number}.ipa",
       clean: true,
-      xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye'",
+      xcargs: [
+        "FLUTTER_BUILD_NAME=#{version_name}",
+        "FLUTTER_BUILD_NUMBER=#{build_number}",
+        "MARKETING_VERSION=#{version_name}",
+        "CURRENT_PROJECT_VERSION=#{build_number}",
+        "DEVELOPMENT_TEAM=AC775BUGG5",
+        "PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye'"
+      ].join(" "),
       export_options: {
         provisioningProfiles: {
           "com.asiyeapp.asiye" => "match AppStore com.asiyeapp.asiye"
@@ -71,7 +78,40 @@ platform :ios do
       }
     )
 
-    # 6. Build App Store Connect API key from the encrypted GitHub secret.
+    # Verify the actual IPA metadata before sending anything to Apple.
+    verify_dir = File.expand_path("build/ipa_verify", __dir__)
+    FileUtils.rm_rf(verify_dir)
+    FileUtils.mkdir_p(verify_dir)
+
+    sh("unzip -q -o #{Shellwords.escape(ipa_path)} -d #{Shellwords.escape(verify_dir)}")
+
+    info_plist = Dir[File.join(verify_dir, "Payload", "*.app", "Info.plist")].first
+    UI.user_error!("Could not find Info.plist inside the generated IPA") unless info_plist
+
+    ipa_version = sh(
+      "/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' #{Shellwords.escape(info_plist)}",
+      log: false
+    ).strip
+
+    ipa_build = sh(
+      "/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' #{Shellwords.escape(info_plist)}",
+      log: false
+    ).strip
+
+    UI.message("Verified IPA metadata: version #{ipa_version}, build #{ipa_build}")
+
+    if ipa_version != version_name
+      UI.user_error!(
+        "Refusing upload: IPA version is #{ipa_version}, expected #{version_name}"
+      )
+    end
+
+    if ipa_build != build_number.to_s
+      UI.user_error!(
+        "Refusing upload: IPA build is #{ipa_build}, expected #{build_number}"
+      )
+    end
+
     key_secret = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].to_s.strip
     UI.user_error!("APP_STORE_CONNECT_PRIVATE_KEY is empty") if key_secret.empty?
 
@@ -94,7 +134,6 @@ platform :ios do
       in_house: false
     )
 
-    # 7. Upload the signed IPA to TestFlight.
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
