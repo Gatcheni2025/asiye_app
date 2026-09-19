@@ -1,5 +1,5 @@
 name: Android Release APK and AAB
-# Release 11.0.21+291
+# Release 11.0.22+292
 
 on:
   workflow_dispatch:
@@ -71,7 +71,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep '^version: 11.0.21+291$' pubspec.yaml
+          grep '^version: 11.0.22+292$' pubspec.yaml
 
       - name: Analyze Flutter code
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
@@ -95,8 +95,9 @@ jobs:
           test -n "$AAPT"
 
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='291'"
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.21'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='292'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.22'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "targetSdkVersion:'36'"
 
       - name: Verify AAB signature
         run: jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
@@ -104,7 +105,7 @@ jobs:
       - name: Upload Android release files
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.21-build-291-android
+          name: asiye-11.0.22-build-292-android
           path: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/bundle/release/app-release.aab
