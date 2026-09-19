@@ -91,7 +91,14 @@ jobs:
         run: gem install fastlane cocoapods --no-document
 
       - name: Install Flutter dependencies
-        run: flutter pub get
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter pub get
+
+      - name: Install iOS CocoaPods dependencies
+        working-directory: ./ios
+        run: |
+          pod install --repo-update
 
       - name: Verify release version
         run: |
