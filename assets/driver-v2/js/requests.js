@@ -123,6 +123,7 @@ ASIYE_DRIVER.requests = {
                         'passenger',
                         'club',
                         'club_request',
+                        'delivery_request',
                         'request'
                     ];
 
