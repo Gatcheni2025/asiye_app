@@ -28,20 +28,16 @@
     };
 
     const fileFromNativeScan = async result => {
-        if (!result?.dataUrl) {
-            throw Error('The camera did not return a scan.');
+        if (!window.AsiyePhpImageUpload) {
+            throw Error(
+                'Image upload service is unavailable.'
+            );
         }
 
-        const response = await fetch(result.dataUrl);
-        const blob = await response.blob();
-
-        return new File(
-            [blob],
-            result.name || 'asiye-scan.jpg',
-            {
-                type: result.mimeType || blob.type || 'image/jpeg'
-            }
-        );
+        return AsiyePhpImageUpload
+            .toBlob(
+                result
+            );
     };
 
     const openWebCameraFallback = async key => {
@@ -279,14 +275,109 @@
         busy = true; stopCamera(); document.getElementById('submitEnrollment').disabled = true;
         steps.forEach(panel=>panel.disabled=true);
         try {
-            const documents = {};
-            const submissionId = crypto.randomUUID();
-            for (const [key,blob] of Object.entries({...photos,licence:licenceScan})) {
-                status.textContent = `Securing ${key} scan…`;
-                const path = `driverEnrollments/${user.uid}/${submissionId}/${key}`;
-                await firebase.storage().ref(path).put(blob,{contentType:blob.type || 'image/jpeg'}); documents[key]=path;
+            if (!window.AsiyePhpImageUpload) {
+                throw Error(
+                    'Image upload service is unavailable.'
+                );
             }
-            await firebase.database().ref(`driverEnrollments/${user.uid}`).set({ version:1, status:'pending', fullName:String(data.get('fullName')).trim(),phone:String(data.get('phone')).trim(),vehicleReg:String(data.get('vehicleReg')).trim(),documents,references,banking:{accountHolder:String(data.get('accountHolder')).trim(),bank:String(data.get('bank')).trim(),accountNumber:String(data.get('accountNumber')),branchCode:String(data.get('branchCode')),accountType:String(data.get('accountType'))},consent:true,submittedAt:firebase.database.ServerValue.TIMESTAMP });
+
+            const documents = {};
+
+            for (
+                const [key, blob]
+                of Object.entries({
+                    ...photos,
+                    licence:
+                        licenceScan
+                })
+            ) {
+                status.textContent =
+                    `Uploading ${key} scan…`;
+
+                const uploaded =
+                    await AsiyePhpImageUpload.upload(
+                        blob,
+                        {
+                            userId:
+                                user.uid,
+                            purpose:
+                                `driver-enrollment-${key}`,
+                            filename:
+                                `driver-${key}.jpg`
+                        }
+                    );
+
+                documents[key] =
+                    uploaded.url;
+            }
+
+            await firebase
+                .database()
+                .ref(
+                    `driverEnrollments/${user.uid}`
+                )
+                .set({
+                    version: 1,
+                    status: 'pending',
+                    fullName:
+                        String(
+                            data.get('fullName')
+                        ).trim(),
+                    phone:
+                        String(
+                            data.get('phone')
+                        ).trim(),
+                    vehicleReg:
+                        String(
+                            data.get('vehicleReg')
+                        ).trim(),
+                    profile_picture_url:
+                        documents.selfie ||
+                        '',
+                    vehiclePhoto:
+                        documents.car ||
+                        '',
+                    documents,
+                    references,
+                    banking: {
+                        accountHolder:
+                            String(
+                                data.get(
+                                    'accountHolder'
+                                )
+                            ).trim(),
+                        bank:
+                            String(
+                                data.get(
+                                    'bank'
+                                )
+                            ).trim(),
+                        accountNumber:
+                            String(
+                                data.get(
+                                    'accountNumber'
+                                )
+                            ),
+                        branchCode:
+                            String(
+                                data.get(
+                                    'branchCode'
+                                )
+                            ),
+                        accountType:
+                            String(
+                                data.get(
+                                    'accountType'
+                                )
+                            )
+                    },
+                    consent: true,
+                    submittedAt:
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+                });
             form.reset(); form.hidden = true; status.textContent='Application submitted. Waiting for verification. We will review your details before you can start driving.';
         } catch (error) {
             if (error.code === 'storage/unauthorized') {
