@@ -365,9 +365,17 @@ ASIYE.ui = {
                 'click',
                 () => {
 
-                    ASIYE.ui.toast(
-                        'Parcel service will be connected next.'
-                    );
+                    if (
+                        ASIYE.parcels &&
+                        typeof ASIYE.parcels.open ===
+                            'function'
+                    ) {
+                        ASIYE.parcels.open();
+                    } else {
+                        ASIYE.ui.toast(
+                            'Delivery service is loading. Please try again.'
+                        );
+                    }
                 }
             );
 
