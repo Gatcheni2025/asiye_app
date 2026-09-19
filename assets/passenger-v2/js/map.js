@@ -25,6 +25,10 @@ ASIYE.map = {
 
     nearbyDriverMarkers: new Map(),
 
+    routeGeometry: null,
+
+    followUser: true,
+
 
     init() {
 
@@ -276,6 +280,72 @@ ASIYE.map = {
 
             this.userMarker.setLngLat([lng, lat]);
         }
+
+
+        this.updateRoadAccess(
+            lat,
+            lng
+        );
+
+
+        if (
+            this.followUser
+        ) {
+            this.instance.easeTo({
+                center: [
+                    lng,
+                    lat
+                ],
+                zoom:
+                    Math.max(
+                        15,
+                        Number(
+                            this.instance.getZoom?.() || 15
+                        )
+                    ),
+                pitch:
+                    0,
+                bearing:
+                    0,
+                duration:
+                    650,
+                essential:
+                    true
+            });
+        }
+    },
+
+
+    updateRoadAccess(
+        latitude,
+        longitude
+    ) {
+
+        if (
+            !window.AsiyeRoadGuidance ||
+            !this.instance
+        ) {
+            return;
+        }
+
+
+        if (!this.routeGeometry) {
+            AsiyeRoadGuidance.clear(
+                this.instance
+            );
+
+            return;
+        }
+
+
+        AsiyeRoadGuidance.update(
+            this.instance,
+            [
+                Number(longitude),
+                Number(latitude)
+            ],
+            this.routeGeometry
+        );
     },
 
 
@@ -284,6 +354,8 @@ ASIYE.map = {
        ======================================================== */
 
     centerUser(zoom = 15) {
+
+        this.followUser = true;
 
         const location = ASIYE.state.location;
 
@@ -392,6 +464,25 @@ ASIYE.map = {
         if (!this.instance || !geometry) {
 
             return;
+        }
+
+
+        this.routeGeometry =
+            geometry;
+
+
+        const location =
+            ASIYE.state?.location || {};
+
+
+        if (
+            Number.isFinite(location.latitude) &&
+            Number.isFinite(location.longitude)
+        ) {
+            this.updateRoadAccess(
+                location.latitude,
+                location.longitude
+            );
         }
 
 
@@ -646,6 +737,16 @@ ASIYE.map = {
 
             this.instance.removeSource('asiye-route');
         }
+
+
+        this.routeGeometry =
+            null;
+
+
+        window.AsiyeRoadGuidance
+            ?.clear?.(
+                this.instance
+            );
     }
 
 };
