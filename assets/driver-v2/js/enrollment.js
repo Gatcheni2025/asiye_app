@@ -134,7 +134,7 @@
                                 title:
                                     'Driver face scan',
                                 subtitle:
-                                    'Centre your face inside the guide and capture a clear profile photo.'
+                                    'Centre your face inside the guide. Move naturally and smile when prompted.'
                             });
 
                     blob =
