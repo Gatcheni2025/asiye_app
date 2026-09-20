@@ -46,3 +46,14 @@ body.asiye-safety-modal-open{overflow:hidden}
 .member-vehicle-form input,.member-vehicle-form select{width:100%;box-sizing:border-box;padding:14px;border:1px solid #dbe6d8;border-radius:13px;background:#fbfdf9;color:#173c2b;font:inherit;font-size:14px;outline:none}
 .member-vehicle-form input:focus,.member-vehicle-form select:focus{border-color:#2d7550;box-shadow:0 0 0 3px rgba(45,117,80,.12)}
 .member-vehicle-form .member-primary{margin:6px 0 0}
+
+
+.member-support-form{display:grid;gap:13px;margin:22px 0;padding:18px;border:1px solid #e1e9dc;border-radius:17px;background:#fff}
+.member-support-form h3{margin:0 0 4px;font-size:15px}
+.member-support-form label{display:grid;gap:7px;font-size:11px;font-weight:800;color:#355a45;text-transform:uppercase;letter-spacing:.45px}
+.member-support-form select,.member-support-form textarea{width:100%;box-sizing:border-box;padding:14px;border:1px solid #dbe6d8;border-radius:13px;background:#fbfdf9;color:#173c2b;font:inherit;font-size:14px;outline:none}
+.member-support-form textarea{resize:vertical;min-height:120px;line-height:1.5}
+.member-support-form select:focus,.member-support-form textarea:focus{border-color:#2d7550;box-shadow:0 0 0 3px rgba(45,117,80,.12)}
+.member-support-form .member-primary{margin:4px 0 0}
+.member-support-form .member-primary:disabled{opacity:.6}
+.member-secondary-support{background:#eff4ec;color:#193e2d}
