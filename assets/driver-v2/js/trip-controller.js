@@ -1715,6 +1715,13 @@ ASIYE_DRIVER.trip = {
         );
 
 
+        await ASIYE_DRIVER.metrics
+            ?.refresh?.(
+                ASIYE_DRIVER.state
+                    ?.driverId
+            );
+
+
         /*
          * Notifications.
          */
