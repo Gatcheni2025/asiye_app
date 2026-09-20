@@ -1020,6 +1020,9 @@ ASIYE_DRIVER.requests = {
 
             const vehicleReg =
 
+                driver.vehicle
+                    ?.registration ||
+
                 driver.vehicleReg ||
 
                 driver.registration ||
@@ -1033,6 +1036,9 @@ ASIYE_DRIVER.requests = {
 
             const vehicleMake =
 
+                driver.vehicle
+                    ?.make ||
+
                 driver.vehicleMake ||
 
                 driver.make ||
@@ -1041,6 +1047,9 @@ ASIYE_DRIVER.requests = {
 
 
             const vehicleModel =
+
+                driver.vehicle
+                    ?.model ||
 
                 driver.vehicleModel ||
 
@@ -1051,11 +1060,45 @@ ASIYE_DRIVER.requests = {
 
             const vehicleColor =
 
+                driver.vehicle
+                    ?.colour ||
+
+                driver.vehicle
+                    ?.color ||
+
                 driver.vehicleColor ||
 
                 driver.color ||
 
                 '';
+
+
+            const vehicleType =
+
+                driver.vehicle
+                    ?.type ||
+
+                driver.vehicleType ||
+
+                driver.carCategory ||
+
+                '';
+
+
+            const vehicleSeats =
+
+                Number(
+                    driver.vehicle
+                        ?.seats ||
+
+                    driver.vehicleSeats ||
+
+                    driver.seats ||
+
+                    driver.capacity ||
+
+                    0
+                );
 
 
             const vehicleInfo =
@@ -1208,6 +1251,12 @@ ASIYE_DRIVER.requests = {
 
                 vehicleColor:
                     vehicleColor,
+
+                vehicleType:
+                    vehicleType,
+
+                vehicleSeats:
+                    vehicleSeats,
 
                 vehicleReg:
                     vehicleReg,
@@ -1476,6 +1525,12 @@ ASIYE_DRIVER.requests = {
 
                                 vehicleColor:
                                     vehicleColor,
+
+                                vehicleType:
+                                    vehicleType,
+
+                                vehicleSeats:
+                                    vehicleSeats,
 
                                 vehicleReg:
                                     vehicleReg,
