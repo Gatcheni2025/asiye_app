@@ -337,7 +337,7 @@ ASIYE.profile = {
 
                 if (status) {
                     status.textContent =
-                        'Opening the front camera. Take a clear face photo.';
+                        'Opening live face scan. Centre your face and follow the movement prompts.';
                 }
 
                 try {
@@ -395,7 +395,7 @@ ASIYE.profile = {
                                     title:
                                         'Passenger face scan',
                                     subtitle:
-                                        'Centre your face inside the guide and capture a clear profile photo.'
+                                        'Centre your face inside the guide. Move naturally and smile when prompted.'
                                 });
 
                         blob =
