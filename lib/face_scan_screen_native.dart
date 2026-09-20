@@ -547,9 +547,15 @@ class _AsiyeLiveFaceScanScreenState extends State<AsiyeLiveFaceScanScreen>
           return CameraPreview(controller);
         }
 
+        final viewport =
+            Size(
+              constraints.maxWidth,
+              constraints.maxHeight,
+            );
+
         final scale = 1 /
             (controller.value.aspectRatio *
-                constraints.maxSize.aspectRatio);
+                viewport.aspectRatio);
 
         return Transform.scale(
           scale:
