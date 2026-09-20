@@ -28,6 +28,14 @@ jobs:
       - name: Resolve dependencies
         run: flutter pub get
 
+      - name: Upload resolved lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: face-scan-pubspec-lock
+          path: pubspec.lock
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
