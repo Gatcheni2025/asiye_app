@@ -52,7 +52,7 @@ window.AsiyeFaceScanner = {
                         data-face-close
                         aria-label="Close face scanner"
                     >
-                        <i class="fas fa-times"></i>
+                        <span aria-hidden="true">×</span>
                     </button>
                 </header>
 
@@ -195,7 +195,7 @@ window.AsiyeFaceScanner = {
                             false;
 
                         status.textContent =
-                            'Face detected area ready. Tap Capture face when you are centred.';
+                            'Camera ready. Keep your face inside the guide and tap Capture face.';
                     }
                 };
 
