@@ -112,6 +112,159 @@ window.AsiyePhpImageUpload = {
         );
     },
 
+    compressProfileImage(
+        blob,
+        {
+            maxSide = 720,
+            quality = 0.72
+        } = {}
+    ) {
+        if (
+            !blob ||
+            !String(
+                blob.type || ''
+            ).startsWith(
+                'image/'
+            )
+        ) {
+            return Promise.resolve(
+                blob
+            );
+        }
+
+        return new Promise(
+            resolve => {
+                const reader =
+                    new FileReader();
+
+                reader.onerror =
+                    () => resolve(
+                        blob
+                    );
+
+                reader.onload =
+                    event => {
+                        const image =
+                            new Image();
+
+                        image.onerror =
+                            () => resolve(
+                                blob
+                            );
+
+                        image.onload =
+                            () => {
+                                const originalWidth =
+                                    image.naturalWidth ||
+                                    image.width;
+
+                                const originalHeight =
+                                    image.naturalHeight ||
+                                    image.height;
+
+                                if (
+                                    !originalWidth ||
+                                    !originalHeight
+                                ) {
+                                    resolve(
+                                        blob
+                                    );
+                                    return;
+                                }
+
+                                const scale =
+                                    Math.min(
+                                        1,
+                                        maxSide /
+                                            Math.max(
+                                                originalWidth,
+                                                originalHeight
+                                            )
+                                    );
+
+                                const width =
+                                    Math.max(
+                                        1,
+                                        Math.round(
+                                            originalWidth *
+                                            scale
+                                        )
+                                    );
+
+                                const height =
+                                    Math.max(
+                                        1,
+                                        Math.round(
+                                            originalHeight *
+                                            scale
+                                        )
+                                    );
+
+                                const canvas =
+                                    document.createElement(
+                                        'canvas'
+                                    );
+
+                                canvas.width =
+                                    width;
+
+                                canvas.height =
+                                    height;
+
+                                const context =
+                                    canvas.getContext(
+                                        '2d'
+                                    );
+
+                                if (!context) {
+                                    resolve(
+                                        blob
+                                    );
+                                    return;
+                                }
+
+                                context.drawImage(
+                                    image,
+                                    0,
+                                    0,
+                                    width,
+                                    height
+                                );
+
+                                canvas.toBlob(
+                                    compressed => {
+                                        if (
+                                            compressed &&
+                                            compressed.size > 0 &&
+                                            compressed.size <
+                                                blob.size
+                                        ) {
+                                            resolve(
+                                                compressed
+                                            );
+                                            return;
+                                        }
+
+                                        resolve(
+                                            blob
+                                        );
+                                    },
+                                    'image/jpeg',
+                                    quality
+                                );
+                            };
+
+                        image.src =
+                            event.target.result;
+                    };
+
+                reader.readAsDataURL(
+                    blob
+                );
+            }
+        );
+    },
+
     buildFormData(
         blob,
         {
@@ -324,7 +477,7 @@ window.AsiyePhpImageUpload = {
             );
         }
 
-        const blob =
+        let blob =
             this.toBlob(input);
 
         if (
@@ -347,6 +500,26 @@ window.AsiyePhpImageUpload = {
             throw new Error(
                 'The captured image is empty or too large.'
             );
+        }
+
+        /*
+         * Face/profile captures are identity thumbnails, not source
+         * documents. Resize them before the network request so mobile
+         * uploads stay fast even when the native camera captures a
+         * multi-megapixel JPEG.
+         */
+        if (
+            /profile|selfie|face/i.test(
+                String(
+                    purpose
+                )
+            )
+        ) {
+            blob =
+                await this
+                    .compressProfileImage(
+                        blob
+                    );
         }
 
         const options = {
