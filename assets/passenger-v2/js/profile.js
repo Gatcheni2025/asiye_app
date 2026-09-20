@@ -90,7 +90,7 @@ ASIYE.profile = {
                     reject(new Error('The selected image could not be opened.'));
 
                 img.onload = () => {
-                    const maxSide = 1000;
+                    const maxSide = 720;
                     let width = img.naturalWidth || img.width;
                     let height = img.naturalHeight || img.height;
 
@@ -119,7 +119,7 @@ ASIYE.profile = {
                             resolve(blob);
                         },
                         'image/jpeg',
-                        0.78
+                        0.72
                     );
                 };
 
@@ -350,16 +350,14 @@ ASIYE.profile = {
                      */
                     if (
                         window.AsiyeNativeBridge &&
-                        typeof AsiyeNativeBridge.scanImage ===
+                        typeof AsiyeNativeBridge.scanFace ===
                             'function'
                     ) {
                         const result =
                             await AsiyeNativeBridge
-                                .scanImage({
+                                .scanFace({
                                     purpose:
-                                        'passenger-profile',
-                                    facing:
-                                        'front'
+                                        'passenger-profile'
                                 });
 
                         if (!result) {
