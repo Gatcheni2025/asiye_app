@@ -1515,19 +1515,6 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         try {
 
-            if (
-                typeof AsiyePhpImageUpload
-                    .compressProfileImage ===
-                    'function'
-            ) {
-                selfie =
-                    await AsiyePhpImageUpload
-                        .compressProfileImage(
-                            selfie
-                        );
-            }
-
-
             const uploaded =
                 await AsiyePhpImageUpload
                     .upload(
