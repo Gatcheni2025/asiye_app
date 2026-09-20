@@ -170,7 +170,8 @@ ASIYE.profile = {
         const updates = {
             profile_picture_url: url,
             profileImageUrl: url,
-            profilePhotoUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+            profilePhotoUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
+            liveSelfieVerifiedAt: firebase.database.ServerValue.TIMESTAMP
         };
 
         await firebase
