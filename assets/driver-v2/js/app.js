@@ -4211,25 +4211,6 @@ document.addEventListener(
                 'click',
                 () => {
 
-                    const nav =
-                        ASIYE_DRIVER.state
-                            .navigation;
-
-
-                    if (
-                        !nav.active &&
-                        !ASIYE_DRIVER.navigator
-                            ?.target
-                    ) {
-
-                        ASIYE_DRIVER.ui.toast(
-                            'No active navigation.'
-                        );
-
-                        return;
-                    }
-
-
                     ASIYE_DRIVER.navigator
                         ?.toggleNavigationMode?.();
                 }
