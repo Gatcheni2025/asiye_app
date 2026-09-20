@@ -2678,8 +2678,8 @@ ASIYE_DRIVER.trip = {
                 (
                     request.clubMode ===
                     'club7'
-                    ? 7
-                    : 4
+                    ? 5
+                    : 3
                 )
             );
 
