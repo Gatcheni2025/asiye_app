@@ -102,7 +102,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep '^version: 11.0.22+292
+          grep '^version: 11.0.23+293
 
       - name: Build, verify and upload to TestFlight
         working-directory: ./ios
@@ -136,7 +136,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.22-ios
+          name: asiye-11.0.23-ios
           path: |
             ios/build/ipa/*.ipa
             ios/*.ipa
