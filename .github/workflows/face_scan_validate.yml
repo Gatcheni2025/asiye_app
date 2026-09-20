@@ -1,9 +1,9 @@
 name: Validate Live Face Scan
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/live-face-scan
+      - fix/native-authentication
 
 jobs:
   validate:
