@@ -39,6 +39,21 @@ jobs:
       - name: Analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
+      - name: Configure CI-only Android keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore android/app/asiye-ci-validation.jks \
+            -storepass validation123 \
+            -keypass validation123 \
+            -alias validation \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 1 \
+            -dname "CN=Asiye CI Validation, OU=CI, O=Asiye, L=Durban, ST=KZN, C=ZA"
+
+          printf 'storeFile=asiye-ci-validation.jks\nstorePassword=validation123\nkeyAlias=validation\nkeyPassword=validation123\n' \
+            > android/key.properties
+
       - name: Build Android debug APK
         run: flutter build apk --debug
 
