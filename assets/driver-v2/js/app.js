@@ -2265,6 +2265,30 @@ ASIYE_DRIVER.ui = {
             null;
 
 
+        const currentPassenger =
+
+            request.passengers
+                ?.[target.id] ||
+            {};
+
+
+        const passengerName =
+
+            currentPassenger.name ||
+            currentPassenger.commuterName ||
+            request.commuterName ||
+            'Passenger';
+
+
+        const passengerPhoto =
+
+            currentPassenger.profileImageUrl ||
+            currentPassenger.profile_picture_url ||
+            request.commuterProfileImageUrl ||
+            request.passengerProfileImageUrl ||
+            '';
+
+
         container.innerHTML = `
 
             <div class="driver-navigation-card">
@@ -2355,7 +2379,15 @@ ASIYE_DRIVER.ui = {
 
                     <div class="navigator-avatar">
 
-                        <i class="fas fa-user"></i>
+                        ${
+                            passengerPhoto
+                                ? `<img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">`
+                                : this.escape(
+                                    passengerName
+                                        .charAt(0)
+                                        .toUpperCase()
+                                )
+                        }
 
                     </div>
 
@@ -2369,8 +2401,7 @@ ASIYE_DRIVER.ui = {
                         <strong>
 
                             ${this.escape(
-                                request.commuterName ||
-                                'Passenger'
+                                passengerName
                             )}
 
                         </strong>
