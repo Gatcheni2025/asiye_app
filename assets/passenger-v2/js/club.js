@@ -676,6 +676,12 @@ ASIYE.club = {
                         phone:
                             user.phone || '',
 
+                        profileImageUrl:
+                            user.profile_picture_url ||
+                            user.profileImageUrl ||
+                            user.photoURL ||
+                            '',
+
                         pickupAddress:
                             ASIYE.state.location
                                 .address ||
@@ -952,6 +958,12 @@ ASIYE.club = {
             phone:
                 user.phone || '',
 
+            profileImageUrl:
+                user.profile_picture_url ||
+                user.profileImageUrl ||
+                user.photoURL ||
+                '',
+
             pickupAddress:
                 pickup.address ||
                 'Current location',
@@ -1073,6 +1085,10 @@ ASIYE.club = {
 
             commuterPhone:
                 passenger.phone,
+
+            commuterProfileImageUrl:
+                passenger.profileImageUrl ||
+                '',
 
             commuterLocation: {
 
