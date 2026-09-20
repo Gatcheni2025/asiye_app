@@ -1154,7 +1154,34 @@
                 const status = driver.verificationStatus || 'unknown';
                 const verifiedAt = driver.verifiedAt ? new Date(driver.verifiedAt).toLocaleString() : 'N/A';
                 const trips = driver.totalTrips || 0;
-                const rating = driver.averageRating || '5.0';
+                const ratingCount =
+                    Number(
+                        driver.ratingSummary?.count ||
+                        driver.ratingCount ||
+                        0
+                    );
+
+                const ratingTotal =
+                    Number(
+                        driver.ratingSummary?.total ||
+                        0
+                    );
+
+                const rating =
+                    ratingCount > 0
+                        ? (
+                            ratingTotal > 0
+                                ? (
+                                    ratingTotal /
+                                    ratingCount
+                                  ).toFixed(1)
+                                : Number(
+                                    driver.rating ||
+                                    driver.averageRating ||
+                                    0
+                                  ).toFixed(1)
+                          )
+                        : 'New';
                 const walletBalance = driver.walletBalance || 0;
                 const totalEarnings = driver.totalEarnings || 0;
                 const hasLogin = driver.hasLogin !== false;
@@ -1203,6 +1230,9 @@
                         <h4 style="color: #e8ecf4; margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Documents</h4>
                         <div class="doc-grid">${docHtml}</div>
                     </div>
+                    <button class="btn btn-approve" onclick="updateApprovedVehicle('${key}')" style="width:100%; margin-top: 1rem;">
+                        <i class="fas fa-car"></i> Set / Update Approved Vehicle
+                    </button>
                     ${!hasLogin ? `
                         <button class="btn btn-create" onclick="showCreatePassword('${key}')" style="width:100%; margin-top: 1rem;">
                             <i class="fas fa-key"></i> Set Password
@@ -1786,6 +1816,113 @@
                 showToast('Error rejecting: ' + error.message, 'error');
             });
         }
+
+        // ================================================================
+        // UPDATE APPROVED VEHICLE
+        // ================================================================
+        async function updateApprovedVehicle(driverId) {
+            try {
+                const snapshot =
+                    await database
+                        .ref(
+                            `taxis/${driverId}`
+                        )
+                        .once(
+                            'value'
+                        );
+
+                const driver =
+                    snapshot.val();
+
+                if (!driver) {
+                    showToast(
+                        'Driver not found',
+                        'error'
+                    );
+                    return;
+                }
+
+                const approvedVehicle =
+                    collectApprovedVehicle(
+                        driver
+                    );
+
+                if (!approvedVehicle) {
+                    return;
+                }
+
+                await database
+                    .ref(
+                        `taxis/${driverId}`
+                    )
+                    .update({
+                        taxiRegistrationNumber:
+                            approvedVehicle.registration,
+                        vehicleReg:
+                            approvedVehicle.registration,
+                        vehicleType:
+                            approvedVehicle.type,
+                        vehicleMake:
+                            approvedVehicle.make,
+                        vehicleModel:
+                            approvedVehicle.model,
+                        vehicleColor:
+                            approvedVehicle.colour,
+                        vehicleSeats:
+                            approvedVehicle.seats,
+                        seats:
+                            approvedVehicle.seats,
+                        vehicle: {
+                            type:
+                                approvedVehicle.type,
+                            make:
+                                approvedVehicle.make,
+                            model:
+                                approvedVehicle.model,
+                            colour:
+                                approvedVehicle.colour,
+                            registration:
+                                approvedVehicle.registration,
+                            seats:
+                                approvedVehicle.seats
+                        },
+                        vehicleApproved:
+                            true,
+                        vehicleApprovalStatus:
+                            'approved',
+                        vehicleApprovedAt:
+                            firebase.database.ServerValue.TIMESTAMP,
+                        vehicleApprovedBy:
+                            auth.currentUser
+                                ? auth.currentUser.uid
+                                : 'admin'
+                    });
+
+                showToast(
+                    '✅ Approved vehicle updated',
+                    'success'
+                );
+
+                closeModal();
+
+                viewDriverProfile(
+                    driverId
+                );
+
+            } catch (error) {
+                console.error(
+                    'Vehicle approval update failed:',
+                    error
+                );
+
+                showToast(
+                    'Could not update approved vehicle: ' +
+                    error.message,
+                    'error'
+                );
+            }
+        }
+
 
         // ================================================================
         // DEACTIVATE DRIVER
