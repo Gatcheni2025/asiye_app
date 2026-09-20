@@ -101,16 +101,14 @@
                  */
                 if (
                     window.AsiyeNativeBridge &&
-                    typeof AsiyeNativeBridge.scanImage ===
+                    typeof AsiyeNativeBridge.scanFace ===
                         'function'
                 ) {
                     const nativeResult =
                         await AsiyeNativeBridge
-                            .scanImage({
+                            .scanFace({
                                 purpose:
-                                    'driver-profile',
-                                facing:
-                                    'front'
+                                    'driver-profile'
                             });
 
                     if (!nativeResult) {
