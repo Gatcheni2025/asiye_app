@@ -86,46 +86,85 @@
                     );
                 }
 
-                if (!window.AsiyeFaceScanner) {
-                    throw Error(
-                        'Live face scanner is unavailable.'
-                    );
-                }
-
                 if (!window.AsiyePhpImageUpload) {
                     throw Error(
                         'Image upload service is unavailable.'
                     );
                 }
 
-                const result =
-                    await AsiyeFaceScanner
-                        .open({
-                            title:
-                                'Driver face scan',
-                            subtitle:
-                                'Centre your face inside the guide. The captured face becomes your driver profile picture.'
-                        });
+                let blob = null;
 
-                if (!result?.blob) {
+                /*
+                 * In the installed app, use the Flutter native front
+                 * camera. It opens Camera directly and does not offer
+                 * a gallery/file picker for the selfie.
+                 */
+                if (
+                    window.AsiyeNativeBridge &&
+                    typeof AsiyeNativeBridge.scanImage ===
+                        'function'
+                ) {
+                    const nativeResult =
+                        await AsiyeNativeBridge
+                            .scanImage({
+                                purpose:
+                                    'driver-profile',
+                                facing:
+                                    'front'
+                            });
+
+                    if (!nativeResult) {
+                        status.textContent =
+                            'Camera cancelled. You can try again.';
+
+                        return;
+                    }
+
+                    blob =
+                        await fileFromNativeScan(
+                            nativeResult
+                        );
+
+                } else if (
+                    window.AsiyeFaceScanner
+                ) {
+                    const result =
+                        await AsiyeFaceScanner
+                            .open({
+                                title:
+                                    'Driver face scan',
+                                subtitle:
+                                    'Centre your face inside the guide and capture a clear profile photo.'
+                            });
+
+                    blob =
+                        result?.blob ||
+                        null;
+                } else {
+                    throw Error(
+                        'Camera service is unavailable in this build.'
+                    );
+                }
+
+                if (!blob) {
                     status.textContent =
-                        'Face scan cancelled. You can try again.';
+                        'No face photo was captured. Try again.';
 
                     return;
                 }
 
                 savePhoto(
                     key,
-                    result.blob
+                    blob
                 );
 
                 status.textContent =
-                    'Saving face scan…';
+                    'Photo captured. Saving profile picture…';
 
                 const uploaded =
                     await AsiyePhpImageUpload
                         .upload(
-                            result.blob,
+                            blob,
                             {
                                 userId:
                                     user.uid,
@@ -148,17 +187,16 @@
                         });
                 } catch (error) {
                     console.warn(
-                        'Driver Auth profile face update skipped:',
+                        'Driver Auth profile photo update skipped:',
                         error
                     );
                 }
 
                 status.textContent =
-                    'Face scan saved. It will be used as your driver profile picture after approval.';
+                    'Profile photo saved. It will be used after your driver application is approved.';
 
                 return;
             }
-
 
             if (window.AsiyeNativeBridge) {
                 const result =
@@ -243,7 +281,7 @@
         const target = document.getElementById('enrollmentReview');
         target.replaceChildren();
         const data = new FormData(form);
-        const rows = [['Name', data.get('fullName')], ['Phone', data.get('phone')], ['Vehicle registration',data.get('vehicleReg')], ['Scans','Selfie, vehicle and ID/passport captured'], ['Licence',licenceScan ? 'Scanned' : 'Not scanned'], ['Bank',data.get('bank')], ['Account holder',data.get('accountHolder')], ['Account number','•••• ' + String(data.get('accountNumber')).slice(-4)], ['Branch code',data.get('branchCode')], ['Account type',data.get('accountType')]];
+        const rows = [['Name', data.get('fullName')], ['Phone', data.get('phone')], ['Vehicle type',data.get('vehicleType')], ['Vehicle make',data.get('vehicleMake')], ['Vehicle model',data.get('vehicleModel')], ['Vehicle colour',data.get('vehicleColor')], ['Passenger seats',data.get('vehicleSeats')], ['Vehicle registration',data.get('vehicleReg')], ['Scans','Selfie, vehicle and ID/passport captured'], ['Licence',licenceScan ? 'Scanned' : 'Not scanned'], ['Bank',data.get('bank')], ['Account holder',data.get('accountHolder')], ['Account number','•••• ' + String(data.get('accountNumber')).slice(-4)], ['Branch code',data.get('branchCode')], ['Account type',data.get('accountType')]];
         for (let i=1;i<=3;i++) rows.push([`Reference ${i}`,`${data.get(`refName${i}`)} · ${data.get(`refPhone${i}`)}`]);
         rows.forEach(([label,value])=>{ const row=document.createElement('p');const strong=document.createElement('strong');strong.textContent=label+': ';row.append(strong,document.createTextNode(String(value || 'Not provided')));target.append(row); });
     };
@@ -261,12 +299,13 @@
     const validateStep = async index => {
         for(const input of steps[index].querySelectorAll('input,select')) {
             input.setCustomValidity('');
-            if (['fullName','vehicleReg','accountHolder','bank'].includes(input.name) && input.value.trim().length < 2) {
+            if (['fullName','vehicleType','vehicleMake','vehicleModel','vehicleColor','vehicleReg','accountHolder','bank'].includes(input.name) && input.value.trim().length < 2) {
                 input.setCustomValidity('Please enter at least two characters for this detail.');
             } else
             if(input.type==='tel' && !EnrollmentValidation.phone(input.value)) input.setCustomValidity('Enter a valid phone number, for example 082 123 4567 or +27 82 123 4567.');
             else if(input.required && input.type==='text' && !input.value.trim()) input.setCustomValidity('Please enter this detail.');
             else if(input.name==='accountNumber' && !/^[0-9]{6,20}$/.test(input.value)) input.setCustomValidity('Enter 6 to 20 digits from your bank account number, without spaces.');
+            else if(input.name==='vehicleSeats' && (!Number.isInteger(Number(input.value)) || Number(input.value) < 1 || Number(input.value) > 15)) input.setCustomValidity('Passenger seats must be a whole number between 1 and 15.');
             else if(input.name==='branchCode' && !/^[0-9]{6}$/.test(input.value)) input.setCustomValidity('Enter your bank’s six-digit branch code.');
             if(!input.checkValidity()) { showStep(index);showError(input.validationMessage);input.reportValidity();return false; }
         }
@@ -426,10 +465,63 @@
                         String(
                             data.get('phone')
                         ).trim(),
+                    vehicleType:
+                        String(
+                            data.get('vehicleType')
+                        ).trim(),
+                    vehicleMake:
+                        String(
+                            data.get('vehicleMake')
+                        ).trim(),
+                    vehicleModel:
+                        String(
+                            data.get('vehicleModel')
+                        ).trim(),
+                    vehicleColor:
+                        String(
+                            data.get('vehicleColor')
+                        ).trim(),
+                    vehicleSeats:
+                        Number(
+                            data.get('vehicleSeats')
+                        ),
                     vehicleReg:
                         String(
                             data.get('vehicleReg')
                         ).trim(),
+                    vehiclePending: {
+                        type:
+                            String(
+                                data.get('vehicleType')
+                            ).trim(),
+                        make:
+                            String(
+                                data.get('vehicleMake')
+                            ).trim(),
+                        model:
+                            String(
+                                data.get('vehicleModel')
+                            ).trim(),
+                        colour:
+                            String(
+                                data.get('vehicleColor')
+                            ).trim(),
+                        seats:
+                            Number(
+                                data.get('vehicleSeats')
+                            ),
+                        registration:
+                            String(
+                                data.get('vehicleReg')
+                            ).trim(),
+                        submittedAt:
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP
+                    },
+                    vehicleApprovalStatus:
+                        'pending',
                     profile_picture_url:
                         documents.selfie ||
                         '',
