@@ -113,7 +113,64 @@ window.AsiyePages = {
                 }
             };
         } else if (page === 'vehicle') {
-            body.innerHTML = `<div class="member-balance"><small>Registered vehicle</small><strong>${esc(user.vehicleReg || user.registration || 'Not provided')}</strong></div>` + this.row('Make', user.vehicleMake || user.make) + this.row('Model', user.vehicleModel || user.model) + this.row('Colour', user.vehicleColor || user.color) + this.row('Seats', user.capacity || user.seats) + note('Contact support to correct registered vehicle details.');
+            const vehicle =
+                user.vehicle || {};
+
+            const registration =
+                vehicle.registration ||
+                user.vehicleReg ||
+                user.registration ||
+                user.taxiRegistrationNumber ||
+                'Not provided';
+
+            const approved =
+                user.vehicleApproved ===
+                    true ||
+                String(
+                    user.vehicleApprovalStatus ||
+                    ''
+                ).toLowerCase() ===
+                    'approved';
+
+            body.innerHTML =
+                `<div class="member-balance"><small>Admin-approved vehicle</small><strong>${esc(registration)}</strong></div>` +
+                this.row(
+                    'Vehicle type',
+                    vehicle.type ||
+                    user.vehicleType ||
+                    user.carCategory
+                ) +
+                this.row(
+                    'Make',
+                    vehicle.make ||
+                    user.vehicleMake ||
+                    user.make
+                ) +
+                this.row(
+                    'Model',
+                    vehicle.model ||
+                    user.vehicleModel ||
+                    user.model
+                ) +
+                this.row(
+                    'Colour',
+                    vehicle.colour ||
+                    vehicle.color ||
+                    user.vehicleColor ||
+                    user.color
+                ) +
+                this.row(
+                    'Seats',
+                    vehicle.seats ||
+                    user.vehicleSeats ||
+                    user.seats ||
+                    user.capacity
+                ) +
+                note(
+                    approved
+                        ? 'Vehicle details are approved by Asiye administration. Contact support if the approved vehicle changes.'
+                        : 'Vehicle details must be confirmed by Asiye administration before they are treated as approved.'
+                );
         } else if (page === 'safety') {
             if (!id) {
                 body.innerHTML = note('Sign in to manage loved ones.');
@@ -330,10 +387,94 @@ window.AsiyePages = {
                 if (page === 'club') rides = rides.filter(ride => ride.type === 'club');
                 let html = '';
                 if (page === 'earnings') {
-                    rides = rides.filter(ride => ride.status === 'completed');
-                    const known = rides.filter(ride => ride.type !== 'club' && Number.isFinite(Number(ride.finalAmount ?? ride.calculatedPrice ?? ride.price)));
-                    const sum = known.reduce((total, ride) => total + Number(ride.finalAmount ?? ride.calculatedPrice ?? ride.price), 0);
-                    html += `<div class="member-balance"><small>Recorded GO fares</small><strong>${this.money(sum)}</strong></div>` + note('Gross fares from loaded completed GO rides, before fees. Asiye Work earnings and payouts are not included.');
+                    rides =
+                        rides.filter(
+                            ride =>
+                                ride.status ===
+                                'completed'
+                        );
+
+                    const grossFare =
+                        ride => {
+                            if (
+                                driver &&
+                                window.ASIYE_DRIVER
+                                    ?.metrics
+                                    ?.grossFare
+                            ) {
+                                return ASIYE_DRIVER
+                                    .metrics
+                                    .grossFare(
+                                        ride
+                                    );
+                            }
+
+                            if (
+                                ride.type ===
+                                'club'
+                            ) {
+                                const total =
+                                    Number(
+                                        ride.totalPoolFare ||
+                                        0
+                                    );
+
+                                if (
+                                    Number.isFinite(
+                                        total
+                                    ) &&
+                                    total > 0
+                                ) {
+                                    return total;
+                                }
+
+                                const active =
+                                    Object.values(
+                                        ride.passengers ||
+                                        {}
+                                    ).filter(
+                                        passenger =>
+                                            !String(
+                                                passenger?.status ||
+                                                ''
+                                            ).includes(
+                                                'cancelled'
+                                            )
+                                    ).length;
+
+                                return Number(
+                                    ride.pricePerPassenger ||
+                                    0
+                                ) * active;
+                            }
+
+                            return Number(
+                                ride.finalAmount ??
+                                ride.agreedFare ??
+                                ride.calculatedPrice ??
+                                ride.price ??
+                                0
+                            ) || 0;
+                        };
+
+                    const sum =
+                        rides.reduce(
+                            (
+                                total,
+                                ride
+                            ) =>
+                                total +
+                                grossFare(
+                                    ride
+                                ),
+                            0
+                        );
+
+                    html +=
+                        `<div class="member-balance"><small>Completed fares</small><strong>${this.money(sum)}</strong></div>` +
+                        note(
+                            'Gross completed Asiye Go, Work and Delivery fares shown before platform fees or other deductions.'
+                        );
                 }
                 html += note('Showing up to 100 recent records per booking type.');
                 if (!rides.length) html += `<div class="member-empty"><h2>No ${page === 'parcels' ? 'parcels' : 'trips'} yet</h2><p>Your records will appear here once available.</p></div>`;
