@@ -1146,9 +1146,30 @@
                 const name = driver.name || 'Unknown';
                 const email = driver.email || 'No email';
                 const phone = driver.phone || 'No phone';
-                const reg = driver.taxiRegistrationNumber || 'N/A';
-                const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
-                const color = driver.vehicleColor || 'N/A';
+                const approvedVehicle = driver.vehicle || {};
+                const reg =
+                    approvedVehicle.registration ||
+                    driver.vehicleReg ||
+                    driver.taxiRegistrationNumber ||
+                    'N/A';
+                const vehicle =
+                    `${approvedVehicle.make || driver.vehicleMake || ''} ${approvedVehicle.model || driver.vehicleModel || ''}`.trim() ||
+                    'N/A';
+                const vehicleType =
+                    approvedVehicle.type ||
+                    driver.vehicleType ||
+                    driver.carCategory ||
+                    'N/A';
+                const color =
+                    approvedVehicle.colour ||
+                    approvedVehicle.color ||
+                    driver.vehicleColor ||
+                    'N/A';
+                const seats =
+                    approvedVehicle.seats ||
+                    driver.vehicleSeats ||
+                    driver.seats ||
+                    'N/A';
                 const year = driver.vehicleYear || 'N/A';
                 const area = driver.loadingArea || driver.assignedRank || 'N/A';
                 const status = driver.verificationStatus || 'unknown';
@@ -1213,7 +1234,9 @@
                             <div><span style="color: #8b95a9;">Phone:</span> <strong>${escapeHtml(phone)}</strong></div>
                             <div><span style="color: #8b95a9;">Area:</span> <strong>${escapeHtml(area)}</strong></div>
                             <div><span style="color: #8b95a9;">Vehicle:</span> <strong>${escapeHtml(vehicle)}</strong></div>
+                            <div><span style="color: #8b95a9;">Vehicle type:</span> <strong>${escapeHtml(vehicleType)}</strong></div>
                             <div><span style="color: #8b95a9;">Color:</span> <strong>${escapeHtml(color)}</strong></div>
+                            <div><span style="color: #8b95a9;">Passenger seats:</span> <strong>${escapeHtml(seats)}</strong></div>
                             <div><span style="color: #8b95a9;">Registration:</span> <strong>${escapeHtml(reg)}</strong></div>
                             <div><span style="color: #8b95a9;">Year:</span> <strong>${escapeHtml(year)}</strong></div>
                             <div><span style="color: #8b95a9;">Rating:</span> <strong>⭐ ${rating}</strong></div>
