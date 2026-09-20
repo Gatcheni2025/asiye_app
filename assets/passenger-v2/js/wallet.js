@@ -279,12 +279,15 @@ ASIYE.wallet = {
             Number(cfg.pollIntervalMs || 3000)
         );
 
+        let finished = false;
+
         const check = async () => {
             try {
                 const data = await this.getTopup(requestId);
                 this.updateStatus(container, data);
 
                 if (this.isFinal(data?.status)) {
+                    finished = true;
                     this.stopPolling();
 
                     if (
@@ -302,7 +305,7 @@ ASIYE.wallet = {
 
         await check();
 
-        if (!this.pollTimer) {
+        if (!finished) {
             this.pollTimer = window.setInterval(
                 check,
                 intervalMs
