@@ -1437,8 +1437,14 @@ ASIYE.ride = {
 
                     <div class="asiye-driver-details">
                         ★ ${
-                            request.driverRating ||
-                            '5.0'
+                            Number(
+                                request.driverRating ||
+                                0
+                            ) > 0
+                                ? Number(
+                                    request.driverRating
+                                ).toFixed(1)
+                                : 'New'
                         }
                     </div>
 
