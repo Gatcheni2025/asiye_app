@@ -587,6 +587,82 @@ ASIYE_DRIVER.ui = {
     },
 
 
+    hasApprovedVehicle(
+        driver =
+            ASIYE_DRIVER.state.driver ||
+            {}
+    ) {
+
+        const vehicle =
+            driver.vehicle ||
+            {};
+
+
+        const type =
+            vehicle.type ||
+            driver.vehicleType ||
+            driver.carCategory;
+
+
+        const make =
+            vehicle.make ||
+            driver.vehicleMake ||
+            driver.make;
+
+
+        const model =
+            vehicle.model ||
+            driver.vehicleModel ||
+            driver.model;
+
+
+        const colour =
+            vehicle.colour ||
+            vehicle.color ||
+            driver.vehicleColor ||
+            driver.color;
+
+
+        const seats =
+            Number(
+                vehicle.seats ||
+                driver.vehicleSeats ||
+                driver.seats ||
+                0
+            );
+
+
+        const registration =
+            vehicle.registration ||
+            driver.vehicleReg ||
+            driver.taxiRegistrationNumber ||
+            driver.registration ||
+            driver.registrationNumber;
+
+
+        const approved =
+            driver.vehicleApproved ===
+                true ||
+            String(
+                driver.vehicleApprovalStatus ||
+                ''
+            ).toLowerCase() ===
+                'approved';
+
+
+        return Boolean(
+            approved &&
+            type &&
+            make &&
+            model &&
+            colour &&
+            registration &&
+            Number.isInteger(seats) &&
+            seats > 0
+        );
+    },
+
+
     /* ========================================================
        ONLINE / OFFLINE
        ======================================================== */
@@ -631,6 +707,24 @@ ASIYE_DRIVER.ui = {
 
         const newOnline =
             !currentlyOnline;
+
+
+        if (
+            newOnline &&
+            !this.hasApprovedVehicle()
+        ) {
+            this.toast(
+                'Your vehicle must be approved with type, make, model, colour and seats before you can go online.',
+                'warning'
+            );
+
+            AsiyePages
+                ?.open?.(
+                    'vehicle'
+                );
+
+            return;
+        }
 
 
         try {
