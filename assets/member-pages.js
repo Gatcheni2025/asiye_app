@@ -26,7 +26,19 @@ window.AsiyePages = {
         if (page === 'account') {
             body.innerHTML = `<div class="member-avatar">${esc((user.name || user.firstName || 'A').charAt(0))}</div><h2>${esc(user.name || user.firstName || 'Your account')}</h2>` + this.row('Phone', user.phone || user.phoneNumber) + this.row('Email', user.email) + this.row('Account type', driver ? 'Driver' : 'Passenger');
         } else if (page === 'wallet') {
-            body.innerHTML = `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` + note('Wallet credits shown from your account. Choose your payment method when booking a ride.') + this.row('Currency', 'South African rand · ZAR');
+            if (
+                !driver &&
+                window.ASIYE?.wallet &&
+                typeof ASIYE.wallet.render === 'function'
+            ) {
+                await ASIYE.wallet.render(body, {
+                    user,
+                    commuterId: id,
+                    dialog
+                });
+            } else {
+                body.innerHTML = `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` + note('Wallet credits shown from your account. Choose your payment method when booking a ride.') + this.row('Currency', 'South African rand · ZAR');
+            }
         } else if (page === 'vehicle') {
             body.innerHTML = `<div class="member-balance"><small>Registered vehicle</small><strong>${esc(user.vehicleReg || user.registration || 'Not provided')}</strong></div>` + this.row('Make', user.vehicleMake || user.make) + this.row('Model', user.vehicleModel || user.model) + this.row('Colour', user.vehicleColor || user.color) + this.row('Seats', user.capacity || user.seats) + note('Contact support to correct registered vehicle details.');
         } else if (page === 'safety') {
