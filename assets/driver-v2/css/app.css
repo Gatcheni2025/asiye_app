@@ -4013,6 +4013,47 @@ and
         center;
 }
 
+.navigator-avatar {
+
+    overflow:
+        hidden;
+
+    flex-shrink:
+        0;
+
+    font-size:
+        14px;
+
+    font-weight:
+        900;
+
+    color:
+        var(--asiye-black);
+}
+
+
+.navigator-avatar img {
+
+    width:
+        100%;
+
+    height:
+        100%;
+
+    display:
+        block;
+
+    object-fit:
+        cover;
+}
+
+
+.driver-passenger-identity {
+
+    margin-top:
+        13px;
+}
+
 
 .navigator-passenger small {
 
