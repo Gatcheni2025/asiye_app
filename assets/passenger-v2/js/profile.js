@@ -329,62 +329,107 @@ ASIYE.profile = {
 
         button.onclick =
             async () => {
-                if (
-                    !window.AsiyeFaceScanner
-                ) {
-                    if (status) {
-                        status.textContent =
-                            'Live face scanner is unavailable.';
-                    }
-
-                    return;
-                }
-
                 button.disabled =
                     true;
 
                 button.textContent =
-                    'Opening face scan…';
+                    'Opening camera…';
 
                 if (status) {
                     status.textContent =
-                        'Centre your face inside the guide, then capture.';
+                        'Opening the front camera. Take a clear face photo.';
                 }
 
                 try {
-                    const result =
-                        await AsiyeFaceScanner
-                            .open({
-                                title:
-                                    'Passenger face scan',
+                    let blob = null;
 
-                                subtitle:
-                                    'Centre your face inside the guide. When you capture, Asiye saves it securely as your profile picture.'
-                            });
+                    /*
+                     * Mobile app: use Flutter's native camera bridge.
+                     * This opens the camera directly and never opens
+                     * the gallery/file picker.
+                     */
+                    if (
+                        window.AsiyeNativeBridge &&
+                        typeof AsiyeNativeBridge.scanImage ===
+                            'function'
+                    ) {
+                        const result =
+                            await AsiyeNativeBridge
+                                .scanImage({
+                                    purpose:
+                                        'passenger-profile',
+                                    facing:
+                                        'front'
+                                });
 
-                    if (!result?.blob) {
-                        button.textContent =
-                            this.getUrl()
-                                ? 'Rescan face'
-                                : 'Scan face';
+                        if (!result) {
+                            button.textContent =
+                                this.getUrl()
+                                    ? 'Rescan face'
+                                    : 'Scan face';
 
+                            if (status) {
+                                status.textContent =
+                                    'Camera cancelled. No photo was changed.';
+                            }
+
+                            return;
+                        }
+
+                        blob =
+                            await this
+                                ._fileFromScan(
+                                    result
+                                );
+
+                    } else if (
+                        window.AsiyeFaceScanner
+                    ) {
+                        /*
+                         * Browser fallback only. The installed mobile
+                         * app should normally use the native bridge above.
+                         */
+                        const result =
+                            await AsiyeFaceScanner
+                                .open({
+                                    title:
+                                        'Passenger face scan',
+                                    subtitle:
+                                        'Centre your face inside the guide and capture a clear profile photo.'
+                                });
+
+                        blob =
+                            result?.blob ||
+                            null;
+                    } else {
+                        throw new Error(
+                            'Camera service is unavailable in this build.'
+                        );
+                    }
+
+                    if (!blob) {
                         return;
                     }
 
+                    if (status) {
+                        status.textContent =
+                            'Photo captured. Saving profile picture…';
+                    }
+
                     await saveFace(
-                        result.blob
+                        blob
                     );
 
                 } catch (error) {
                     console.error(
-                        'Passenger face scanner failed:',
+                        'Passenger profile camera failed:',
                         error
                     );
 
                     if (status) {
                         status.textContent =
                             error?.message ||
-                            'Unable to start the face scanner.';
+                            'Could not take or save the profile photo.';
                     }
 
                     button.textContent =
