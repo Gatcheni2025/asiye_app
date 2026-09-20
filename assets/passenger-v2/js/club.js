@@ -618,6 +618,20 @@ ASIYE.club = {
 
 
                     /*
+                     * Migrate any still-open legacy Work pool from
+                     * 4/7 paying passengers to the current 3/5 rule.
+                     */
+                    pool.capacity =
+                        config.capacity;
+
+                    pool.maxCapacity =
+                        config.capacity;
+
+                    pool.minimumPassengers =
+                        config.minimumPassengers;
+
+
+                    /*
                      * Already joined.
                      */
 
