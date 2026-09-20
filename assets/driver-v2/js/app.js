@@ -1413,6 +1413,17 @@ ASIYE_DRIVER.ui = {
             'delivery';
 
 
+        const passengerName =
+            request.commuterName ||
+            'Passenger';
+
+
+        const passengerPhoto =
+            request.commuterProfileImageUrl ||
+            request.passengerProfileImageUrl ||
+            '';
+
+
         container.innerHTML = `
 
             <div class="driver-trip-header">
@@ -1461,6 +1472,31 @@ ASIYE_DRIVER.ui = {
 
             </div>
 
+
+            ${
+                !isDelivery
+                ? `
+                    <div class="navigator-passenger driver-passenger-identity">
+                        <div class="navigator-avatar">
+                            ${
+                                passengerPhoto
+                                    ? `<img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">`
+                                    : this.escape(
+                                        passengerName
+                                            .charAt(0)
+                                            .toUpperCase()
+                                    )
+                            }
+                        </div>
+
+                        <div>
+                            <small>PASSENGER</small>
+                            <strong>${this.escape(passengerName)}</strong>
+                        </div>
+                    </div>
+                `
+                : ''
+            }
 
             <div class="driver-trip-card">
 
