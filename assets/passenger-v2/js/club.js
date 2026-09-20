@@ -14,11 +14,19 @@ ASIYE.club = {
             name:
                 'Asiye Work 4',
 
-            capacity:
+            /*
+             * Work 4 uses a 4-seat vehicle, but only 3 paying
+             * passengers are grouped so the driver seat is not
+             * counted as a passenger seat.
+             */
+            vehicleSeats:
                 4,
 
+            capacity:
+                3,
+
             minimumPassengers:
-                4,
+                3,
 
             pickupWindowMinutes:
                 10,
@@ -33,11 +41,18 @@ ASIYE.club = {
             name:
                 'Asiye Work 7',
 
-            capacity:
+            /*
+             * Work 7 now departs with 5 paying passengers.
+             * vehicleSeats preserves the product/vehicle class name.
+             */
+            vehicleSeats:
                 7,
 
+            capacity:
+                5,
+
             minimumPassengers:
-                7,
+                5,
 
             pickupWindowMinutes:
                 15,
