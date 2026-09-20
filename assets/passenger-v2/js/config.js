@@ -21,6 +21,32 @@ window.ASIYE_CONFIG = {
 
 
     currency:
-        'ZAR'
+        'ZAR',
+
+
+    /*
+     * FNB PayShap Request-to-Pay
+     *
+     * Mobile Flutter/WebView builds must point apiBase at the
+     * public HTTPS Asiye payment backend. FNB credentials and
+     * bank API URLs must NEVER be placed in this client config.
+     *
+     * Example:
+     * apiBase: 'https://payments.example.com'
+     */
+    payshap: {
+
+        apiBase:
+            '',
+
+        createRequestPath:
+            '/api/wallet/payshap/requests',
+
+        requestStatusPath:
+            '/api/wallet/payshap/requests',
+
+        pollIntervalMs:
+            3000
+    }
 
 };
