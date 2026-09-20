@@ -999,12 +999,23 @@ ASIYE_DRIVER.requests = {
                 '';
 
 
-            const driverRating =
+            const ratingInfo =
+                ASIYE_DRIVER.metrics
+                    ?.rating?.(
+                        driver
+                    ) || {
+                        value: null
+                    };
 
-                Number(
-                    driver.rating ||
-                    5
-                );
+
+            const driverRating =
+                Number.isFinite(
+                    ratingInfo.value
+                )
+                    ? Number(
+                        ratingInfo.value
+                    )
+                    : 0;
 
 
             const vehicleReg =
