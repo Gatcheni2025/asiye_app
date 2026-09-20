@@ -134,7 +134,7 @@ window.AsiyePages = {
 
                 if (status) {
                     status.textContent =
-                        'Opening the front camera. Take a clear face photo.';
+                        'Opening live face scan. Centre your face and follow the movement prompts.';
                 }
 
                 try {
@@ -192,7 +192,7 @@ window.AsiyePages = {
                                     title:
                                         'Driver face scan',
                                     subtitle:
-                                        'Centre your face inside the guide and capture a clear profile photo.'
+                                        'Centre your face inside the guide. Move naturally and smile when prompted.'
                                 });
 
                         blob =
@@ -330,7 +330,7 @@ window.AsiyePages = {
                             ? 'data-driver-profile-status'
                             : 'data-passenger-profile-status'}
                     >
-                        Asiye opens your front camera directly. Take a clear face photo and it becomes your profile picture after it is saved.
+                        Asiye opens a live front-camera scan. Centre your face, move when prompted and smile; the verified final frame becomes your profile picture.
                     </p>
                 </div>
             `;
