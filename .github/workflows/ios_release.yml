@@ -61,7 +61,6 @@ jobs:
           SH
 
           chmod 700 /tmp/asiye-git-askpass.sh
-
           export GIT_ASKPASS=/tmp/asiye-git-askpass.sh
           export GIT_TERMINAL_PROMPT=0
           export GIT_USERNAME=Gatcheni2025
@@ -101,7 +100,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep '^version: 11.0.23+293
+          grep -F "version: 11.0.23+293" pubspec.yaml
 
       - name: Build, verify and upload to TestFlight
         working-directory: ./ios
@@ -121,54 +120,12 @@ jobs:
           SH
 
           chmod 700 /tmp/asiye-git-askpass.sh
-
           export GIT_ASKPASS=/tmp/asiye-git-askpass.sh
           export GIT_TERMINAL_PROMPT=0
           export GIT_USERNAME=Gatcheni2025
           export GIT_PASSWORD="$GH_PAT"
 
           git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
-
-          fastlane beta
-
-      - name: Upload signed IPA artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: asiye-11.0.23-ios
-          path: |
-            ios/build/ipa/*.ipa
-            ios/*.ipa
-          if-no-files-found: warn
-          retention-days: 30
- pubspec.yaml
-
-      - name: Build, verify and upload to TestFlight
-        working-directory: ./ios
-        env:
-          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          GH_PAT: ${{ secrets.GH_PAT }}
-          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
-          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
-          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: |
-          cat > /tmp/asiye-git-askpass.sh <<'SH'
-          #!/bin/sh
-          case "$1" in
-            *Username*) printf '%s\n' "$GIT_USERNAME" ;;
-            *Password*) printf '%s\n' "$GIT_PASSWORD" ;;
-          esac
-          SH
-
-          chmod 700 /tmp/asiye-git-askpass.sh
-
-          export GIT_ASKPASS=/tmp/asiye-git-askpass.sh
-          export GIT_TERMINAL_PROMPT=0
-          export GIT_USERNAME=Gatcheni2025
-          export GIT_PASSWORD="$GH_PAT"
-
-          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
-
           fastlane beta
 
       - name: Upload signed IPA artifact
