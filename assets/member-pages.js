@@ -353,10 +353,10 @@ window.AsiyePages = {
             body.innerHTML =
                 `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
                 (returnStatus === 'success'
-                    ? note('Payment returned successfully. Your balance will update after PayFast confirms it.')
+                    ? note('You have returned from the bank payment. Your balance updates only after Ozow securely confirms the EFT.')
                     : returnStatus === 'cancelled'
                         ? note('The payment was cancelled and no funds were added.')
-                        : note('Add funds securely using PayFast Sandbox.')) +
+                        : note('Add funds securely from your bank account using Ozow Pay by Bank.')) +
                 `<form class="wallet-topup" data-wallet-topup>
                     <label>Amount to add</label>
                     <div class="wallet-amounts">
@@ -369,8 +369,8 @@ window.AsiyePages = {
                         <span>R</span>
                         <input name="amount" type="number" inputmode="decimal" min="10" max="5000" step="0.01" placeholder="Enter amount" required>
                     </div>
-                    <button class="member-primary" type="submit">Add funds with PayFast</button>
-                    <p class="member-note">Sandbox payments use test money. Funds are credited only after secure PayFast confirmation.</p>
+                    <button class="member-primary" type="submit">Add funds with EFT</button>
+                    <p class="member-note">Ozow staging is enabled for testing. Your wallet is credited automatically only after a verified bank-payment confirmation.</p>
                 </form>` +
                 this.row('Currency', 'South African rand · ZAR');
             const form = body.querySelector('[data-wallet-topup]');
@@ -386,13 +386,13 @@ window.AsiyePages = {
                 event.preventDefault();
                 const submit = form.querySelector('[type="submit"]');
                 submit.disabled = true;
-                submit.textContent = 'Opening PayFast…';
+                submit.textContent = 'Opening EFT…';
                 try {
                     await ASIYE.wallet.startTopup(Number(input.value));
                 } catch (error) {
                     submit.disabled = false;
-                    submit.textContent = 'Add funds with PayFast';
-                    app.ui?.toast?.(error.message || 'Unable to start payment.');
+                    submit.textContent = 'Add funds with EFT';
+                    app.ui?.toast?.(error.message || 'Unable to start EFT payment.');
                 }
             };
         } else if (page === 'vehicle') {
