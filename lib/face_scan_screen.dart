@@ -96,7 +96,7 @@ class _AsiyeLiveFaceScanScreenState extends State<AsiyeLiveFaceScanScreen>
       final cameras = await availableCameras();
 
       if (cameras.isEmpty) {
-        throw const CameraException(
+        throw CameraException(
           'NoCamera',
           'No camera is available on this device.',
         );
@@ -560,13 +560,11 @@ class _AsiyeLiveFaceScanScreenState extends State<AsiyeLiveFaceScanScreen>
             child: Transform(
               alignment: Alignment.center,
               transform:
-                  Matrix4.identity()
-                    ..scaleByDouble(
-                      -1.0,
-                      1.0,
-                      1.0,
-                      1.0,
-                    ),
+                  Matrix4.diagonal3Values(
+                    -1.0,
+                    1.0,
+                    1.0,
+                  ),
               child: CameraPreview(
                 controller,
               ),
