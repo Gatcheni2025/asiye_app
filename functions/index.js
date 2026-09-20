@@ -904,3 +904,472 @@ exports.notifyDriversWhenClubReady = functions.database
 
     return null;
   });
+
+
+// =================================================================
+// --- OZOW ONE API WALLET TOP-UP (STAGING) ---
+// =================================================================
+// The mobile/web client never receives Ozow credentials. The passenger
+// authenticates to this function with a Firebase ID token, then the server
+// creates an Ozow hosted Pay by Bank payment and returns only redirectUrl.
+//
+// Before deployment configure these Firebase secrets:
+//   OZOW_CLIENT_ID
+//   OZOW_CLIENT_SECRET
+//   OZOW_SITE_CODE
+//   OZOW_WEBHOOK_SECRET
+//
+// For the trial integration we intentionally use Ozow One API staging.
+// Change both URLs to https://one.ozow.com/v1 only after the staging flow
+// and webhook have been verified with the live Ozow merchant account.
+const ozowClientId = defineSecret("OZOW_CLIENT_ID");
+const ozowClientSecret = defineSecret("OZOW_CLIENT_SECRET");
+const ozowSiteCode = defineSecret("OZOW_SITE_CODE");
+const ozowWebhookSecret = defineSecret("OZOW_WEBHOOK_SECRET");
+
+const OZOW_BASE_URL = "https://stagingone.ozow.com/v1";
+const OZOW_RETURN_URL =
+  "https://us-central1-asiye-80386.cloudfunctions.net/ozowWalletReturn";
+
+function walletCors(request, response) {
+  const origin = request.get("origin");
+  if (origin) response.set("Access-Control-Allow-Origin", origin);
+  else response.set("Access-Control-Allow-Origin", "*");
+  response.set("Vary", "Origin");
+  response.set(
+    "Access-Control-Allow-Headers",
+    "Authorization, Content-Type"
+  );
+  response.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+}
+
+async function getOzowAccessToken(clientId, clientSecret) {
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    scope: "payments",
+    grant_type: "client_credentials"
+  });
+
+  const response = await fetch(`${OZOW_BASE_URL}/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body
+  });
+
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || !payload.access_token) {
+    console.error("Ozow token request failed", {
+      status: response.status,
+      payload
+    });
+    throw new Error("Unable to authenticate the bank payment service.");
+  }
+
+  return payload.access_token;
+}
+
+function ozowMerchantReference() {
+  return (
+    "ASIYE" +
+    Date.now().toString() +
+    crypto.randomBytes(5).toString("hex").toUpperCase()
+  ).slice(0, 45);
+}
+
+exports.createOzowWalletTopup = onRequest(
+  {
+    region: "us-central1",
+    secrets: [
+      ozowClientId,
+      ozowClientSecret,
+      ozowSiteCode
+    ]
+  },
+  async (request, response) => {
+    walletCors(request, response);
+
+    if (request.method === "OPTIONS") {
+      return response.status(204).send("");
+    }
+
+    if (request.method !== "POST") {
+      return response.status(405).json({
+        error: "POST required."
+      });
+    }
+
+    try {
+      const match = (request.get("authorization") || "")
+        .match(/^Bearer (.+)$/);
+
+      if (!match) {
+        return response.status(401).json({
+          error: "Sign in again before adding funds."
+        });
+      }
+
+      const decoded = await admin.auth().verifyIdToken(match[1]);
+      const amount = Number(request.body?.amount);
+
+      if (!Number.isFinite(amount) || amount < 10 || amount > 5000) {
+        return response.status(400).json({
+          error: "Amount must be between R10 and R5,000."
+        });
+      }
+
+      const roundedAmount = Number(amount.toFixed(2));
+      const merchantReference = ozowMerchantReference();
+      const beneficiaryReference =
+        ("ASIYE" + merchantReference.slice(-12))
+          .replace(/[^A-Za-z0-9]/g, "")
+          .slice(0, 20);
+
+      const token = await getOzowAccessToken(
+        ozowClientId.value(),
+        ozowClientSecret.value()
+      );
+
+      const expireAt =
+        new Date(Date.now() + 30 * 60 * 1000).toISOString();
+
+      const paymentRequest = {
+        siteCode: ozowSiteCode.value(),
+        region: "ZA",
+        amount: {
+          currency: "ZAR",
+          value: roundedAmount
+        },
+        merchantReference,
+        beneficiaryReference,
+        expireAt,
+        returnUrl: OZOW_RETURN_URL
+      };
+
+      const ozowResponse = await fetch(
+        `${OZOW_BASE_URL}/payments`,
+        {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json",
+            "Idempotency-Key": merchantReference
+          },
+          body: JSON.stringify(paymentRequest)
+        }
+      );
+
+      const ozowPayment =
+        await ozowResponse.json().catch(() => ({}));
+
+      if (
+        !ozowResponse.ok ||
+        !ozowPayment.id ||
+        !ozowPayment.redirectUrl
+      ) {
+        console.error("Ozow payment request failed", {
+          status: ozowResponse.status,
+          payload: ozowPayment
+        });
+
+        return response.status(502).json({
+          error:
+            ozowPayment.detail ||
+            "Unable to start the EFT payment."
+        });
+      }
+
+      await admin.database()
+        .ref(`walletPayments/${merchantReference}`)
+        .set({
+          uid: decoded.uid,
+          amount: roundedAmount,
+          currency: "ZAR",
+          provider: "ozow",
+          environment: "staging",
+          status: "pending",
+          merchantReference,
+          beneficiaryReference,
+          ozowPaymentId: String(ozowPayment.id),
+          createdAt: admin.database.ServerValue.TIMESTAMP
+        });
+
+      return response.json({
+        provider: "ozow",
+        environment: "staging",
+        merchantReference,
+        paymentId: String(ozowPayment.id),
+        redirectUrl: String(ozowPayment.redirectUrl)
+      });
+
+    } catch (error) {
+      console.error("Create Ozow wallet top-up failed", error);
+
+      return response.status(500).json({
+        error:
+          error?.message ||
+          "Unable to start the EFT payment."
+      });
+    }
+  }
+);
+
+exports.ozowWalletReturn = onRequest(
+  { region: "us-central1" },
+  async (request, response) => {
+    response
+      .status(200)
+      .set("Content-Type", "text/html; charset=utf-8")
+      .set("Cache-Control", "no-store")
+      .send(
+        "<!doctype html>" +
+        "<html><head><meta name='viewport' " +
+        "content='width=device-width,initial-scale=1'>" +
+        "<title>Returning to Asiye</title></head>" +
+        "<body style='font-family:system-ui;background:#f6fbf7;" +
+        "color:#173c2b;display:grid;place-items:center;" +
+        "min-height:100vh;margin:0;text-align:center'>" +
+        "<main><h2>Returning to Asiye…</h2>" +
+        "<p>Your wallet updates only after the bank payment " +
+        "is securely confirmed.</p></main></body></html>"
+      );
+  }
+);
+
+exports.ozowWalletWebhook = onRequest(
+  {
+    region: "us-central1",
+    secrets: [
+      ozowClientId,
+      ozowClientSecret,
+      ozowSiteCode,
+      ozowWebhookSecret
+    ]
+  },
+  async (request, response) => {
+    if (request.method !== "POST") {
+      return response.status(405).send("POST required");
+    }
+
+    const rawBody = request.rawBody;
+
+    if (!rawBody) {
+      return response.status(400).send("Missing raw body");
+    }
+
+    let event;
+
+    try {
+      // Svix 2.x is ESM; dynamic import works from this CommonJS
+      // Firebase Functions file on Node 20.
+      const { Webhook } = await import("svix");
+      const webhook = new Webhook(ozowWebhookSecret.value());
+
+      webhook.verify(rawBody, {
+        "svix-id": request.get("svix-id") || "",
+        "svix-timestamp": request.get("svix-timestamp") || "",
+        "svix-signature": request.get("svix-signature") || ""
+      });
+
+      event = JSON.parse(rawBody.toString("utf8"));
+
+    } catch (error) {
+      console.error("Rejected Ozow webhook", error);
+      return response.status(400).send("Invalid signature");
+    }
+
+    if (
+      event?.type !== "transaction.complete" ||
+      !event?.data?.id
+    ) {
+      return response.status(200).send("OK");
+    }
+
+    const transactionId = String(event.data.id);
+
+    try {
+      const token = await getOzowAccessToken(
+        ozowClientId.value(),
+        ozowClientSecret.value()
+      );
+
+      // Do not trust the event body alone. Read the transaction back
+      // from Ozow after the verified webhook, then match its merchant
+      // reference, site, amount and status to our pending wallet record.
+      const txResponse = await fetch(
+        `${OZOW_BASE_URL}/transactions/${encodeURIComponent(transactionId)}`,
+        {
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Accept": "application/json"
+          }
+        }
+      );
+
+      const transaction =
+        await txResponse.json().catch(() => ({}));
+
+      if (!txResponse.ok) {
+        console.error("Ozow transaction lookup failed", {
+          status: txResponse.status,
+          transactionId,
+          payload: transaction
+        });
+        return response.status(500).send("Retry");
+      }
+
+      const merchantReference =
+        String(transaction.merchantReference || "");
+
+      if (!merchantReference) {
+        console.error(
+          "Ozow transaction has no merchant reference",
+          transactionId
+        );
+        return response.status(200).send("OK");
+      }
+
+      const paymentRef = admin.database()
+        .ref(`walletPayments/${merchantReference}`);
+
+      const paymentSnapshot = await paymentRef.once("value");
+      const payment = paymentSnapshot.val();
+
+      if (!payment || payment.provider !== "ozow") {
+        console.warn(
+          "No Asiye Ozow wallet payment matched",
+          merchantReference
+        );
+        return response.status(200).send("OK");
+      }
+
+      const transactionStatus =
+        String(transaction.status || event.data.status || "");
+
+      const transactionAmount =
+        Number(transaction.amount?.value);
+
+      const currency =
+        String(transaction.amount?.currency || "").toUpperCase();
+
+      const sameSite =
+        String(transaction.siteCode || "") ===
+        String(ozowSiteCode.value());
+
+      const amountMatches =
+        Number.isFinite(transactionAmount) &&
+        transactionAmount.toFixed(2) ===
+          Number(payment.amount).toFixed(2);
+
+      if (
+        transactionStatus !== "Successful" ||
+        currency !== "ZAR" ||
+        !sameSite ||
+        !amountMatches
+      ) {
+        await paymentRef.update({
+          status:
+            transactionStatus === "Pending"
+              ? "pending"
+              : "not_complete",
+          ozowTransactionId: transactionId,
+          ozowStatus: transactionStatus,
+          lastWebhookAt:
+            admin.database.ServerValue.TIMESTAMP
+        });
+
+        return response.status(200).send("OK");
+      }
+
+      const uid = String(payment.uid || "");
+      const amount = Number(payment.amount);
+
+      if (!uid || !Number.isFinite(amount) || amount <= 0) {
+        console.error(
+          "Invalid Asiye wallet payment record",
+          merchantReference
+        );
+        return response.status(200).send("OK");
+      }
+
+      /*
+       * Credit the passenger exactly once. The marker and balance are
+       * changed in one RTDB transaction on the commuter object, so a
+       * duplicate Svix delivery cannot add the same payment twice.
+       */
+      const commuterRef =
+        admin.database().ref(`commuters/${uid}`);
+
+      const creditResult =
+        await commuterRef.transaction(current => {
+          if (!current) return;
+
+          const applied =
+            current.walletAppliedPayments || {};
+
+          if (applied[merchantReference]) {
+            return current;
+          }
+
+          const currentBalance =
+            Number(
+              current.credits ??
+              current.walletBalance ??
+              0
+            ) || 0;
+
+          const newBalance =
+            Number((currentBalance + amount).toFixed(2));
+
+          applied[merchantReference] = {
+            provider: "ozow",
+            amount,
+            transactionId,
+            appliedAt: Date.now()
+          };
+
+          current.walletAppliedPayments = applied;
+          current.credits = newBalance;
+          current.walletBalance = newBalance;
+
+          return current;
+        });
+
+      if (!creditResult.committed) {
+        console.error(
+          "Passenger wallet transaction was not committed",
+          uid,
+          merchantReference
+        );
+        return response.status(500).send("Retry");
+      }
+
+      const creditedBalance =
+        Number(
+          creditResult.snapshot.val()?.credits ??
+          creditResult.snapshot.val()?.walletBalance ??
+          0
+        );
+
+      await paymentRef.update({
+        status: "complete",
+        ozowTransactionId: transactionId,
+        ozowStatus: "Successful",
+        creditedBalance,
+        completedAt:
+          admin.database.ServerValue.TIMESTAMP,
+        lastWebhookAt:
+          admin.database.ServerValue.TIMESTAMP
+      });
+
+      return response.status(200).send("OK");
+
+    } catch (error) {
+      console.error("Ozow wallet webhook failed", error);
+      return response.status(500).send("Retry");
+    }
+  }
+);
