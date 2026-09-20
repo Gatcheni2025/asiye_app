@@ -3203,20 +3203,38 @@ ASIYE_DRIVER.ui = {
             .toUpperCase();
 
 
+        const approvedVehicle =
+            driver.vehicle ||
+            {};
+
+
         const vehicle =
 
             [
+                approvedVehicle.make ||
                 driver.vehicleMake ||
                 driver.make,
 
+                approvedVehicle.model ||
                 driver.vehicleModel ||
                 driver.model,
 
+                approvedVehicle.registration ||
+                driver.vehicleReg ||
+                driver.taxiRegistrationNumber ||
                 driver.registration ||
                 driver.registrationNumber
             ]
             .filter(Boolean)
             .join(' ');
+
+
+        const profileUrl =
+
+            driver.profile_picture_url ||
+            driver.profileImageUrl ||
+            driver.photoURL ||
+            '';
 
 
         const profileInitial =
@@ -3243,18 +3261,48 @@ ASIYE_DRIVER.ui = {
             );
 
 
-        if (profileInitial) {
+        const renderAvatar =
+            target => {
 
-            profileInitial.textContent =
-                initial;
-        }
+                if (!target) return;
+
+                if (profileUrl) {
+                    target.replaceChildren();
+
+                    const image =
+                        document.createElement(
+                            'img'
+                        );
+
+                    image.src =
+                        profileUrl;
+
+                    image.alt =
+                        'Driver profile picture';
+
+                    image.referrerPolicy =
+                        'no-referrer';
+
+                    target.appendChild(
+                        image
+                    );
+
+                    return;
+                }
+
+                target.textContent =
+                    initial;
+            };
 
 
-        if (menuAvatar) {
+        renderAvatar(
+            profileInitial
+        );
 
-            menuAvatar.textContent =
-                initial;
-        }
+
+        renderAvatar(
+            menuAvatar
+        );
 
 
         if (menuName) {
