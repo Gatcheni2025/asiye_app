@@ -177,6 +177,12 @@ ASIYE.booking = {
                 user.phoneNumber ||
                 '',
 
+            commuterProfileImageUrl:
+                user.profile_picture_url ||
+                user.profileImageUrl ||
+                user.photoURL ||
+                '',
+
 
             /* Pickup */
 
