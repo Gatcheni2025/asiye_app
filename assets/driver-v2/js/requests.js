@@ -1134,9 +1134,9 @@ ASIYE_DRIVER.requests = {
                             claimedRequest.rideType ===
                                 'club7'
 
-                            ? 7
+                            ? 5
 
-                            : 4
+                            : 3
                         )
                     );
 
