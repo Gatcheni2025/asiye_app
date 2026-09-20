@@ -977,6 +977,10 @@ ASIYE.ride = {
         const passenger = this.getPassengerData(request);
         const pin = String(passenger.pickupPin ?? request.pickupPin ?? '----');
         const name = request.driverName || 'Your driver';
+        const driverPhoto =
+            request.driverProfileImageUrl ||
+            request.driverPhotoUrl ||
+            '';
         const rating = Number(request.driverRating);
         const phone = String(request.driverPhone || '').replace(/[^\d+]/g, '');
         const icons = {
@@ -1030,7 +1034,15 @@ ASIYE.ride = {
                 </header>
                 <div class="pickup-progress" aria-hidden="true"><span></span><span></span><span></span></div>
                 <div class="pickup-driver">
-                    <div class="pickup-avatar" aria-hidden="true">${escape(name.charAt(0).toUpperCase())}</div>
+                    <div class="pickup-avatar" aria-hidden="true">${
+                        driverPhoto
+                            ? `<img src="${escape(driverPhoto)}" alt="">`
+                            : escape(
+                                name
+                                    .charAt(0)
+                                    .toUpperCase()
+                            )
+                    }</div>
                     <div class="pickup-driver-info"><strong>${escape(name)}</strong>
                         <span>${Number.isFinite(rating) && rating > 0 ? `<span class="pickup-star">★</span> ${rating.toFixed(1)} <span class="pickup-muted">· Driver</span>` : 'Your driver'}</span>
                     </div>
@@ -1406,6 +1418,11 @@ ASIYE.ride = {
 
     driverCard(request) {
 
+        const photo =
+            request.driverProfileImageUrl ||
+            request.driverPhotoUrl ||
+            '';
+
         return `
 
             <div class="asiye-driver-card">
@@ -1413,13 +1430,15 @@ ASIYE.ride = {
                 <div class="menu-avatar">
 
                     ${
-                        ASIYE.ui.escape(
-                            (
-                                request.driverName ||
-                                'D'
+                        photo
+                            ? `<img src="${ASIYE.ui.escape(photo)}" alt="Driver profile picture">`
+                            : ASIYE.ui.escape(
+                                (
+                                    request.driverName ||
+                                    'D'
+                                )
+                                .charAt(0)
                             )
-                            .charAt(0)
-                        )
                     }
 
                 </div>
