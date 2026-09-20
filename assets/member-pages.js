@@ -147,16 +147,14 @@ window.AsiyePages = {
                      */
                     if (
                         window.AsiyeNativeBridge &&
-                        typeof AsiyeNativeBridge.scanImage ===
+                        typeof AsiyeNativeBridge.scanFace ===
                             'function'
                     ) {
                         const result =
                             await AsiyeNativeBridge
-                                .scanImage({
+                                .scanFace({
                                     purpose:
-                                        'driver-profile',
-                                    facing:
-                                        'front'
+                                        'driver-profile'
                                 });
 
                         if (!result) {
