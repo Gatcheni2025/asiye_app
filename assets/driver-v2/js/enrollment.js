@@ -3,6 +3,7 @@
     const status = document.getElementById('enrollmentStatus');
     const photos = {}, previews = {};
     let licenceScan = null;
+    let uploadedSelfieUrl = null;
     let stream, current, user, busy = false;
     const kinds = { selfie: 'Selfie scan', car: 'Vehicle scan', identity: 'ID / passport scan' };
     const stopCamera = () => { stream?.getTracks().forEach(track => track.stop()); stream = null; document.getElementById('captureVideo').hidden = true; document.getElementById('takePhoto').hidden = true; document.getElementById('cancelCamera').hidden = true; };
@@ -66,11 +67,99 @@
 
     const openScan = async key => {
         status.textContent =
-            key === 'licence'
-                ? 'Opening licence scanner…'
-                : `Opening ${kinds[key] || 'camera scan'}…`;
+            key === 'selfie'
+                ? 'Opening live face scan…'
+                : key === 'licence'
+                    ? 'Opening licence scanner…'
+                    : `Opening ${kinds[key] || 'camera scan'}…`;
 
         try {
+            /*
+             * A selfie is not a file upload. Keep the user inside
+             * Asiye, show the live front camera with a face guide,
+             * capture the face, and save it to PHP immediately.
+             */
+            if (key === 'selfie') {
+                if (!user?.uid) {
+                    throw Error(
+                        'Your driver account is still loading.'
+                    );
+                }
+
+                if (!window.AsiyeFaceScanner) {
+                    throw Error(
+                        'Live face scanner is unavailable.'
+                    );
+                }
+
+                if (!window.AsiyePhpImageUpload) {
+                    throw Error(
+                        'Image upload service is unavailable.'
+                    );
+                }
+
+                const result =
+                    await AsiyeFaceScanner
+                        .open({
+                            title:
+                                'Driver face scan',
+                            subtitle:
+                                'Centre your face inside the guide. The captured face becomes your driver profile picture.'
+                        });
+
+                if (!result?.blob) {
+                    status.textContent =
+                        'Face scan cancelled. You can try again.';
+
+                    return;
+                }
+
+                savePhoto(
+                    key,
+                    result.blob
+                );
+
+                status.textContent =
+                    'Saving face scan…';
+
+                const uploaded =
+                    await AsiyePhpImageUpload
+                        .upload(
+                            result.blob,
+                            {
+                                userId:
+                                    user.uid,
+                                purpose:
+                                    'driver-profile',
+                                filename:
+                                    'driver-profile.jpg'
+                            }
+                        );
+
+                uploadedSelfieUrl =
+                    uploaded.url;
+
+                try {
+                    await firebase.auth()
+                        .currentUser
+                        ?.updateProfile?.({
+                            photoURL:
+                                uploadedSelfieUrl
+                        });
+                } catch (error) {
+                    console.warn(
+                        'Driver Auth profile face update skipped:',
+                        error
+                    );
+                }
+
+                status.textContent =
+                    'Face scan saved. It will be used as your driver profile picture after approval.';
+
+                return;
+            }
+
+
             if (window.AsiyeNativeBridge) {
                 const result =
                     await AsiyeNativeBridge.scanImage({
@@ -291,6 +380,16 @@
                         licenceScan
                 })
             ) {
+                if (
+                    key === 'selfie' &&
+                    uploadedSelfieUrl
+                ) {
+                    documents[key] =
+                        uploadedSelfieUrl;
+
+                    continue;
+                }
+
                 status.textContent =
                     `Uploading ${key} scan…`;
 
@@ -380,9 +479,7 @@
                 });
             form.reset(); form.hidden = true; status.textContent='Application submitted. Waiting for verification. We will review your details before you can start driving.';
         } catch (error) {
-            if (error.code === 'storage/unauthorized') {
-                status.textContent = 'The scanned documents could not be submitted. Enrollment storage permissions must be enabled before you try again.';
-            } else if (/permission.?denied/i.test(String(error.code || error.message))) {
+            if (/permission.?denied/i.test(String(error.code || error.message))) {
                 status.textContent = 'The enrollment record could not be saved. Check Realtime Database enrollment permissions or refresh to see whether it was already submitted. Your entered details are still here.';
             } else {
                 status.textContent = 'Submission failed. Your entered details are still here. Check your connection and try again.';
