@@ -1499,6 +1499,113 @@
         }
 
         // ================================================================
+        // ADMIN-APPROVED VEHICLE
+        // ================================================================
+        function collectApprovedVehicle(app) {
+            const type = (
+                prompt(
+                    'Vehicle type (for example: e-hailing, sedan, SUV, 4-seater or 7-seater):',
+                    app.vehicleType ||
+                    app.carCategory ||
+                    'e-hailing'
+                ) || ''
+            ).trim();
+
+            if (!type) return null;
+
+            const make = (
+                prompt(
+                    'Vehicle make:',
+                    app.vehicleMake ||
+                    app.make ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!make) return null;
+
+            const model = (
+                prompt(
+                    'Vehicle model:',
+                    app.vehicleModel ||
+                    app.model ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!model) return null;
+
+            const colour = (
+                prompt(
+                    'Vehicle colour:',
+                    app.vehicleColor ||
+                    app.color ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!colour) return null;
+
+            const registration = (
+                prompt(
+                    'Vehicle registration:',
+                    app.taxiRegistrationNumber ||
+                    app.vehicleReg ||
+                    app.reg ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!registration) return null;
+
+            const seatInput =
+                prompt(
+                    'Number of passenger seats:',
+                    String(
+                        app.vehicleSeats ||
+                        app.seats ||
+                        app.capacity ||
+                        (
+                            /7/.test(type)
+                                ? 7
+                                : 4
+                        )
+                    )
+                );
+
+            if (seatInput === null) {
+                return null;
+            }
+
+            const seats =
+                Number(
+                    seatInput
+                );
+
+            if (
+                !Number.isInteger(seats) ||
+                seats < 1 ||
+                seats > 15
+            ) {
+                showToast(
+                    'Enter a valid passenger seat count between 1 and 15.',
+                    'error'
+                );
+                return null;
+            }
+
+            return {
+                type,
+                make,
+                model,
+                colour,
+                registration,
+                seats
+            };
+        }
+
+
+        // ================================================================
         // APPROVE DRIVER
         // ================================================================
         function approveDriver(key) {
@@ -1510,6 +1617,19 @@
                 return;
             }
 
+            const approvedVehicle =
+                collectApprovedVehicle(
+                    app
+                );
+
+            if (!approvedVehicle) {
+                showToast(
+                    'Approval cancelled. Vehicle details must be completed by an administrator.',
+                    'info'
+                );
+                return;
+            }
+
             const driverId = app.email ? app.email.replace(/[^a-zA-Z0-9]/g, '_') : `driver_${Date.now()}`;
             const existingAuthUid = app.userUid || app.authUid || null;
 
@@ -1518,10 +1638,46 @@
                 surname: app.fullName ? app.fullName.split(' ').slice(1).join(' ') : '',
                 email: app.email || '',
                 phone: app.phone || '',
-                taxiRegistrationNumber: app.taxiRegistrationNumber || app.reg || 'N/A',
-                vehicleMake: app.vehicleMake || 'N/A',
-                vehicleModel: app.vehicleModel || 'N/A',
-                vehicleColor: app.vehicleColor || 'N/A',
+                taxiRegistrationNumber:
+                    approvedVehicle.registration,
+                vehicleReg:
+                    approvedVehicle.registration,
+                vehicleType:
+                    approvedVehicle.type,
+                vehicleMake:
+                    approvedVehicle.make,
+                vehicleModel:
+                    approvedVehicle.model,
+                vehicleColor:
+                    approvedVehicle.colour,
+                vehicleSeats:
+                    approvedVehicle.seats,
+                seats:
+                    approvedVehicle.seats,
+                vehicle: {
+                    type:
+                        approvedVehicle.type,
+                    make:
+                        approvedVehicle.make,
+                    model:
+                        approvedVehicle.model,
+                    colour:
+                        approvedVehicle.colour,
+                    registration:
+                        approvedVehicle.registration,
+                    seats:
+                        approvedVehicle.seats
+                },
+                vehicleApproved:
+                    true,
+                vehicleApprovalStatus:
+                    'approved',
+                vehicleApprovedAt:
+                    firebase.database.ServerValue.TIMESTAMP,
+                vehicleApprovedBy:
+                    auth.currentUser
+                        ? auth.currentUser.uid
+                        : 'admin',
                 vehicleYear: app.vehicleYear || 'N/A',
                 vehiclePhoto: app.vehiclePhoto || app.documents?.CAR_FRONT || '',
                 profile_picture_url: app.profile_picture_url || app.documents?.FACE || '',
@@ -1532,8 +1688,16 @@
                 isOnline: false,
                 isBroadcasting: false,
                 isFull: false,
-                rating: 5.0,
+                rating: 0,
+                ratingSummary: {
+                    total: 0,
+                    count: 0
+                },
                 totalTrips: 0,
+                todayTrips: 0,
+                totalEarnings: 0,
+                todayEarnings: 0,
+                dailyEarnings: 0,
                 earnings: 0,
                 walletBalance: 0,
                 commissionDebt: 0,
@@ -1554,7 +1718,21 @@
                         verifiedAt: firebase.database.ServerValue.TIMESTAMP,
                         driverId: driverId,
                         verifiedBy: auth.currentUser ? auth.currentUser.uid : 'admin',
-                        hasLogin: false
+                        hasLogin: false,
+                        approvedVehicle: {
+                            type:
+                                approvedVehicle.type,
+                            make:
+                                approvedVehicle.make,
+                            model:
+                                approvedVehicle.model,
+                            colour:
+                                approvedVehicle.colour,
+                            registration:
+                                approvedVehicle.registration,
+                            seats:
+                                approvedVehicle.seats
+                        }
                     });
                 })
                 .then(() => {
