@@ -85,14 +85,6 @@ ASIYE_DRIVER.navigator = {
     },
 
     enterNavigationMode() {
-        if (!this.target) {
-            ASIYE_DRIVER.ui?.toast?.(
-                'No active navigation.'
-            );
-
-            return;
-        }
-
         this.navigationMode = true;
         this.follow = true;
 
@@ -105,9 +97,21 @@ ASIYE_DRIVER.navigator = {
 
         this.updateNavigationButton();
 
-        this.update(
-            ASIYE_DRIVER.state.location
-        );
+        if (this.target) {
+            this.update(
+                ASIYE_DRIVER.state.location
+            );
+        } else {
+            const location =
+                ASIYE_DRIVER.state?.location || {};
+
+            ASIYE_DRIVER.map
+                ?.followDriverNavigationView?.(
+                    location.latitude,
+                    location.longitude,
+                    location.heading
+                );
+        }
     },
 
     exitNavigationMode() {
@@ -222,11 +226,27 @@ ASIYE_DRIVER.navigator = {
     },
 
     update(location) {
-        if (!this.target) return;
         if (!Number.isFinite(location?.latitude) || !Number.isFinite(location?.longitude)) {
             this.text('navInstruction', 'Waiting for GPS…');
             return;
         }
+
+        if (!this.target) {
+            if (
+                this.navigationMode &&
+                this.follow
+            ) {
+                ASIYE_DRIVER.map
+                    ?.followDriverNavigationView?.(
+                        location.latitude,
+                        location.longitude,
+                        location.heading
+                    );
+            }
+
+            return;
+        }
+
         const point = [location.longitude, location.latitude];
         const map = ASIYE_DRIVER.map.instance;
         if (
