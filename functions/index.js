@@ -1373,3 +1373,1851 @@ exports.ozowWalletWebhook = onRequest(
     }
   }
 );
+
+
+// =================================================================
+// --- ASIYE ADMIN CONTROL PLANE ---
+// =================================================================
+
+async function requireAsiyeAdmin(context) {
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "Sign in with an Asiye administrator account."
+    );
+  }
+
+  const token = context.auth.token || {};
+
+  if (
+    token.admin === true ||
+    token.enrollmentReviewer === true ||
+    token.asiyeAdmin === true
+  ) {
+    return {
+      uid: context.auth.uid,
+      email: token.email || ""
+    };
+  }
+
+  const snapshot = await admin.database()
+    .ref(`admins/${context.auth.uid}`)
+    .once("value");
+
+  const record = snapshot.val();
+
+  const allowed =
+    snapshot.exists() &&
+    record !== false &&
+    (
+      typeof record !== "object" ||
+      (
+        record.active !== false &&
+        record.disabled !== true
+      )
+    );
+
+  if (!allowed) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "This account is not authorised to use Asiye Admin."
+    );
+  }
+
+  return {
+    uid: context.auth.uid,
+    email:
+      token.email ||
+      (
+        typeof record === "object"
+          ? String(record.email || "")
+          : ""
+      )
+  };
+}
+
+function safeAdminString(value, maxLength = 250) {
+  return String(value == null ? "" : value)
+    .trim()
+    .slice(0, maxLength);
+}
+
+function safeAdminNumber(value, fallback = 0) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+}
+
+function adminAuditRef() {
+  return admin.database()
+    .ref("adminAudit")
+    .push();
+}
+
+async function writeAdminAudit(actor, action, target, details = {}) {
+  const ref = adminAuditRef();
+
+  await ref.set({
+    action,
+    target: safeAdminString(target, 180),
+    details,
+    adminUid: actor.uid,
+    adminEmail: actor.email || "",
+    createdAt: admin.database.ServerValue.TIMESTAMP
+  });
+
+  return ref.key;
+}
+
+function normaliseApprovedVehicle(input = {}, fallback = {}) {
+  const source = {
+    ...fallback,
+    ...input
+  };
+
+  const seats = Math.min(
+    15,
+    Math.max(
+      1,
+      Math.round(
+        safeAdminNumber(
+          source.seats ??
+          source.vehicleSeats ??
+          fallback.seats ??
+          fallback.vehicleSeats,
+          4
+        )
+      )
+    )
+  );
+
+  return {
+    type:
+      safeAdminString(
+        source.type ??
+        source.vehicleType ??
+        fallback.type ??
+        fallback.vehicleType,
+        60
+      ) || "ehailing",
+    make:
+      safeAdminString(
+        source.make ??
+        source.vehicleMake ??
+        fallback.make ??
+        fallback.vehicleMake,
+        80
+      ),
+    model:
+      safeAdminString(
+        source.model ??
+        source.vehicleModel ??
+        fallback.model ??
+        fallback.vehicleModel,
+        80
+      ),
+    colour:
+      safeAdminString(
+        source.colour ??
+        source.color ??
+        source.vehicleColor ??
+        fallback.colour ??
+        fallback.vehicleColor,
+        60
+      ),
+    registration:
+      safeAdminString(
+        source.registration ??
+        source.vehicleReg ??
+        source.taxiRegistrationNumber ??
+        fallback.registration ??
+        fallback.vehicleReg,
+        30
+      ),
+    seats
+  };
+}
+
+exports.adminWhoAmI = functions.https.onCall(
+  async (data, context) => {
+    const actor = await requireAsiyeAdmin(context);
+
+    return {
+      ok: true,
+      uid: actor.uid,
+      email: actor.email
+    };
+  }
+);
+
+exports.reviewDriverEnrollment = functions.https.onCall(
+  async (data, context) => {
+    const actor = await requireAsiyeAdmin(context);
+
+    const uid = safeAdminString(data?.uid, 160);
+    const decision =
+      safeAdminString(data?.decision, 20).toLowerCase();
+    const reason =
+      safeAdminString(data?.reason, 600);
+
+    if (!uid) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Driver UID is required."
+      );
+    }
+
+    if (!["approved", "rejected"].includes(decision)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Decision must be approved or rejected."
+      );
+    }
+
+    const enrollmentRef =
+      admin.database()
+        .ref(`driverEnrollments/${uid}`);
+
+    const enrollmentSnapshot =
+      await enrollmentRef.once("value");
+
+    const enrollment =
+      enrollmentSnapshot.val();
+
+    if (!enrollment) {
+      throw new functions.https.HttpsError(
+        "not-found",
+        "Driver enrollment was not found."
+      );
+    }
+
+    const now =
+      admin.database.ServerValue.TIMESTAMP;
+
+    const approval = {
+      version: 1,
+      status: decision,
+      reviewedAt: now,
+      reviewedBy: actor.uid,
+      reviewerEmail: actor.email || "",
+      reason:
+        decision === "rejected"
+          ? reason || "Application not approved."
+          : ""
+    };
+
+    const updates = {
+      [`driverApprovals/${uid}`]:
+        approval,
+      [`driverEnrollments/${uid}/status`]:
+        decision,
+      [`driverEnrollments/${uid}/reviewedAt`]:
+        now,
+      [`driverEnrollments/${uid}/reviewedBy`]:
+        actor.uid
+    };
+
+    if (decision === "rejected") {
+      updates[
+        `driverEnrollments/${uid}/rejectionReason`
+      ] =
+        approval.reason;
+
+      updates[
+        `notifications/taxis/${uid}/admin_review_${Date.now()}`
+      ] = {
+        type: "driver_application_rejected",
+        title: "Driver application update",
+        body: approval.reason,
+        timestamp: now
+      };
+
+      await admin.database()
+        .ref()
+        .update(updates);
+
+      await writeAdminAudit(
+        actor,
+        "driver_enrollment_rejected",
+        uid,
+        {
+          reason: approval.reason
+        }
+      );
+
+      return {
+        ok: true,
+        status: "rejected"
+      };
+    }
+
+    const approvedVehicle =
+      normaliseApprovedVehicle(
+        data?.vehicle || {},
+        enrollment.vehiclePending || enrollment
+      );
+
+    if (
+      !approvedVehicle.make ||
+      !approvedVehicle.model ||
+      !approvedVehicle.registration
+    ) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Vehicle make, model and registration are required before approval."
+      );
+    }
+
+    let authUser = null;
+
+    try {
+      authUser =
+        await admin.auth()
+          .getUser(uid);
+    } catch (error) {
+      console.warn(
+        "Driver auth profile could not be loaded during approval:",
+        uid,
+        error?.message || error
+      );
+    }
+
+    const currentTaxiSnapshot =
+      await admin.database()
+        .ref(`taxis/${uid}`)
+        .once("value");
+
+    const currentTaxi =
+      currentTaxiSnapshot.val() || {};
+
+    const fullName =
+      safeAdminString(
+        enrollment.fullName ||
+        currentTaxi.fullName ||
+        currentTaxi.name ||
+        authUser?.displayName ||
+        "Asiye Driver",
+        120
+      );
+
+    const nameParts =
+      fullName.split(/\s+/).filter(Boolean);
+
+    const driverPatch = {
+      name:
+        fullName,
+      fullName:
+        fullName,
+      surname:
+        nameParts.slice(1).join(" "),
+      email:
+        safeAdminString(
+          authUser?.email ||
+          currentTaxi.email ||
+          "",
+          180
+        ),
+      phone:
+        safeAdminString(
+          enrollment.phone ||
+          authUser?.phoneNumber ||
+          currentTaxi.phone ||
+          "",
+          40
+        ),
+      authUid:
+        uid,
+      userUid:
+        uid,
+      hasLogin:
+        true,
+      taxiRegistrationNumber:
+        approvedVehicle.registration,
+      vehicleReg:
+        approvedVehicle.registration,
+      vehicleType:
+        approvedVehicle.type,
+      vehicleMake:
+        approvedVehicle.make,
+      vehicleModel:
+        approvedVehicle.model,
+      vehicleColor:
+        approvedVehicle.colour,
+      vehicleSeats:
+        approvedVehicle.seats,
+      seats:
+        approvedVehicle.seats,
+      vehicle: {
+        type:
+          approvedVehicle.type,
+        make:
+          approvedVehicle.make,
+        model:
+          approvedVehicle.model,
+        colour:
+          approvedVehicle.colour,
+        registration:
+          approvedVehicle.registration,
+        seats:
+          approvedVehicle.seats
+      },
+      vehiclePending:
+        null,
+      vehicleApproved:
+        true,
+      vehicleApprovalStatus:
+        "approved",
+      vehicleApprovedAt:
+        now,
+      vehicleApprovedBy:
+        actor.uid,
+      profile_picture_url:
+        enrollment.profile_picture_url ||
+        enrollment.documents?.selfie ||
+        currentTaxi.profile_picture_url ||
+        "",
+      profileImageUrl:
+        enrollment.profile_picture_url ||
+        enrollment.documents?.selfie ||
+        currentTaxi.profileImageUrl ||
+        "",
+      vehiclePhoto:
+        enrollment.vehiclePhoto ||
+        enrollment.documents?.car ||
+        currentTaxi.vehiclePhoto ||
+        "",
+      documents:
+        enrollment.documents ||
+        currentTaxi.documents ||
+        {},
+      references:
+        enrollment.references ||
+        currentTaxi.references ||
+        {},
+      banking:
+        enrollment.banking ||
+        currentTaxi.banking ||
+        {},
+      verificationStatus:
+        "verified",
+      status:
+        "active",
+      provisionalActivation:
+        true,
+      isOnline:
+        false,
+      isBroadcasting:
+        false,
+      isFull:
+        false,
+      verifiedAt:
+        now,
+      verifiedBy:
+        actor.uid,
+      enrollmentVersion:
+        1,
+      updatedAt:
+        now
+    };
+
+    if (!currentTaxi.createdAt) {
+      driverPatch.createdAt =
+        now;
+    }
+
+    if (currentTaxi.walletBalance == null) {
+      driverPatch.walletBalance =
+        0;
+    }
+
+    if (currentTaxi.totalEarnings == null) {
+      driverPatch.totalEarnings =
+        0;
+    }
+
+    if (currentTaxi.totalTrips == null) {
+      driverPatch.totalTrips =
+        0;
+    }
+
+    if (!currentTaxi.ratingSummary) {
+      driverPatch.ratingSummary = {
+        total: 0,
+        count: 0
+      };
+    }
+
+    updates[
+      `taxis/${uid}`
+    ] = {
+      ...currentTaxi,
+      ...driverPatch
+    };
+
+    updates[
+      `driverEnrollments/${uid}/approvedVehicle`
+    ] =
+      approvedVehicle;
+
+    updates[
+      `notifications/taxis/${uid}/admin_review_${Date.now()}`
+    ] = {
+      type:
+        "driver_application_approved",
+      title:
+        "Driver application approved",
+      body:
+        "Your Asiye driver profile has been approved. Sign in to continue.",
+      timestamp:
+        now
+    };
+
+    await admin.database()
+      .ref()
+      .update(updates);
+
+    await writeAdminAudit(
+      actor,
+      "driver_enrollment_approved",
+      uid,
+      {
+        registration:
+          approvedVehicle.registration,
+        vehicle:
+          `${approvedVehicle.make} ${approvedVehicle.model}`
+            .trim()
+      }
+    );
+
+    return {
+      ok: true,
+      status: "approved",
+      driverId: uid
+    };
+  }
+);
+
+exports.adminManagePlatform = functions.https.onCall(
+  async (data, context) => {
+    const actor =
+      await requireAsiyeAdmin(context);
+
+    const action =
+      safeAdminString(
+        data?.action,
+        60
+      );
+
+    if (!action) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Admin action is required."
+      );
+    }
+
+    const root =
+      admin.database()
+        .ref();
+
+    if (action === "updatePassenger") {
+      const id =
+        safeAdminString(data?.id, 160);
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Passenger ID is required."
+        );
+      }
+
+      const source =
+        data?.patch || {};
+
+      const patch = {};
+
+      if ("name" in source) {
+        patch.name =
+          safeAdminString(
+            source.name,
+            120
+          );
+      }
+
+      if ("phone" in source) {
+        patch.phone =
+          safeAdminString(
+            source.phone,
+            40
+          );
+      }
+
+      if ("email" in source) {
+        patch.email =
+          safeAdminString(
+            source.email,
+            180
+          );
+      }
+
+      if ("isActive" in source) {
+        patch.isActive =
+          source.isActive !== false;
+      }
+
+      if ("homeAddress" in source) {
+        patch.homeAddress =
+          safeAdminString(
+            source.homeAddress,
+            300
+          );
+      }
+
+      if ("workAddress" in source) {
+        patch.workAddress =
+          safeAdminString(
+            source.workAddress,
+            300
+          );
+      }
+
+      patch.adminUpdatedAt =
+        admin.database.ServerValue.TIMESTAMP;
+
+      await admin.database()
+        .ref(`commuters/${id}`)
+        .update(patch);
+
+      await writeAdminAudit(
+        actor,
+        "passenger_updated",
+        id,
+        {
+          fields:
+            Object.keys(patch)
+              .filter(
+                key =>
+                  key !==
+                  "adminUpdatedAt"
+              )
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "updateDriver") {
+      const id =
+        safeAdminString(data?.id, 160);
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Driver ID is required."
+        );
+      }
+
+      const source =
+        data?.patch || {};
+
+      const patch = {};
+
+      const strings = [
+        ["name", 120],
+        ["fullName", 120],
+        ["phone", 40],
+        ["email", 180],
+        ["area", 120],
+        ["assignedRank", 120],
+        ["vehicleType", 60],
+        ["vehicleMake", 80],
+        ["vehicleModel", 80],
+        ["vehicleColor", 60],
+        ["vehicleReg", 30],
+        ["taxiRegistrationNumber", 30]
+      ];
+
+      for (const [field, max] of strings) {
+        if (field in source) {
+          patch[field] =
+            safeAdminString(
+              source[field],
+              max
+            );
+        }
+      }
+
+      if ("vehicleSeats" in source) {
+        patch.vehicleSeats =
+          Math.min(
+            15,
+            Math.max(
+              1,
+              Math.round(
+                safeAdminNumber(
+                  source.vehicleSeats,
+                  4
+                )
+              )
+            )
+          );
+
+        patch.seats =
+          patch.vehicleSeats;
+      }
+
+      if ("isOnline" in source) {
+        patch.isOnline =
+          source.isOnline === true;
+      }
+
+      if ("verificationStatus" in source) {
+        const status =
+          safeAdminString(
+            source.verificationStatus,
+            30
+          );
+
+        if (
+          ![
+            "verified",
+            "unverified",
+            "suspended"
+          ].includes(status)
+        ) {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Unsupported driver verification status."
+          );
+        }
+
+        patch.verificationStatus =
+          status;
+
+        if (
+          status !==
+          "verified"
+        ) {
+          patch.isOnline =
+            false;
+          patch.isBroadcasting =
+            false;
+          patch.provisionalActivation =
+            false;
+        }
+      }
+
+      patch.adminUpdatedAt =
+        admin.database.ServerValue.TIMESTAMP;
+
+      await admin.database()
+        .ref(`taxis/${id}`)
+        .update(patch);
+
+      await writeAdminAudit(
+        actor,
+        "driver_updated",
+        id,
+        {
+          fields:
+            Object.keys(patch)
+              .filter(
+                key =>
+                  key !==
+                  "adminUpdatedAt"
+              )
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "adjustWallet") {
+      const passengerId =
+        safeAdminString(
+          data?.passengerId,
+          160
+        );
+
+      const delta =
+        safeAdminNumber(
+          data?.delta,
+          NaN
+        );
+
+      const reason =
+        safeAdminString(
+          data?.reason,
+          400
+        );
+
+      if (!passengerId) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Passenger ID is required."
+        );
+      }
+
+      if (
+        !Number.isFinite(delta) ||
+        delta === 0 ||
+        Math.abs(delta) > 5000
+      ) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Wallet adjustment must be between -R5,000 and R5,000 and cannot be zero."
+        );
+      }
+
+      if (!reason) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "A wallet adjustment reason is required."
+        );
+      }
+
+      const passengerRef =
+        admin.database()
+          .ref(
+            `commuters/${passengerId}`
+          );
+
+      const result =
+        await passengerRef.transaction(
+          current => {
+            if (!current) {
+              return;
+            }
+
+            const balance =
+              safeAdminNumber(
+                current.walletBalance ??
+                current.credits,
+                0
+              );
+
+            const next =
+              Math.max(
+                0,
+                Math.round(
+                  (balance + delta) * 100
+                ) / 100
+              );
+
+            current.walletBalance =
+              next;
+
+            current.credits =
+              next;
+
+            current.walletAdminUpdatedAt =
+              Date.now();
+
+            return current;
+          }
+        );
+
+      if (!result.committed) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Passenger could not be found."
+        );
+      }
+
+      const balance =
+        safeAdminNumber(
+          result.snapshot.val()
+            ?.walletBalance,
+          0
+        );
+
+      const adjustmentRef =
+        admin.database()
+          .ref("walletAdjustments")
+          .push();
+
+      await adjustmentRef.set({
+        passengerId,
+        delta,
+        balanceAfter:
+          balance,
+        reason,
+        adminUid:
+          actor.uid,
+        adminEmail:
+          actor.email || "",
+        createdAt:
+          admin.database.ServerValue.TIMESTAMP
+      });
+
+      await writeAdminAudit(
+        actor,
+        "wallet_adjusted",
+        passengerId,
+        {
+          delta,
+          balanceAfter:
+            balance,
+          reason
+        }
+      );
+
+      return {
+        ok: true,
+        balance
+      };
+    }
+
+    if (action === "updateRequest") {
+      const id =
+        safeAdminString(data?.id, 160);
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Request ID is required."
+        );
+      }
+
+      const snapshot =
+        await admin.database()
+          .ref(`requests/${id}`)
+          .once("value");
+
+      const request =
+        snapshot.val();
+
+      if (!request) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Booking was not found."
+        );
+      }
+
+      const source =
+        data?.patch || {};
+
+      const patch = {};
+
+      if ("status" in source) {
+        const status =
+          safeAdminString(
+            source.status,
+            50
+          );
+
+        const allowed = [
+          "pending",
+          "searching",
+          "driver_busy",
+          "pooling",
+          "waiting_members",
+          "driver_waiting",
+          "pool_ready",
+          "accepted",
+          "driver_on_way",
+          "arrived",
+          "collecting_passengers",
+          "all_onboard",
+          "passenger_onboard",
+          "in_transit",
+          "completed",
+          "cancelled_by_admin",
+          "cancelled_by_driver",
+          "cancelled_by_commuter",
+          "rejected"
+        ];
+
+        if (!allowed.includes(status)) {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Unsupported booking status."
+          );
+        }
+
+        patch.status =
+          status;
+      }
+
+      for (
+        const field
+        of [
+          "finalAmount",
+          "agreedFare",
+          "calculatedPrice"
+        ]
+      ) {
+        if (field in source) {
+          const amount =
+            safeAdminNumber(
+              source[field],
+              NaN
+            );
+
+          if (
+            !Number.isFinite(amount) ||
+            amount < 0 ||
+            amount > 100000
+          ) {
+            throw new functions.https.HttpsError(
+              "invalid-argument",
+              "Fare amount is invalid."
+            );
+          }
+
+          patch[field] =
+            Math.round(
+              amount * 100
+            ) / 100;
+        }
+      }
+
+      if ("paymentMethod" in source) {
+        patch.paymentMethod =
+          safeAdminString(
+            source.paymentMethod,
+            40
+          );
+      }
+
+      patch.adminUpdatedAt =
+        admin.database.ServerValue.TIMESTAMP;
+      patch.adminUpdatedBy =
+        actor.uid;
+
+      const multi = {
+        [`requests/${id}`]:
+          {
+            ...request,
+            ...patch
+          }
+      };
+
+      if (
+        request.type ===
+        "delivery"
+      ) {
+        const mirrorSnapshot =
+          await admin.database()
+            .ref(
+              `delivery_requests/${id}`
+            )
+            .once("value");
+
+        multi[
+          `delivery_requests/${id}`
+        ] = {
+          ...(mirrorSnapshot.val() || request),
+          ...patch
+        };
+      }
+
+      await root.update(
+        multi
+      );
+
+      await writeAdminAudit(
+        actor,
+        "booking_updated",
+        id,
+        {
+          fields:
+            Object.keys(patch)
+              .filter(
+                key =>
+                  ![
+                    "adminUpdatedAt",
+                    "adminUpdatedBy"
+                  ].includes(key)
+              )
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "assignDriver") {
+      const requestId =
+        safeAdminString(
+          data?.requestId,
+          160
+        );
+
+      const driverId =
+        safeAdminString(
+          data?.driverId,
+          160
+        );
+
+      if (
+        !requestId ||
+        !driverId
+      ) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Booking and driver IDs are required."
+        );
+      }
+
+      const [
+        requestSnapshot,
+        driverSnapshot
+      ] =
+        await Promise.all([
+          admin.database()
+            .ref(
+              `requests/${requestId}`
+            )
+            .once("value"),
+          admin.database()
+            .ref(
+              `taxis/${driverId}`
+            )
+            .once("value")
+        ]);
+
+      const request =
+        requestSnapshot.val();
+      const driver =
+        driverSnapshot.val();
+
+      if (!request) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Booking was not found."
+        );
+      }
+
+      if (!driver) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Driver was not found."
+        );
+      }
+
+      if (
+        driver.verificationStatus !==
+          "verified" &&
+        driver.provisionalActivation !==
+          true
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Only an approved driver can be assigned."
+        );
+      }
+
+      const timestamp =
+        admin.database.ServerValue.TIMESTAMP;
+
+      const requestPatch = {
+        taxiId:
+          driverId,
+        assignedTaxiId:
+          driverId,
+        driverAuthUid:
+          driver.authUid ||
+          driver.userUid ||
+          driverId,
+        driverName:
+          driver.name ||
+          driver.fullName ||
+          "Asiye Driver",
+        driverPhone:
+          driver.phone ||
+          "",
+        driverRating:
+          safeAdminNumber(
+            driver.rating,
+            0
+          ),
+        status:
+          request.type ===
+          "club"
+            ? (
+                request.poolReady
+                  ? "pool_ready"
+                  : "driver_waiting"
+              )
+            : "accepted",
+        acceptedAt:
+          timestamp,
+        assignedByAdmin:
+          actor.uid
+      };
+
+      const multi = {
+        [`requests/${requestId}`]:
+          {
+            ...request,
+            ...requestPatch
+          },
+        [`taxis/${driverId}/currentRequest`]:
+          requestId,
+        [`taxis/${driverId}/isFull`]:
+          false
+      };
+
+      if (
+        request.type ===
+        "delivery"
+      ) {
+        const mirror =
+          (
+            await admin.database()
+              .ref(
+                `delivery_requests/${requestId}`
+              )
+              .once("value")
+          ).val() || request;
+
+        multi[
+          `delivery_requests/${requestId}`
+        ] = {
+          ...mirror,
+          ...requestPatch
+        };
+      }
+
+      const passengerIds =
+        request.type ===
+          "club"
+          ? Object.keys(
+              request.passengers || {}
+            )
+          : [
+              request.commuterId
+            ].filter(Boolean);
+
+      for (
+        const passengerId
+        of passengerIds
+      ) {
+        const key =
+          admin.database()
+            .ref(
+              `notifications/commuters/${passengerId}`
+            )
+            .push()
+            .key;
+
+        multi[
+          `notifications/commuters/${passengerId}/${key}`
+        ] = {
+          type:
+            "request_accepted",
+          requestId,
+          driverId,
+          driverName:
+            requestPatch.driverName,
+          title:
+            "Driver assigned",
+          timestamp
+        };
+      }
+
+      await root.update(
+        multi
+      );
+
+      await writeAdminAudit(
+        actor,
+        "driver_assigned",
+        requestId,
+        {
+          driverId
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "cancelRequest") {
+      const requestId =
+        safeAdminString(
+          data?.requestId,
+          160
+        );
+
+      const reason =
+        safeAdminString(
+          data?.reason,
+          500
+        );
+
+      if (!requestId) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Booking ID is required."
+        );
+      }
+
+      const requestRef =
+        admin.database()
+          .ref(
+            `requests/${requestId}`
+          );
+
+      const snapshot =
+        await requestRef.once("value");
+
+      const request =
+        snapshot.val();
+
+      if (!request) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Booking was not found."
+        );
+      }
+
+      const timestamp =
+        admin.database.ServerValue.TIMESTAMP;
+
+      const patch = {
+        status:
+          "cancelled_by_admin",
+        cancelledAt:
+          timestamp,
+        cancelledBy:
+          actor.uid,
+        cancellationReason:
+          reason ||
+          "Cancelled by Asiye Admin"
+      };
+
+      const multi = {
+        [`requests/${requestId}`]:
+          {
+            ...request,
+            ...patch
+          }
+      };
+
+      if (
+        request.type ===
+        "delivery"
+      ) {
+        const mirror =
+          (
+            await admin.database()
+              .ref(
+                `delivery_requests/${requestId}`
+              )
+              .once("value")
+          ).val() || request;
+
+        multi[
+          `delivery_requests/${requestId}`
+        ] = {
+          ...mirror,
+          ...patch
+        };
+      }
+
+      if (request.taxiId) {
+        multi[
+          `taxis/${request.taxiId}/currentRequest`
+        ] =
+          null;
+        multi[
+          `taxis/${request.taxiId}/isFull`
+        ] =
+          false;
+      }
+
+      const passengerIds =
+        request.type ===
+          "club"
+          ? Object.keys(
+              request.passengers || {}
+            )
+          : [
+              request.commuterId
+            ].filter(Boolean);
+
+      for (
+        const passengerId
+        of passengerIds
+      ) {
+        multi[
+          `commuters/${passengerId}/currentRequest`
+        ] =
+          null;
+      }
+
+      await root.update(
+        multi
+      );
+
+      await writeAdminAudit(
+        actor,
+        "booking_cancelled",
+        requestId,
+        {
+          reason:
+            patch.cancellationReason
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "reviewPayout") {
+      const collection =
+        safeAdminString(
+          data?.collection,
+          40
+        );
+
+      const id =
+        safeAdminString(
+          data?.id,
+          160
+        );
+
+      const status =
+        safeAdminString(
+          data?.status,
+          30
+        )
+          .toLowerCase();
+
+      const note =
+        safeAdminString(
+          data?.note,
+          500
+        );
+
+      if (
+        ![
+          "payout_requests",
+          "withdrawals"
+        ].includes(collection)
+      ) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Unsupported payout collection."
+        );
+      }
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Payout ID is required."
+        );
+      }
+
+      if (
+        ![
+          "pending",
+          "approved",
+          "rejected",
+          "paid"
+        ].includes(status)
+      ) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Unsupported payout status."
+        );
+      }
+
+      await admin.database()
+        .ref(
+          `${collection}/${id}`
+        )
+        .update({
+          status,
+          adminNote:
+            note,
+          reviewedAt:
+            admin.database.ServerValue.TIMESTAMP,
+          reviewedBy:
+            actor.uid
+        });
+
+      await writeAdminAudit(
+        actor,
+        "payout_reviewed",
+        `${collection}/${id}`,
+        {
+          status,
+          note
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "updateSupport") {
+      const id =
+        safeAdminString(
+          data?.id,
+          160
+        );
+
+      const status =
+        safeAdminString(
+          data?.status,
+          30
+        )
+          .toLowerCase();
+
+      const note =
+        safeAdminString(
+          data?.note,
+          1500
+        );
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Support ticket ID is required."
+        );
+      }
+
+      if (
+        ![
+          "open",
+          "pending",
+          "resolved",
+          "closed"
+        ].includes(status)
+      ) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Unsupported support status."
+        );
+      }
+
+      const ref =
+        admin.database()
+          .ref(
+            `support_chats/${id}`
+          );
+
+      const existing =
+        (
+          await ref.once("value")
+        ).val();
+
+      if (!existing) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Support ticket was not found."
+        );
+      }
+
+      const patch = {
+        status,
+        adminNote:
+          note,
+        adminUpdatedAt:
+          admin.database.ServerValue.TIMESTAMP,
+        adminUpdatedBy:
+          actor.uid
+      };
+
+      if (
+        status ===
+          "resolved" ||
+        status ===
+          "closed"
+      ) {
+        patch.resolvedAt =
+          admin.database.ServerValue.TIMESTAMP;
+      }
+
+      await ref.update(
+        patch
+      );
+
+      await writeAdminAudit(
+        actor,
+        "support_updated",
+        id,
+        {
+          status
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "updatePaymentNote") {
+      const id =
+        safeAdminString(
+          data?.id,
+          180
+        );
+
+      const note =
+        safeAdminString(
+          data?.note,
+          800
+        );
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Payment ID is required."
+        );
+      }
+
+      await admin.database()
+        .ref(
+          `walletPayments/${id}`
+        )
+        .update({
+          adminNote:
+            note,
+          adminReviewedAt:
+            admin.database.ServerValue.TIMESTAMP,
+          adminReviewedBy:
+            actor.uid
+        });
+
+      await writeAdminAudit(
+        actor,
+        "payment_noted",
+        id,
+        {}
+      );
+
+      return {
+        ok: true
+      };
+    }
+
+    if (action === "reviewLegacyDriver") {
+      const id =
+        safeAdminString(
+          data?.id,
+          160
+        );
+
+      const decision =
+        safeAdminString(
+          data?.decision,
+          30
+        )
+          .toLowerCase();
+
+      const reason =
+        safeAdminString(
+          data?.reason,
+          600
+        );
+
+      if (
+        !id ||
+        ![
+          "approved",
+          "rejected"
+        ].includes(decision)
+      ) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Legacy application and decision are required."
+        );
+      }
+
+      const appRef =
+        admin.database()
+          .ref(
+            `driver_applications/${id}`
+          );
+
+      const application =
+        (
+          await appRef.once("value")
+        ).val();
+
+      if (!application) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Legacy driver application was not found."
+        );
+      }
+
+      if (
+        decision ===
+        "rejected"
+      ) {
+        await appRef.update({
+          status:
+            "rejected",
+          rejectionReason:
+            reason ||
+            "Application not approved.",
+          rejectedAt:
+            admin.database.ServerValue.TIMESTAMP,
+          rejectedBy:
+            actor.uid
+        });
+
+        await writeAdminAudit(
+          actor,
+          "legacy_driver_rejected",
+          id,
+          {
+            reason
+          }
+        );
+
+        return {
+          ok: true
+        };
+      }
+
+      const driverId =
+        safeAdminString(
+          application.authUid ||
+          application.userUid ||
+          application.driverId ||
+          id,
+          160
+        );
+
+      const approvedVehicle =
+        normaliseApprovedVehicle(
+          data?.vehicle || {},
+          application.approvedVehicle ||
+          application.vehiclePending ||
+          application
+        );
+
+      const currentTaxi =
+        (
+          await admin.database()
+            .ref(
+              `taxis/${driverId}`
+            )
+            .once("value")
+        ).val() || {};
+
+      const fullName =
+        safeAdminString(
+          application.fullName ||
+          application.name ||
+          currentTaxi.name ||
+          "Asiye Driver",
+          120
+        );
+
+      await root.update({
+        [`taxis/${driverId}`]:
+          {
+            ...currentTaxi,
+            name:
+              fullName,
+            fullName:
+              fullName,
+            phone:
+              application.phone ||
+              currentTaxi.phone ||
+              "",
+            email:
+              application.email ||
+              currentTaxi.email ||
+              "",
+            authUid:
+              application.authUid ||
+              application.userUid ||
+              currentTaxi.authUid ||
+              null,
+            userUid:
+              application.userUid ||
+              application.authUid ||
+              currentTaxi.userUid ||
+              null,
+            profile_picture_url:
+              application.profile_picture_url ||
+              application.documents?.FACE ||
+              application.documents?.selfie ||
+              currentTaxi.profile_picture_url ||
+              "",
+            vehiclePhoto:
+              application.vehiclePhoto ||
+              application.documents?.CAR_FRONT ||
+              application.documents?.car ||
+              currentTaxi.vehiclePhoto ||
+              "",
+            taxiRegistrationNumber:
+              approvedVehicle.registration,
+            vehicleReg:
+              approvedVehicle.registration,
+            vehicleType:
+              approvedVehicle.type,
+            vehicleMake:
+              approvedVehicle.make,
+            vehicleModel:
+              approvedVehicle.model,
+            vehicleColor:
+              approvedVehicle.colour,
+            vehicleSeats:
+              approvedVehicle.seats,
+            seats:
+              approvedVehicle.seats,
+            vehicle:
+              approvedVehicle,
+            vehicleApproved:
+              true,
+            vehicleApprovalStatus:
+              "approved",
+            verificationStatus:
+              "verified",
+            provisionalActivation:
+              true,
+            status:
+              "active",
+            isOnline:
+              false,
+            verifiedAt:
+              admin.database.ServerValue.TIMESTAMP,
+            verifiedBy:
+              actor.uid
+          },
+        [`driver_applications/${id}/status`]:
+          "verified",
+        [`driver_applications/${id}/driverId`]:
+          driverId,
+        [`driver_applications/${id}/verifiedAt`]:
+          admin.database.ServerValue.TIMESTAMP,
+        [`driver_applications/${id}/verifiedBy`]:
+          actor.uid
+      });
+
+      await writeAdminAudit(
+        actor,
+        "legacy_driver_approved",
+        id,
+        {
+          driverId
+        }
+      );
+
+      return {
+        ok: true,
+        driverId
+      };
+    }
+
+    throw new functions.https.HttpsError(
+      "invalid-argument",
+      "Unsupported admin action."
+    );
+  }
+);
