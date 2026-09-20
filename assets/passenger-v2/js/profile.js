@@ -218,11 +218,6 @@ ASIYE.profile = {
     bindAccount(container) {
         if (!container) return;
 
-        const input =
-            container.querySelector(
-                '[data-passenger-profile-file]'
-            );
-
         const button =
             container.querySelector(
                 '[data-passenger-profile-camera]'
@@ -245,132 +240,162 @@ ASIYE.profile = {
 
         if (!button) return;
 
-        const saveFile = async file => {
-            if (!file) return;
+        const saveFace =
+            async blob => {
+                if (!blob) return;
 
-            button.disabled = true;
-            button.textContent =
-                'Saving scan…';
-
-            try {
-                const url =
-                    await this.upload(
-                        file,
-                        status
-                    );
-
-                if (url) {
-                    if (preview) {
-                        preview.src = url;
-                        preview.hidden = false;
-                    } else if (accountAvatar) {
-                        accountAvatar.classList.add(
-                            'member-avatar-photo'
-                        );
-
-                        accountAvatar.innerHTML = '';
-
-                        const image =
-                            document.createElement('img');
-
-                        image.src = url;
-                        image.alt = 'Profile picture';
-                        image.setAttribute(
-                            'data-passenger-profile-preview',
-                            ''
-                        );
-
-                        accountAvatar.appendChild(image);
-                    }
-                }
+                button.disabled =
+                    true;
 
                 button.textContent =
-                    'Rescan profile picture';
-            } catch (error) {
-                console.error(
-                    'Passenger profile scan failed:',
-                    error
-                );
-
-                if (status) {
-                    status.textContent =
-                        error?.message ||
-                        'Could not save the scanned profile picture.';
-                }
-
-                button.textContent =
-                    'Scan profile picture';
-            } finally {
-                button.disabled = false;
-
-                if (input) {
-                    input.value = '';
-                }
-            }
-        };
-
-        button.onclick = async () => {
-            if (window.AsiyeNativeBridge) {
-                button.disabled = true;
-                button.textContent =
-                    'Opening camera…';
-
-                if (status) {
-                    status.textContent =
-                        'Position your face clearly inside the camera frame.';
-                }
+                    'Saving face…';
 
                 try {
-                    const result =
-                        await AsiyeNativeBridge.scanImage({
-                            purpose:
-                                'passenger-profile',
-                            facing:
-                                'front'
-                        });
-
-                    if (!result) {
-                        button.disabled = false;
-                        button.textContent =
-                            this.getUrl()
-                                ? 'Rescan profile picture'
-                                : 'Scan profile picture';
-                        return;
-                    }
-
-                    const file =
-                        await this._fileFromScan(
-                            result
+                    const url =
+                        await this.upload(
+                            blob,
+                            status
                         );
 
-                    button.disabled = false;
-                    await saveFile(file);
-                } catch (error) {
-                    button.disabled = false;
+                    if (url) {
+                        if (preview) {
+                            preview.src =
+                                url;
+
+                            preview.hidden =
+                                false;
+
+                        } else if (
+                            accountAvatar
+                        ) {
+                            accountAvatar
+                                .classList
+                                .add(
+                                    'member-avatar-photo'
+                                );
+
+                            accountAvatar
+                                .replaceChildren();
+
+                            const image =
+                                document.createElement(
+                                    'img'
+                                );
+
+                            image.src =
+                                url;
+
+                            image.alt =
+                                'Passenger profile picture';
+
+                            image.setAttribute(
+                                'data-passenger-profile-preview',
+                                ''
+                            );
+
+                            accountAvatar
+                                .appendChild(
+                                    image
+                                );
+                        }
+                    }
+
                     button.textContent =
-                        this.getUrl()
-                            ? 'Rescan profile picture'
-                            : 'Scan profile picture';
+                        'Rescan face';
+
+                } catch (error) {
+                    console.error(
+                        'Passenger face scan failed:',
+                        error
+                    );
 
                     if (status) {
                         status.textContent =
                             error?.message ||
-                            'Unable to open the camera.';
+                            'Could not save the face scan.';
                     }
+
+                    button.textContent =
+                        this.getUrl()
+                            ? 'Rescan face'
+                            : 'Scan face';
+
+                } finally {
+                    button.disabled =
+                        false;
+                }
+            };
+
+
+        button.onclick =
+            async () => {
+                if (
+                    !window.AsiyeFaceScanner
+                ) {
+                    if (status) {
+                        status.textContent =
+                            'Live face scanner is unavailable.';
+                    }
+
+                    return;
                 }
 
-                return;
-            }
+                button.disabled =
+                    true;
 
-            input?.click();
-        };
+                button.textContent =
+                    'Opening face scan…';
 
-        if (input) {
-            input.onchange = async () => {
-                await saveFile(
-                    input.files?.[0]
-                );
+                if (status) {
+                    status.textContent =
+                        'Centre your face inside the guide, then capture.';
+                }
+
+                try {
+                    const result =
+                        await AsiyeFaceScanner
+                            .open({
+                                title:
+                                    'Passenger face scan',
+
+                                subtitle:
+                                    'Centre your face inside the guide. When you capture, Asiye saves it securely as your profile picture.'
+                            });
+
+                    if (!result?.blob) {
+                        button.textContent =
+                            this.getUrl()
+                                ? 'Rescan face'
+                                : 'Scan face';
+
+                        return;
+                    }
+
+                    await saveFace(
+                        result.blob
+                    );
+
+                } catch (error) {
+                    console.error(
+                        'Passenger face scanner failed:',
+                        error
+                    );
+
+                    if (status) {
+                        status.textContent =
+                            error?.message ||
+                            'Unable to start the face scanner.';
+                    }
+
+                    button.textContent =
+                        this.getUrl()
+                            ? 'Rescan face'
+                            : 'Scan face';
+
+                } finally {
+                    button.disabled =
+                        false;
+                }
             };
-        }
     }
 };
