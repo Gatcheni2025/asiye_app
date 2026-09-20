@@ -126,53 +126,103 @@ window.AsiyePages = {
 
         button.onclick =
             async () => {
-                if (
-                    !window.AsiyeFaceScanner
-                ) {
-                    if (status) {
-                        status.textContent =
-                            'Face scanner is unavailable.';
-                    }
-
-                    return;
-                }
-
                 button.disabled =
                     true;
 
                 button.textContent =
-                    'Opening face scan…';
+                    'Opening camera…';
+
+                if (status) {
+                    status.textContent =
+                        'Opening the front camera. Take a clear face photo.';
+                }
 
                 try {
-                    const result =
-                        await AsiyeFaceScanner
-                            .open({
-                                title:
-                                    'Driver face scan',
-                                subtitle:
-                                    'Centre your face inside the guide. The captured face becomes your driver profile picture.'
-                            });
+                    let blob = null;
 
-                    if (!result?.blob) {
-                        button.disabled =
-                            false;
+                    /*
+                     * Installed mobile app: use Flutter's native camera
+                     * bridge. This opens Camera directly and does not offer
+                     * a gallery/file picker for the profile photo.
+                     */
+                    if (
+                        window.AsiyeNativeBridge &&
+                        typeof AsiyeNativeBridge.scanImage ===
+                            'function'
+                    ) {
+                        const result =
+                            await AsiyeNativeBridge
+                                .scanImage({
+                                    purpose:
+                                        'driver-profile',
+                                    facing:
+                                        'front'
+                                });
 
-                        button.textContent =
-                            'Scan face';
+                        if (!result) {
+                            if (status) {
+                                status.textContent =
+                                    'Camera cancelled. No photo was changed.';
+                            }
 
+                            button.textContent =
+                                'Scan face';
+
+                            return;
+                        }
+
+                        if (!window.AsiyePhpImageUpload) {
+                            throw new Error(
+                                'Profile image service is unavailable.'
+                            );
+                        }
+
+                        blob =
+                            AsiyePhpImageUpload
+                                .toBlob(
+                                    result
+                                );
+
+                    } else if (
+                        window.AsiyeFaceScanner
+                    ) {
+                        const result =
+                            await AsiyeFaceScanner
+                                .open({
+                                    title:
+                                        'Driver face scan',
+                                    subtitle:
+                                        'Centre your face inside the guide and capture a clear profile photo.'
+                                });
+
+                        blob =
+                            result?.blob ||
+                            null;
+                    } else {
+                        throw new Error(
+                            'Camera service is unavailable in this build.'
+                        );
+                    }
+
+                    if (!blob) {
                         return;
                     }
 
                     button.textContent =
-                        'Saving face…';
+                        'Saving photo…';
+
+                    if (status) {
+                        status.textContent =
+                            'Photo captured. Saving profile picture…';
+                    }
 
                     const url =
                         await this.saveDriverFace(
-                            result.blob,
+                            blob,
                             status
                         );
 
-                    let avatar =
+                    const avatar =
                         container.querySelector(
                             '.member-avatar'
                         );
@@ -182,8 +232,7 @@ window.AsiyePages = {
                             'member-avatar-photo'
                         );
 
-                        avatar.innerHTML =
-                            '';
+                        avatar.replaceChildren();
 
                         const image =
                             document.createElement(
@@ -206,14 +255,14 @@ window.AsiyePages = {
 
                 } catch (error) {
                     console.error(
-                        'Driver face scan failed:',
+                        'Driver profile camera failed:',
                         error
                     );
 
                     if (status) {
                         status.textContent =
                             error?.message ||
-                            'Could not save your face scan.';
+                            'Could not take or save the profile photo.';
                     }
 
                     button.textContent =
@@ -281,7 +330,7 @@ window.AsiyePages = {
                             ? 'data-driver-profile-status'
                             : 'data-passenger-profile-status'}
                     >
-                        Asiye opens a live face scan inside the app. Centre your face, capture it, and the saved PHP image becomes your profile picture immediately.
+                        Asiye opens your front camera directly. Take a clear face photo and it becomes your profile picture after it is saved.
                     </p>
                 </div>
             `;
@@ -347,64 +396,384 @@ window.AsiyePages = {
                 }
             };
         } else if (page === 'vehicle') {
-            const vehicle =
+            if (!driver || !id) {
+                body.innerHTML =
+                    note(
+                        'Vehicle details are available on driver accounts.'
+                    );
+                return;
+            }
+
+            const approvedVehicle =
                 user.vehicle || {};
 
-            const registration =
-                vehicle.registration ||
-                user.vehicleReg ||
-                user.registration ||
-                user.taxiRegistrationNumber ||
-                'Not provided';
+            const pendingVehicle =
+                user.vehiclePending || {};
 
-            const approved =
-                user.vehicleApproved ===
-                    true ||
+            const pick =
+                (pendingValue, approvedValue, legacyValue) =>
+                    pendingValue ||
+                    approvedValue ||
+                    legacyValue ||
+                    '';
+
+            const current = {
+                type:
+                    pick(
+                        pendingVehicle.type,
+                        approvedVehicle.type,
+                        user.vehicleType ||
+                        user.carCategory
+                    ),
+                make:
+                    pick(
+                        pendingVehicle.make,
+                        approvedVehicle.make,
+                        user.vehicleMake ||
+                        user.make
+                    ),
+                model:
+                    pick(
+                        pendingVehicle.model,
+                        approvedVehicle.model,
+                        user.vehicleModel ||
+                        user.model
+                    ),
+                colour:
+                    pick(
+                        pendingVehicle.colour ||
+                        pendingVehicle.color,
+                        approvedVehicle.colour ||
+                        approvedVehicle.color,
+                        user.vehicleColor ||
+                        user.color
+                    ),
+                seats:
+                    pick(
+                        pendingVehicle.seats,
+                        approvedVehicle.seats,
+                        user.vehicleSeats ||
+                        user.seats ||
+                        user.capacity
+                    ),
+                registration:
+                    pick(
+                        pendingVehicle.registration,
+                        approvedVehicle.registration,
+                        user.vehicleReg ||
+                        user.registration ||
+                        user.taxiRegistrationNumber
+                    )
+            };
+
+            const approvalStatus =
                 String(
                     user.vehicleApprovalStatus ||
-                    ''
-                ).toLowerCase() ===
-                    'approved';
+                    (
+                        user.vehicleApproved === true
+                            ? 'approved'
+                            : 'not submitted'
+                    )
+                ).toLowerCase();
 
-            body.innerHTML =
-                `<div class="member-balance"><small>Admin-approved vehicle</small><strong>${esc(registration)}</strong></div>` +
-                this.row(
-                    'Vehicle type',
-                    vehicle.type ||
-                    user.vehicleType ||
-                    user.carCategory
-                ) +
-                this.row(
-                    'Make',
-                    vehicle.make ||
-                    user.vehicleMake ||
-                    user.make
-                ) +
-                this.row(
-                    'Model',
-                    vehicle.model ||
-                    user.vehicleModel ||
-                    user.model
-                ) +
-                this.row(
-                    'Colour',
-                    vehicle.colour ||
-                    vehicle.color ||
-                    user.vehicleColor ||
-                    user.color
-                ) +
-                this.row(
-                    'Seats',
-                    vehicle.seats ||
-                    user.vehicleSeats ||
-                    user.seats ||
-                    user.capacity
-                ) +
-                note(
-                    approved
-                        ? 'Vehicle details are approved by Asiye administration. Contact support if the approved vehicle changes.'
-                        : 'Vehicle details must be confirmed by Asiye administration before they are treated as approved.'
+            const hasPending =
+                approvalStatus ===
+                    'pending' ||
+                Boolean(
+                    user.vehiclePending
                 );
+
+            body.innerHTML = `
+                <div class="member-balance">
+                    <small>Vehicle approval</small>
+                    <strong>${
+                        approvalStatus === 'approved'
+                            ? 'Approved'
+                            : hasPending
+                                ? 'Pending review'
+                                : 'Action required'
+                    }</strong>
+                </div>
+
+                <p class="member-note">
+                    Add or edit the vehicle you drive on Asiye. Any change
+                    must be reviewed by an administrator before you can go
+                    online again.
+                </p>
+
+                <form
+                    class="member-vehicle-form"
+                    data-driver-vehicle-form
+                >
+                    <label>
+                        Vehicle type
+                        <input
+                            name="type"
+                            maxlength="40"
+                            value="${esc(current.type)}"
+                            placeholder="e.g. Sedan, SUV, 7-seater"
+                            required
+                        >
+                    </label>
+
+                    <label>
+                        Make
+                        <input
+                            name="make"
+                            maxlength="40"
+                            value="${esc(current.make)}"
+                            placeholder="e.g. Toyota"
+                            required
+                        >
+                    </label>
+
+                    <label>
+                        Model
+                        <input
+                            name="model"
+                            maxlength="50"
+                            value="${esc(current.model)}"
+                            placeholder="e.g. Corolla"
+                            required
+                        >
+                    </label>
+
+                    <label>
+                        Colour
+                        <input
+                            name="colour"
+                            maxlength="30"
+                            value="${esc(current.colour)}"
+                            placeholder="e.g. White"
+                            required
+                        >
+                    </label>
+
+                    <label>
+                        Passenger seats
+                        <input
+                            name="seats"
+                            type="number"
+                            inputmode="numeric"
+                            min="1"
+                            max="15"
+                            step="1"
+                            value="${esc(current.seats)}"
+                            required
+                        >
+                    </label>
+
+                    <label>
+                        Registration
+                        <input
+                            name="registration"
+                            maxlength="20"
+                            value="${esc(current.registration)}"
+                            placeholder="Vehicle registration"
+                            required
+                        >
+                    </label>
+
+                    <button
+                        class="member-primary"
+                        type="submit"
+                    >
+                        Submit vehicle for approval
+                    </button>
+
+                    <p
+                        class="member-note"
+                        data-vehicle-status
+                    >
+                        ${
+                            approvalStatus === 'approved'
+                                ? 'This vehicle is approved. Editing and submitting it will start a new admin review.'
+                                : hasPending
+                                    ? 'Your latest vehicle details are waiting for admin approval.'
+                                    : 'Complete all vehicle details and submit them for admin approval.'
+                        }
+                    </p>
+                </form>
+            `;
+
+            const form =
+                body.querySelector(
+                    '[data-driver-vehicle-form]'
+                );
+
+            const vehicleStatus =
+                body.querySelector(
+                    '[data-vehicle-status]'
+                );
+
+            form.onsubmit =
+                async event => {
+                    event.preventDefault();
+
+                    const data =
+                        new FormData(
+                            form
+                        );
+
+                    const vehiclePending = {
+                        type:
+                            String(
+                                data.get(
+                                    'type'
+                                ) ||
+                                ''
+                            ).trim(),
+                        make:
+                            String(
+                                data.get(
+                                    'make'
+                                ) ||
+                                ''
+                            ).trim(),
+                        model:
+                            String(
+                                data.get(
+                                    'model'
+                                ) ||
+                                ''
+                            ).trim(),
+                        colour:
+                            String(
+                                data.get(
+                                    'colour'
+                                ) ||
+                                ''
+                            ).trim(),
+                        registration:
+                            String(
+                                data.get(
+                                    'registration'
+                                ) ||
+                                ''
+                            ).trim(),
+                        seats:
+                            Number(
+                                data.get(
+                                    'seats'
+                                )
+                            )
+                    };
+
+                    if (
+                        [
+                            vehiclePending.type,
+                            vehiclePending.make,
+                            vehiclePending.model,
+                            vehiclePending.colour,
+                            vehiclePending.registration
+                        ].some(
+                            value =>
+                                value.length <
+                                2
+                        )
+                    ) {
+                        vehicleStatus.textContent =
+                            'Complete type, make, model, colour and registration before submitting.';
+                        return;
+                    }
+
+                    if (
+                        !Number.isInteger(
+                            vehiclePending.seats
+                        ) ||
+                        vehiclePending.seats <
+                            1 ||
+                        vehiclePending.seats >
+                            15
+                    ) {
+                        vehicleStatus.textContent =
+                            'Passenger seats must be a whole number between 1 and 15.';
+                        return;
+                    }
+
+                    const submit =
+                        form.querySelector(
+                            '[type="submit"]'
+                        );
+
+                    submit.disabled =
+                        true;
+
+                    submit.textContent =
+                        'Submitting…';
+
+                    try {
+                        vehiclePending.submittedAt =
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP;
+
+                        await firebase
+                            .database()
+                            .ref(
+                                `taxis/${id}`
+                            )
+                            .update({
+                                vehiclePending,
+                                vehicleApproved:
+                                    false,
+                                vehicleApprovalStatus:
+                                    'pending',
+                                vehicleSubmittedAt:
+                                    firebase
+                                        .database
+                                        .ServerValue
+                                        .TIMESTAMP,
+                                isOnline:
+                                    false,
+                                isBroadcasting:
+                                    false
+                            });
+
+                        Object.assign(
+                            user,
+                            {
+                                vehiclePending,
+                                vehicleApproved:
+                                    false,
+                                vehicleApprovalStatus:
+                                    'pending',
+                                isOnline:
+                                    false,
+                                isBroadcasting:
+                                    false
+                            }
+                        );
+
+                        vehicleStatus.textContent =
+                            'Vehicle submitted. An administrator must approve it before you can go online.';
+
+                        submit.textContent =
+                            'Update pending vehicle';
+
+                        app.ui?.toast?.(
+                            'Vehicle submitted for admin approval.',
+                            'success'
+                        );
+
+                    } catch (error) {
+                        console.error(
+                            'Vehicle submission failed:',
+                            error
+                        );
+
+                        vehicleStatus.textContent =
+                            error?.message ||
+                            'Could not submit vehicle details. Try again.';
+
+                        submit.textContent =
+                            'Submit vehicle for approval';
+                    } finally {
+                        submit.disabled =
+                            false;
+                    }
+                };
         } else if (page === 'safety') {
             if (!id) {
                 body.innerHTML = note('Sign in to manage loved ones.');
