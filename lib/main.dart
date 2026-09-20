@@ -555,6 +555,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             if (_pendingNotification != null) await _openNotification(_pendingNotification!);
           },
           onNavigationRequest: (request) async {
+            if (request.url.contains('ozowWalletReturn')) {
+              final String startPage = await _determineStartPage();
+              _controller?.loadFlutterAsset(startPage);
+              return NavigationDecision.prevent;
+            }
+
             if (request.url.contains('success.html') || request.url.contains('cancel.html')) {
               final bool isSuccess = request.url.contains('success.html');
 
