@@ -3,6 +3,9 @@ name: Android Release APK and AAB
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/live-face-scan
 
 jobs:
   build-android-release:
