@@ -916,8 +916,8 @@ ASIYE_DRIVER.ui = {
                 (
                     request.clubMode ===
                     'club7'
-                    ? 7
-                    : 4
+                    ? 5
+                    : 3
                 )
             )
 
@@ -1513,7 +1513,7 @@ ASIYE_DRIVER.ui = {
 
                     <div class="driver-kicker">
                         ${
-                            capacity === 7
+                            capacity >= 5
                             ? 'Asiye Work 7'
                             : 'Asiye Work 4'
                         }
@@ -1722,7 +1722,7 @@ ASIYE_DRIVER.ui = {
                     <div class="driver-kicker">
 
                         ${
-                            capacity === 7
+                            capacity >= 5
                             ? 'Asiye Work 7'
                             : 'Asiye Work 4'
                         }
