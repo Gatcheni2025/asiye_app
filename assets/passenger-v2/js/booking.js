@@ -906,7 +906,7 @@ ASIYE.booking = {
                 Number(
                     request.capacity ||
                     request.maxCapacity ||
-                    4
+                    3
                 );
 
 
