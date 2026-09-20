@@ -2025,6 +2025,19 @@ ASIYE_DRIVER.ui = {
         if (!container) return;
 
 
+        const passengerName =
+            passenger.name ||
+            passenger.commuterName ||
+            'Passenger';
+
+
+        const passengerPhoto =
+            passenger.profileImageUrl ||
+            passenger.profile_picture_url ||
+            passenger.profilePhotoUrl ||
+            '';
+
+
         container.innerHTML = `
 
             <div class="driver-trip-header">
@@ -2070,6 +2083,25 @@ ASIYE_DRIVER.ui = {
 
             </div>
 
+
+            <div class="navigator-passenger driver-passenger-identity">
+                <div class="navigator-avatar">
+                    ${
+                        passengerPhoto
+                            ? `<img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">`
+                            : this.escape(
+                                passengerName
+                                    .charAt(0)
+                                    .toUpperCase()
+                            )
+                    }
+                </div>
+
+                <div>
+                    <small>PASSENGER</small>
+                    <strong>${this.escape(passengerName)}</strong>
+                </div>
+            </div>
 
             <div class="driver-trip-card">
 
