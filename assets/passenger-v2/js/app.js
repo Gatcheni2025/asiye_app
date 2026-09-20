@@ -808,7 +808,7 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'club4',
                 'Asiye Work 4',
-                'To or from work · share with up to 4 passengers',
+                'To or from work · share with up to 3 passengers',
                 prices.club4,
                 'fa-users'
             )}
@@ -817,7 +817,7 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'club7',
                 'Asiye Work 7',
-                'To or from work · share with up to 7 passengers',
+                'To or from work · share with up to 5 passengers',
                 prices.club7,
                 'fa-van-shuttle'
             )}
