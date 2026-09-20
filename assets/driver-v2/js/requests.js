@@ -999,6 +999,17 @@ ASIYE_DRIVER.requests = {
                 '';
 
 
+            const driverProfileImageUrl =
+
+                driver.profile_picture_url ||
+
+                driver.profileImageUrl ||
+
+                driver.photoURL ||
+
+                '';
+
+
             const ratingInfo =
                 ASIYE_DRIVER.metrics
                     ?.rating?.(
@@ -1236,6 +1247,9 @@ ASIYE_DRIVER.requests = {
 
                 driverPhone:
                     driverPhone,
+
+                driverProfileImageUrl:
+                    driverProfileImageUrl,
 
                 driverRating:
                     driverRating,
@@ -1510,6 +1524,9 @@ ASIYE_DRIVER.requests = {
 
                                 driverPhone:
                                     driverPhone,
+
+                                driverProfileImageUrl:
+                                    driverProfileImageUrl,
 
                                 driverRating:
                                     driverRating,
