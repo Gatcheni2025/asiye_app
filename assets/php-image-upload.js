@@ -509,6 +509,8 @@ window.AsiyePhpImageUpload = {
          * multi-megapixel JPEG.
          */
         if (
+            blob.size >
+                350 * 1024 &&
             /profile|selfie|face/i.test(
                 String(
                     purpose
