@@ -3221,3 +3221,74 @@ exports.adminManagePlatform = functions.https.onCall(
     );
   }
 );
+
+
+// =================================================================
+// --- ADMIN READ API ---
+// =================================================================
+
+exports.adminFetchData = functions.https.onCall(
+  async (data, context) => {
+    await requireAsiyeAdmin(context);
+
+    const resource =
+      safeAdminString(
+        data?.resource,
+        80
+      );
+
+    const allowed = new Set([
+      "commuters",
+      "taxis",
+      "driverEnrollments",
+      "driverApprovals",
+      "driver_applications",
+      "requests",
+      "delivery_requests",
+      "support_chats",
+      "walletPayments",
+      "walletAdjustments",
+      "withdrawals",
+      "payout_requests",
+      "adminAudit"
+    ]);
+
+    if (!allowed.has(resource)) {
+      throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Unsupported admin data resource."
+      );
+    }
+
+    const requestedLimit =
+      Math.round(
+        safeAdminNumber(
+          data?.limit,
+          250
+        )
+      );
+
+    const limit =
+      Math.min(
+        500,
+        Math.max(
+          25,
+          requestedLimit
+        )
+      );
+
+    const snapshot =
+      await admin.database()
+        .ref(resource)
+        .limitToLast(limit)
+        .once("value");
+
+    return {
+      ok: true,
+      resource,
+      data:
+        snapshot.val() ||
+        {}
+    };
+  }
+);
