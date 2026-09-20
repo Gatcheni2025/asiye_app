@@ -4,6 +4,7 @@ ASIYE_DRIVER.navigator = {
     target: null,
     route: null,
     follow: true,
+    navigationMode: false,
     generation: 0,
 
     start(request) {
@@ -23,10 +24,16 @@ ASIYE_DRIVER.navigator = {
             this.follow = true;
         }
         document.body.classList.add('destination-navigation');
+        this.updateNavigationButton();
+
         const map = ASIYE_DRIVER.map.instance;
         if (map && this.boundMap !== map) {
             this.boundMap = map;
-            map.on('dragstart', () => { this.follow = false; });
+            map.on('dragstart', () => {
+                if (this.navigationMode) {
+                    this.follow = false;
+                }
+            });
         }
         const follow = document.getElementById('navFollow');
         if (follow) follow.onclick = () => { this.follow = true; this.update(ASIYE_DRIVER.state.location); };
@@ -38,6 +45,118 @@ ASIYE_DRIVER.navigator = {
     text(id, value) {
         const element = document.getElementById(id);
         if (element) element.textContent = value;
+    },
+
+    updateNavigationButton() {
+        const button =
+            document.getElementById(
+                'driverNavigationButton'
+            );
+
+        if (!button) return;
+
+        button.classList
+            ?.toggle?.(
+                'active',
+                this.navigationMode
+            );
+
+        button.setAttribute?.(
+            'aria-label',
+            this.navigationMode
+                ? 'Exit navigation'
+                : 'Navigation'
+        );
+
+        button.title =
+            this.navigationMode
+                ? 'Exit navigation'
+                : 'Navigation';
+
+        const icon =
+            button.querySelector('i');
+
+        if (icon) {
+            icon.className =
+                this.navigationMode
+                    ? 'fas fa-map'
+                    : 'fas fa-route';
+        }
+    },
+
+    enterNavigationMode() {
+        this.navigationMode = true;
+        this.follow = true;
+
+        document.body.classList.add(
+            'navigation-camera-mode'
+        );
+
+        ASIYE_DRIVER.map.followDriver =
+            true;
+
+        this.updateNavigationButton();
+
+        if (this.target) {
+            this.update(
+                ASIYE_DRIVER.state.location
+            );
+        } else {
+            const location =
+                ASIYE_DRIVER.state?.location || {};
+
+            ASIYE_DRIVER.map
+                ?.followDriverNavigationView?.(
+                    location.latitude,
+                    location.longitude,
+                    location.heading
+                );
+        }
+    },
+
+    exitNavigationMode() {
+        this.navigationMode = false;
+        this.follow = true;
+
+        document.body.classList.remove(
+            'navigation-camera-mode'
+        );
+
+        ASIYE_DRIVER.map.followDriver =
+            true;
+
+        this.updateNavigationButton();
+
+        const location =
+            ASIYE_DRIVER.state?.location || {};
+
+        if (
+            Number.isFinite(location.latitude) &&
+            Number.isFinite(location.longitude)
+        ) {
+            ASIYE_DRIVER.map
+                ?.followDriverTopView?.(
+                    location.latitude,
+                    location.longitude,
+                    16
+                );
+        } else {
+            ASIYE_DRIVER.map.instance
+                ?.easeTo?.({
+                    pitch: 0,
+                    bearing: 0,
+                    padding: 0,
+                    duration: 500
+                });
+        }
+    },
+
+    toggleNavigationMode() {
+        if (this.navigationMode) {
+            this.exitNavigationMode();
+        } else {
+            this.enterNavigationMode();
+        }
     },
 
     async fetchRoute() {
@@ -107,23 +226,98 @@ ASIYE_DRIVER.navigator = {
     },
 
     update(location) {
-        if (!this.target) return;
         if (!Number.isFinite(location?.latitude) || !Number.isFinite(location?.longitude)) {
             this.text('navInstruction', 'Waiting for GPS…');
             return;
         }
+
+        if (!this.target) {
+            if (
+                this.navigationMode &&
+                this.follow
+            ) {
+                ASIYE_DRIVER.map
+                    ?.followDriverNavigationView?.(
+                        location.latitude,
+                        location.longitude,
+                        location.heading
+                    );
+            }
+
+            return;
+        }
+
         const point = [location.longitude, location.latitude];
         const map = ASIYE_DRIVER.map.instance;
-        if (map && this.follow) {
-            const sheet = document.getElementById('activeTripContent');
-            map.easeTo({ center: point, zoom: 17, pitch: 45,
-                bearing: Number.isFinite(location.heading) ? location.heading : map.getBearing(),
-                padding: { top: 100, bottom: Math.min((sheet?.offsetHeight || 240) + 35, window.innerHeight * .48), left: 35, right: 35 }, duration: 900 });
+        if (
+            map &&
+            this.navigationMode &&
+            this.follow
+        ) {
+            const sheet =
+                document.getElementById(
+                    'activeTripContent'
+                );
+
+            map.easeTo({
+                center: point,
+                zoom: 17.5,
+                pitch: 58,
+                bearing:
+                    Number.isFinite(
+                        location.heading
+                    )
+                        ? location.heading
+                        : map.getBearing(),
+                padding: {
+                    top: 120,
+                    bottom: Math.min(
+                        (sheet?.offsetHeight || 240) + 35,
+                        window.innerHeight * .48
+                    ),
+                    left: 35,
+                    right: 35
+                },
+                duration: 700,
+                essential: true
+            });
         }
         if (!this.route) {
             if (!this.lastFetch || Date.now() - this.lastFetch > 15000) this.fetchRoute();
             return;
         }
+        const roadAccess =
+            window.AsiyeRoadGuidance
+                ?.nearest?.(
+                    point,
+                    this.route.geometry
+                );
+
+        if (
+            roadAccess &&
+            roadAccess.distance >
+                (AsiyeRoadGuidance.thresholdMetres || 35)
+        ) {
+            this.text(
+                'navArrow',
+                '🚶'
+            );
+
+            this.text(
+                'navTurnDistance',
+                this.distance(
+                    roadAccess.distance
+                )
+            );
+
+            this.text(
+                'navInstruction',
+                'Walking directions to the road'
+            );
+
+            return;
+        }
+
         let index = this.stepIndex;
         let best = this.project(point, this.steps[index].geometry?.coordinates || []);
         // Only look ahead locally so crossing roads cannot skip distant turns.
@@ -159,12 +353,47 @@ ASIYE_DRIVER.navigator = {
 
     stop() {
         this.generation++;
+
+        this.navigationMode = false;
+        this.follow = true;
+
+        document.body.classList.remove(
+            'destination-navigation',
+            'navigation-camera-mode'
+        );
+
+        this.updateNavigationButton();
+
+        ASIYE_DRIVER.map.followDriver =
+            true;
+
+        const location =
+            ASIYE_DRIVER.state?.location || {};
+
+        if (
+            Number.isFinite(location.latitude) &&
+            Number.isFinite(location.longitude)
+        ) {
+            ASIYE_DRIVER.map
+                ?.followDriverTopView?.(
+                    location.latitude,
+                    location.longitude,
+                    16
+                );
+        } else {
+            ASIYE_DRIVER.map.instance
+                ?.easeTo?.({
+                    pitch: 0,
+                    bearing: 0,
+                    padding: 0,
+                    duration: 500
+                });
+        }
+
         this.target = null;
         this.key = null;
         this.route = null;
         this.loading = false;
         this.lastFetch = 0;
-        document.body.classList.remove('destination-navigation');
-        ASIYE_DRIVER.map.instance?.easeTo({ pitch: 0, padding: 0, duration: 500 });
     }
 };

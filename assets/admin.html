@@ -1146,15 +1146,63 @@
                 const name = driver.name || 'Unknown';
                 const email = driver.email || 'No email';
                 const phone = driver.phone || 'No phone';
-                const reg = driver.taxiRegistrationNumber || 'N/A';
-                const vehicle = `${driver.vehicleMake || ''} ${driver.vehicleModel || ''}`.trim() || 'N/A';
-                const color = driver.vehicleColor || 'N/A';
+                const approvedVehicle = driver.vehicle || {};
+                const reg =
+                    approvedVehicle.registration ||
+                    driver.vehicleReg ||
+                    driver.taxiRegistrationNumber ||
+                    'N/A';
+                const vehicle =
+                    `${approvedVehicle.make || driver.vehicleMake || ''} ${approvedVehicle.model || driver.vehicleModel || ''}`.trim() ||
+                    'N/A';
+                const vehicleType =
+                    approvedVehicle.type ||
+                    driver.vehicleType ||
+                    driver.carCategory ||
+                    'N/A';
+                const color =
+                    approvedVehicle.colour ||
+                    approvedVehicle.color ||
+                    driver.vehicleColor ||
+                    'N/A';
+                const seats =
+                    approvedVehicle.seats ||
+                    driver.vehicleSeats ||
+                    driver.seats ||
+                    'N/A';
                 const year = driver.vehicleYear || 'N/A';
                 const area = driver.loadingArea || driver.assignedRank || 'N/A';
                 const status = driver.verificationStatus || 'unknown';
                 const verifiedAt = driver.verifiedAt ? new Date(driver.verifiedAt).toLocaleString() : 'N/A';
                 const trips = driver.totalTrips || 0;
-                const rating = driver.averageRating || '5.0';
+                const ratingCount =
+                    Number(
+                        driver.ratingSummary?.count ||
+                        driver.ratingCount ||
+                        0
+                    );
+
+                const ratingTotal =
+                    Number(
+                        driver.ratingSummary?.total ||
+                        0
+                    );
+
+                const rating =
+                    ratingCount > 0
+                        ? (
+                            ratingTotal > 0
+                                ? (
+                                    ratingTotal /
+                                    ratingCount
+                                  ).toFixed(1)
+                                : Number(
+                                    driver.rating ||
+                                    driver.averageRating ||
+                                    0
+                                  ).toFixed(1)
+                          )
+                        : 'New';
                 const walletBalance = driver.walletBalance || 0;
                 const totalEarnings = driver.totalEarnings || 0;
                 const hasLogin = driver.hasLogin !== false;
@@ -1186,7 +1234,9 @@
                             <div><span style="color: #8b95a9;">Phone:</span> <strong>${escapeHtml(phone)}</strong></div>
                             <div><span style="color: #8b95a9;">Area:</span> <strong>${escapeHtml(area)}</strong></div>
                             <div><span style="color: #8b95a9;">Vehicle:</span> <strong>${escapeHtml(vehicle)}</strong></div>
+                            <div><span style="color: #8b95a9;">Vehicle type:</span> <strong>${escapeHtml(vehicleType)}</strong></div>
                             <div><span style="color: #8b95a9;">Color:</span> <strong>${escapeHtml(color)}</strong></div>
+                            <div><span style="color: #8b95a9;">Passenger seats:</span> <strong>${escapeHtml(seats)}</strong></div>
                             <div><span style="color: #8b95a9;">Registration:</span> <strong>${escapeHtml(reg)}</strong></div>
                             <div><span style="color: #8b95a9;">Year:</span> <strong>${escapeHtml(year)}</strong></div>
                             <div><span style="color: #8b95a9;">Rating:</span> <strong>⭐ ${rating}</strong></div>
@@ -1203,6 +1253,9 @@
                         <h4 style="color: #e8ecf4; margin-bottom: 0.5rem;"><i class="fas fa-file-alt"></i> Documents</h4>
                         <div class="doc-grid">${docHtml}</div>
                     </div>
+                    <button class="btn btn-approve" onclick="updateApprovedVehicle('${key}')" style="width:100%; margin-top: 1rem;">
+                        <i class="fas fa-car"></i> Review / Approve Vehicle
+                    </button>
                     ${!hasLogin ? `
                         <button class="btn btn-create" onclick="showCreatePassword('${key}')" style="width:100%; margin-top: 1rem;">
                             <i class="fas fa-key"></i> Set Password
@@ -1281,8 +1334,18 @@
         // ================================================================
         // SHOW CREATE PASSWORD MODAL
         // ================================================================
-        function showCreatePassword(key) {
-            pendingCreateDriver = key;
+        function showCreatePassword(key, driverId = null) {
+            const record = allApplications.find(item => item.key === key);
+            const resolvedDriverId =
+                driverId ||
+                record?.driverId ||
+                (record?._source === 'taxis' ? record.key : null) ||
+                (record?.email ? record.email.replace(/[^a-zA-Z0-9]/g, '_') : key);
+
+            pendingCreateDriver = {
+                applicationKey: key,
+                driverId: resolvedDriverId
+            };
             document.getElementById('newPasswordInput').value = '';
             document.getElementById('confirmPasswordInput').value = '';
             document.getElementById('strengthBar').className = 'password-strength';
@@ -1387,7 +1450,19 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
 
-            const driver = allApplications.find(a => a.key === pendingCreateDriver);
+            const applicationKey =
+                typeof pendingCreateDriver === 'string'
+                    ? pendingCreateDriver
+                    : pendingCreateDriver.applicationKey;
+
+            const driverId =
+                typeof pendingCreateDriver === 'string'
+                    ? pendingCreateDriver
+                    : pendingCreateDriver.driverId;
+
+            const driver = allApplications.find(
+                a => a.key === applicationKey || a.key === driverId
+            );
             if (!driver) {
                 showToast('Driver not found', 'error');
                 btn.disabled = false;
@@ -1395,7 +1470,7 @@
                 return;
             }
 
-            const email = driver.email || `driver_${pendingCreateDriver}@asiye.com`;
+            const email = driver.email || `driver_${driverId}@asiye.com`;
             const name = driver.fullName || driver.name || 'Driver';
             const phone = driver.phone || '';
 
@@ -1408,14 +1483,16 @@
                 })
                 .then((user) => {
                     return Promise.all([
-                        database.ref(`taxis/${pendingCreateDriver}`).update({
+                        database.ref(`taxis/${driverId}`).update({
                             hasLogin: true,
                             userUid: user.uid,
+                            authUid: user.uid,
                             passwordLastReset: firebase.database.ServerValue.TIMESTAMP
                         }),
-                        database.ref(`driver_applications/${pendingCreateDriver}`).update({
+                        database.ref(`driver_applications/${applicationKey}`).update({
                             hasLogin: true,
                             userUid: user.uid,
+                            driverId: driverId,
                             passwordLastReset: firebase.database.ServerValue.TIMESTAMP
                         })
                     ]);
@@ -1433,7 +1510,7 @@
                         auth.sendPasswordResetEmail(email)
                             .then(() => {
                                 showToast(`Password reset email sent to ${email}`, 'info');
-                                database.ref(`taxis/${pendingCreateDriver}`).update({
+                                database.ref(`taxis/${driverId}`).update({
                                     hasLogin: true,
                                     passwordLastReset: firebase.database.ServerValue.TIMESTAMP
                                 });
@@ -1475,6 +1552,120 @@
         }
 
         // ================================================================
+        // ADMIN-APPROVED VEHICLE
+        // ================================================================
+        function collectApprovedVehicle(app) {
+            const type = (
+                prompt(
+                    'Vehicle type (for example: e-hailing, sedan, SUV, 4-seater or 7-seater):',
+                    app.vehiclePending?.type ||
+                    app.vehicleType ||
+                    app.carCategory ||
+                    'e-hailing'
+                ) || ''
+            ).trim();
+
+            if (!type) return null;
+
+            const make = (
+                prompt(
+                    'Vehicle make:',
+                    app.vehiclePending?.make ||
+                    app.vehicleMake ||
+                    app.make ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!make) return null;
+
+            const model = (
+                prompt(
+                    'Vehicle model:',
+                    app.vehiclePending?.model ||
+                    app.vehicleModel ||
+                    app.model ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!model) return null;
+
+            const colour = (
+                prompt(
+                    'Vehicle colour:',
+                    app.vehiclePending?.colour ||
+                    app.vehiclePending?.color ||
+                    app.vehicleColor ||
+                    app.color ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!colour) return null;
+
+            const registration = (
+                prompt(
+                    'Vehicle registration:',
+                    app.vehiclePending?.registration ||
+                    app.taxiRegistrationNumber ||
+                    app.vehicleReg ||
+                    app.reg ||
+                    ''
+                ) || ''
+            ).trim();
+
+            if (!registration) return null;
+
+            const seatInput =
+                prompt(
+                    'Number of passenger seats:',
+                    String(
+                        app.vehiclePending?.seats ||
+                        app.vehicleSeats ||
+                        app.seats ||
+                        app.capacity ||
+                        (
+                            /7/.test(type)
+                                ? 7
+                                : 4
+                        )
+                    )
+                );
+
+            if (seatInput === null) {
+                return null;
+            }
+
+            const seats =
+                Number(
+                    seatInput
+                );
+
+            if (
+                !Number.isInteger(seats) ||
+                seats < 1 ||
+                seats > 15
+            ) {
+                showToast(
+                    'Enter a valid passenger seat count between 1 and 15.',
+                    'error'
+                );
+                return null;
+            }
+
+            return {
+                type,
+                make,
+                model,
+                colour,
+                registration,
+                seats
+            };
+        }
+
+
+        // ================================================================
         // APPROVE DRIVER
         // ================================================================
         function approveDriver(key) {
@@ -1486,17 +1677,67 @@
                 return;
             }
 
+            const approvedVehicle =
+                collectApprovedVehicle(
+                    app
+                );
+
+            if (!approvedVehicle) {
+                showToast(
+                    'Approval cancelled. Vehicle details must be completed by an administrator.',
+                    'info'
+                );
+                return;
+            }
+
             const driverId = app.email ? app.email.replace(/[^a-zA-Z0-9]/g, '_') : `driver_${Date.now()}`;
+            const existingAuthUid = app.userUid || app.authUid || null;
 
             const driverData = {
                 name: app.fullName || app.name || 'Driver',
                 surname: app.fullName ? app.fullName.split(' ').slice(1).join(' ') : '',
                 email: app.email || '',
                 phone: app.phone || '',
-                taxiRegistrationNumber: app.taxiRegistrationNumber || app.reg || 'N/A',
-                vehicleMake: app.vehicleMake || 'N/A',
-                vehicleModel: app.vehicleModel || 'N/A',
-                vehicleColor: app.vehicleColor || 'N/A',
+                taxiRegistrationNumber:
+                    approvedVehicle.registration,
+                vehicleReg:
+                    approvedVehicle.registration,
+                vehicleType:
+                    approvedVehicle.type,
+                vehicleMake:
+                    approvedVehicle.make,
+                vehicleModel:
+                    approvedVehicle.model,
+                vehicleColor:
+                    approvedVehicle.colour,
+                vehicleSeats:
+                    approvedVehicle.seats,
+                seats:
+                    approvedVehicle.seats,
+                vehicle: {
+                    type:
+                        approvedVehicle.type,
+                    make:
+                        approvedVehicle.make,
+                    model:
+                        approvedVehicle.model,
+                    colour:
+                        approvedVehicle.colour,
+                    registration:
+                        approvedVehicle.registration,
+                    seats:
+                        approvedVehicle.seats
+                },
+                vehicleApproved:
+                    true,
+                vehicleApprovalStatus:
+                    'approved',
+                vehicleApprovedAt:
+                    firebase.database.ServerValue.TIMESTAMP,
+                vehicleApprovedBy:
+                    auth.currentUser
+                        ? auth.currentUser.uid
+                        : 'admin',
                 vehicleYear: app.vehicleYear || 'N/A',
                 vehiclePhoto: app.vehiclePhoto || app.documents?.CAR_FRONT || '',
                 profile_picture_url: app.profile_picture_url || app.documents?.FACE || '',
@@ -1507,8 +1748,16 @@
                 isOnline: false,
                 isBroadcasting: false,
                 isFull: false,
-                rating: 5.0,
+                rating: 0,
+                ratingSummary: {
+                    total: 0,
+                    count: 0
+                },
                 totalTrips: 0,
+                todayTrips: 0,
+                totalEarnings: 0,
+                todayEarnings: 0,
+                dailyEarnings: 0,
                 earnings: 0,
                 walletBalance: 0,
                 commissionDebt: 0,
@@ -1517,7 +1766,9 @@
                 createdAt: firebase.database.ServerValue.TIMESTAMP,
                 trainingStatus: 'completed',
                 documents: app.documents || {},
-                hasLogin: false
+                userUid: existingAuthUid,
+                authUid: existingAuthUid,
+                hasLogin: Boolean(existingAuthUid || app.hasLogin)
             };
 
             database.ref(`taxis/${driverId}`).set(driverData)
@@ -1527,13 +1778,39 @@
                         verifiedAt: firebase.database.ServerValue.TIMESTAMP,
                         driverId: driverId,
                         verifiedBy: auth.currentUser ? auth.currentUser.uid : 'admin',
-                        hasLogin: false
+                        hasLogin: false,
+                        approvedVehicle: {
+                            type:
+                                approvedVehicle.type,
+                            make:
+                                approvedVehicle.make,
+                            model:
+                                approvedVehicle.model,
+                            colour:
+                                approvedVehicle.colour,
+                            registration:
+                                approvedVehicle.registration,
+                            seats:
+                                approvedVehicle.seats
+                        }
                     });
                 })
                 .then(() => {
                     showToast(`✅ Driver ${app.fullName || 'Driver'} verified!`, 'success');
-                    // Show create password modal
-                    setTimeout(() => showCreatePassword(key), 500);
+
+                    if (existingAuthUid || app.hasLogin) {
+                        sendDriverNotification(
+                            app.phone,
+                            app.fullName || app.name || 'Driver',
+                            'approved'
+                        );
+                    } else {
+                        setTimeout(
+                            () => showCreatePassword(key, driverId),
+                            500
+                        );
+                    }
+
                     loadApplications();
                 })
                 .catch((error) => {
@@ -1569,6 +1846,117 @@
                 showToast('Error rejecting: ' + error.message, 'error');
             });
         }
+
+        // ================================================================
+        // UPDATE APPROVED VEHICLE
+        // ================================================================
+        async function updateApprovedVehicle(driverId) {
+            try {
+                const snapshot =
+                    await database
+                        .ref(
+                            `taxis/${driverId}`
+                        )
+                        .once(
+                            'value'
+                        );
+
+                const driver =
+                    snapshot.val();
+
+                if (!driver) {
+                    showToast(
+                        'Driver not found',
+                        'error'
+                    );
+                    return;
+                }
+
+                const approvedVehicle =
+                    collectApprovedVehicle(
+                        driver
+                    );
+
+                if (!approvedVehicle) {
+                    return;
+                }
+
+                await database
+                    .ref(
+                        `taxis/${driverId}`
+                    )
+                    .update({
+                        taxiRegistrationNumber:
+                            approvedVehicle.registration,
+                        vehicleReg:
+                            approvedVehicle.registration,
+                        vehicleType:
+                            approvedVehicle.type,
+                        vehicleMake:
+                            approvedVehicle.make,
+                        vehicleModel:
+                            approvedVehicle.model,
+                        vehicleColor:
+                            approvedVehicle.colour,
+                        vehicleSeats:
+                            approvedVehicle.seats,
+                        seats:
+                            approvedVehicle.seats,
+                        vehicle: {
+                            type:
+                                approvedVehicle.type,
+                            make:
+                                approvedVehicle.make,
+                            model:
+                                approvedVehicle.model,
+                            colour:
+                                approvedVehicle.colour,
+                            registration:
+                                approvedVehicle.registration,
+                            seats:
+                                approvedVehicle.seats
+                        },
+                        vehicleApproved:
+                            true,
+                        vehicleApprovalStatus:
+                            'approved',
+                        vehiclePending:
+                            null,
+                        vehicleSubmittedAt:
+                            null,
+                        vehicleApprovedAt:
+                            firebase.database.ServerValue.TIMESTAMP,
+                        vehicleApprovedBy:
+                            auth.currentUser
+                                ? auth.currentUser.uid
+                                : 'admin'
+                    });
+
+                showToast(
+                    '✅ Approved vehicle updated',
+                    'success'
+                );
+
+                closeModal();
+
+                viewDriverProfile(
+                    driverId
+                );
+
+            } catch (error) {
+                console.error(
+                    'Vehicle approval update failed:',
+                    error
+                );
+
+                showToast(
+                    'Could not update approved vehicle: ' +
+                    error.message,
+                    'error'
+                );
+            }
+        }
+
 
         // ================================================================
         // DEACTIVATE DRIVER

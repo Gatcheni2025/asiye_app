@@ -1,0 +1,191 @@
+/* ============================================================
+   ASIYE LIVE FACE SCANNER
+   ============================================================ */
+
+.asiye-face-scan {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    display: grid;
+    place-items: center;
+    padding: max(16px, env(safe-area-inset-top))
+        16px
+        max(16px, env(safe-area-inset-bottom));
+    background: rgba(4, 10, 8, .94);
+    backdrop-filter: blur(14px);
+}
+
+.asiye-face-scan-card {
+    width: min(100%, 470px);
+    max-height: 100%;
+    overflow-y: auto;
+    border-radius: 26px;
+    background: #0d1713;
+    color: #fff;
+    box-shadow: 0 24px 70px rgba(0,0,0,.45);
+}
+
+.asiye-face-scan-card > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 20px 14px;
+}
+
+.asiye-face-scan-card header small {
+    color: #7fc39f;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1.1px;
+}
+
+.asiye-face-scan-card header h2 {
+    margin: 4px 0 4px;
+    font-size: 21px;
+}
+
+.asiye-face-scan-card header p {
+    margin: 0;
+    max-width: 310px;
+    color: #aebbb4;
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.asiye-face-scan-card header button {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    border: 0;
+    border-radius: 50%;
+    background: rgba(255,255,255,.1);
+    color: #fff;
+}
+
+.asiye-face-camera {
+    position: relative;
+    width: calc(100% - 24px);
+    aspect-ratio: 1 / 1;
+    margin: 0 12px;
+    overflow: hidden;
+    border-radius: 22px;
+    background: #050806;
+}
+
+.asiye-face-camera video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+}
+
+.asiye-face-guide {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    pointer-events: none;
+    background:
+        radial-gradient(
+            ellipse 32% 42% at 50% 47%,
+            transparent 0 97%,
+            rgba(2, 7, 4, .66) 100%
+        );
+}
+
+.asiye-face-guide span {
+    width: 56%;
+    height: 72%;
+    border: 3px solid rgba(137, 235, 183, .96);
+    border-radius: 48% 48% 44% 44% / 42% 42% 56% 56%;
+    box-shadow:
+        0 0 0 999px rgba(0,0,0,.18),
+        0 0 22px rgba(87, 216, 146, .24);
+}
+
+.asiye-face-camera-tip {
+    position: absolute;
+    left: 50%;
+    bottom: 14px;
+    transform: translateX(-50%);
+    width: calc(100% - 34px);
+    padding: 9px 12px;
+    border-radius: 999px;
+    background: rgba(0,0,0,.55);
+    color: #fff;
+    text-align: center;
+    font-size: 9px;
+    font-weight: 800;
+    backdrop-filter: blur(7px);
+}
+
+.asiye-face-status {
+    padding: 13px 20px 2px;
+    color: #aebbb4;
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+}
+
+.asiye-face-actions {
+    display: grid;
+    grid-template-columns: .8fr 1.2fr;
+    gap: 10px;
+    padding: 16px 20px 20px;
+}
+
+.asiye-face-actions button {
+    min-height: 50px;
+    border-radius: 15px;
+    font-weight: 900;
+}
+
+.asiye-face-cancel {
+    border: 1px solid #33463c;
+    background: transparent;
+    color: #d7e2dc;
+}
+
+.asiye-face-capture {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: 0;
+    background: #fff;
+    color: #102219;
+}
+
+.asiye-face-capture:disabled {
+    opacity: .48;
+}
+
+.asiye-face-shutter {
+    width: 18px;
+    height: 18px;
+    border: 3px solid #183e2c;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 3px #fff;
+    background: #183e2c;
+}
+
+.member-avatar-photo img,
+#driverProfileInitial img,
+#driverMenuAvatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: inherit;
+}
+
+
+.asiye-driver-card .menu-avatar img,
+.pickup-avatar img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    border-radius: inherit;
+}

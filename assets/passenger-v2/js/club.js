@@ -1,6 +1,6 @@
 /* ============================================================
    ASIYE PASSENGER V2
-   ASIYE CLUB SERVICE
+   ASIYE WORK SERVICE
    ============================================================ */
 
 window.ASIYE = window.ASIYE || {};
@@ -12,13 +12,21 @@ ASIYE.club = {
         club4: {
 
             name:
-                'Asiye Club 4',
+                'Asiye Work 4',
+
+            /*
+             * Work 4 uses a 4-seat vehicle, but only 3 paying
+             * passengers are grouped so the driver seat is not
+             * counted as a passenger seat.
+             */
+            vehicleSeats:
+                4,
 
             capacity:
-                4,
+                3,
 
             minimumPassengers:
-                4,
+                3,
 
             pickupWindowMinutes:
                 10,
@@ -31,13 +39,20 @@ ASIYE.club = {
         club7: {
 
             name:
-                'Asiye Club 7',
+                'Asiye Work 7',
+
+            /*
+             * Work 7 now departs with 5 paying passengers.
+             * vehicleSeats preserves the product/vehicle class name.
+             */
+            vehicleSeats:
+                7,
 
             capacity:
-                7,
+                5,
 
             minimumPassengers:
-                7,
+                5,
 
             pickupWindowMinutes:
                 15,
@@ -95,7 +110,7 @@ ASIYE.club = {
        PRICE CALCULATION
 
        Total trip value is shared equally between all
-       passengers in the selected Club.
+       passengers in the selected Asiye Work.
        ======================================================== */
 
     calculatePrice(
@@ -158,7 +173,7 @@ ASIYE.club = {
          * Use full Go-equivalent route fare as
          * pool value for now.
          *
-         * Later you can apply a Club multiplier
+         * Later you can apply a Asiye Work multiplier
          * if required.
          */
 
@@ -219,13 +234,52 @@ ASIYE.club = {
     },
 
 
+    getCommuteDirection() {
+
+        const destination =
+            ASIYE.state.destination || {};
+
+        const home =
+            ASIYE.places?.getSavedPlace?.('home');
+
+        const work =
+            ASIYE.places?.getSavedPlace?.('work');
+
+        const distanceTo = place => {
+
+            if (!place) return Infinity;
+
+            return this.distanceKm(
+                Number(destination.latitude),
+                Number(destination.longitude),
+                Number(place.latitude),
+                Number(place.longitude)
+            );
+        };
+
+
+        if (distanceTo(work) <= 2) {
+
+            return 'to_work';
+        }
+
+
+        if (distanceTo(home) <= 2) {
+
+            return 'to_home';
+        }
+
+
+        return 'other';
+    },
+
+
     /* ========================================================
        FIND COMPATIBLE EXISTING POOL
        ======================================================== */
 
     async findCompatiblePool(
-        type,
-        departureTime
+        type
     ) {
 
         this.ensureFirebase();
@@ -241,6 +295,10 @@ ASIYE.club = {
 
         const config =
             this.getConfig(type);
+
+
+        const commuteDirection =
+            this.getCommuteDirection();
 
 
         const snapshot =
@@ -278,6 +336,16 @@ ASIYE.club = {
 
             if (
                 pool.clubMode !== type
+            ) {
+
+                return;
+            }
+
+
+            if (
+                commuteDirection !== 'other' &&
+                pool.commuteDirection &&
+                pool.commuteDirection !== commuteDirection
             ) {
 
                 return;
@@ -411,49 +479,62 @@ ASIYE.club = {
                         poolDestLng
                     );
 
-
-            /*
-             * Departure time comparison.
-             */
-
-            const departureDifference =
-
-                this.timeDifferenceMinutes(
-
-                    departureTime,
-
-                    pool.departureTime
-                );
-
-
             /*
              * Current compatibility rules:
              *
+             * same Asiye Work mode/direction
              * pickup within 3km
              * destination within 5km
-             * departure within 20 minutes
+             * pool still inside its waiting window
              */
+            const createdAt =
+                Number(pool.createdAt || 0);
+
+            const maxWaitMinutes =
+                Number(
+                    pool.maxWaitMinutes ||
+                    config.maxWaitMinutes ||
+                    20
+                );
+
+            const ageMinutes =
+                createdAt > 0
+                ? (
+                    Date.now() -
+                    createdAt
+                  ) / 60000
+                : 0;
 
             if (
                 pickupDistance > 3 ||
                 destinationDistance > 5 ||
-                departureDifference > 20
+                (
+                    createdAt > 0 &&
+                    ageMinutes >
+                    maxWaitMinutes
+                )
             ) {
 
                 return;
             }
 
 
-            const score =
-
-                pickupDistance +
-
-                destinationDistance +
-
+            /*
+             * Prefer the closest route, while giving
+             * fuller pools a small advantage so
+             * passengers can leave sooner.
+             */
+            const fullnessBoost =
                 (
-                    departureDifference /
-                    10
-                );
+                    count /
+                    config.capacity
+                ) * 2;
+
+
+            const score =
+                pickupDistance +
+                destinationDistance -
+                fullnessBoost;
 
 
             if (
@@ -485,8 +566,7 @@ ASIYE.club = {
        ======================================================== */
 
     async joinPool(
-        poolId,
-        departureTime
+        poolId
     ) {
 
         this.ensureFirebase();
@@ -502,7 +582,7 @@ ASIYE.club = {
         ) {
 
             throw new Error(
-                'Missing passenger or Club pool.'
+                'Missing passenger or Asiye Work pool.'
             );
         }
 
@@ -535,6 +615,20 @@ ASIYE.club = {
 
                     pool.passengers =
                         pool.passengers || {};
+
+
+                    /*
+                     * Migrate any still-open legacy Work pool from
+                     * 4/7 paying passengers to the current 3/5 rule.
+                     */
+                    pool.capacity =
+                        config.capacity;
+
+                    pool.maxCapacity =
+                        config.capacity;
+
+                    pool.minimumPassengers =
+                        config.minimumPassengers;
 
 
                     /*
@@ -609,8 +703,14 @@ ASIYE.club = {
                             ASIYE.state.destination
                                 .longitude,
 
+                        commuteDirection:
+                            this.getCommuteDirection(),
+
+                        pickupTiming:
+                            'asap',
+
                         departureTime:
-                            departureTime,
+                            'ASAP',
 
                         paymentMethod:
                             ASIYE.state.booking
@@ -730,7 +830,7 @@ ASIYE.club = {
         if (!result.committed) {
 
             throw new Error(
-                'Unable to join this Club ride.'
+                'Unable to join this Asiye Work ride.'
             );
         }
 
@@ -772,8 +872,7 @@ ASIYE.club = {
        ======================================================== */
 
     async createPool(
-        type,
-        departureTime
+        type
     ) {
 
         this.ensureFirebase();
@@ -873,8 +972,14 @@ ASIYE.club = {
             destinationLng:
                 destination.longitude,
 
+            commuteDirection:
+                this.getCommuteDirection(),
+
+            pickupTiming:
+                'asap',
+
             departureTime:
-                departureTime,
+                'ASAP',
 
             price:
                 pricing.pricePerPassenger,
@@ -906,6 +1011,15 @@ ASIYE.club = {
             type:
                 'club',
 
+            service:
+                'asiye_work',
+
+            serviceName:
+                'Asiye Work',
+
+            commuteDirection:
+                this.getCommuteDirection(),
+
             clubMode:
                 type,
 
@@ -927,8 +1041,11 @@ ASIYE.club = {
             remainingSeats:
                 config.capacity - 1,
 
+            pickupTiming:
+                'asap',
+
             departureTime:
-                departureTime,
+                'ASAP',
 
             pickupWindowMinutes:
                 config.pickupWindowMinutes,
@@ -941,6 +1058,12 @@ ASIYE.club = {
 
             pricePerPassenger:
                 pricing.pricePerPassenger,
+
+            agreedFare:
+                pricing.pricePerPassenger,
+
+            pricingVersion:
+                1,
 
             commuterId:
                 uid,
@@ -1055,8 +1178,7 @@ ASIYE.club = {
        ======================================================== */
 
     async book(
-        type,
-        departureTime
+        type
     ) {
 
         this.ensureFirebase();
@@ -1067,10 +1189,7 @@ ASIYE.club = {
         const existingPool =
 
             await this.findCompatiblePool(
-
-                type,
-
-                departureTime
+                type
             );
 
 
@@ -1082,10 +1201,7 @@ ASIYE.club = {
             requestId =
 
                 await this.joinPool(
-
-                    existingPool.id,
-
-                    departureTime
+                    existingPool.id
                 );
 
 
@@ -1094,10 +1210,7 @@ ASIYE.club = {
             requestId =
 
                 await this.createPool(
-
-                    type,
-
-                    departureTime
+                    type
                 );
         }
 

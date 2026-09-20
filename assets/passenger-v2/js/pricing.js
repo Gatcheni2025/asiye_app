@@ -28,6 +28,24 @@ ASIYE.pricing = {
         },
 
 
+        /*
+         * Delivery starts on the same distance tariff as Asiye Go.
+         * It is deliberately separate so production delivery pricing
+         * can be changed without altering passenger ride pricing.
+         */
+        delivery: {
+
+            baseFare:
+                20,
+
+            perKm:
+                9,
+
+            minimumFare:
+                25
+        },
+
+
         club4: {
 
             divisor:
@@ -47,6 +65,36 @@ ASIYE.pricing = {
                 15
         }
 
+    },
+
+
+    calculateDelivery(
+        distanceKm
+    ) {
+
+        const config =
+            this.rates.delivery;
+
+
+        const distance =
+            Math.max(
+                0,
+                Number(distanceKm || 0)
+            );
+
+
+        const fare =
+            Math.max(
+                config.minimumFare,
+                config.baseFare +
+                    distance *
+                    config.perKm
+            );
+
+
+        return Math.round(
+            fare
+        );
     },
 
 

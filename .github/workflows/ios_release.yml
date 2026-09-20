@@ -1,34 +1,141 @@
 name: iOS TestFlight Release
+# Release 11.0.23+293: camera, vehicle approval, Work capacity and EFT prep
 
 on:
   push:
     branches:
-      - main
+      - fix/native-authentication
   workflow_dispatch:
 
 jobs:
   build-and-release-ios:
     runs-on: macos-latest
-    
+
     steps:
-      - name: Checkout App Code
+      - name: Checkout app
         uses: actions/checkout@v5
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          persist-credentials: false
 
-      - name: Install Flutter Dependencies
-        run: flutter pub get
-
-      - name: Build and Upload to TestFlight 
-        working-directory: ./ios
+      - name: Validate iOS release secrets
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          # Mapping GH_PAT secret to the variable Fastlane expects
-          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.GH_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: fastlane beta
+        run: |
+          missing=0
+
+          for name in MATCH_PASSWORD GH_PAT APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Required GitHub secret $name is not configured."
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Verify certificate repository access
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          STATUS="$(curl -sS -o /tmp/asiye-certs-repo.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_PAT" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/Gatcheni2025/asiye-certs)"
+
+          if [ "$STATUS" != "200" ]; then
+            echo "::error::GH_PAT repository check failed with GitHub HTTP $STATUS."
+            exit 1
+          fi
+
+          cat > /tmp/asiye-git-askpass.sh <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' "$GIT_USERNAME" ;;
+            *Password*) printf '%s\n' "$GIT_PASSWORD" ;;
+          esac
+          SH
+
+          chmod 700 /tmp/asiye-git-askpass.sh
+          export GIT_ASKPASS=/tmp/asiye-git-askpass.sh
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_USERNAME=Gatcheni2025
+          export GIT_PASSWORD="$GH_PAT"
+
+          if ! git -c http.https://github.com/.extraheader= ls-remote \
+            https://github.com/Gatcheni2025/asiye-certs.git HEAD \
+            >/dev/null 2>&1; then
+            echo "::error::GitHub API access succeeded, but Git HTTPS authentication still failed."
+            exit 1
+          fi
+
+          echo "Certificate repository access confirmed."
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+
+      - name: Install Fastlane and CocoaPods
+        run: gem install fastlane cocoapods --no-document
+
+      - name: Install Flutter dependencies
+        run: |
+          flutter config --no-enable-swift-package-manager
+          flutter pub get
+
+      - name: Install iOS CocoaPods dependencies
+        working-directory: ./ios
+        run: pod install --repo-update
+
+      - name: Verify release version
+        run: |
+          grep -F "version: 11.0.23+293" pubspec.yaml
+
+      - name: Build, verify and upload to TestFlight
+        working-directory: ./ios
+        env:
+          MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+        run: |
+          cat > /tmp/asiye-git-askpass.sh <<'SH'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' "$GIT_USERNAME" ;;
+            *Password*) printf '%s\n' "$GIT_PASSWORD" ;;
+          esac
+          SH
+
+          chmod 700 /tmp/asiye-git-askpass.sh
+          export GIT_ASKPASS=/tmp/asiye-git-askpass.sh
+          export GIT_TERMINAL_PROMPT=0
+          export GIT_USERNAME=Gatcheni2025
+          export GIT_PASSWORD="$GH_PAT"
+
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          fastlane beta
+
+      - name: Upload signed IPA artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asiye-11.0.23-ios
+          path: |
+            ios/build/ipa/*.ipa
+            ios/*.ipa
+          if-no-files-found: warn
+          retention-days: 30

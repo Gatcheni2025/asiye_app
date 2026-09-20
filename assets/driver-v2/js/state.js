@@ -675,8 +675,8 @@ ASIYE_DRIVER.loadClubState = function(
             (
                 request.clubMode ===
                 'club7'
-                ? 7
-                : 4
+                ? 5
+                : 3
             )
         );
 
@@ -728,7 +728,7 @@ ASIYE_DRIVER.loadClubState = function(
             request.clubMode ||
 
             (
-                capacity === 7
+                capacity >= 5
                 ? 'club7'
                 : 'club4'
             ),

@@ -5,6 +5,20 @@ window.onPushNotificationReceived = function(data) {
 };
 window.onNotificationClicked = async function(data) {
     const app = window.ASIYE_DRIVER || window.ASIYE;
+
+    if (data?.type === 'app_update') {
+        const channel = window.Asiye || window.Android;
+        if (channel && typeof channel.postMessage === 'function') {
+            channel.postMessage(JSON.stringify({
+                action: 'openAppUpdate',
+                ...data
+            }));
+        } else {
+            app?.ui?.toast('A new Asiye update is available.');
+        }
+        return;
+    }
+
     const id = data.requestId || data.tripId;
     if (!id) { window.onPushNotificationReceived(data); return; }
     if (!app?.state || !(app.state.driverId || app.state.userId)) {

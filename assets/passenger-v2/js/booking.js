@@ -9,6 +9,17 @@ ASIYE.booking = {
 
     async create() {
 
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'passenger'
+            })
+        ) {
+            throw new Error(
+                'Add a trusted family member before requesting a ride.'
+            );
+        }
+
         const type =
             ASIYE.state.booking.rideType;
 
@@ -31,15 +42,8 @@ ASIYE.booking = {
             type === 'club7'
         ) {
 
-            const time =
-                ASIYE.state.booking
-                    .club
-                    .departureTime;
-
-
             return await ASIYE.club.book(
-                type,
-                time
+                type
             );
         }
 
@@ -231,6 +235,12 @@ ASIYE.booking = {
             finalAmount:
                 fare,
 
+            agreedFare:
+                fare,
+
+            pricingVersion:
+                1,
+
             paymentMethod:
                 ASIYE.state.booking
                     .paymentMethod ||
@@ -275,6 +285,8 @@ ASIYE.booking = {
             requestData
         );
 
+        await this.offerSafetyShare(requestId);
+
 
         await firebase
             .database()
@@ -317,6 +329,25 @@ ASIYE.booking = {
 
 
         return requestId;
+    },
+
+
+    async offerSafetyShare(requestId) {
+        try {
+            if (window.AsiyeSafetyContact) {
+                await AsiyeSafetyContact.offerTripShare(
+                    requestId,
+                    {
+                        role: 'passenger'
+                    }
+                );
+            }
+        } catch (error) {
+            console.warn(
+                'Safety sharing was not completed:',
+                error
+            );
+        }
     },
 
 
@@ -562,13 +593,17 @@ ASIYE.booking = {
                             .set({
 
                                 type:
-                                    'ride_request',
+                                    request.type === 'delivery'
+                                        ? 'delivery_request'
+                                        : 'ride_request',
 
                                 requestId:
                                     requestId,
 
                                 rideType:
-                                    'go',
+                                    request.type === 'delivery'
+                                        ? 'delivery'
+                                        : 'go',
 
                                 commuterId:
                                     request.commuterId,
@@ -871,7 +906,7 @@ ASIYE.booking = {
                 Number(
                     request.capacity ||
                     request.maxCapacity ||
-                    4
+                    3
                 );
 
 
@@ -919,6 +954,12 @@ ASIYE.booking = {
              * GO
              */
 
+            const cancelledAt =
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP;
+
             await firebase
                 .database()
                 .ref(
@@ -930,12 +971,26 @@ ASIYE.booking = {
                         'cancelled_by_commuter',
 
                     cancelledAt:
-
-                        firebase
-                            .database
-                            .ServerValue
-                            .TIMESTAMP
+                        cancelledAt
                 });
+
+
+            if (
+                request.type ===
+                'delivery'
+            ) {
+                await firebase
+                    .database()
+                    .ref(
+                        `delivery_requests/${requestId}`
+                    )
+                    .update({
+                        status:
+                            'cancelled_by_commuter',
+                        cancelledAt:
+                            cancelledAt
+                    });
+            }
         }
 
 

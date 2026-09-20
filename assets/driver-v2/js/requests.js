@@ -123,6 +123,7 @@ ASIYE_DRIVER.requests = {
                         'passenger',
                         'club',
                         'club_request',
+                        'delivery_request',
                         'request'
                     ];
 
@@ -408,6 +409,15 @@ ASIYE_DRIVER.requests = {
     async accept(requestId = null) {
 
         if (!await AsiyeEnrollment.requireApproval()) return;
+
+        if (
+            window.AsiyeSafetyContact &&
+            !await AsiyeSafetyContact.ensure({
+                role: 'driver'
+            })
+        ) {
+            return;
+        }
 
         const driverId =
             ASIYE_DRIVER.state
@@ -989,15 +999,40 @@ ASIYE_DRIVER.requests = {
                 '';
 
 
-            const driverRating =
+            const driverProfileImageUrl =
 
-                Number(
-                    driver.rating ||
-                    5
-                );
+                driver.profile_picture_url ||
+
+                driver.profileImageUrl ||
+
+                driver.photoURL ||
+
+                '';
+
+
+            const ratingInfo =
+                ASIYE_DRIVER.metrics
+                    ?.rating?.(
+                        driver
+                    ) || {
+                        value: null
+                    };
+
+
+            const driverRating =
+                Number.isFinite(
+                    ratingInfo.value
+                )
+                    ? Number(
+                        ratingInfo.value
+                    )
+                    : 0;
 
 
             const vehicleReg =
+
+                driver.vehicle
+                    ?.registration ||
 
                 driver.vehicleReg ||
 
@@ -1012,6 +1047,9 @@ ASIYE_DRIVER.requests = {
 
             const vehicleMake =
 
+                driver.vehicle
+                    ?.make ||
+
                 driver.vehicleMake ||
 
                 driver.make ||
@@ -1020,6 +1058,9 @@ ASIYE_DRIVER.requests = {
 
 
             const vehicleModel =
+
+                driver.vehicle
+                    ?.model ||
 
                 driver.vehicleModel ||
 
@@ -1030,11 +1071,45 @@ ASIYE_DRIVER.requests = {
 
             const vehicleColor =
 
+                driver.vehicle
+                    ?.colour ||
+
+                driver.vehicle
+                    ?.color ||
+
                 driver.vehicleColor ||
 
                 driver.color ||
 
                 '';
+
+
+            const vehicleType =
+
+                driver.vehicle
+                    ?.type ||
+
+                driver.vehicleType ||
+
+                driver.carCategory ||
+
+                '';
+
+
+            const vehicleSeats =
+
+                Number(
+                    driver.vehicle
+                        ?.seats ||
+
+                    driver.vehicleSeats ||
+
+                    driver.seats ||
+
+                    driver.capacity ||
+
+                    0
+                );
 
 
             const vehicleInfo =
@@ -1124,9 +1199,9 @@ ASIYE_DRIVER.requests = {
                             claimedRequest.rideType ===
                                 'club7'
 
-                            ? 7
+                            ? 5
 
-                            : 4
+                            : 3
                         )
                     );
 
@@ -1173,6 +1248,9 @@ ASIYE_DRIVER.requests = {
                 driverPhone:
                     driverPhone,
 
+                driverProfileImageUrl:
+                    driverProfileImageUrl,
+
                 driverRating:
                     driverRating,
 
@@ -1187,6 +1265,12 @@ ASIYE_DRIVER.requests = {
 
                 vehicleColor:
                     vehicleColor,
+
+                vehicleType:
+                    vehicleType,
+
+                vehicleSeats:
+                    vehicleSeats,
 
                 vehicleReg:
                     vehicleReg,
@@ -1441,6 +1525,9 @@ ASIYE_DRIVER.requests = {
                                 driverPhone:
                                     driverPhone,
 
+                                driverProfileImageUrl:
+                                    driverProfileImageUrl,
+
                                 driverRating:
                                     driverRating,
 
@@ -1455,6 +1542,12 @@ ASIYE_DRIVER.requests = {
 
                                 vehicleColor:
                                     vehicleColor,
+
+                                vehicleType:
+                                    vehicleType,
+
+                                vehicleSeats:
+                                    vehicleSeats,
 
                                 vehicleReg:
                                     vehicleReg,
