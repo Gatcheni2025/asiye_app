@@ -969,10 +969,252 @@ window.AsiyePages = {
                 () => this.open('support');
         } else if (page === 'support') {
             const config = driver ? window.ASIYE_DRIVER_CONFIG : window.ASIYE_CONFIG;
-            body.innerHTML = `<h2>How can we help?</h2><details class="member-info"><summary>My driver or passenger cannot find me</summary><p>Use Message on your trip to share a nearby landmark and agree on a safe meeting point.</p></details><details class="member-info"><summary>My payment or fare looks incorrect</summary><p>Keep your trip reference and the amount shown on the completed-trip receipt.</p></details><details class="member-info"><summary>Map or location is unavailable</summary><p>Allow location access in your browser or device settings, check your connection, then recenter the map.</p></details>`;
+
+            body.innerHTML = `
+                <h2>How can we help?</h2>
+
+                <details class="member-info">
+                    <summary>My driver or passenger cannot find me</summary>
+                    <p>Use Message on your trip to share a nearby landmark and agree on a safe meeting point.</p>
+                </details>
+
+                <details class="member-info">
+                    <summary>My payment or fare looks incorrect</summary>
+                    <p>Keep your trip reference and the amount shown on the completed-trip receipt.</p>
+                </details>
+
+                <details class="member-info">
+                    <summary>Map or location is unavailable</summary>
+                    <p>Allow location access in your browser or device settings, check your connection, then recenter the map.</p>
+                </details>
+
+                <form class="member-support-form" data-support-form>
+                    <h3>Send a support ticket</h3>
+
+                    <label>
+                        Topic
+                        <select data-support-topic>
+                            <option value="trip">Trip or booking</option>
+                            <option value="payment">Payment or wallet</option>
+                            <option value="account">Account or profile</option>
+                            <option value="driver">Driver / passenger issue</option>
+                            <option value="delivery">Delivery</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Tell us what happened
+                        <textarea
+                            data-support-message
+                            rows="5"
+                            maxlength="1500"
+                            placeholder="Include your trip reference, amount or other useful details."
+                            required
+                        ></textarea>
+                    </label>
+
+                    <button class="member-primary" type="submit">
+                        Send to Asiye Support
+                    </button>
+
+                    <p class="member-note" data-support-status>
+                        Your ticket will be available to the Asiye support team.
+                    </p>
+                </form>
+            `;
+
+            const supportForm =
+                body.querySelector(
+                    '[data-support-form]'
+                );
+
+            supportForm
+                ?.addEventListener(
+                    'submit',
+                    async event => {
+                        event.preventDefault();
+
+                        const authUser =
+                            firebase.auth()
+                                .currentUser;
+
+                        const statusElement =
+                            supportForm
+                                .querySelector(
+                                    '[data-support-status]'
+                                );
+
+                        const button =
+                            supportForm
+                                .querySelector(
+                                    '[type="submit"]'
+                                );
+
+                        const topic =
+                            supportForm
+                                .querySelector(
+                                    '[data-support-topic]'
+                                )
+                                ?.value ||
+                            'other';
+
+                        const message =
+                            supportForm
+                                .querySelector(
+                                    '[data-support-message]'
+                                )
+                                ?.value
+                                .trim() ||
+                            '';
+
+                        if (
+                            !authUser ||
+                            !id
+                        ) {
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    'Sign in again before contacting support.';
+                            }
+
+                            return;
+                        }
+
+                        if (
+                            message.length < 5
+                        ) {
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    'Add a little more detail so support can help.';
+                            }
+
+                            return;
+                        }
+
+                        if (button) {
+                            button.disabled =
+                                true;
+
+                            button.textContent =
+                                'Sending…';
+                        }
+
+                        if (statusElement) {
+                            statusElement.textContent =
+                                'Sending your ticket…';
+                        }
+
+                        try {
+                            const ticketRef =
+                                firebase
+                                    .database()
+                                    .ref(
+                                        'support_chats'
+                                    )
+                                    .push();
+
+                            await ticketRef
+                                .set({
+                                    ticketId:
+                                        ticketRef.key,
+
+                                    userId:
+                                        id,
+
+                                    authUid:
+                                        authUser.uid,
+
+                                    role:
+                                        driver
+                                            ? 'driver'
+                                            : 'passenger',
+
+                                    name:
+                                        user.name ||
+                                        user.fullName ||
+                                        user.firstName ||
+                                        (
+                                            driver
+                                                ? 'Driver'
+                                                : 'Passenger'
+                                        ),
+
+                                    phone:
+                                        user.phone ||
+                                        user.phoneNumber ||
+                                        authUser.phoneNumber ||
+                                        '',
+
+                                    email:
+                                        user.email ||
+                                        authUser.email ||
+                                        '',
+
+                                    subject:
+                                        topic,
+
+                                    message:
+                                        message,
+
+                                    status:
+                                        'open',
+
+                                    createdAt:
+                                        firebase
+                                            .database
+                                            .ServerValue
+                                            .TIMESTAMP,
+
+                                    updatedAt:
+                                        firebase
+                                            .database
+                                            .ServerValue
+                                            .TIMESTAMP
+                                });
+
+                            supportForm
+                                .reset();
+
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    `Ticket ${ticketRef.key.slice(-6)} sent. Asiye Support can now review it.`;
+                            }
+
+                        } catch (error) {
+                            console.error(
+                                'Support ticket could not be sent:',
+                                error
+                            );
+
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    'Could not send the ticket. Check your connection and try again.';
+                            }
+
+                        } finally {
+                            if (button) {
+                                button.disabled =
+                                    false;
+
+                                button.textContent =
+                                    'Send to Asiye Support';
+                            }
+                        }
+                    }
+                );
+
             const email = config?.supportEmail;
-            if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) body.innerHTML += `<a class="member-primary" href="mailto:${encodeURIComponent(email)}">Email support</a>`;
-            else body.innerHTML += note('Direct support contact has not been configured for this app yet.');
+
+            if (
+                email &&
+                /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                    .test(
+                        email
+                    )
+            ) {
+                body.innerHTML +=
+                    `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`;
+            }
         } else {
             try {
                 if (!id) throw new Error('Sign in to view your records.');
