@@ -3,6 +3,228 @@ window.AsiyePages = {
     escape(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
     money(value) { return Number.isFinite(Number(value)) && value != null ? `R${Number(value).toFixed(2)}` : 'Not available'; },
     row(label, value) { return `<div class="member-row"><span>${this.escape(label)}</span><strong>${this.escape(value ?? 'Not provided')}</strong></div>`; },
+
+    async saveDriverFace(blob, statusEl = null) {
+        const driverId =
+            window.ASIYE_DRIVER
+                ?.state
+                ?.driverId;
+
+        if (!driverId) {
+            throw new Error(
+                'Driver account is not loaded.'
+            );
+        }
+
+        if (
+            !window.AsiyePhpImageUpload
+        ) {
+            throw new Error(
+                'Profile image service is unavailable.'
+            );
+        }
+
+        if (statusEl) {
+            statusEl.textContent =
+                'Saving face scan…';
+        }
+
+        const uploaded =
+            await AsiyePhpImageUpload
+                .upload(
+                    blob,
+                    {
+                        userId:
+                            driverId,
+                        purpose:
+                            'driver-profile',
+                        filename:
+                            'driver-profile.jpg'
+                    }
+                );
+
+        const url =
+            uploaded.url;
+
+        const updates = {
+            profile_picture_url:
+                url,
+            profileImageUrl:
+                url,
+            profilePhotoUpdatedAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP
+        };
+
+        await firebase
+            .database()
+            .ref(
+                `taxis/${driverId}`
+            )
+            .update(
+                updates
+            );
+
+        if (
+            ASIYE_DRIVER.state.driver
+        ) {
+            Object.assign(
+                ASIYE_DRIVER.state.driver,
+                updates
+            );
+        }
+
+        const authUser =
+            firebase.auth()
+                .currentUser;
+
+        if (
+            authUser &&
+            typeof authUser
+                .updateProfile ===
+                'function'
+        ) {
+            try {
+                await authUser
+                    .updateProfile({
+                        photoURL:
+                            url
+                    });
+            } catch (error) {
+                console.warn(
+                    'Driver Auth profile photo update skipped:',
+                    error
+                );
+            }
+        }
+
+        ASIYE_DRIVER.ui
+            ?.updateDriverProfileUI?.();
+
+        if (statusEl) {
+            statusEl.textContent =
+                'Face scan saved as your driver profile picture.';
+        }
+
+        return url;
+    },
+
+    bindDriverFaceScan(container) {
+        const button =
+            container.querySelector(
+                '[data-driver-profile-face]'
+            );
+
+        const status =
+            container.querySelector(
+                '[data-driver-profile-status]'
+            );
+
+        if (!button) return;
+
+        button.onclick =
+            async () => {
+                if (
+                    !window.AsiyeFaceScanner
+                ) {
+                    if (status) {
+                        status.textContent =
+                            'Face scanner is unavailable.';
+                    }
+
+                    return;
+                }
+
+                button.disabled =
+                    true;
+
+                button.textContent =
+                    'Opening face scan…';
+
+                try {
+                    const result =
+                        await AsiyeFaceScanner
+                            .open({
+                                title:
+                                    'Driver face scan',
+                                subtitle:
+                                    'Centre your face inside the guide. The captured face becomes your driver profile picture.'
+                            });
+
+                    if (!result?.blob) {
+                        button.disabled =
+                            false;
+
+                        button.textContent =
+                            'Scan face';
+
+                        return;
+                    }
+
+                    button.textContent =
+                        'Saving face…';
+
+                    const url =
+                        await this.saveDriverFace(
+                            result.blob,
+                            status
+                        );
+
+                    let avatar =
+                        container.querySelector(
+                            '.member-avatar'
+                        );
+
+                    if (avatar && url) {
+                        avatar.classList.add(
+                            'member-avatar-photo'
+                        );
+
+                        avatar.innerHTML =
+                            '';
+
+                        const image =
+                            document.createElement(
+                                'img'
+                            );
+
+                        image.src =
+                            url;
+
+                        image.alt =
+                            'Driver profile picture';
+
+                        avatar.appendChild(
+                            image
+                        );
+                    }
+
+                    button.textContent =
+                        'Rescan face';
+
+                } catch (error) {
+                    console.error(
+                        'Driver face scan failed:',
+                        error
+                    );
+
+                    if (status) {
+                        status.textContent =
+                            error?.message ||
+                            'Could not save your face scan.';
+                    }
+
+                    button.textContent =
+                        'Scan face';
+                } finally {
+                    button.disabled =
+                        false;
+                }
+            };
+    },
+
     async open(page) {
         this.dialog?.close(); this.dialog?.remove();
         const driver = !!window.ASIYE_DRIVER;
@@ -39,31 +261,43 @@ window.AsiyePages = {
                 this.row('Email', user.email) +
                 this.row('Account type', driver ? 'Driver' : 'Passenger');
 
-            if (!driver) {
-                body.innerHTML += `
-                    <div class="member-profile-photo-actions">
-                        <button type="button" class="member-primary" data-passenger-profile-camera>
-                            ${photoUrl ? 'Rescan profile picture' : 'Scan profile picture'}
-                        </button>
-                        <input
-                            type="file"
-                            accept="image/*"
-                            capture="user"
-                            data-passenger-profile-file
-                            hidden
-                        >
-                        <p class="member-note" data-passenger-profile-status>
-                            Scan a clear face photo with the camera. As soon as the scan is captured, Asiye saves it automatically as your profile picture.
-                        </p>
-                    </div>
-                `;
+            body.innerHTML += `
+                <div class="member-profile-photo-actions">
+                    <button
+                        type="button"
+                        class="member-primary"
+                        ${driver
+                            ? 'data-driver-profile-face'
+                            : 'data-passenger-profile-camera'}
+                    >
+                        ${photoUrl
+                            ? 'Rescan face'
+                            : 'Scan face'}
+                    </button>
 
-                if (
-                    window.ASIYE?.profile &&
-                    typeof ASIYE.profile.bindAccount === 'function'
-                ) {
-                    ASIYE.profile.bindAccount(body);
-                }
+                    <p
+                        class="member-note"
+                        ${driver
+                            ? 'data-driver-profile-status'
+                            : 'data-passenger-profile-status'}
+                    >
+                        Asiye opens a live face scan inside the app. Centre your face, capture it, and the saved PHP image becomes your profile picture immediately.
+                    </p>
+                </div>
+            `;
+
+            if (driver) {
+                this.bindDriverFaceScan(
+                    body
+                );
+            } else if (
+                window.ASIYE?.profile &&
+                typeof ASIYE.profile.bindAccount ===
+                    'function'
+            ) {
+                ASIYE.profile.bindAccount(
+                    body
+                );
             }
         } else if (page === 'wallet') {
             const returnStatus = new URLSearchParams(location.search).get('wallet');
