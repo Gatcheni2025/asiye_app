@@ -298,6 +298,16 @@ ASIYE_DRIVER.map = {
          * pitched/bearing camera while it is active.
          */
         if (
+            ASIYE_DRIVER.navigator?.navigationMode &&
+            ASIYE_DRIVER.navigator?.follow &&
+            !ASIYE_DRIVER.navigator?.target
+        ) {
+            this.followDriverNavigationView(
+                lat,
+                lng,
+                heading
+            );
+        } else if (
             !ASIYE_DRIVER.navigator?.navigationMode &&
             this.followDriver
         ) {
@@ -398,6 +408,67 @@ ASIYE_DRIVER.map = {
 
             duration:
                 650
+        });
+    },
+
+
+    followDriverNavigationView(
+        latitude,
+        longitude,
+        heading = null
+    ) {
+
+        const lat =
+            Number(latitude);
+
+        const lng =
+            Number(longitude);
+
+        if (
+            !this.instance ||
+            !Number.isFinite(lat) ||
+            !Number.isFinite(lng)
+        ) {
+            ASIYE_DRIVER.ui?.toast?.(
+                'Waiting for driver location.'
+            );
+
+            return;
+        }
+
+        const currentBearing =
+            Number(
+                this.instance.getBearing?.() ||
+                0
+            );
+
+        const bearing =
+            Number.isFinite(
+                Number(heading)
+            ) &&
+            Number(heading) >= 0
+                ? Number(heading)
+                : currentBearing;
+
+        this.instance.easeTo({
+            center: [
+                lng,
+                lat
+            ],
+            zoom: 17.5,
+            pitch: 58,
+            bearing,
+            padding: {
+                top: 110,
+                bottom: Math.min(
+                    240,
+                    window.innerHeight * .34
+                ),
+                left: 30,
+                right: 30
+            },
+            duration: 650,
+            essential: true
         });
     },
 
