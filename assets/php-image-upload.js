@@ -6,6 +6,11 @@ window.AsiyePhpImageUpload = {
     endpoint:
         'https://app.asiye.cloud/upload_handler.php',
 
+    endpoints: [
+        'https://app.asiye.cloud/upload_handler.php',
+        'https://app.asiye.cloud/server/upload_handler.php'
+    ],
+
     apiKey:
         'asiye_secure_upload_2025',
 
@@ -107,6 +112,204 @@ window.AsiyePhpImageUpload = {
         );
     },
 
+    buildFormData(
+        blob,
+        {
+            userId,
+            purpose,
+            filename
+        }
+    ) {
+        const formData =
+            new FormData();
+
+        formData.append(
+            'file',
+            blob,
+            filename
+        );
+
+        formData.append(
+            'api_key',
+            this.apiKey
+        );
+
+        formData.append(
+            'userId',
+            String(userId)
+        );
+
+        formData.append(
+            'purpose',
+            String(purpose)
+        );
+
+        return formData;
+    },
+
+    async uploadToEndpoint(
+        endpoint,
+        blob,
+        options
+    ) {
+        const controller =
+            typeof AbortController !== 'undefined'
+                ? new AbortController()
+                : null;
+
+        const timeout =
+            controller
+                ? setTimeout(
+                    () => controller.abort(),
+                    30000
+                )
+                : null;
+
+        try {
+            const response =
+                await fetch(
+                    endpoint,
+                    {
+                        method:
+                            'POST',
+                        body:
+                            this.buildFormData(
+                                blob,
+                                options
+                            ),
+                        cache:
+                            'no-store',
+                        signal:
+                            controller?.signal
+                    }
+                );
+
+            const raw =
+                await response.text();
+
+            let data = {};
+
+            if (raw) {
+                try {
+                    data =
+                        JSON.parse(raw);
+                } catch (_) {
+                    /*
+                     * A 404/500 page from shared hosting is often HTML.
+                     * Surface the HTTP status instead of the vague
+                     * "Failed to fetch" / "invalid response" message.
+                     */
+                    if (!response.ok) {
+                        const error =
+                            new Error(
+                                `Image server returned HTTP ${response.status} at ${endpoint}.`
+                            );
+
+                        error.httpStatus =
+                            response.status;
+
+                        error.endpoint =
+                            endpoint;
+
+                        throw error;
+                    }
+
+                    throw new Error(
+                        `Image server returned an invalid response from ${endpoint}.`
+                    );
+                }
+            }
+
+            const url =
+                data?.url ||
+                data?.file_url ||
+                data?.fileUrl ||
+                data?.location ||
+                '';
+
+            if (
+                !response.ok ||
+                !url ||
+                (
+                    data.status &&
+                    ![
+                        'success',
+                        'ok'
+                    ].includes(
+                        String(
+                            data.status
+                        ).toLowerCase()
+                    )
+                )
+            ) {
+                const error =
+                    new Error(
+                        data?.message ||
+                        data?.error ||
+                        `The image server rejected the upload (HTTP ${response.status}).`
+                    );
+
+                error.httpStatus =
+                    response.status;
+
+                error.endpoint =
+                    endpoint;
+
+                throw error;
+            }
+
+            return {
+                url,
+                data,
+                blob,
+                endpoint
+            };
+        } catch (error) {
+            if (
+                error?.name ===
+                'AbortError'
+            ) {
+                const timeoutError =
+                    new Error(
+                        `Image upload timed out while contacting ${endpoint}.`
+                    );
+
+                timeoutError.endpoint =
+                    endpoint;
+
+                throw timeoutError;
+            }
+
+            if (
+                error instanceof TypeError &&
+                /fetch/i.test(
+                    String(
+                        error.message ||
+                        ''
+                    )
+                )
+            ) {
+                const networkError =
+                    new Error(
+                        `Image server could not be reached at ${endpoint}.`
+                    );
+
+                networkError.endpoint =
+                    endpoint;
+
+                throw networkError;
+            }
+
+            throw error;
+        } finally {
+            if (timeout) {
+                clearTimeout(
+                    timeout
+                );
+            }
+        }
+    },
+
     async upload(
         input,
         {
@@ -146,94 +349,80 @@ window.AsiyePhpImageUpload = {
             );
         }
 
-        const formData =
-            new FormData();
-
-        formData.append(
-            'file',
-            blob,
+        const options = {
+            userId,
+            purpose,
             filename
-        );
-
-        formData.append(
-            'api_key',
-            this.apiKey
-        );
-
-        formData.append(
-            'userId',
-            String(userId)
-        );
-
-        /*
-         * Existing PHP ignores unknown fields safely, while newer
-         * handlers can use purpose to keep captures organised.
-         */
-        formData.append(
-            'purpose',
-            String(purpose)
-        );
-
-        const response =
-            await fetch(
-                this.endpoint,
-                {
-                    method:
-                        'POST',
-                    body:
-                        formData
-                }
-            );
-
-        const raw =
-            await response.text();
-
-        let data = {};
-
-        try {
-            data =
-                raw
-                    ? JSON.parse(raw)
-                    : {};
-        } catch (_) {
-            throw new Error(
-                'The image server returned an invalid response.'
-            );
-        }
-
-        const url =
-            data?.url ||
-            data?.file_url ||
-            data?.fileUrl ||
-            data?.location ||
-            '';
-
-        if (
-            !response.ok ||
-            !url ||
-            (
-                data.status &&
-                ![
-                    'success',
-                    'ok'
-                ].includes(
-                    String(
-                        data.status
-                    ).toLowerCase()
-                )
-            )
-        ) {
-            throw new Error(
-                data?.message ||
-                data?.error ||
-                'The captured image could not be saved.'
-            );
-        }
-
-        return {
-            url,
-            data,
-            blob
         };
+
+        const endpoints =
+            Array.from(
+                new Set(
+                    [
+                        this.endpoint,
+                        ...(this.endpoints || [])
+                    ].filter(Boolean)
+                )
+            );
+
+        let lastError = null;
+
+        for (
+            const endpoint
+            of endpoints
+        ) {
+            try {
+                const uploaded =
+                    await this.uploadToEndpoint(
+                        endpoint,
+                        blob,
+                        options
+                    );
+
+                /*
+                 * Remember the working endpoint for any later upload in
+                 * the same app session.
+                 */
+                this.endpoint =
+                    endpoint;
+
+                return uploaded;
+            } catch (error) {
+                lastError =
+                    error;
+
+                console.warn(
+                    'Asiye image upload endpoint failed:',
+                    endpoint,
+                    error
+                );
+
+                /*
+                 * These statuses prove that the endpoint exists and the
+                 * request reached PHP. Falling back would hide the real
+                 * server-side problem, so stop here.
+                 */
+                if (
+                    [
+                        400,
+                        401,
+                        403,
+                        413,
+                        415
+                    ].includes(
+                        Number(
+                            error?.httpStatus
+                        )
+                    )
+                ) {
+                    throw error;
+                }
+            }
+        }
+
+        throw new Error(
+            lastError?.message ||
+            'Image server is unavailable. Make sure upload_handler.php is deployed on app.asiye.cloud.'
+        );
     }
 };
