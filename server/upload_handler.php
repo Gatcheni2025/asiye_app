@@ -14,17 +14,13 @@ declare(strict_types=1);
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
-$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$allowedOrigins = [
-    'https://app.asiye.cloud',
-    'https://asiye.cloud',
-];
-
-if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
-    header('Access-Control-Allow-Origin: ' . $origin);
-    header('Vary: Origin');
-}
-
+/*
+ * The packaged Flutter WebView loads local assets, so its Origin may be
+ * "null" rather than https://app.asiye.cloud. This endpoint does not use
+ * cookie credentials; the upload API key is validated below. Allowing all
+ * origins lets Android/iOS app captures reach this PHP endpoint reliably.
+ */
+header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
 
