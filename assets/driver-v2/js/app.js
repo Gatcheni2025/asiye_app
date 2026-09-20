@@ -352,12 +352,24 @@ ASIYE_DRIVER.ui = {
             );
 
 
-        const rating =
+        const ratingInfo =
+            ASIYE_DRIVER.metrics
+                ?.rating?.(
+                    driver
+                ) || {
+                    count: 0,
+                    value: null
+                };
 
-            Number(
-                driver.rating ||
-                5
-            );
+
+        const ratingDisplay =
+            Number.isFinite(
+                ratingInfo.value
+            )
+                ? Number(
+                    ratingInfo.value
+                ).toFixed(1)
+                : 'New';
 
 
         container.innerHTML = `
@@ -457,7 +469,7 @@ ASIYE_DRIVER.ui = {
                 <div class="driver-stat-card">
 
                     <span class="driver-stat-value">
-                        ${rating.toFixed(1)}
+                        ${ratingDisplay}
                     </span>
 
                     <span class="driver-stat-label">
@@ -3822,6 +3834,16 @@ async function (
 
         ASIYE_DRIVER.ui
             .updateDriverProfileUI();
+
+
+        /*
+         * Rebuild trip/earnings counters from completed requests.
+         * This also repairs older trips that were never counted.
+         */
+        await ASIYE_DRIVER.metrics
+            ?.refresh?.(
+                driverId
+            );
 
 
         ASIYE_DRIVER.ui
