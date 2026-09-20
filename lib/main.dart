@@ -22,6 +22,8 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 
+import 'face_scan_screen.dart';
+
 bool _isFirebaseInitialized = false;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
@@ -1147,6 +1149,100 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
+
+  Future<void> _scanFaceForWeb(Map<String, dynamic> data) async {
+    final callbackId = data['callbackId']?.toString() ?? '';
+
+    try {
+      if (!await _ensureCameraPermission()) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'Camera permission is required for the live face scan.',
+        );
+        return;
+      }
+
+      if (!mounted) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'The face scanner is not ready.',
+        );
+        return;
+      }
+
+      final purpose =
+          data['purpose']?.toString() ??
+          'profile';
+
+      final roleTitle =
+          purpose.contains('driver')
+              ? 'Driver live face scan'
+              : 'Passenger live face scan';
+
+      final path = await Navigator.of(context).push<String>(
+        MaterialPageRoute<String>(
+          fullscreenDialog: true,
+          builder:
+              (_) => AsiyeLiveFaceScanScreen(
+                title: roleTitle,
+              ),
+        ),
+      );
+
+      if (path == null || path.isEmpty) {
+        _sendBridgeResult(
+          callbackId,
+          cancelled: true,
+        );
+        return;
+      }
+
+      final photo = XFile(path);
+      final bytes = await photo.readAsBytes();
+
+      if (bytes.isEmpty) {
+        _sendBridgeResult(
+          callbackId,
+          ok: false,
+          error: 'The live face scan did not return a usable image.',
+        );
+        return;
+      }
+
+      _sendBridgeResult(
+        callbackId,
+        result: {
+          'dataUrl':
+              'data:image/jpeg;base64,${base64Encode(bytes)}',
+          'mimeType':
+              'image/jpeg',
+          'name':
+              'asiye-live-face.jpg',
+          'purpose':
+              purpose,
+          'liveCapture':
+              true,
+          'checks': [
+            'single_face',
+            'head_movement',
+            'smile'
+          ],
+        },
+      );
+    } catch (error) {
+      debugPrint('Native live face scan failed: $error');
+
+      _sendBridgeResult(
+        callbackId,
+        ok: false,
+        error:
+            'Unable to complete the live face scan. Check Camera permission and try again.',
+      );
+    }
+  }
+
   void _handleJsCalls(String message) async {
     try {
       if (message == "triggerGoogleSignIn" || message == "startGoogleSignIn") {
@@ -1191,6 +1287,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           }
           else if (action == 'pickContact') {
             await _pickContactForWeb(data);
+          }
+          else if (action == 'scanFace') {
+            await _scanFaceForWeb(data);
           }
           else if (action == 'scanImage') {
             await _scanImageForWeb(data);
