@@ -541,28 +541,28 @@ ASIYE_DRIVER.trip = {
 
 
         /*
-         * Switch Driver UI into navigation mode.
+         * Render the in-app navigator first so the guidance engine can bind
+         * its speed, traffic, voice and follow controls.
          */
 
         ASIYE_DRIVER.ui
-            ?.renderNavigator?.(
-
-                target,
-
+            ?.showPickupNavigation?.(
                 request,
-
+                target,
                 route
             );
 
 
-        ASIYE_DRIVER.ui
-            ?.showPickupNavigation?.(
-
-                request,
-
+        ASIYE_DRIVER.navigator
+            ?.startTarget?.(
                 target,
-
-                route
+                {
+                    key:
+                        `${this.requestId || request.requestId || request.key}:pickup:${target.id || ''}:${target.latitude},${target.longitude}`,
+                    route:
+                        route?.rawRoute ||
+                        null
+                }
             );
     },
 
