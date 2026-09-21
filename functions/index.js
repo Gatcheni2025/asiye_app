@@ -3292,3 +3292,197 @@ exports.adminFetchData = functions.https.onCall(
     };
   }
 );
+
+
+// =================================================================
+// --- PUBLIC ACCOUNT DELETION REQUEST ---
+// =================================================================
+
+function deletionCors(request, response) {
+  const origin = request.get("origin") || "";
+  const allowedOrigins = new Set([
+    "https://asiye.cloud",
+    "https://www.asiye.cloud"
+  ]);
+
+  if (allowedOrigins.has(origin)) {
+    response.set("Access-Control-Allow-Origin", origin);
+  }
+
+  response.set("Vary", "Origin");
+  response.set("Access-Control-Allow-Headers", "Content-Type");
+  response.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+}
+
+function deletionText(value, maxLength) {
+  return String(value == null ? "" : value)
+    .trim()
+    .slice(0, maxLength);
+}
+
+exports.submitAccountDeletionRequest = onRequest(
+  { region: "us-central1" },
+  async (request, response) => {
+    deletionCors(request, response);
+
+    if (request.method === "OPTIONS") {
+      return response.status(204).send("");
+    }
+
+    if (request.method !== "POST") {
+      return response.status(405).json({
+        error: "POST required."
+      });
+    }
+
+    try {
+      const accountType =
+        deletionText(
+          request.body?.accountType,
+          20
+        ).toLowerCase();
+
+      const name =
+        deletionText(
+          request.body?.name,
+          120
+        );
+
+      const phone =
+        deletionText(
+          request.body?.phone,
+          40
+        );
+
+      const email =
+        deletionText(
+          request.body?.email,
+          180
+        ).toLowerCase();
+
+      const reason =
+        deletionText(
+          request.body?.reason,
+          800
+        );
+
+      const confirmation =
+        request.body?.confirmation ===
+        true;
+
+      const website =
+        deletionText(
+          request.body?.website,
+          120
+        );
+
+      if (website) {
+        return response.status(200).json({
+          ok: true
+        });
+      }
+
+      if (
+        ![
+          "passenger",
+          "driver",
+          "both"
+        ].includes(accountType)
+      ) {
+        return response.status(400).json({
+          error:
+            "Choose passenger, driver, or both."
+        });
+      }
+
+      if (!phone && !email) {
+        return response.status(400).json({
+          error:
+            "Enter the phone number or email linked to your Asiye account."
+        });
+      }
+
+      if (
+        email &&
+        !/^[^\s@]+@[^\s@]+\.[^\s@]+$/
+          .test(email)
+      ) {
+        return response.status(400).json({
+          error:
+            "Enter a valid email address."
+        });
+      }
+
+      const phoneDigits =
+        phone.replace(/\D/g, "");
+
+      if (
+        phone &&
+        (
+          phoneDigits.length < 7 ||
+          phoneDigits.length > 15
+        )
+      ) {
+        return response.status(400).json({
+          error:
+            "Enter a valid phone number."
+        });
+      }
+
+      if (!confirmation) {
+        return response.status(400).json({
+          error:
+            "Confirm that you want Asiye to delete your account and associated data."
+        });
+      }
+
+      const ref =
+        admin.database()
+          .ref(
+            "accountDeletionRequests"
+          )
+          .push();
+
+      await ref.set({
+        requestId:
+          ref.key,
+        accountType,
+        name,
+        phone,
+        email,
+        reason,
+        status:
+          "pending",
+        source:
+          "asiye.cloud/delete",
+        requestedAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP,
+        updatedAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP
+      });
+
+      return response.status(200).json({
+        ok: true,
+        requestId:
+          ref.key,
+        message:
+          "Your Asiye account deletion request has been received."
+      });
+
+    } catch (error) {
+      console.error(
+        "Account deletion request failed",
+        error
+      );
+
+      return response.status(500).json({
+        error:
+          "Unable to submit the deletion request right now."
+      });
+    }
+  }
+);
