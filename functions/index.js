@@ -759,20 +759,48 @@ exports.createEftSmsTopup = onRequest(
 // --- RESTORED: CUSTOM AUTH TOKEN GENERATOR (1st Gen) ---
 // =================================================================
 exports.createCustomToken = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
+  if (!context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError(
+      "unauthenticated",
+      "The function must be called while authenticated."
+    );
   }
-  const uid = data.uid;
-  if (typeof uid !== 'string' || uid.length === 0) {
-    throw new functions.https.HttpsError("invalid-argument", "The function must be called with a `uid` argument.");
+
+  const requestedUid =
+    typeof data?.uid === "string" &&
+    data.uid.trim()
+      ? data.uid.trim()
+      : context.auth.uid;
+
+  if (requestedUid !== context.auth.uid) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "A user can only request a token for their own Firebase account."
+    );
   }
+
   try {
-    const customToken = await admin.auth().createCustomToken(uid);
-    console.log(`Successfully created custom token for UID: ${uid}`);
-    return { token: customToken };
+    const customToken =
+      await admin.auth()
+        .createCustomToken(
+          context.auth.uid
+        );
+
+    return {
+      token:
+        customToken
+    };
+
   } catch (error) {
-    console.error(`Error creating custom token for UID: ${uid}`, error);
-    throw new functions.https.HttpsError("internal", "Unable to create custom token.");
+    console.error(
+      "Unable to create self custom token",
+      error
+    );
+
+    throw new functions.https.HttpsError(
+      "internal",
+      "Unable to create custom token."
+    );
   }
 });
 
