@@ -375,7 +375,7 @@ window.AsiyePages = {
             body.innerHTML =
                 `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
                 note(
-                    'Choose an amount and Asiye will SMS the FNB banking details to the mobile number on your account. Use your phone number as the EFT reference.'
+                    'Choose an amount to add. Your FNB EFT details will appear here and Asiye will also send them by SMS. After payment, you will receive an SMS update when the EFT is confirmed and your wallet is credited.'
                 ) +
                 `
                 <form class="wallet-topup" data-wallet-topup>
@@ -409,7 +409,7 @@ window.AsiyePages = {
                     <div class="member-info" data-eft-result hidden></div>
 
                     <p class="member-note">
-                        Your wallet is credited after Asiye matches your EFT on the bank statement using the payment reference.
+                        Use the payment reference exactly. Asiye will notify you by SMS when your EFT is matched and the wallet credit is complete.
                     </p>
                 </form>` +
                 this.row(
@@ -478,7 +478,15 @@ window.AsiyePages = {
 
                     if (resultBox) {
                         resultBox.hidden =
-                            true;
+                            false;
+
+                        resultBox.innerHTML =
+                            `
+                            <strong>Preparing your EFT payment</strong>
+                            <p class="member-note">
+                                We are generating your banking details and requesting the SMS now…
+                            </p>
+                            `;
                     }
 
                     try {
@@ -491,12 +499,20 @@ window.AsiyePages = {
                                 );
 
                         if (resultBox) {
+                            const smsQueued =
+                                payment.smsStatus ===
+                                    'sent';
+
                             resultBox.hidden =
                                 false;
 
                             resultBox.innerHTML =
                                 `
-                                <strong>EFT details sent by SMS</strong>
+                                <strong>
+                                    ${smsQueued
+                                        ? 'EFT details ready · SMS requested'
+                                        : 'EFT details ready'}
+                                </strong>
 
                                 <p>
                                     <b>Bank:</b> ${esc(payment.bank || 'FNB')}<br>
@@ -506,19 +522,43 @@ window.AsiyePages = {
                                 </p>
 
                                 <p class="member-note">
-                                    SMS sent to ${esc(payment.smsTo || 'your registered mobile number')}. Use the reference exactly as shown.
+                                    ${smsQueued
+                                        ? `Banking details have been accepted for SMS delivery to ${esc(payment.smsTo || 'your registered mobile number')}.`
+                                        : 'The instruction SMS could not be sent right now. You can still use the banking details shown above.'}
+                                </p>
+
+                                <p class="member-note">
+                                    After making the EFT, keep this reference exactly as shown. Asiye will send you an SMS update when the payment is confirmed and your wallet has been credited.
                                 </p>
                                 `;
                         }
 
                         app.ui?.toast?.(
-                            'FNB EFT details sent by SMS.'
+                            payment.smsStatus === 'sent'
+                                ? 'EFT details ready. SMS delivery requested.'
+                                : 'EFT details ready. Use the details shown on screen.'
                         );
 
                     } catch (error) {
+                        if (resultBox) {
+                            resultBox.hidden =
+                                false;
+
+                            resultBox.innerHTML =
+                                `
+                                <strong>Unable to prepare EFT payment</strong>
+                                <p class="member-note">
+                                    ${esc(
+                                        error.message ||
+                                        'Please try again.'
+                                    )}
+                                </p>
+                                `;
+                        }
+
                         app.ui?.toast?.(
                             error.message ||
-                            'Unable to send the EFT banking details.'
+                            'Unable to prepare the EFT banking details.'
                         );
 
                     } finally {
