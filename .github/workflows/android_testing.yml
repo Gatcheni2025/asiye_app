@@ -1,5 +1,5 @@
 name: Android Testing APK
-# Test release 11.0.28+298
+# Test release 11.0.29+299
 
 on:
   push:
@@ -32,14 +32,14 @@ jobs:
 
       - name: Verify test version
         run: |
-          grep -F "version: 11.0.28+298" pubspec.yaml
+          grep -F "version: 11.0.29+299" pubspec.yaml
 
       - name: Analyze Flutter code
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build testing APK
         run: |
-          flutter build apk --debug --build-name 11.0.28 --build-number 298
+          flutter build apk --debug --build-name 11.0.29 --build-number 298
           test -f build/app/outputs/flutter-apk/app-debug.apk
 
       - name: Verify APK metadata
@@ -47,8 +47,8 @@ jobs:
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -n "$AAPT"
           "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "package: name='com.asiyeapp.asiye'"
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionCode='298'"
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionName='11.0.28'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionCode='299'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionName='11.0.29'"
 
       - name: Generate SHA-256
         run: |
@@ -57,7 +57,7 @@ jobs:
       - name: Upload testing APK
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.28-build-298-testing-apk
+          name: asiye-11.0.29-build-299-testing-apk
           path: |
             build/app/outputs/flutter-apk/app-debug.apk
             build/app/outputs/flutter-apk/app-debug.apk.sha256
