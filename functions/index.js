@@ -1196,7 +1196,64 @@ function haversineKm(lat1, lng1, lat2, lng2) {
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-exports.notifyDriversWhenClubReady = functions.database
+function clubPickupTimeLabel(request) {
+  const raw =
+    request.departureTime ||
+    request.pickupTime ||
+    request.scheduledTime ||
+    request.requestedPickupTime ||
+    "ASAP";
+
+  if (
+    raw === "ASAP" ||
+    raw === "asap"
+  ) {
+    return "ASAP";
+  }
+
+  const numeric =
+    Number(raw);
+
+  if (
+    Number.isFinite(numeric) &&
+    numeric > 100000000000
+  ) {
+    try {
+      return new Date(numeric)
+        .toLocaleTimeString(
+          "en-ZA",
+          {
+            timeZone:
+              "Africa/Johannesburg",
+            hour:
+              "2-digit",
+            minute:
+              "2-digit",
+            hour12:
+              false
+          }
+        );
+    } catch (_) {
+      return "ASAP";
+    }
+  }
+
+  const text =
+    String(raw || "")
+      .trim();
+
+  return text || "ASAP";
+}
+
+exports.notifyDriversWhenClubReady = functions
+  .runWith({
+    secrets: [
+      twilioAccountSid,
+      twilioAuthToken,
+      twilioFromNumber
+    ]
+  })
+  .database
   .ref("/requests/{requestId}/poolReady")
   .onUpdate(async (change, context) => {
     if (change.before.val() === true || change.after.val() !== true) {
@@ -1243,9 +1300,20 @@ exports.notifyDriversWhenClubReady = functions.database
       if (
         taxi.isOnline !== true ||
         taxi.currentRequest ||
-        taxi.isFull === true ||
-        !taxi.fcmToken
+        taxi.isFull === true
       ) {
+        return;
+      }
+
+      const driverPhone =
+        normaliseSmsPhone(
+          taxi.phone ||
+          taxi.phoneNumber ||
+          taxi.mobile ||
+          ""
+        );
+
+      if (!driverPhone) {
         return;
       }
 
@@ -1272,37 +1340,178 @@ exports.notifyDriversWhenClubReady = functions.database
       if (distanceKm > 10) return;
 
       candidates.push({
-        driverId: child.key,
-        distanceKm
+        driverId:
+          child.key,
+        distanceKm,
+        phone:
+          driverPhone,
+        driverName:
+          taxi.name ||
+          taxi.fullName ||
+          "Driver"
       });
     });
 
     candidates.sort((left, right) => left.distanceKm - right.distanceKm);
     const selected = candidates.slice(0, 8);
 
+    const pickupTime =
+      clubPickupTimeLabel(
+        request
+      );
+
+    const passengerCount =
+      Number(
+        request.passengerCount ||
+        Object.keys(
+          request.passengers ||
+          {}
+        ).length
+      );
+
+    if (
+      request.clubMode === "club4" &&
+      passengerCount < 3
+    ) {
+      console.warn(
+        `Club ${requestId} became ready before 3 passengers were recorded.`
+      );
+
+      return null;
+    }
+
     await Promise.all(
-      selected.map(candidate =>
-        admin.database()
-          .ref(`/notifications/taxis/${candidate.driverId}/${requestId}`)
-          .set({
-            type: "club_request",
-            requestId,
-            rideType: request.clubMode || "club4",
-            serviceName: "Asiye Work",
-            commuterName: request.commuterName || "Asiye Work passengers",
-            pickupAddress: request.pickupAddress || "Pickup",
-            destination: request.destination || "Destination",
-            fare: Number(request.pricePerPassenger || 0),
-            passengerCount: Number(request.passengerCount || requiredSeats),
-            capacity: requiredSeats,
-            distanceKm: candidate.distanceKm,
-            timestamp: admin.database.ServerValue.TIMESTAMP
-          })
+      selected.map(
+        async candidate => {
+          await admin.database()
+            .ref(
+              `/notifications/taxis/${candidate.driverId}/${requestId}`
+            )
+            .set({
+              type:
+                "club_request",
+              requestId,
+              rideType:
+                request.clubMode ||
+                "club4",
+              serviceName:
+                "Asiye Work",
+              commuterName:
+                request.commuterName ||
+                "Asiye Work passengers",
+              pickupAddress:
+                request.pickupAddress ||
+                "Pickup",
+              destination:
+                request.destination ||
+                "Destination",
+              fare:
+                Number(
+                  request.pricePerPassenger ||
+                  0
+                ),
+              passengerCount:
+                passengerCount ||
+                requiredSeats,
+              capacity:
+                requiredSeats,
+              distanceKm:
+                candidate.distanceKm,
+              pickupTime,
+              timestamp:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+
+          const smsRef =
+            admin.database()
+              .ref(
+                `/requests/${requestId}/driverSmsNotifications/${candidate.driverId}`
+              );
+
+          const claim =
+            await smsRef.transaction(
+              current => {
+                if (
+                  current &&
+                  (
+                    current.status === "sent" ||
+                    current.status === "sending"
+                  )
+                ) {
+                  return;
+                }
+
+                return {
+                  status:
+                    "sending",
+                  phone:
+                    candidate.phone,
+                  distanceKm:
+                    candidate.distanceKm,
+                  attemptedAt:
+                    Date.now()
+                };
+              }
+            );
+
+          if (!claim.committed) {
+            return;
+          }
+
+          const smsBody =
+            `Asiye: You have a load to fetch at ${pickupTime}. Check your Asiye app to accept or reject.`;
+
+          try {
+            const result =
+              await sendTwilioSms({
+                to:
+                  candidate.phone,
+                body:
+                  smsBody
+              });
+
+            await smsRef.update({
+              status:
+                "sent",
+              twilioMessageSid:
+                String(
+                  result.sid ||
+                  ""
+                ),
+              sentAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+
+          } catch (error) {
+            console.error(
+              `Club SMS failed for driver ${candidate.driverId}`,
+              error
+            );
+
+            await smsRef.update({
+              status:
+                "failed",
+              error:
+                String(
+                  error?.message ||
+                  "SMS failed"
+                ).slice(0, 300),
+              failedAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+          }
+        }
       )
     );
 
     console.log(
-      `Asiye Work ${requestId} sent to ${selected.length} nearby driver(s).`
+      `Asiye Work ${requestId} sent to ${selected.length} nearby driver(s) within 10 km, with Twilio SMS reminders.`
     );
 
     return null;
