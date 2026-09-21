@@ -682,17 +682,23 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         try {
 
-            const result = this.nativeVerificationId
-                ? await firebase.auth().signInWithCredential(
-                    firebase.auth.PhoneAuthProvider.credential(
-                        this.nativeVerificationId,
-                        code
-                    )
-                )
-                : await this.confirmationResult.confirm(code);
+            if (
+                this.nativeVerificationId &&
+                window.AsiyeNativeAuth?.post({
+                    action: 'verifyPhoneAuthCode',
+                    code
+                })
+            ) {
+                return;
+            }
 
-            this.nativeVerificationId = null;
+            const result =
+                await this.confirmationResult.confirm(
+                    code
+                );
 
+            this.nativeVerificationId =
+                null;
 
             await this.afterAuthentication(
                 result.user
@@ -2134,6 +2140,197 @@ window.onNativePhoneAuthError = function (payload) {
         'phone'
     );
 };
+
+const ASIYE_NATIVE_SESSION_EXCHANGE_URL =
+    'https://us-central1-asiye-80386.cloudfunctions.net/exchangeNativeAuthSession';
+
+window.onNativeFirebaseAuthSuccess = async function (payload) {
+    const login =
+        window.ASIYE_PASSENGER_LOGIN;
+
+    const provider =
+        String(
+            payload?.provider ||
+            'account'
+        );
+
+    try {
+        if (
+            !payload?.firebaseIdToken
+        ) {
+            throw new Error(
+                'The native Firebase session did not return an ID token.'
+            );
+        }
+
+        login.showAuthProgress(
+            'Signing you in',
+            'Securing your Asiye session...'
+        );
+
+        const response =
+            await fetch(
+                ASIYE_NATIVE_SESSION_EXCHANGE_URL,
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${payload.firebaseIdToken}`,
+
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            provider
+                        })
+                }
+            );
+
+        const session =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+        if (
+            !response.ok ||
+            !session.customToken
+        ) {
+            throw new Error(
+                session.error ||
+                'Unable to create the Asiye Firebase session.'
+            );
+        }
+
+        const result =
+            await firebase
+                .auth()
+                .signInWithCustomToken(
+                    session.customToken
+                );
+
+        if (!result.user) {
+            throw new Error(
+                'Firebase did not return a signed-in user.'
+            );
+        }
+
+        await login.afterAuthentication(
+            result.user
+        );
+
+    } catch (error) {
+        console.error(
+            'Native Firebase session handoff failed:',
+            error
+        );
+
+        login.hideAuthProgress();
+
+        if (
+            provider ===
+            'phone'
+        ) {
+            login.handleAuthError(
+                {
+                    code:
+                        'auth/native-session-failed',
+
+                    message:
+                        error?.message ||
+                        'Unable to complete phone authentication.'
+                },
+                'phone'
+            );
+
+        } else {
+            login.handleSocialError(
+                {
+                    code:
+                        'auth/native-session-failed',
+
+                    message:
+                        error?.message ||
+                        `${provider} authentication failed.`
+                },
+                provider === 'apple'
+                    ? 'Apple'
+                    : 'Google'
+            );
+        }
+    }
+};
+
+window.onNativeFirebaseAuthError = function (payload) {
+    const login =
+        window.ASIYE_PASSENGER_LOGIN;
+
+    const provider =
+        String(
+            payload?.provider ||
+            'account'
+        );
+
+    const code =
+        String(
+            payload?.code ||
+            'native-auth-failed'
+        );
+
+    const message =
+        payload?.message ||
+        'Authentication failed.';
+
+    console.error(
+        'Native Firebase authentication failed:',
+        {
+            provider,
+            code,
+            message
+        }
+    );
+
+    login.hideAuthProgress();
+
+    if (
+        provider ===
+        'phone'
+    ) {
+        login.nativeVerificationId =
+            null;
+
+        login.handleAuthError(
+            {
+                code:
+                    `auth/${code}`,
+
+                message
+            },
+            'phone'
+        );
+
+        return;
+    }
+
+    login.handleSocialError(
+        {
+            code:
+                `auth/${code}`,
+
+            message:
+                `${message} [${code}]`
+        },
+        provider === 'apple'
+            ? 'Apple'
+            : 'Google'
+    );
+};
+
 
 window.onGoogleNativeLoginSuccess = async function (payload) {
     try {
