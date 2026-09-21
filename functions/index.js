@@ -1,5 +1,6 @@
 const functions = require("firebase-functions/v1");
 const { onRequest } = require("firebase-functions/v2/https");
+const { onValueUpdated } = require("firebase-functions/v2/database");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
@@ -674,6 +675,9 @@ exports.createEftSmsTopup = onRequest(
       const message =
         `Asiye wallet EFT: Pay R${roundedAmount.toFixed(2)} to FNB account ${ASIYE_EFT_ACCOUNT}. Use reference ${reference} exactly. Your wallet is credited after Asiye matches the payment. Request ${String(paymentId).slice(-6)}.`;
 
+      let smsStatus =
+        "failed";
+
       try {
         const twilioMessage =
           await sendTwilioSms({
@@ -683,6 +687,9 @@ exports.createEftSmsTopup = onRequest(
               message
           });
 
+        smsStatus =
+          "sent";
+
         await admin.database()
           .ref()
           .update({
@@ -691,6 +698,11 @@ exports.createEftSmsTopup = onRequest(
             [`walletPayments/${paymentId}/twilioMessageSid`]:
               String(
                 twilioMessage.sid
+              ),
+            [`walletPayments/${paymentId}/twilioDeliveryStatus`]:
+              String(
+                twilioMessage.status ||
+                "accepted"
               ),
             [`walletPayments/${paymentId}/instructionsSentAt`]:
               admin.database
@@ -703,9 +715,11 @@ exports.createEftSmsTopup = onRequest(
           });
 
       } catch (smsError) {
+        /*
+         * Keep the EFT payable even if Twilio is temporarily unavailable.
+         * The passenger still receives the exact banking details in-app.
+         */
         await paymentRef.update({
-          status:
-            "instructions_failed",
           smsStatus:
             "failed",
           smsError:
@@ -720,7 +734,15 @@ exports.createEftSmsTopup = onRequest(
               .TIMESTAMP
         });
 
-        throw smsError;
+        console.error(
+          "EFT instruction SMS delivery failed",
+          {
+            paymentId,
+            message:
+              smsError?.message ||
+              "SMS failed"
+          }
+        );
       }
 
       return response
@@ -741,10 +763,13 @@ exports.createEftSmsTopup = onRequest(
               /(\+27\d{2})\d+(\d{2})$/,
               "$1•••••$2"
             ),
+          smsStatus,
           status:
             "awaiting_payment",
           message:
-            "EFT banking instructions were sent by SMS."
+            smsStatus === "sent"
+              ? "EFT banking instructions were accepted for SMS delivery."
+              : "EFT banking details are ready on screen. SMS delivery is temporarily unavailable."
         });
 
     } catch (error) {
@@ -763,6 +788,161 @@ exports.createEftSmsTopup = onRequest(
     }
   }
 );
+
+// =================================================================
+// --- EFT PAYMENT CONFIRMATION SMS ---
+// =================================================================
+// When Asiye Admin reconciles a manual EFT and marks it complete, notify the
+// passenger automatically. Twilio failure never rolls back the wallet credit.
+exports.sendEftPaymentStatusSms =
+  onValueUpdated(
+    {
+      ref:
+        "/walletPayments/{paymentId}",
+      region:
+        "us-central1",
+      secrets: [
+        twilioAccountSid,
+        twilioAuthToken,
+        twilioFromNumber
+      ]
+    },
+    async event => {
+      const before =
+        event.data.before.val() ||
+        {};
+
+      const after =
+        event.data.after.val() ||
+        {};
+
+      if (
+        after.provider !==
+          "manual_eft" ||
+        before.status ===
+          after.status ||
+        after.status !==
+          "complete"
+      ) {
+        return;
+      }
+
+      const paymentId =
+        event.params.paymentId;
+
+      const phone =
+        normaliseSmsPhone(
+          after.phone
+        );
+
+      if (!phone) {
+        await event.data.after.ref.update({
+          confirmationSmsStatus:
+            "failed",
+          confirmationSmsError:
+            "No valid mobile number is attached to this EFT payment."
+        });
+
+        return;
+      }
+
+      const statusRef =
+        event.data.after.ref.child(
+          "confirmationSmsStatus"
+        );
+
+      const claim =
+        await statusRef.transaction(
+          current => {
+            if (current) {
+              return;
+            }
+
+            return "sending";
+          }
+        );
+
+      if (!claim.committed) {
+        return;
+      }
+
+      const amount =
+        Number(after.amount || 0);
+
+      const balance =
+        Number(
+          after.creditedBalance ||
+          0
+        );
+
+      const amountText =
+        Number.isFinite(amount)
+          ? `R${amount.toFixed(2)}`
+          : "your EFT";
+
+      const balanceText =
+        Number.isFinite(balance)
+          ? ` Your Asiye Wallet balance is now R${balance.toFixed(2)}.`
+          : "";
+
+      const confirmationMessage =
+        `Asiye payment update: We received ${amountText} by EFT and your wallet has been credited.${balanceText} Ref ${after.reference || String(paymentId).slice(-6)}.`;
+
+      try {
+        const twilioMessage =
+          await sendTwilioSms({
+            to:
+              phone,
+            body:
+              confirmationMessage
+          });
+
+        await event.data.after.ref.update({
+          confirmationSmsStatus:
+            "sent",
+          confirmationSmsSid:
+            String(
+              twilioMessage.sid
+            ),
+          confirmationTwilioStatus:
+            String(
+              twilioMessage.status ||
+              "accepted"
+            ),
+          confirmationSmsSentAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
+      } catch (error) {
+        console.error(
+          "EFT confirmation SMS failed",
+          {
+            paymentId,
+            message:
+              error?.message ||
+              "SMS failed"
+          }
+        );
+
+        await event.data.after.ref.update({
+          confirmationSmsStatus:
+            "failed",
+          confirmationSmsError:
+            String(
+              error?.message ||
+              "SMS failed"
+            ).slice(0, 300),
+          confirmationSmsUpdatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+      }
+    }
+  );
+
 
 // =================================================================
 // --- RESTORED: CUSTOM AUTH TOKEN GENERATOR (1st Gen) ---
