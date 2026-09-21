@@ -262,7 +262,7 @@
           <li><strong>Google Firebase</strong> for authentication, database, messaging, backend functions and related infrastructure.</li>
           <li><strong>Google Sign-In</strong> and <strong>Apple Sign-In</strong> where a user chooses those account methods.</li>
           <li><strong>Mapbox</strong> and, where enabled, <strong>Google Maps / Places services</strong> for address search, geocoding, mapping and route functions.</li>
-          <li><strong>PayFast</strong> and other payment providers enabled by Asiye from time to time for supported payment or wallet flows.</li>
+          <li><strong>Twilio</strong> for transactional SMS messages, including manual EFT banking instructions requested by a signed-in user.</li>\n          <li><strong>FNB</strong> as the bank account used for supported manual EFT wallet deposits. Asiye matches the payer-supplied phone-number reference against bank records before wallet credit is applied.</li>
           <li><strong>Asiye-hosted servers</strong>, including app.asiye.cloud, for application content and image or document uploads.</li>
           <li>Hosting, communications, diagnostics, security and professional service providers reasonably necessary to operate the platform.</li>
         </ul>
@@ -279,10 +279,12 @@
       <section id="payments">
         <h2>6. Payments and financial information</h2>
         <p>
-          Payment providers may collect payment or banking information directly
-          from you under their own privacy terms. Asiye receives information
-          needed to identify and reconcile a transaction, such as an amount,
-          status, merchant reference or provider transaction identifier.
+          For supported manual EFT wallet top-ups, Asiye sends FNB banking
+          instructions to the mobile number linked to the signed-in account
+          using Twilio SMS. The EFT reference is derived from that mobile number
+          so Asiye can match the deposit against its bank records. A pending
+          top-up does not credit the wallet merely because an SMS was delivered;
+          the payment must first be reconciled against the bank record.
         </p>
         <p>
           Asiye does not require users to provide online-banking passwords to
