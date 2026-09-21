@@ -100,7 +100,8 @@ jobs:
         run: pod install --repo-update
 
       - name: Verify release version
-        run: grep -F "version: 11.0.27+297" pubspec.yaml
+        run: |
+          grep -F "version: 11.0.27+297" pubspec.yaml
 
       - name: Build, verify and upload to TestFlight
         working-directory: ./ios

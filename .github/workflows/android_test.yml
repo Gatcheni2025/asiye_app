@@ -70,7 +70,47 @@ jobs:
         run: flutter pub get
 
       - name: Verify release version
-        run: grep '^version: 11.0.27+297$' pubspec.yaml
+        run: |
+          grep '^version: 11.0.27+297
+
+      - name: Analyze Flutter code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Build signed release APK
+        run: |
+          flutter build apk --release
+          test -f build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Build signed release AAB
+        run: |
+          flutter build appbundle --release
+          test -f build/app/outputs/bundle/release/app-release.aab
+
+      - name: Verify APK signature and version
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+
+          test -n "$APKSIGNER"
+          test -n "$AAPT"
+
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='297'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.27'"
+
+      - name: Verify AAB signature
+        run: jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
+
+      - name: Upload Android release files
+        uses: actions/upload-artifact@v4
+        with:
+          name: asiye-11.0.27-build-297-android-release
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+          retention-days: 30
+ pubspec.yaml
 
       - name: Analyze Flutter code
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
