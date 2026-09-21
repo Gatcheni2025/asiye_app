@@ -57,3 +57,5 @@ body.asiye-safety-modal-open{overflow:hidden}
 .member-support-form .member-primary{margin:4px 0 0}
 .member-support-form .member-primary:disabled{opacity:.6}
 .member-secondary-support{background:#eff4ec;color:#193e2d}
+
+.member-data-delete{background:#fff1f1;color:#923b3b;border:1px solid #efd3d3}
