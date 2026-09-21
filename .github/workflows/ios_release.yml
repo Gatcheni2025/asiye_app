@@ -1,5 +1,5 @@
 name: iOS TestFlight Release
-# Release 11.0.28+298: Twilio EFT, Asiye Work driver SMS, admin/privacy updates
+# Release 11.0.29+299: Twilio EFT, Asiye Work driver SMS, admin/privacy updates
 
 on:
   workflow_dispatch:
@@ -98,7 +98,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep -F "version: 11.0.28+298" pubspec.yaml
+          grep -F "version: 11.0.29+299" pubspec.yaml
 
       - name: Build, verify and upload to TestFlight
         working-directory: ./ios
@@ -130,7 +130,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.28-ios-testflight
+          name: asiye-11.0.29-ios-testflight
           path: |
             ios/build/ipa/*.ipa
             ios/*.ipa
