@@ -372,52 +372,15 @@ window.AsiyePages = {
                 );
             }
         } else if (page === 'wallet') {
-            const returnStatus = new URLSearchParams(location.search).get('wallet');
             body.innerHTML =
                 `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
-                (returnStatus === 'success'
-                    ? note('You have returned from the bank payment. Your balance updates only after Ozow securely confirms the EFT.')
-                    : returnStatus === 'cancelled'
-                        ? note('The payment was cancelled and no funds were added.')
-                        : note('Add funds securely from your bank account using Ozow Pay by Bank.')) +
-                `<form class="wallet-topup" data-wallet-topup>
-                    <label>Amount to add</label>
-                    <div class="wallet-amounts">
-                        <button type="button" data-amount="50">R50</button>
-                        <button type="button" data-amount="100">R100</button>
-                        <button type="button" data-amount="200">R200</button>
-                        <button type="button" data-amount="500">R500</button>
-                    </div>
-                    <div class="wallet-custom">
-                        <span>R</span>
-                        <input name="amount" type="number" inputmode="decimal" min="10" max="5000" step="0.01" placeholder="Enter amount" required>
-                    </div>
-                    <button class="member-primary" type="submit">Add funds with EFT</button>
-                    <p class="member-note">Ozow staging is enabled for testing. Your wallet is credited automatically only after a verified bank-payment confirmation.</p>
-                </form>` +
-                this.row('Currency', 'South African rand · ZAR');
-            const form = body.querySelector('[data-wallet-topup]');
-            const input = form.querySelector('input[name="amount"]');
-            form.querySelectorAll('[data-amount]').forEach(button => {
-                button.onclick = () => {
-                    input.value = button.dataset.amount;
-                    form.querySelectorAll('[data-amount]').forEach(item => item.classList.remove('selected'));
-                    button.classList.add('selected');
-                };
-            });
-            form.onsubmit = async event => {
-                event.preventDefault();
-                const submit = form.querySelector('[type="submit"]');
-                submit.disabled = true;
-                submit.textContent = 'Opening EFT…';
-                try {
-                    await ASIYE.wallet.startTopup(Number(input.value));
-                } catch (error) {
-                    submit.disabled = false;
-                    submit.textContent = 'Add funds with EFT';
-                    app.ui?.toast?.(error.message || 'Unable to start EFT payment.');
-                }
-            };
+                note(
+                    'Wallet top-ups are temporarily unavailable in the app. Existing wallet balances and completed transactions remain visible.'
+                ) +
+                this.row(
+                    'Currency',
+                    'South African rand · ZAR'
+                );
         } else if (page === 'vehicle') {
             if (!driver || !id) {
                 body.innerHTML =
