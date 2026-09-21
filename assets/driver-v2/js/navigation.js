@@ -30,34 +30,99 @@ ASIYE_DRIVER.navigator = {
             point.longitude ??
             point.lng;
 
+        return this.startTarget(
+            {
+                type:
+                    'dropoff',
+                id:
+                    request.requestId ||
+                    request.key ||
+                    null,
+                label:
+                    request.destinationName ||
+                    request.destination ||
+                    'Destination',
+                latitude:
+                    lat,
+                longitude:
+                    lng
+            },
+            {
+                key:
+                    `${request.requestId || request.key || ASIYE_DRIVER.trip?.requestId}:dropoff:${lat},${lng}`
+            }
+        );
+    },
+
+    startTarget(
+        target,
+        options = {}
+    ) {
+        const lat =
+            Number(
+                target?.latitude ??
+                target?.lat
+            );
+
+        const lng =
+            Number(
+                target?.longitude ??
+                target?.lng
+            );
+
         if (
-            lat == null ||
-            lng == null ||
-            !Number.isFinite(Number(lat)) ||
-            !Number.isFinite(Number(lng)) ||
-            Math.abs(Number(lat)) > 90 ||
-            Math.abs(Number(lng)) > 180
+            !Number.isFinite(lat) ||
+            !Number.isFinite(lng) ||
+            Math.abs(lat) > 90 ||
+            Math.abs(lng) > 180
         ) {
             this.stop();
+
             this.text(
                 'navInstruction',
-                'Destination coordinates unavailable'
+                'Navigation coordinates unavailable'
             );
+
             return;
         }
 
         const key =
-            `${request.requestId || request.key || ASIYE_DRIVER.trip?.requestId}:${lat},${lng}`;
+            options.key ||
+            `${target?.type || 'route'}:${target?.id || ''}:${lat},${lng}`;
 
         if (this.key !== key) {
             this.stop();
-            this.key = key;
+
+            this.key =
+                key;
+
             this.target = [
-                Number(lng),
-                Number(lat)
+                lng,
+                lat
             ];
-            this.follow = true;
-            this.spokenInstructions.clear();
+
+            this.targetMeta = {
+                type:
+                    target?.type ||
+                    'dropoff',
+                id:
+                    target?.id ||
+                    null,
+                label:
+                    target?.label ||
+                    (
+                        target?.type ===
+                            'pickup'
+                            ? 'Passenger pickup'
+                            : 'Destination'
+                    )
+            };
+
+            this.follow =
+                true;
+
+            this.spokenInstructions
+                .clear();
         }
 
         document.body.classList.add(
@@ -65,13 +130,14 @@ ASIYE_DRIVER.navigator = {
             'navigation-camera-mode'
         );
 
-        /*
-         * Navigation opens in proper follow mode automatically. The driver can
-         * still tap the map/navigation control to leave the pitched camera.
-         */
-        this.navigationMode = true;
-        this.follow = true;
-        ASIYE_DRIVER.map.followDriver = true;
+        this.navigationMode =
+            true;
+
+        this.follow =
+            true;
+
+        ASIYE_DRIVER.map.followDriver =
+            true;
 
         this.updateNavigationButton();
         this.updateVoiceButton();
@@ -83,13 +149,17 @@ ASIYE_DRIVER.navigator = {
             map &&
             this.boundMap !== map
         ) {
-            this.boundMap = map;
+            this.boundMap =
+                map;
 
             map.on(
                 'dragstart',
                 () => {
-                    if (this.navigationMode) {
-                        this.follow = false;
+                    if (
+                        this.navigationMode
+                    ) {
+                        this.follow =
+                            false;
                     }
                 }
             );
@@ -103,9 +173,13 @@ ASIYE_DRIVER.navigator = {
         if (follow) {
             follow.onclick =
                 () => {
-                    this.follow = true;
+                    this.follow =
+                        true;
+
                     this.update(
-                        ASIYE_DRIVER.state.location
+                        ASIYE_DRIVER
+                            .state
+                            .location
                     );
                 };
         }
@@ -117,7 +191,8 @@ ASIYE_DRIVER.navigator = {
 
         if (retry) {
             retry.onclick =
-                () => this.fetchRoute();
+                () =>
+                    this.fetchRoute();
         }
 
         const voice =
@@ -127,11 +202,28 @@ ASIYE_DRIVER.navigator = {
 
         if (voice) {
             voice.onclick =
-                () => this.toggleVoice();
+                () =>
+                    this.toggleVoice();
+        }
+
+        if (
+            options.route
+                ?.geometry
+                ?.coordinates
+                ?.length &&
+            options.route
+                ?.legs?.[0]
+                ?.steps?.length
+        ) {
+            this.applyRoute(
+                options.route
+            );
         }
 
         this.update(
-            ASIYE_DRIVER.state.location
+            ASIYE_DRIVER
+                .state
+                .location
         );
     },
 
@@ -404,6 +496,66 @@ ASIYE_DRIVER.navigator = {
         }
     },
 
+    applyRoute(route) {
+        if (
+            !route?.geometry
+                ?.coordinates
+                ?.length ||
+            !route.legs?.[0]
+                ?.steps?.length
+        ) {
+            return false;
+        }
+
+        this.route =
+            route;
+
+        this.steps =
+            route.legs.flatMap(
+                leg =>
+                    leg.steps ||
+                    []
+            );
+
+        this.stepIndex =
+            0;
+
+        this.spokenInstructions
+            .clear();
+
+        ASIYE_DRIVER
+            .setNavigationTarget?.({
+                type:
+                    this.targetMeta
+                        ?.type ||
+                    'dropoff',
+                id:
+                    this.targetMeta
+                        ?.id ||
+                    null,
+                name:
+                    this.targetMeta
+                        ?.label ||
+                    '',
+                latitude:
+                    this.target[1],
+                longitude:
+                    this.target[0],
+                distanceKm:
+                    route.distance /
+                    1000,
+                durationMinutes:
+                    route.duration /
+                    60,
+                geometry:
+                    route.geometry
+            });
+
+        this.draw();
+
+        return true;
+    },
+
     async fetchRoute() {
         const location =
             ASIYE_DRIVER.state.location;
@@ -490,40 +642,9 @@ ASIYE_DRIVER.navigator = {
                 );
             }
 
-            this.route =
-                route;
-
-            this.steps =
-                route.legs.flatMap(
-                    leg =>
-                        leg.steps || []
-                );
-
-            this.stepIndex =
-                0;
-
-            this.spokenInstructions
-                .clear();
-
-            ASIYE_DRIVER
-                .setNavigationTarget?.({
-                    type:
-                        'dropoff',
-                    latitude:
-                        this.target[1],
-                    longitude:
-                        this.target[0],
-                    distanceKm:
-                        route.distance /
-                        1000,
-                    durationMinutes:
-                        route.duration /
-                        60,
-                    geometry:
-                        route.geometry
-                });
-
-            this.draw();
+            this.applyRoute(
+                route
+            );
 
         } catch (error) {
             if (
@@ -610,7 +731,9 @@ ASIYE_DRIVER.navigator = {
         map.showTargetMarker(
             this.target[1],
             this.target[0],
-            'dropoff'
+            this.targetMeta
+                ?.type ||
+                'dropoff'
         );
     },
 
@@ -1638,6 +1761,9 @@ ASIYE_DRIVER.navigator = {
         }
 
         this.target =
+            null;
+
+        this.targetMeta =
             null;
 
         this.key =
