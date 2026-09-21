@@ -336,9 +336,64 @@ ASIYE_DRIVER.navigator = {
                 true
             );
         } else {
+            this.stopVoice();
+        }
+    },
+
+    postNativeVoice(action, text = '') {
+        const payload =
+            JSON.stringify({
+                action,
+                text
+            });
+
+        try {
+            if (
+                window.Asiye &&
+                typeof window.Asiye
+                    .postMessage ===
+                    'function'
+            ) {
+                window.Asiye
+                    .postMessage(
+                        payload
+                    );
+
+                return true;
+            }
+
+            if (
+                window.Android &&
+                typeof window.Android
+                    .postMessage ===
+                    'function'
+            ) {
+                window.Android
+                    .postMessage(
+                        payload
+                    );
+
+                return true;
+            }
+        } catch (error) {
+            console.warn(
+                'Native navigation voice bridge unavailable:',
+                error
+            );
+        }
+
+        return false;
+    },
+
+    stopVoice() {
+        this.postNativeVoice(
+            'stopNavigationVoice'
+        );
+
+        try {
             window.speechSynthesis
                 ?.cancel?.();
-        }
+        } catch (_) {}
     },
 
     speak(text, force = false) {
@@ -349,6 +404,20 @@ ASIYE_DRIVER.navigator = {
         if (
             !announcement ||
             (!this.voiceEnabled && !force)
+        ) {
+            return;
+        }
+
+        /*
+         * Prefer Flutter's native TTS bridge in the mobile app. This keeps
+         * guidance audible through the device's installed TTS engine. Browser
+         * speech synthesis remains the fallback for the web build.
+         */
+        if (
+            this.postNativeVoice(
+                'speakNavigation',
+                announcement
+            )
         ) {
             return;
         }
@@ -1725,8 +1794,7 @@ ASIYE_DRIVER.navigator = {
 
         this.updateNavigationButton();
 
-        window.speechSynthesis
-            ?.cancel?.();
+        this.stopVoice();
 
         ASIYE_DRIVER.map.followDriver =
             true;
