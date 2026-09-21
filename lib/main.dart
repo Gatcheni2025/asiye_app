@@ -16,6 +16,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:system_contact_picker/system_contact_picker.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
@@ -158,6 +159,8 @@ class AsiyeMainShell extends StatefulWidget {
 class _AsiyeMainShellState extends State<AsiyeMainShell> {
   WebViewController? _controller;
   Map<String, dynamic>? _pendingNotification;
+  final FlutterTts _navigationTts = FlutterTts();
+  bool _navigationTtsReady = false;
 
   Future<void> _openNotification(Map<String, dynamic> data) async {
     if (data['type']?.toString() == 'app_update') {
@@ -192,6 +195,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _tokenSubscription?.cancel();
     _messageSubscription?.cancel();
     _openedSubscription?.cancel();
+    _navigationTts.stop();
     super.dispose();
   }
 
@@ -1286,6 +1290,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           else if (action == 'showNotification') {
             _triggerSystemNotification(data['title'] ?? 'Asiye', data['message'] ?? 'New update', data['payload']);
           }
+          else if (action == 'speakNavigation') {
+            await _speakNavigation(
+              data['text']?.toString() ?? '',
+            );
+          }
+          else if (action == 'stopNavigationVoice') {
+            await _stopNavigationVoice();
+          }
           else if (action == 'hidePreloader') {
             if (mounted) setState(() => _isLoading = false);
           }
@@ -1307,6 +1319,34 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         } catch(_) {}
       }
     } catch (e) {}
+  }
+
+  Future<void> _speakNavigation(String text) async {
+    final announcement = text.trim();
+    if (announcement.isEmpty) return;
+
+    try {
+      if (!_navigationTtsReady) {
+        await _navigationTts.setLanguage('en-ZA');
+        await _navigationTts.setSpeechRate(0.48);
+        await _navigationTts.setVolume(1.0);
+        await _navigationTts.setPitch(1.0);
+        _navigationTtsReady = true;
+      }
+
+      await _navigationTts.stop();
+      await _navigationTts.speak(announcement);
+    } catch (error) {
+      debugPrint('Navigation TTS failed: $error');
+    }
+  }
+
+  Future<void> _stopNavigationVoice() async {
+    try {
+      await _navigationTts.stop();
+    } catch (error) {
+      debugPrint('Unable to stop navigation TTS: $error');
+    }
   }
 
   Future<void> _triggerSystemNotification(String? title, String? body, String? payload) async {
