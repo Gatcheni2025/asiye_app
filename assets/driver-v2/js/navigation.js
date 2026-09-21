@@ -13,6 +13,7 @@ ASIYE_DRIVER.navigator = {
     lastFetch: 0,
     spokenInstructions: new Set(),
     voiceEnabled:
+        typeof localStorage === 'undefined' ||
         localStorage.getItem('asiyeNavigationVoice') !== 'off',
 
     start(request) {
@@ -171,7 +172,7 @@ ASIYE_DRIVER.navigator = {
                 : 'Navigation';
 
         const icon =
-            button.querySelector('i');
+            button.querySelector?.('i');
 
         if (icon) {
             icon.className =
@@ -189,12 +190,12 @@ ASIYE_DRIVER.navigator = {
 
         if (!button) return;
 
-        button.classList.toggle(
+        button.classList?.toggle?.(
             'muted',
             !this.voiceEnabled
         );
 
-        button.setAttribute(
+        button.setAttribute?.(
             'aria-pressed',
             this.voiceEnabled
                 ? 'true'
@@ -202,7 +203,7 @@ ASIYE_DRIVER.navigator = {
         );
 
         const icon =
-            button.querySelector('i');
+            button.querySelector?.('i');
 
         if (icon) {
             icon.className =
@@ -223,12 +224,17 @@ ASIYE_DRIVER.navigator = {
         this.voiceEnabled =
             !this.voiceEnabled;
 
-        localStorage.setItem(
-            'asiyeNavigationVoice',
-            this.voiceEnabled
-                ? 'on'
-                : 'off'
-        );
+        if (
+            typeof localStorage !==
+            'undefined'
+        ) {
+            localStorage.setItem(
+                'asiyeNavigationVoice',
+                this.voiceEnabled
+                    ? 'on'
+                    : 'off'
+            );
+        }
 
         this.updateVoiceButton();
 
@@ -429,35 +435,26 @@ ASIYE_DRIVER.navigator = {
         );
 
         try {
-            const params =
-                new URLSearchParams({
-                    geometries:
-                        'geojson',
-                    overview:
-                        'full',
-                    steps:
-                        'true',
-                    voice_instructions:
-                        'true',
-                    banner_instructions:
-                        'true',
-                    voice_units:
-                        'metric',
-                    language:
-                        'en',
-                    roundabout_exits:
-                        'true',
-                    annotations:
-                        'distance,duration,speed,congestion,congestion_numeric,maxspeed,closure',
-                    notifications:
-                        'all',
-                    access_token:
+            const query =
+                [
+                    'geometries=geojson',
+                    'overview=full',
+                    'steps=true',
+                    'voice_instructions=true',
+                    'banner_instructions=true',
+                    'voice_units=metric',
+                    'language=en',
+                    'roundabout_exits=true',
+                    'annotations=distance%2Cduration%2Cspeed%2Ccongestion%2Ccongestion_numeric%2Cmaxspeed%2Cclosure',
+                    'notifications=all',
+                    `access_token=${encodeURIComponent(
                         ASIYE_DRIVER_CONFIG
                             .mapboxToken
-                });
+                    )}`
+                ].join('&');
 
             const url =
-                `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${location.longitude},${location.latitude};${this.target.join(',')}?${params.toString()}`;
+                `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${location.longitude},${location.latitude};${this.target.join(',')}?${query}`;
 
             const response =
                 await fetch(url);
@@ -840,7 +837,7 @@ ASIYE_DRIVER.navigator = {
             );
 
         if (speedPanel) {
-            speedPanel.classList.toggle(
+            speedPanel.classList?.toggle?.(
                 'over-limit',
                 Number.isFinite(
                     speedLimit
