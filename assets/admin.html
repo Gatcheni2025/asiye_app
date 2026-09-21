@@ -1149,7 +1149,7 @@
         return item.verificationStatus === "verified" || item.provisionalActivation === true;
       }).length;
       const successfulPayments = state.data.walletPayments.filter(function(item) {
-        return ["complete","successful"].includes(String(item.status || item.ozowStatus || "").toLowerCase());
+        return String(item.status || "").toLowerCase() === "complete";
       });
       const paymentValue = successfulPayments.reduce(function(sum,item) {
         return sum + Number(item.amount || 0);
