@@ -73,12 +73,12 @@ jobs:
 
       - name: Build signed release APK
         run: |
-          flutter build apk --release --build-name 11.0.29 --build-number 298
+          flutter build apk --release --build-name 11.0.29 --build-number 299
           test -f build/app/outputs/flutter-apk/app-release.apk
 
       - name: Build signed release AAB
         run: |
-          flutter build appbundle --release --build-name 11.0.29 --build-number 298
+          flutter build appbundle --release --build-name 11.0.29 --build-number 299
           test -f build/app/outputs/bundle/release/app-release.aab
 
       - name: Verify APK signature and version
