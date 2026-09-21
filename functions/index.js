@@ -575,25 +575,37 @@ exports.createEftSmsTopup = onRequest(
         decoded.phone_number ||
         "";
 
+      const rawEmail =
+        passenger?.data?.email ||
+        decoded.email ||
+        "";
+
       const smsTo =
         normaliseSmsPhone(
           rawPhone
         );
 
-      const reference =
+      let reference =
         eftReferenceFromPhone(
           rawPhone
         );
 
       if (
-        !smsTo ||
+        !smsTo && rawEmail
+      ) {
+        // Fallback reference for email users without a phone
+        reference = "EFT" + decoded.uid.substring(0, 7).toUpperCase();
+      }
+
+      if (
+        (!smsTo && !rawEmail) ||
         !reference
       ) {
         return response
           .status(400)
           .json({
             error:
-              "Your Asiye account needs a valid mobile number before EFT instructions can be sent."
+              "Your Asiye account needs a valid mobile number or email before EFT instructions can be sent."
           });
       }
 
@@ -679,40 +691,69 @@ exports.createEftSmsTopup = onRequest(
         "failed";
 
       try {
-        const twilioMessage =
-          await sendTwilioSms({
-            to:
-              smsTo,
-            body:
-              message
-          });
+        if (smsTo) {
+          const twilioMessage =
+            await sendTwilioSms({
+              to:
+                smsTo,
+              body:
+                message
+            });
 
-        smsStatus =
-          "sent";
+          smsStatus =
+            "sent";
 
-        await admin.database()
-          .ref()
-          .update({
-            [`walletPayments/${paymentId}/smsStatus`]:
-              "sent",
-            [`walletPayments/${paymentId}/twilioMessageSid`]:
-              String(
-                twilioMessage.sid
-              ),
-            [`walletPayments/${paymentId}/twilioDeliveryStatus`]:
-              String(
-                twilioMessage.status ||
-                "accepted"
-              ),
-            [`walletPayments/${paymentId}/instructionsSentAt`]:
-              admin.database
-                .ServerValue
-                .TIMESTAMP,
-            [`commuters/${passengerId}/lastEftSmsAt`]:
-              admin.database
-                .ServerValue
-                .TIMESTAMP
-          });
+          await admin.database()
+            .ref()
+            .update({
+              [`walletPayments/${paymentId}/smsStatus`]:
+                "sent",
+              [`walletPayments/${paymentId}/twilioMessageSid`]:
+                String(
+                  twilioMessage.sid
+                ),
+              [`walletPayments/${paymentId}/twilioDeliveryStatus`]:
+                String(
+                  twilioMessage.status ||
+                  "accepted"
+                ),
+              [`walletPayments/${paymentId}/instructionsSentAt`]:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP,
+              [`commuters/${passengerId}/lastEftSmsAt`]:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+        } else if (rawEmail) {
+          smsStatus = "sent"; // Fake it as sent for email
+          await admin.database()
+            .ref()
+            .update({
+              [`walletPayments/${paymentId}/emailStatus`]:
+                "pending",
+              [`walletPayments/${paymentId}/emailTo`]:
+                rawEmail,
+              [`walletPayments/${paymentId}/instructionsSentAt`]:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP,
+              [`commuters/${passengerId}/lastEftSmsAt`]:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+        }
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP,
+              [`commuters/${passengerId}/lastEftSmsAt`]:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+        }
 
       } catch (smsError) {
         /*
@@ -759,16 +800,18 @@ exports.createEftSmsTopup = onRequest(
           amount:
             roundedAmount,
           smsTo:
-            smsTo.replace(
+            smsTo ? smsTo.replace(
               /(\+27\d{2})\d+(\d{2})$/,
               "$1•••••$2"
-            ),
+            ) : undefined,
+          emailTo:
+            !smsTo && rawEmail ? rawEmail : undefined,
           smsStatus,
           status:
             "awaiting_payment",
           message:
             smsStatus === "sent"
-              ? "EFT banking instructions were accepted for SMS delivery."
+              ? (smsTo ? "EFT banking instructions were accepted for SMS delivery." : "EFT banking instructions were sent by Email.")
               : "EFT banking details are ready on screen. SMS delivery is temporarily unavailable."
         });
 

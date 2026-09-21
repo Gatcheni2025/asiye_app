@@ -372,10 +372,13 @@ window.AsiyePages = {
                 );
             }
         } else if (page === 'wallet') {
+            const hasPhone = !!(user.phone || user.phoneNumber);
+            const destinationText = hasPhone ? 'SMS' : 'email';
+
             body.innerHTML =
                 `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
                 note(
-                    'Choose an amount to add. Your FNB EFT details will appear here and Asiye will also send them by SMS. After payment, you will receive an SMS update when the EFT is confirmed and your wallet is credited.'
+                    `Choose an amount to add. Your FNB EFT details will appear here and Asiye will also send them by ${destinationText}. After payment, you will receive an update when the EFT is confirmed and your wallet is credited.`
                 ) +
                 `
                 <form class="wallet-topup" data-wallet-topup>
@@ -506,13 +509,20 @@ window.AsiyePages = {
                             resultBox.hidden =
                                 false;
 
+                            const methodLabel = payment.emailTo ? 'Email' : 'SMS';
+                            const destination = payment.emailTo ? esc(payment.emailTo) : esc(payment.smsTo || 'your registered mobile number');
+
                             resultBox.innerHTML =
                                 `
+<<<<<<< Updated upstream
                                 <strong>
                                     ${smsQueued
                                         ? 'EFT details ready · SMS requested'
                                         : 'EFT details ready'}
                                 </strong>
+=======
+                                <strong>EFT details sent by ${methodLabel}</strong>
+>>>>>>> Stashed changes
 
                                 <p>
                                     <b>Bank:</b> ${esc(payment.bank || 'FNB')}<br>
@@ -522,6 +532,7 @@ window.AsiyePages = {
                                 </p>
 
                                 <p class="member-note">
+<<<<<<< Updated upstream
                                     ${smsQueued
                                         ? `Banking details have been accepted for SMS delivery to ${esc(payment.smsTo || 'your registered mobile number')}.`
                                         : 'The instruction SMS could not be sent right now. You can still use the banking details shown above.'}
@@ -529,15 +540,40 @@ window.AsiyePages = {
 
                                 <p class="member-note">
                                     After making the EFT, keep this reference exactly as shown. Asiye will send you an SMS update when the payment is confirmed and your wallet has been credited.
+=======
+                                    ${methodLabel} sent to ${destination}. Use the reference exactly as shown.
+>>>>>>> Stashed changes
                                 </p>
                                 `;
                         }
 
+<<<<<<< Updated upstream
                         app.ui?.toast?.(
                             payment.smsStatus === 'sent'
                                 ? 'EFT details ready. SMS delivery requested.'
                                 : 'EFT details ready. Use the details shown on screen.'
                         );
+=======
+                        const msg = payment.emailTo
+                            ? 'FNB EFT details sent by Email.'
+                            : 'FNB EFT details sent by SMS.';
+
+                        app.ui?.toast?.(msg);
+
+                        if (window.Asiye) {
+                            window.Asiye.postMessage(JSON.stringify({
+                                action: 'showNotification',
+                                title: 'Banking Details Sent',
+                                message: msg
+                            }));
+                        } else if (window.Android) {
+                            window.Android.postMessage(JSON.stringify({
+                                action: 'showNotification',
+                                title: 'Banking Details Sent',
+                                message: msg
+                            }));
+                        }
+>>>>>>> Stashed changes
 
                     } catch (error) {
                         if (resultBox) {

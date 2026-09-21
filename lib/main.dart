@@ -24,13 +24,20 @@ import 'dart:math';
 import 'face_scan_screen.dart';
 
 bool _isFirebaseInitialized = false;
-final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 
 const bool isTest = bool.fromEnvironment('FLUTTER_TEST', defaultValue: false);
 
 int _compareVersions(String left, String right) {
-  final leftParts = left.split('.').map((part) => int.tryParse(part) ?? 0).toList();
-  final rightParts = right.split('.').map((part) => int.tryParse(part) ?? 0).toList();
+  final leftParts = left
+      .split('.')
+      .map((part) => int.tryParse(part) ?? 0)
+      .toList();
+  final rightParts = right
+      .split('.')
+      .map((part) => int.tryParse(part) ?? 0)
+      .toList();
   final length = max(leftParts.length, rightParts.length);
 
   for (var index = 0; index < length; index++) {
@@ -56,10 +63,11 @@ Future<bool> _isAppUpdateRequired(Map<String, dynamic> data) async {
   }
 
   final currentBuild = int.tryParse(info.buildNumber) ?? 0;
-  final latestBuild = int.tryParse(
+  final latestBuild =
+      int.tryParse(
         data['latestBuildAndroid']?.toString() ??
-        data['latestBuild']?.toString() ??
-        '0',
+            data['latestBuild']?.toString() ??
+            '0',
       ) ??
       0;
   return latestBuild > currentBuild;
@@ -72,7 +80,9 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (message.data['type']?.toString() == 'app_update') {
     try {
       if (!await _isAppUpdateRequired(message.data)) {
-        debugPrint('Ignoring app update notification: installed version is current.');
+        debugPrint(
+          'Ignoring app update notification: installed version is current.',
+        );
         return;
       }
     } catch (error) {
@@ -95,13 +105,22 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     );
 
     await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
 
     await flutterLocalNotificationsPlugin.show(
-      id: (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode,
+      id:
+          (message.messageId ??
+                  DateTime.now().microsecondsSinceEpoch.toString())
+              .hashCode,
       title: notification?.title ?? message.data['title'] ?? 'Asiye',
-      body: notification?.body ?? message.data['message'] ?? message.data['body'] ?? 'New update',
+      body:
+          notification?.body ??
+          message.data['message'] ??
+          message.data['body'] ??
+          'New update',
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
           channel.id,
@@ -134,22 +153,28 @@ void main() async {
     if (!kIsWeb) {
       await Firebase.initializeApp().timeout(const Duration(seconds: 5));
       _isFirebaseInitialized = true;
-      FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
     }
 
     // Initialize Google Sign-In singleton
     await GoogleSignIn.instance.initialize(
-      serverClientId: '531902350858-p5bf7u1goohrufm74tgc4v4vvj4fb4j3.apps.googleusercontent.com',
+      serverClientId:
+          '531902350858-p5bf7u1goohrufm74tgc4v4vvj4fb4j3.apps.googleusercontent.com',
     );
   } catch (e) {
     debugPrint("Initialization failed or timed out: $e");
   }
-  
-  runApp(const MaterialApp(
-    debugShowCheckedModeBanner: false,
-    home: AsiyeMainShell(),
-  ));
+
+  runApp(
+    const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: AsiyeMainShell(),
+    ),
+  );
 }
+
 class AsiyeMainShell extends StatefulWidget {
   const AsiyeMainShell({super.key});
   @override
@@ -177,9 +202,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           return true;
         })()
       """);
-      if (result == true || result.toString() == 'true') _pendingNotification = null;
-    } catch (error) { debugPrint('Notification deferred until page ready: $error'); }
+      if (result == true || result.toString() == 'true')
+        _pendingNotification = null;
+    } catch (error) {
+      debugPrint('Notification deferred until page ready: $error');
+    }
   }
+
   StreamSubscription<Position>? _positionSubscription;
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
@@ -260,10 +289,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       if (!await _isAppUpdateRequired(data)) return;
 
       final info = await PackageInfo.fromPlatform();
-      final latestBuild = int.tryParse(
+      final latestBuild =
+          int.tryParse(
             release['latestBuildAndroid']?.toString() ??
-            release['latestBuild']?.toString() ??
-            '0',
+                release['latestBuild']?.toString() ??
+                '0',
           ) ??
           0;
       final latestVersion =
@@ -284,8 +314,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       if (!mounted) return;
 
       final title =
-          release['title']?.toString() ??
-          'A new Asiye update is available';
+          release['title']?.toString() ?? 'A new Asiye update is available';
       final message =
           release['message']?.toString() ??
           'Update Asiye to get the latest improvements and fixes.';
@@ -390,9 +419,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     return Container(
       width: double.infinity,
       height: double.infinity,
-      decoration: const BoxDecoration(
-        color: Colors.white,
-      ),
+      decoration: const BoxDecoration(color: Colors.white),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -414,7 +441,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               child: Image.asset(
                 'assets/data/AsiyeNew.png',
                 width: 60,
-                errorBuilder: (context, error, stackTrace) => const Icon(Icons.local_taxi, size: 50, color: Colors.blueAccent),
+                errorBuilder: (context, error, stackTrace) => const Icon(
+                  Icons.local_taxi,
+                  size: 50,
+                  color: Colors.blueAccent,
+                ),
               ),
             ),
           ),
@@ -449,7 +480,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _initializeApp();
   }
 
- Future<void> _initializeApp() async {
+  Future<void> _initializeApp() async {
     if (isTest) {
       if (mounted) {
         setState(() {
@@ -458,11 +489,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       }
       return;
     }
- // FIX 2: Prevent the WebViewController from crashing the app on the web.
+    // FIX 2: Prevent the WebViewController from crashing the app on the web.
     if (kIsWeb) {
       debugPrint("Running on Web. Skipping native WebView creation.");
       if (mounted) setState(() => _isLoading = false);
-      return; 
+      return;
     }
 
     final controller = WebViewController()
@@ -480,7 +511,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             final prefs = await SharedPreferences.getInstance();
             if (url.contains('/driver-v2/') || url.contains('taxi.html')) {
               await prefs.setString('userType', 'driver');
-            } else if (url.contains('/passenger-v2/') && !url.contains('login.html')) {
+            } else if (url.contains('/passenger-v2/') &&
+                !url.contains('login.html')) {
               await prefs.setString('userType', 'commuter');
             } else if (url.contains('handler.html')) {
               await prefs.setString('userType', 'handler');
@@ -497,10 +529,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
              * { action: 'hidePreloader' }. Static/login pages can reveal
              * as soon as WebView reports that the page has finished.
              */
-            if (
-              !waitsForInteractiveReady &&
-              mounted
-            ) {
+            if (!waitsForInteractiveReady && mounted) {
               setState(() => _isLoading = false);
             }
 
@@ -516,17 +545,21 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               """);
 
               if (result != null && result.toString() != "null") {
-                String unquoted = result.toString().replaceAll(RegExp(r'^"|"$'), '').replaceAll(r'\"', '"');
+                String unquoted = result
+                    .toString()
+                    .replaceAll(RegExp(r'^"|"$'), '')
+                    .replaceAll(r'\"', '"');
                 Map<String, dynamic> data = jsonDecode(unquoted);
 
                 if (data['uid'] != null && data['uid'].toString().isNotEmpty) {
                   await prefs.setString('userId', data['uid']);
                 }
-                if (data['type'] != null && data['type'].toString().isNotEmpty) {
+                if (data['type'] != null &&
+                    data['type'].toString().isNotEmpty) {
                   await prefs.setString('userType', data['type']);
                 }
               }
-            } catch(e) {
+            } catch (e) {
               debugPrint("Session sync extraction failed: $e");
             }
 
@@ -538,8 +571,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
               // Hard guard to prevent drivers loading index.html and reverting to commuter
               String protectionLogic = "";
-              if (url.contains('/passenger-v2/index.html') && userType == 'driver') {
-                protectionLogic = "window.location.replace('../driver-v2/index.html');";
+              if (url.contains('/passenger-v2/index.html') &&
+                  userType == 'driver') {
+                protectionLogic =
+                    "window.location.replace('../driver-v2/index.html');";
               } else if (url.contains('taxi.html') && userType == 'commuter') {
                 protectionLogic = "window.location.replace('index.html');";
               }
@@ -557,7 +592,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               """);
             }
             await _syncAppVersionAndCheckRelease();
-            if (_pendingNotification != null) await _openNotification(_pendingNotification!);
+            if (_pendingNotification != null)
+              await _openNotification(_pendingNotification!);
           },
           onNavigationRequest: (request) async {
             if (request.url.contains('ozowWalletReturn')) {
@@ -566,7 +602,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               return NavigationDecision.prevent;
             }
 
-            if (request.url.contains('success.html') || request.url.contains('cancel.html')) {
+            if (request.url.contains('success.html') ||
+                request.url.contains('cancel.html')) {
               final bool isSuccess = request.url.contains('success.html');
 
               if (isSuccess) {
@@ -580,7 +617,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               return NavigationDecision.prevent;
             }
 
-            if (!request.url.startsWith('http') && !request.url.startsWith('file')) {
+            if (!request.url.startsWith('http') &&
+                !request.url.startsWith('file')) {
               try {
                 final uri = Uri.parse(request.url);
                 if (await canLaunchUrl(uri)) {
@@ -610,26 +648,42 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
       platform.setOnShowFileSelector((FileSelectorParams params) async {
         try {
-          final isImageOnly = params.acceptTypes.any((type) => type.contains('image/'));
+          final isImageOnly = params.acceptTypes.any(
+            (type) => type.contains('image/'),
+          );
 
           if (isImageOnly) {
             final ImagePicker picker = ImagePicker();
             final String? source = await showModalBottomSheet<String>(
               context: context,
               backgroundColor: const Color(0xFF1c1c1e),
-              shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
               builder: (BuildContext bc) {
                 return SafeArea(
                   child: Wrap(
                     children: <Widget>[
                       ListTile(
-                        leading: const Icon(Icons.photo_library, color: Colors.white),
-                        title: const Text('Photo Gallery', style: TextStyle(color: Colors.white)),
+                        leading: const Icon(
+                          Icons.photo_library,
+                          color: Colors.white,
+                        ),
+                        title: const Text(
+                          'Photo Gallery',
+                          style: TextStyle(color: Colors.white),
+                        ),
                         onTap: () => Navigator.of(context).pop('gallery'),
                       ),
                       ListTile(
-                        leading: const Icon(Icons.camera_alt, color: Colors.white),
-                        title: const Text('Camera', style: TextStyle(color: Colors.white)),
+                        leading: const Icon(
+                          Icons.camera_alt,
+                          color: Colors.white,
+                        ),
+                        title: const Text(
+                          'Camera',
+                          style: TextStyle(color: Colors.white),
+                        ),
                         onTap: () => Navigator.of(context).pop('camera'),
                       ),
                     ],
@@ -645,7 +699,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             }
 
             final XFile? photo = await picker.pickImage(
-              source: source == 'camera' ? ImageSource.camera : ImageSource.gallery,
+              source: source == 'camera'
+                  ? ImageSource.camera
+                  : ImageSource.gallery,
               imageQuality: 88,
             );
 
@@ -667,9 +723,18 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       });
     }
 
-    await controller.addJavaScriptChannel('Android', onMessageReceived: (m) => _handleJsCalls(m.message));
-    await controller.addJavaScriptChannel('Asiye', onMessageReceived: (m) => _handleJsCalls(m.message));
-    await controller.addJavaScriptChannel('AndroidNav', onMessageReceived: (m) => _handleNavCalls(m.message));
+    await controller.addJavaScriptChannel(
+      'Android',
+      onMessageReceived: (m) => _handleJsCalls(m.message),
+    );
+    await controller.addJavaScriptChannel(
+      'Asiye',
+      onMessageReceived: (m) => _handleJsCalls(m.message),
+    );
+    await controller.addJavaScriptChannel(
+      'AndroidNav',
+      onMessageReceived: (m) => _handleNavCalls(m.message),
+    );
 
     if (mounted) {
       setState(() {
@@ -679,15 +744,19 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
     try {
       final startPage = await _determineStartPage();
-      await controller.loadFlutterAsset(startPage).timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          debugPrint("Asset load timed out, showing webview anyway.");
-        },
-      );
+      await controller
+          .loadFlutterAsset(startPage)
+          .timeout(
+            const Duration(seconds: 3),
+            onTimeout: () {
+              debugPrint("Asset load timed out, showing webview anyway.");
+            },
+          );
     } catch (e) {
       debugPrint("Initial load error: $e");
-      await controller.loadFlutterAsset('assets/passenger-v2/login.html').catchError((_) => null);
+      await controller
+          .loadFlutterAsset('assets/passenger-v2/login.html')
+          .catchError((_) => null);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -696,8 +765,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   }
 
   Future<void> _runBackgroundInitialization() async {
-    try { await _setupNotifications(); } catch (e) { debugPrint("Notif Init Fail: $e"); }
-    try { await _requestPermissions(); } catch (e) { debugPrint("Perm Init Fail: $e"); }
+    try {
+      await _setupNotifications();
+    } catch (e) {
+      debugPrint("Notif Init Fail: $e");
+    }
+    try {
+      await _requestPermissions();
+    } catch (e) {
+      debugPrint("Perm Init Fail: $e");
+    }
   }
 
   Future<void> _setupNotifications() async {
@@ -708,15 +785,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
     const DarwinInitializationSettings initializationSettingsDarwin =
         DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
+          requestAlertPermission: true,
+          requestBadgePermission: true,
+          requestSoundPermission: true,
+        );
 
-    const InitializationSettings initializationSettings = InitializationSettings(
-      android: initializationSettingsAndroid,
-      iOS: initializationSettingsDarwin,
-    );
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+          android: initializationSettingsAndroid,
+          iOS: initializationSettingsDarwin,
+        );
 
     await flutterLocalNotificationsPlugin.initialize(
       settings: initializationSettings,
@@ -725,17 +803,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           try {
             final data = jsonDecode(details.payload!);
             if (data is Map<String, dynamic>) _openNotification(data);
-          } catch (_) { _openNotification({'message': details.payload}); }
+          } catch (_) {
+            _openNotification({'message': details.payload});
+          }
         }
       },
     );
 
     FirebaseMessaging messaging = FirebaseMessaging.instance;
-    await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    await messaging.requestPermission(alert: true, badge: true, sound: true);
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'asiye_danger_channel',
@@ -747,13 +823,19 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     );
 
     await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin
+        >()
         ?.createNotificationChannel(channel);
 
     _tokenSubscription = messaging.onTokenRefresh.listen((token) {
-      _savePushToken(token).catchError((Object error) { debugPrint('Push token refresh failed: $error'); });
+      _savePushToken(token).catchError((Object error) {
+        debugPrint('Push token refresh failed: $error');
+      });
     });
-    _messageSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
+    _messageSubscription = FirebaseMessaging.onMessage.listen((
+      RemoteMessage message,
+    ) async {
       if (message.data['type']?.toString() == 'app_update') {
         try {
           if (!await _isAppUpdateRequired(message.data)) return;
@@ -766,9 +848,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       AndroidNotification? android = message.notification?.android;
 
       flutterLocalNotificationsPlugin.show(
-        id: (message.messageId ?? DateTime.now().microsecondsSinceEpoch.toString()).hashCode,
+        id:
+            (message.messageId ??
+                    DateTime.now().microsecondsSinceEpoch.toString())
+                .hashCode,
         title: notification?.title ?? message.data['title'] ?? 'Asiye',
-        body: notification?.body ?? message.data['message'] ?? message.data['body'] ?? 'New update',
+        body:
+            notification?.body ??
+            message.data['message'] ??
+            message.data['body'] ??
+            'New update',
         notificationDetails: NotificationDetails(
           android: AndroidNotificationDetails(
             channel.id,
@@ -789,27 +878,36 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         payload: jsonEncode(message.data),
       );
 
-      _controller?.runJavaScript("if(typeof window.onPushNotificationReceived === 'function') { window.onPushNotificationReceived(${jsonEncode(message.data)}); }");
+      _controller?.runJavaScript(
+        "if(typeof window.onPushNotificationReceived === 'function') { window.onPushNotificationReceived(${jsonEncode(message.data)}); }",
+      );
     });
 
-    _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+    _openedSubscription = FirebaseMessaging.onMessageOpenedApp.listen((
+      RemoteMessage message,
+    ) {
       _openNotification(message.data);
     });
 
     final initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) await _openNotification(initialMessage.data);
-    final launch = await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
+    final launch = await flutterLocalNotificationsPlugin
+        .getNotificationAppLaunchDetails();
     final payload = launch?.notificationResponse?.payload;
     if (launch?.didNotificationLaunchApp == true && payload != null) {
       try {
         final data = jsonDecode(payload);
         if (data is Map<String, dynamic>) await _openNotification(data);
-      } catch (_) { /* Ignore malformed legacy notification payloads. */ }
+      } catch (_) {
+        /* Ignore malformed legacy notification payloads. */
+      }
     }
 
     String? token;
     try {
-      token = await FirebaseMessaging.instance.getToken().timeout(const Duration(seconds: 10));
+      token = await FirebaseMessaging.instance.getToken().timeout(
+        const Duration(seconds: 10),
+      );
       if (token != null) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('fcmToken', token);
@@ -833,9 +931,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _requestPermissions() async {
     try {
-      final permissions = <Permission>[
-        Permission.locationWhenInUse,
-      ];
+      final permissions = <Permission>[Permission.locationWhenInUse];
 
       if (defaultTargetPlatform == TargetPlatform.android) {
         permissions.add(Permission.notification);
@@ -850,10 +946,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Future<void> _handleWebViewPermissionRequest(
     PlatformWebViewPermissionRequest request,
   ) async {
-    final wantsCamera =
-        request.types.contains(WebViewPermissionResourceType.camera);
-    final wantsMicrophone =
-        request.types.contains(WebViewPermissionResourceType.microphone);
+    final wantsCamera = request.types.contains(
+      WebViewPermissionResourceType.camera,
+    );
+    final wantsMicrophone = request.types.contains(
+      WebViewPermissionResourceType.microphone,
+    );
 
     if (wantsCamera && !await _ensureCameraPermission()) {
       await request.deny();
@@ -952,10 +1050,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
     if (userType != null) {
       switch (userType) {
-        case 'driver': return 'assets/driver-v2/index.html';
-        case 'rank_manager': return 'assets/taxiRank.html';
-        case 'handler': return 'assets/handler.html';
-        case 'commuter': return 'assets/passenger-v2/index.html';
+        case 'driver':
+          return 'assets/driver-v2/index.html';
+        case 'rank_manager':
+          return 'assets/taxiRank.html';
+        case 'handler':
+          return 'assets/handler.html';
+        case 'commuter':
+          return 'assets/passenger-v2/index.html';
       }
     }
     return 'assets/passenger-v2/index.html';
@@ -980,13 +1082,21 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           final double lat = data['lat'] ?? 0.0;
           final double lng = data['lng'] ?? 0.0;
           final String query = Uri.encodeComponent(data['address'] ?? '');
-          final String googleMapsUrl = "https://www.google.com/maps/search/?api=1&query=$lat,$lng";
-          final String appleMapsUrl = "https://maps.apple.com/?q=$query&ll=$lat,$lng";
+          final String googleMapsUrl =
+              "https://www.google.com/maps/search/?api=1&query=$lat,$lng";
+          final String appleMapsUrl =
+              "https://maps.apple.com/?q=$query&ll=$lat,$lng";
 
           if (await canLaunchUrl(Uri.parse(googleMapsUrl))) {
-            await launchUrl(Uri.parse(googleMapsUrl), mode: LaunchMode.externalApplication);
+            await launchUrl(
+              Uri.parse(googleMapsUrl),
+              mode: LaunchMode.externalApplication,
+            );
           } else if (await canLaunchUrl(Uri.parse(appleMapsUrl))) {
-            await launchUrl(Uri.parse(appleMapsUrl), mode: LaunchMode.externalApplication);
+            await launchUrl(
+              Uri.parse(appleMapsUrl),
+              mode: LaunchMode.externalApplication,
+            );
           }
           break;
         case 'dial':
@@ -1012,9 +1122,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
           try {
             if (await canLaunchUrl(Uri.parse(appUrl))) {
-              await launchUrl(Uri.parse(appUrl), mode: LaunchMode.externalApplication);
+              await launchUrl(
+                Uri.parse(appUrl),
+                mode: LaunchMode.externalApplication,
+              );
             } else {
-              await launchUrl(Uri.parse(webUrl), mode: LaunchMode.externalApplication);
+              await launchUrl(
+                Uri.parse(webUrl),
+                mode: LaunchMode.externalApplication,
+              );
             }
           } catch (e) {}
           break;
@@ -1067,10 +1183,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
       _sendBridgeResult(
         callbackId,
-        result: {
-          'name': contact.displayName.trim(),
-          'phone': phone,
-        },
+        result: {'name': contact.displayName.trim(), 'phone': phone},
       );
     } catch (error) {
       debugPrint('Contact picker failed: $error');
@@ -1095,10 +1208,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         return;
       }
 
-      final facing =
-          data['facing']?.toString().toLowerCase() == 'front'
-              ? CameraDevice.front
-              : CameraDevice.rear;
+      final facing = data['facing']?.toString().toLowerCase() == 'front'
+          ? CameraDevice.front
+          : CameraDevice.rear;
 
       final picker = ImagePicker();
 
@@ -1130,8 +1242,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       final mimeType = lowerPath.endsWith('.png')
           ? 'image/png'
           : lowerPath.endsWith('.webp')
-              ? 'image/webp'
-              : 'image/jpeg';
+          ? 'image/webp'
+          : 'image/jpeg';
 
       _sendBridgeResult(
         callbackId,
@@ -1147,11 +1259,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _sendBridgeResult(
         callbackId,
         ok: false,
-        error: 'Unable to scan the image. Check camera permission and try again.',
+        error:
+            'Unable to scan the image. Check camera permission and try again.',
       );
     }
   }
-
 
   Future<void> _scanFaceForWeb(Map<String, dynamic> data) async {
     final callbackId = data['callbackId']?.toString() ?? '';
@@ -1175,30 +1287,21 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         return;
       }
 
-      final purpose =
-          data['purpose']?.toString() ??
-          'profile';
+      final purpose = data['purpose']?.toString() ?? 'profile';
 
-      final roleTitle =
-          purpose.contains('driver')
-              ? 'Driver live face scan'
-              : 'Passenger live face scan';
+      final roleTitle = purpose.contains('driver')
+          ? 'Driver live face scan'
+          : 'Passenger live face scan';
 
       final path = await Navigator.of(context).push<String>(
         MaterialPageRoute<String>(
           fullscreenDialog: true,
-          builder:
-              (_) => AsiyeLiveFaceScanScreen(
-                title: roleTitle,
-              ),
+          builder: (_) => AsiyeLiveFaceScanScreen(title: roleTitle),
         ),
       );
 
       if (path == null || path.isEmpty) {
-        _sendBridgeResult(
-          callbackId,
-          cancelled: true,
-        );
+        _sendBridgeResult(callbackId, cancelled: true);
         return;
       }
 
@@ -1217,21 +1320,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _sendBridgeResult(
         callbackId,
         result: {
-          'dataUrl':
-              'data:image/jpeg;base64,${base64Encode(bytes)}',
-          'mimeType':
-              'image/jpeg',
-          'name':
-              'asiye-live-face.jpg',
-          'purpose':
-              purpose,
-          'liveCapture':
-              true,
-          'checks': [
-            'single_face',
-            'head_movement',
-            'smile'
-          ],
+          'dataUrl': 'data:image/jpeg;base64,${base64Encode(bytes)}',
+          'mimeType': 'image/jpeg',
+          'name': 'asiye-live-face.jpg',
+          'purpose': purpose,
+          'liveCapture': true,
+          'checks': ['single_face', 'head_movement', 'smile'],
         },
       );
     } catch (error) {
@@ -1250,11 +1344,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     try {
       if (message == "triggerGoogleSignIn" || message == "startGoogleSignIn") {
         _signInWithGoogle();
-      } else if (message == "triggerAppleSignIn" || message == "startAppleSignIn") {
+      } else if (message == "triggerAppleSignIn" ||
+          message == "startAppleSignIn") {
         _signInWithApple();
       } else if (message == "performLogout") {
         _performLogout();
-      } else if (message.startsWith("getCurrentLocation") || message.startsWith("requestLocation")) {
+      } else if (message.startsWith("getCurrentLocation") ||
+          message.startsWith("requestLocation")) {
         bool highAccuracy = !message.contains("accuracy:low");
         _getCurrentLocation(highAccuracy: highAccuracy);
       } else if (message == "startLocationWatch") {
@@ -1270,53 +1366,42 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               data['phone']?.toString() ?? '',
               forceResend: data['forceResend'] == true,
             );
-          }
-          else if (action == 'verifyPhoneAuthCode') {
-            await _verifyPhoneAuthCode(
-              data['code']?.toString() ?? '',
-            );
-          }
-          else if (action == 'appReleaseConfig' && data['config'] is Map) {
+          } else if (action == 'verifyPhoneAuthCode') {
+            await _verifyPhoneAuthCode(data['code']?.toString() ?? '');
+          } else if (action == 'appReleaseConfig' && data['config'] is Map) {
             await _handleAppReleaseConfig(
               Map<String, dynamic>.from(data['config'] as Map),
             );
-          }
-          else if (action == 'openAppUpdate') {
+          } else if (action == 'openAppUpdate') {
             await _openAppUpdate(Map<String, dynamic>.from(data));
-          }
-          else if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
+          } else if (action == 'onUserLoggedIn' ||
+              action == 'onSignupSuccess') {
             await _saveSessionAndRedirect(data['uid'], data['type']);
-          }
-          else if (action == 'showNotification') {
-            _triggerSystemNotification(data['title'] ?? 'Asiye', data['message'] ?? 'New update', data['payload']);
-          }
-          else if (action == 'speakNavigation') {
-            await _speakNavigation(
-              data['text']?.toString() ?? '',
+          } else if (action == 'showNotification') {
+            _triggerSystemNotification(
+              data['title'] ?? 'Asiye',
+              data['message'] ?? 'New update',
+              data['payload'],
             );
-          }
-          else if (action == 'stopNavigationVoice') {
+          } else if (action == 'speakNavigation') {
+            await _speakNavigation(data['text']?.toString() ?? '');
+          } else if (action == 'stopNavigationVoice') {
             await _stopNavigationVoice();
-          }
-          else if (action == 'hidePreloader') {
+          } else if (action == 'hidePreloader') {
             if (mounted) setState(() => _isLoading = false);
-          }
-          else if (action == 'pickContact') {
+          } else if (action == 'pickContact') {
             await _pickContactForWeb(data);
-          }
-          else if (action == 'scanFace') {
+          } else if (action == 'scanFace') {
             await _scanFaceForWeb(data);
-          }
-          else if (action == 'scanImage') {
+          } else if (action == 'scanImage') {
             await _scanImageForWeb(data);
-          }
-          else if (action == 'share') {
+          } else if (action == 'share') {
             final String text = data['text'] ?? '';
             if (text.isNotEmpty) {
               Share.share(text);
             }
           }
-        } catch(_) {}
+        } catch (_) {}
       }
     } catch (e) {}
   }
@@ -1349,16 +1434,21 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
-  Future<void> _triggerSystemNotification(String? title, String? body, String? payload) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'asiye_danger_channel',
-      'Asiye Alerts',
-      importance: Importance.max,
-      priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
-      playSound: true,
-      enableVibration: true,
-    );
+  Future<void> _triggerSystemNotification(
+    String? title,
+    String? body,
+    String? payload,
+  ) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+          'asiye_danger_channel',
+          'Asiye Alerts',
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+          playSound: true,
+          enableVibration: true,
+        );
 
     NotificationDetails platformDetails = const NotificationDetails(
       android: androidDetails,
@@ -1405,7 +1495,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       }
 
       if (permission == LocationPermission.deniedForever) {
-        _controller?.runJavaScript("if(typeof window.onNativeLocationError === 'function') { window.onNativeLocationError('Permission denied forever'); }");
+        _controller?.runJavaScript(
+          "if(typeof window.onNativeLocationError === 'function') { window.onNativeLocationError('Permission denied forever'); }",
+        );
         return;
       }
 
@@ -1414,7 +1506,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         timeLimit: const Duration(seconds: 10),
       );
 
-      Position position = await Geolocator.getCurrentPosition(locationSettings: locationSettings);
+      Position position = await Geolocator.getCurrentPosition(
+        locationSettings: locationSettings,
+      );
 
       final Map<String, dynamic> locData = {
         "latitude": position.latitude,
@@ -1424,26 +1518,36 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         "speed": position.speed,
       };
 
-      _controller?.runJavaScript("if(typeof window.onNativeLocationSuccess === 'function') { window.onNativeLocationSuccess(${jsonEncode(locData)}); }");
+      _controller?.runJavaScript(
+        "if(typeof window.onNativeLocationSuccess === 'function') { window.onNativeLocationSuccess(${jsonEncode(locData)}); }",
+      );
     } catch (e) {
-      _controller?.runJavaScript("if(typeof window.onNativeLocationError === 'function') { window.onNativeLocationError('${e.toString()}'); }");
+      _controller?.runJavaScript(
+        "if(typeof window.onNativeLocationError === 'function') { window.onNativeLocationError('${e.toString()}'); }",
+      );
     }
   }
 
   void _startLocationWatch() async {
     _positionSubscription?.cancel();
-    _positionSubscription = Geolocator.getPositionStream(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
-    ).listen((Position position) {
-      final Map<String, dynamic> locData = {
-        "latitude": position.latitude,
-        "longitude": position.longitude,
-        "accuracy": position.accuracy,
-        "heading": position.heading,
-        "speed": position.speed,
-      };
-      _controller?.runJavaScript("if(typeof window.onNativeLocationUpdate === 'function') { window.onNativeLocationUpdate(${jsonEncode(locData)}); }");
-    });
+    _positionSubscription =
+        Geolocator.getPositionStream(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 5,
+          ),
+        ).listen((Position position) {
+          final Map<String, dynamic> locData = {
+            "latitude": position.latitude,
+            "longitude": position.longitude,
+            "accuracy": position.accuracy,
+            "heading": position.heading,
+            "speed": position.speed,
+          };
+          _controller?.runJavaScript(
+            "if(typeof window.onNativeLocationUpdate === 'function') { window.onNativeLocationUpdate(${jsonEncode(locData)}); }",
+          );
+        });
   }
 
   void _stopLocationWatch() {
@@ -1545,19 +1649,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phoneNumber,
         timeout: const Duration(seconds: 60),
-        forceResendingToken:
-            forceResend ? _phoneResendToken : null,
+        forceResendingToken: forceResend ? _phoneResendToken : null,
         verificationCompleted: (PhoneAuthCredential credential) async {
           try {
-            final result =
-                await FirebaseAuth.instance.signInWithCredential(credential);
+            final result = await FirebaseAuth.instance.signInWithCredential(
+              credential,
+            );
 
             _phoneVerificationId = null;
 
-            await _sendNativeFirebaseSessionToWeb(
-              result,
-              'phone',
-            );
+            await _sendNativeFirebaseSessionToWeb(result, 'phone');
           } on FirebaseAuthException catch (error) {
             debugPrint(
               'Automatic phone verification failed [${error.code}]: ${error.message}',
@@ -1615,26 +1716,20 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
-  Future<void> _verifyPhoneAuthCode(
-    String smsCode,
-  ) async {
-    final verificationId =
-        _phoneVerificationId;
+  Future<void> _verifyPhoneAuthCode(String smsCode) async {
+    final verificationId = _phoneVerificationId;
 
-    if (
-      verificationId == null ||
-      verificationId.isEmpty
-    ) {
+    if (verificationId == null || verificationId.isEmpty) {
       _callWeb('onNativeFirebaseAuthError', {
         'provider': 'phone',
         'code': 'missing-verification-id',
-        'message': 'Your verification session expired. Please request a new code.',
+        'message':
+            'Your verification session expired. Please request a new code.',
       });
       return;
     }
 
-    final code =
-        smsCode.replaceAll(RegExp(r'\D'), '');
+    final code = smsCode.replaceAll(RegExp(r'\D'), '');
 
     if (code.length != 6) {
       _callWeb('onNativeFirebaseAuthError', {
@@ -1646,28 +1741,18 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
 
     try {
-      final credential =
-          PhoneAuthProvider.credential(
-            verificationId:
-                verificationId,
-            smsCode:
-                code,
-          );
-
-      final result =
-          await FirebaseAuth.instance
-              .signInWithCredential(
-                credential
-              );
-
-      _phoneVerificationId =
-          null;
-
-      await _sendNativeFirebaseSessionToWeb(
-        result,
-        'phone',
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: code,
       );
 
+      final result = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+
+      _phoneVerificationId = null;
+
+      await _sendNativeFirebaseSessionToWeb(result, 'phone');
     } on FirebaseAuthException catch (error) {
       debugPrint(
         'Phone code verification failed [${error.code}]: ${error.message}',
@@ -1689,141 +1774,90 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _signInWithGoogle() async {
     try {
-      await _googleSignIn
-          .signOut()
-          .catchError(
-            (_) => null
-          );
+      await _googleSignIn.signOut().catchError((_) => null);
 
       try {
-        await FirebaseAuth.instance
-            .signOut();
+        await FirebaseAuth.instance.signOut();
       } catch (_) {}
 
-      final GoogleSignInAccount? account =
-          await _googleSignIn
-              .authenticate();
+      final GoogleSignInAccount? account = await _googleSignIn.authenticate();
 
       if (account == null) {
-        _callWeb(
-          'onNativeFirebaseAuthError',
-          {
-            'provider': 'google',
-            'code': 'cancelled',
-            'message': 'Google sign-in was cancelled.',
-          },
-        );
+        _callWeb('onNativeFirebaseAuthError', {
+          'provider': 'google',
+          'code': 'cancelled',
+          'message': 'Google sign-in was cancelled.',
+        });
         return;
       }
 
-      final GoogleSignInAuthentication auth =
-          account.authentication;
+      final GoogleSignInAuthentication auth = account.authentication;
 
-      if (
-        auth.idToken == null ||
-        auth.idToken!.isEmpty
-      ) {
-        throw StateError(
-          'Google did not return an ID token.'
-        );
+      if (auth.idToken == null || auth.idToken!.isEmpty) {
+        throw StateError('Google did not return an ID token.');
       }
 
-      final firebaseCredential =
-          GoogleAuthProvider
-              .credential(
-                idToken:
-                    auth.idToken,
-              );
-
-      final result =
-          await FirebaseAuth.instance
-              .signInWithCredential(
-                firebaseCredential
-              );
-
-      await _sendNativeFirebaseSessionToWeb(
-        result,
-        'google',
+      final firebaseCredential = GoogleAuthProvider.credential(
+        idToken: auth.idToken,
       );
 
+      final result = await FirebaseAuth.instance.signInWithCredential(
+        firebaseCredential,
+      );
+
+      await _sendNativeFirebaseSessionToWeb(result, 'google');
     } on FirebaseAuthException catch (error) {
       debugPrint(
         'Google Firebase authentication failed [${error.code}]: ${error.message}',
       );
 
-      _callWeb(
-        'onNativeFirebaseAuthError',
-        {
-          'provider': 'google',
-          'code': error.code,
-          'message': error.message ?? 'Google authentication failed.',
-        },
-      );
-
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'google',
+        'code': error.code,
+        'message': error.message ?? 'Google authentication failed.',
+      });
     } catch (error) {
-      debugPrint(
-        'Google authentication failed: $error'
-      );
+      debugPrint('Google authentication failed: $error');
 
-      _callWeb(
-        'onNativeFirebaseAuthError',
-        {
-          'provider': 'google',
-          'code': 'native-google-failed',
-          'message': error.toString(),
-        },
-      );
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'google',
+        'code': 'native-google-failed',
+        'message': error.toString(),
+      });
     }
   }
 
   Future<void> _signInWithApple() async {
     try {
       try {
-        await FirebaseAuth.instance
-            .signOut();
+        await FirebaseAuth.instance.signOut();
       } catch (_) {}
 
-      final appleProvider =
-          AppleAuthProvider();
+      final appleProvider = AppleAuthProvider();
 
-      final result =
-          await FirebaseAuth.instance
-              .signInWithProvider(
-                appleProvider
-              );
-
-      await _sendNativeFirebaseSessionToWeb(
-        result,
-        'apple',
+      final result = await FirebaseAuth.instance.signInWithProvider(
+        appleProvider,
       );
 
+      await _sendNativeFirebaseSessionToWeb(result, 'apple');
     } on FirebaseAuthException catch (error) {
       debugPrint(
         'Apple Firebase authentication failed [${error.code}]: ${error.message}',
       );
 
-      _callWeb(
-        'onNativeFirebaseAuthError',
-        {
-          'provider': 'apple',
-          'code': error.code,
-          'message': error.message ?? 'Apple authentication failed.',
-        },
-      );
-
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'apple',
+        'code': error.code,
+        'message': error.message ?? 'Apple authentication failed.',
+      });
     } catch (error) {
-      debugPrint(
-        'Apple authentication failed: $error'
-      );
+      debugPrint('Apple authentication failed: $error');
 
-      _callWeb(
-        'onNativeFirebaseAuthError',
-        {
-          'provider': 'apple',
-          'code': 'native-apple-failed',
-          'message': error.toString(),
-        },
-      );
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'apple',
+        'code': 'native-apple-failed',
+        'message': error.toString(),
+      });
     }
   }
 
