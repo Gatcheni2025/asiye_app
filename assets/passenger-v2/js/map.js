@@ -19,6 +19,20 @@ ASIYE.map = {
 
     driverLocation: null,
 
+    nearbyDriversRef: null,
+
+    nearbyDriversListener: null,
+
+    nearbyDriverMarkers: new Map(),
+
+    routeGeometry: null,
+
+    followUser: true,
+
+    tripOverviewActive: false,
+
+    lastTripOverviewFitAt: 0,
+
 
     init() {
 
@@ -106,6 +120,8 @@ ASIYE.map = {
                         location.longitude
                     );
                 }
+
+                this.startNearbyDrivers();
             });
 
             if (this.driverLocation) {
@@ -124,6 +140,69 @@ ASIYE.map = {
        USER LOCATION MARKER
        ======================================================== */
 
+    startNearbyDrivers() {
+        if (this.nearbyDriversRef || !firebase?.database) return;
+
+        this.nearbyDriversRef = firebase.database().ref('taxis');
+        this.nearbyDriversListener = this.nearbyDriversRef.on('value', snapshot => {
+            const visible = new Set();
+            const passenger = ASIYE.state.location || {};
+
+            snapshot.forEach(child => {
+                const driver = child.val() || {};
+                const lat = Number(driver.latitude ?? driver.location?.latitude ?? driver.location?.lat);
+                const lng = Number(driver.longitude ?? driver.location?.longitude ?? driver.location?.lng);
+                const lastSeen = Number(driver.lastSeen || 0);
+                const isFresh = !lastSeen || Date.now() - lastSeen < 120000;
+                if (driver.isOnline !== true || !isFresh ||
+                    !Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+                if (Number.isFinite(passenger.latitude) && Number.isFinite(passenger.longitude)) {
+                    const dy = (lat - passenger.latitude) * 111;
+                    const dx = (lng - passenger.longitude) * 111 *
+                        Math.cos(passenger.latitude * Math.PI / 180);
+                    if (Math.hypot(dx, dy) > 25) return;
+                }
+
+                visible.add(child.key);
+                const heading = Number(driver.heading ?? driver.location?.heading ?? 0);
+                const existing = this.nearbyDriverMarkers.get(child.key);
+                if (existing) {
+                    AsiyeLiveCar.move(existing, [lng, lat], heading);
+                } else if (this.instance) {
+                    const car = AsiyeLiveCar.create(this.instance, [lng, lat], heading);
+                    car.getElement?.().classList.add('asiye-nearby-car');
+                    this.nearbyDriverMarkers.set(child.key, car);
+                }
+            });
+
+            for (const [id, car] of this.nearbyDriverMarkers) {
+                if (!visible.has(id)) {
+                    AsiyeLiveCar.stop(car);
+                    car.remove();
+                    this.nearbyDriverMarkers.delete(id);
+                }
+            }
+        });
+    },
+
+    stopNearbyDrivers() {
+        if (this.nearbyDriversRef && this.nearbyDriversListener) {
+            this.nearbyDriversRef.off('value', this.nearbyDriversListener);
+        }
+        this.nearbyDriversRef = null;
+        this.nearbyDriversListener = null;
+        for (const car of this.nearbyDriverMarkers.values()) {
+            AsiyeLiveCar.stop(car);
+            car.remove();
+        }
+        this.nearbyDriverMarkers.clear();
+    },
+
+    selectDriver() {
+        this.stopNearbyDrivers();
+    },
+
     showDriverLocation(latitude, longitude, heading = 0) {
         if (latitude == null || longitude == null || latitude === '' || longitude === '') return;
         const lat = Number(latitude);
@@ -136,6 +215,15 @@ ASIYE.map = {
             this.driverMarker = AsiyeLiveCar.create(this.instance, [lng, lat], heading);
         } else {
             AsiyeLiveCar.move(this.driverMarker, [lng, lat], heading);
+        }
+
+        /*
+         * During an active ride keep the passenger aware of both the
+         * moving car and the complete route. We throttle camera changes
+         * so Firebase GPS updates do not make the map feel jumpy.
+         */
+        if (this.tripOverviewActive) {
+            this.fitActiveTrip(false);
         }
     },
 
@@ -205,6 +293,72 @@ ASIYE.map = {
 
             this.userMarker.setLngLat([lng, lat]);
         }
+
+
+        this.updateRoadAccess(
+            lat,
+            lng
+        );
+
+
+        if (
+            this.followUser
+        ) {
+            this.instance.easeTo({
+                center: [
+                    lng,
+                    lat
+                ],
+                zoom:
+                    Math.max(
+                        15,
+                        Number(
+                            this.instance.getZoom?.() || 15
+                        )
+                    ),
+                pitch:
+                    0,
+                bearing:
+                    0,
+                duration:
+                    650,
+                essential:
+                    true
+            });
+        }
+    },
+
+
+    updateRoadAccess(
+        latitude,
+        longitude
+    ) {
+
+        if (
+            !window.AsiyeRoadGuidance ||
+            !this.instance
+        ) {
+            return;
+        }
+
+
+        if (!this.routeGeometry) {
+            AsiyeRoadGuidance.clear(
+                this.instance
+            );
+
+            return;
+        }
+
+
+        AsiyeRoadGuidance.update(
+            this.instance,
+            [
+                Number(longitude),
+                Number(latitude)
+            ],
+            this.routeGeometry
+        );
     },
 
 
@@ -213,6 +367,9 @@ ASIYE.map = {
        ======================================================== */
 
     centerUser(zoom = 15) {
+
+        this.tripOverviewActive = false;
+        this.followUser = true;
 
         const location = ASIYE.state.location;
 
@@ -321,6 +478,25 @@ ASIYE.map = {
         if (!this.instance || !geometry) {
 
             return;
+        }
+
+
+        this.routeGeometry =
+            geometry;
+
+
+        const location =
+            ASIYE.state?.location || {};
+
+
+        if (
+            Number.isFinite(location.latitude) &&
+            Number.isFinite(location.longitude)
+        ) {
+            this.updateRoadAccess(
+                location.latitude,
+                location.longitude
+            );
         }
 
 
@@ -435,6 +611,9 @@ ASIYE.map = {
 
     fitTrip() {
 
+        this.followUser = false;
+        this.tripOverviewActive = true;
+
         const pickup = ASIYE.state.location;
         const destination = ASIYE.state.destination;
 
@@ -474,6 +653,9 @@ ASIYE.map = {
 
 
     fitRouteGeometry(geometry) {
+
+        this.followUser = false;
+        this.tripOverviewActive = true;
 
         if (
             !this.instance ||
@@ -550,7 +732,128 @@ ASIYE.map = {
     },
 
 
+    /* ========================================================
+       ACTIVE TRIP OVERVIEW
+       ======================================================== */
+
+    fitActiveTrip(force = true) {
+
+        if (!this.instance) return;
+
+        const now = Date.now();
+
+        if (
+            !force &&
+            now - this.lastTripOverviewFitAt < 2500
+        ) {
+            return;
+        }
+
+        const bounds =
+            new mapboxgl.LngLatBounds();
+
+        let hasPoint = false;
+
+        const extend = (lng, lat) => {
+            const x = Number(lng);
+            const y = Number(lat);
+
+            if (
+                !Number.isFinite(x) ||
+                !Number.isFinite(y) ||
+                Math.abs(y) > 90 ||
+                Math.abs(x) > 180
+            ) {
+                return;
+            }
+
+            bounds.extend([x, y]);
+            hasPoint = true;
+        };
+
+        const geometry =
+            this.routeGeometry;
+
+        if (
+            geometry &&
+            Array.isArray(geometry.coordinates)
+        ) {
+            geometry.coordinates.forEach(
+                coord => {
+                    if (
+                        Array.isArray(coord) &&
+                        coord.length >= 2
+                    ) {
+                        extend(coord[0], coord[1]);
+                    }
+                }
+            );
+        }
+
+        const pickup =
+            ASIYE.state?.location || {};
+
+        const destination =
+            ASIYE.state?.destination || {};
+
+        extend(
+            pickup.longitude,
+            pickup.latitude
+        );
+
+        extend(
+            destination.longitude,
+            destination.latitude
+        );
+
+        if (this.driverLocation) {
+            extend(
+                this.driverLocation[1],
+                this.driverLocation[0]
+            );
+        }
+
+        if (!hasPoint || bounds.isEmpty()) return;
+
+        const sheet =
+            document.getElementById('sheetContent');
+
+        const bottomPadding =
+            Math.min(
+                Math.max(
+                    (sheet?.offsetHeight || 280) + 34,
+                    270
+                ),
+                Math.round(window.innerHeight * .58)
+            );
+
+        this.followUser = false;
+        this.tripOverviewActive = true;
+        this.lastTripOverviewFitAt = now;
+
+        this.instance.fitBounds(
+            bounds,
+            {
+                padding: {
+                    top: 105,
+                    right: 38,
+                    bottom: bottomPadding,
+                    left: 38
+                },
+                duration:
+                    force ? 850 : 550,
+                maxZoom: 15.25,
+                essential: true
+            }
+        );
+    },
+
+
     clearTrip() {
+
+        this.tripOverviewActive = false;
+        this.lastTripOverviewFitAt = 0;
+        this.followUser = true;
 
         if (this.destinationMarker) {
 
@@ -575,6 +878,16 @@ ASIYE.map = {
 
             this.instance.removeSource('asiye-route');
         }
+
+
+        this.routeGeometry =
+            null;
+
+
+        window.AsiyeRoadGuidance
+            ?.clear?.(
+                this.instance
+            );
     }
 
 };

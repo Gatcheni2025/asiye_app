@@ -716,6 +716,26 @@ ASIYE.ui = {
         this.updateRideSelection();
 
 
+        /*
+         * The ride sheet is now at its final height. Re-fit after rendering so
+         * the complete pickup → destination route stays inside the visible map
+         * instead of disappearing underneath the sheet.
+         */
+        requestAnimationFrame(
+            () => {
+                setTimeout(
+                    () => {
+                        ASIYE.map
+                            ?.fitActiveTrip?.(
+                                true
+                            );
+                    },
+                    60
+                );
+            }
+        );
+
+
         document
             .getElementById('rideSelectionBack')
             ?.addEventListener(
