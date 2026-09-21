@@ -55,15 +55,27 @@ android {
             // Keep the default Android debug signing configuration.
         }
         getByName("release") {
+            val releaseTaskRequested =
+                gradle.startParameter.taskNames.any {
+                    it.contains(
+                        "Release",
+                        ignoreCase = true
+                    )
+                }
+
             if (!hasReleaseKeystore) {
-                throw GradleException(
-                    "Release signing is not configured. " +
-                    "Create android/key.properties and provide the production keystore. " +
-                    "Refusing to build a debug-signed release APK."
-                )
+                if (releaseTaskRequested) {
+                    throw GradleException(
+                        "Release signing is not configured. " +
+                        "Create android/key.properties and provide the production keystore. " +
+                        "Refusing to build a release APK/AAB without the production key."
+                    )
+                }
+            } else {
+                signingConfig =
+                    signingConfigs.getByName("release")
             }
 
-            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }
