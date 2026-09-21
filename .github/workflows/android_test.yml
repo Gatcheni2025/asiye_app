@@ -1,5 +1,5 @@
 name: Android Production Release APK and AAB
-# Release 11.0.28+298
+# Release 11.0.29+299
 
 on:
   push:
@@ -66,19 +66,19 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep -F "version: 11.0.28+298" pubspec.yaml
+          grep -F "version: 11.0.29+299" pubspec.yaml
 
       - name: Analyze Flutter code
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build signed release APK
         run: |
-          flutter build apk --release --build-name 11.0.28 --build-number 298
+          flutter build apk --release --build-name 11.0.29 --build-number 298
           test -f build/app/outputs/flutter-apk/app-release.apk
 
       - name: Build signed release AAB
         run: |
-          flutter build appbundle --release --build-name 11.0.28 --build-number 298
+          flutter build appbundle --release --build-name 11.0.29 --build-number 298
           test -f build/app/outputs/bundle/release/app-release.aab
 
       - name: Verify APK signature and version
@@ -90,8 +90,8 @@ jobs:
           test -n "$AAPT"
 
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='298'"
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.28'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='299'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.29'"
 
       - name: Verify AAB signature
         run: jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
@@ -104,7 +104,7 @@ jobs:
       - name: Upload Android release files
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.28-build-298-android-release
+          name: asiye-11.0.29-build-299-android-release
           path: |
             build/app/outputs/flutter-apk/app-release.apk
             build/app/outputs/flutter-apk/app-release.apk.sha256
