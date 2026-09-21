@@ -15,6 +15,11 @@ val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 
+val releaseTaskRequested =
+    gradle.startParameter.taskNames.any { taskName ->
+        taskName.contains("Release", ignoreCase = true)
+    }
+
 if (hasReleaseKeystore) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
@@ -55,15 +60,16 @@ android {
             // Keep the default Android debug signing configuration.
         }
         getByName("release") {
-            if (!hasReleaseKeystore) {
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            } else if (releaseTaskRequested) {
                 throw GradleException(
                     "Release signing is not configured. " +
                     "Create android/key.properties and provide the production keystore. " +
-                    "Refusing to build a debug-signed release APK."
+                    "Refusing to build an unsigned or debug-signed release APK."
                 )
             }
 
-            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
         }
