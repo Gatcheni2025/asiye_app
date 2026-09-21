@@ -1,11 +1,14 @@
-name: Android Production Release APK and AAB
-# Release 11.0.27+297
+name: Android Testing APK
+# Release candidate 11.0.27+297
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release/11.0.27-android-test
 
 jobs:
-  build-android-release:
+  build-android-testing:
     runs-on: ubuntu-latest
 
     steps:
@@ -24,128 +27,40 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Configure production release signing
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          ANDROID_STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
-        run: |
-          missing=0
-
-          for name in ANDROID_KEYSTORE_BASE64 ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD ANDROID_STORE_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::Required GitHub secret $name is not configured."
-              missing=1
-            fi
-          done
-
-          if [ "$missing" -ne 0 ]; then
-            echo "::error::Android production signing is required for APK/AAB release builds."
-            exit 1
-          fi
-
-          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > android/app/asiye-release.jks
-
-          if [ ! -s android/app/asiye-release.jks ]; then
-            echo "::error::Decoded Android keystore is empty."
-            exit 1
-          fi
-
-          printf 'storeFile=asiye-release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
-            "$ANDROID_STORE_PASSWORD" \
-            "$ANDROID_KEY_ALIAS" \
-            "$ANDROID_KEY_PASSWORD" \
-            > android/key.properties
-
-          keytool -list \
-            -keystore android/app/asiye-release.jks \
-            -storepass "$ANDROID_STORE_PASSWORD" \
-            -alias "$ANDROID_KEY_ALIAS" \
-            >/dev/null
-
-          echo "Production Android signing configured."
-
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Verify release version
+      - name: Verify test version
         run: |
-          grep '^version: 11.0.27+297
+          grep '^version: 11.0.27+297$' pubspec.yaml
 
       - name: Analyze Flutter code
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
-
-      - name: Build signed release APK
         run: |
-          flutter build apk --release
-          test -f build/app/outputs/flutter-apk/app-release.apk
+          flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Build signed release AAB
+      - name: Build testing APK
         run: |
-          flutter build appbundle --release
-          test -f build/app/outputs/bundle/release/app-release.aab
+          flutter build apk --debug --build-name=11.0.27 --build-number=297
+          test -f build/app/outputs/flutter-apk/app-debug.apk
 
-      - name: Verify APK signature and version
+      - name: Verify APK package and version
         run: |
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-
-          test -n "$APKSIGNER"
           test -n "$AAPT"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "package: name='com.asiyeapp.asiye'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionCode='297'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionName='11.0.27'"
 
-          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='297'"
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.27'"
+      - name: Generate checksum
+        run: |
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk > build/app/outputs/flutter-apk/app-debug.apk.sha256
 
-      - name: Verify AAB signature
-        run: jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
-
-      - name: Upload Android release files
+      - name: Upload testing APK
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.27-build-297-android-release
+          name: asiye-11.0.27-build-297-testing-apk
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
-          if-no-files-found: error
-          retention-days: 30
- pubspec.yaml
-
-      - name: Analyze Flutter code
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
-
-      - name: Build signed release APK
-        run: |
-          flutter build apk --release
-          test -f build/app/outputs/flutter-apk/app-release.apk
-
-      - name: Build signed release AAB
-        run: |
-          flutter build appbundle --release
-          test -f build/app/outputs/bundle/release/app-release.aab
-
-      - name: Verify APK signature and version
-        run: |
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
-
-          test -n "$APKSIGNER"
-          test -n "$AAPT"
-
-          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionCode='297'"
-          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep "versionName='11.0.27'"
-
-      - name: Verify AAB signature
-        run: jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab
-
-      - name: Upload Android release files
-        uses: actions/upload-artifact@v4
-        with:
-          name: asiye-11.0.27-build-297-android-release
-          path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/app-debug.apk.sha256
           if-no-files-found: error
           retention-days: 30
