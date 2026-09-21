@@ -749,8 +749,7 @@ ASIYE_DRIVER.navigator = {
         return this.route.legs
             .flatMap(
                 leg =>
-                    leg.annotation
-                        ?.[name] ||
+                    leg.annotation?.[name] ||
                     []
             );
     },
