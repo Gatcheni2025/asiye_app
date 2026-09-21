@@ -4086,6 +4086,32 @@ and
         900;
 }
 /* Active destination navigation */
+.navigation-phase-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 2px 10px;
+}
+
+.navigation-phase-label span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #147b54;
+    font-size: 9px;
+    font-weight: 950;
+    letter-spacing: .7px;
+}
+
+.navigation-phase-label strong {
+    overflow: hidden;
+    color: #222;
+    font-size: 13px;
+    font-weight: 900;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .navigation-live-hud {
     overflow: hidden;
     border-radius: 23px;
