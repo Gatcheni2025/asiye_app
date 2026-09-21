@@ -333,6 +333,31 @@ window.AsiyePages = {
                 </div>
             `;
 
+            body.innerHTML += `
+                <div class="member-info">
+                    <h3 style="margin-top:0;">Privacy & data</h3>
+
+                    <p>
+                        Review how Asiye handles your personal information or
+                        request deletion of your account and associated data.
+                    </p>
+
+                    <a
+                        class="member-primary"
+                        href="https://asiye.cloud/privacy-policy/"
+                    >
+                        Privacy Policy
+                    </a>
+
+                    <a
+                        class="member-primary member-data-delete"
+                        href="https://asiye.cloud/delete/"
+                    >
+                        Delete my account
+                    </a>
+                </div>
+            `;
+
             if (driver) {
                 this.bindDriverFaceScan(
                     body
