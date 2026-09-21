@@ -375,12 +375,160 @@ window.AsiyePages = {
             body.innerHTML =
                 `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
                 note(
-                    'Wallet top-ups are temporarily unavailable in the app. Existing wallet balances and completed transactions remain visible.'
+                    'Choose an amount and Asiye will SMS the FNB banking details to the mobile number on your account. Use your phone number as the EFT reference.'
                 ) +
+                `
+                <form class="wallet-topup" data-wallet-topup>
+                    <label>Amount to add</label>
+
+                    <div class="wallet-amounts">
+                        <button type="button" data-amount="50">R50</button>
+                        <button type="button" data-amount="100">R100</button>
+                        <button type="button" data-amount="200">R200</button>
+                        <button type="button" data-amount="500">R500</button>
+                    </div>
+
+                    <div class="wallet-custom">
+                        <span>R</span>
+                        <input
+                            name="amount"
+                            type="number"
+                            inputmode="decimal"
+                            min="10"
+                            max="5000"
+                            step="0.01"
+                            placeholder="Enter amount"
+                            required
+                        >
+                    </div>
+
+                    <button class="member-primary" type="submit">
+                        Add funds with EFT
+                    </button>
+
+                    <div class="member-info" data-eft-result hidden></div>
+
+                    <p class="member-note">
+                        Your wallet is credited after Asiye matches your EFT on the bank statement using the payment reference.
+                    </p>
+                </form>` +
                 this.row(
                     'Currency',
                     'South African rand · ZAR'
                 );
+
+            const form =
+                body.querySelector(
+                    '[data-wallet-topup]'
+                );
+
+            const input =
+                form.querySelector(
+                    'input[name="amount"]'
+                );
+
+            const resultBox =
+                form.querySelector(
+                    '[data-eft-result]'
+                );
+
+            form.querySelectorAll(
+                '[data-amount]'
+            )
+                .forEach(
+                    button => {
+                        button.onclick =
+                            () => {
+                                input.value =
+                                    button.dataset.amount;
+
+                                form.querySelectorAll(
+                                    '[data-amount]'
+                                )
+                                    .forEach(
+                                        item =>
+                                            item.classList
+                                                .remove(
+                                                    'selected'
+                                                )
+                                    );
+
+                                button.classList
+                                    .add(
+                                        'selected'
+                                    );
+                            };
+                    }
+                );
+
+            form.onsubmit =
+                async event => {
+                    event.preventDefault();
+
+                    const submit =
+                        form.querySelector(
+                            '[type="submit"]'
+                        );
+
+                    submit.disabled =
+                        true;
+
+                    submit.textContent =
+                        'Sending banking details…';
+
+                    if (resultBox) {
+                        resultBox.hidden =
+                            true;
+                    }
+
+                    try {
+                        const payment =
+                            await ASIYE.wallet
+                                .startTopup(
+                                    Number(
+                                        input.value
+                                    )
+                                );
+
+                        if (resultBox) {
+                            resultBox.hidden =
+                                false;
+
+                            resultBox.innerHTML =
+                                `
+                                <strong>EFT details sent by SMS</strong>
+
+                                <p>
+                                    <b>Bank:</b> ${esc(payment.bank || 'FNB')}<br>
+                                    <b>Account:</b> ${esc(payment.accountNumber || '')}<br>
+                                    <b>Amount:</b> ${esc(this.money(payment.amount))}<br>
+                                    <b>Reference:</b> ${esc(payment.reference || '')}
+                                </p>
+
+                                <p class="member-note">
+                                    SMS sent to ${esc(payment.smsTo || 'your registered mobile number')}. Use the reference exactly as shown.
+                                </p>
+                                `;
+                        }
+
+                        app.ui?.toast?.(
+                            'FNB EFT details sent by SMS.'
+                        );
+
+                    } catch (error) {
+                        app.ui?.toast?.(
+                            error.message ||
+                            'Unable to send the EFT banking details.'
+                        );
+
+                    } finally {
+                        submit.disabled =
+                            false;
+
+                        submit.textContent =
+                            'Add funds with EFT';
+                    }
+                };
         } else if (page === 'vehicle') {
             if (!driver || !id) {
                 body.innerHTML =
