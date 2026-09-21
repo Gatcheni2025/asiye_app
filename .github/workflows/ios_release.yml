@@ -2,9 +2,6 @@ name: iOS TestFlight Release
 # Release 11.0.28+298: Twilio EFT, Asiye Work driver SMS, admin/privacy updates
 
 on:
-  push:
-    branches:
-      - feature/live-face-scan
   workflow_dispatch:
 
 jobs:
