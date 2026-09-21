@@ -867,8 +867,8 @@
       const value = String(status || "unknown").toLowerCase();
       let tone = "";
       if (["verified","approved","active","complete","completed","paid","successful","resolved","online"].includes(value)) tone = "green";
-      else if (["pending","pending_review","searching","pooling","driver_waiting","waiting_members","driver_busy"].includes(value)) tone = "amber";
-      else if (["rejected","cancelled_by_admin","cancelled_by_driver","cancelled_by_commuter","failed","suspended","closed"].includes(value)) tone = "red";
+      else if (["pending","pending_review","awaiting_payment","sending","searching","pooling","driver_waiting","waiting_members","driver_busy"].includes(value)) tone = "amber";
+      else if (["rejected","cancelled","cancelled_by_admin","cancelled_by_driver","cancelled_by_commuter","failed","instructions_failed","suspended","closed"].includes(value)) tone = "red";
       else if (["accepted","driver_on_way","arrived","in_transit","pool_ready","all_onboard","passenger_onboard"].includes(value)) tone = "blue";
       return '<span class="badge ' + tone + '">' + esc(value.replaceAll("_"," ")) + '</span>';
     }
@@ -1420,40 +1420,46 @@
     }
 
     function paymentStatus(item) {
-      return String(item.status || item.ozowStatus || "pending").toLowerCase();
+      return String(item.status || "pending").toLowerCase();
     }
 
     function renderPayments() {
       let list = filterSearch(byTime(state.data.walletPayments));
 
-      if (state.filter === "completed") list = list.filter(function(item){ return ["complete","successful"].includes(paymentStatus(item)); });
-      if (state.filter === "pending") list = list.filter(function(item){ return paymentStatus(item) === "pending"; });
-      if (state.filter === "failed") list = list.filter(function(item){ return ["failed","cancelled","rejected"].includes(paymentStatus(item)); });
+      if (state.filter === "completed") list = list.filter(function(item){ return paymentStatus(item) === "complete"; });
+      if (state.filter === "pending") list = list.filter(function(item){ return ["pending","awaiting_payment","sending"].includes(paymentStatus(item)); });
+      if (state.filter === "failed") list = list.filter(function(item){ return ["failed","instructions_failed","cancelled","rejected"].includes(paymentStatus(item)); });
 
       const rows = list.map(function(item) {
         const passenger = state.data.commuters.find(function(user) {
-          return user.key === item.uid || user.authUid === item.uid;
+          return user.key === item.passengerId || user.key === item.uid || user.authUid === item.uid;
         });
+
+        const reference =
+          item.reference ||
+          item.phone ||
+          shortId(item.key);
+
         return '<tr>' +
-          '<td><div class="primary-text">' + esc(passenger ? passengerName(passenger) : shortId(item.uid)) + '</div><div class="secondary-text mono">' + esc(shortId(item.key)) + '</div></td>' +
+          '<td><div class="primary-text">' + esc(passenger ? passengerName(passenger) : shortId(item.passengerId || item.uid)) + '</div><div class="secondary-text">Ref: ' + esc(reference) + '</div></td>' +
           '<td>' + money(item.amount) + '</td>' +
           '<td>' + badge(paymentStatus(item)) + '</td>' +
-          '<td><div class="primary-text">' + esc(item.provider || (item.pfPaymentId ? "payfast" : "ozow")) + '</div><div class="secondary-text">' + esc(item.environment || "") + '</div></td>' +
-          '<td>' + esc(when(item.completedAt || item.createdAt || item.lastWebhookAt)) + '</td>' +
+          '<td><div class="primary-text">' + esc(item.provider === "manual_eft" ? "FNB manual EFT" : (item.provider || "Legacy payment")) + '</div><div class="secondary-text">' + esc(item.smsStatus ? "SMS " + item.smsStatus : "") + '</div></td>' +
+          '<td>' + esc(when(item.completedAt || item.reconciledAt || item.createdAt)) + '</td>' +
           '<td><button class="btn dark" onclick="openPayment(\'' + esc(item.key) + '\')">Review</button></td>' +
         '</tr>';
       });
 
       contentEl.innerHTML =
-        pageHeader("Wallet payments","Monitor bank top-ups. Successful wallet credit remains controlled by verified payment webhooks.") +
-        '<div class="notice"><strong>Payment safety:</strong> this console does not manually mark a bank transaction successful. If a customer needs a correction, use an audited passenger wallet adjustment instead.</div>' +
+        pageHeader("Wallet payments","Match manual FNB EFT deposits to the passenger phone-number reference, then credit the wallet from Admin.") +
+        '<div class="notice"><strong>Manual reconciliation:</strong> Twilio sends the banking details but does not verify the bank deposit. Check the FNB statement for the exact phone-number reference and amount before selecting “Mark EFT paid”.</div>' +
         '<div class="toolbar"><div class="filters">' +
           '<button class="filter ' + (state.filter === "all" ? "active" : "") + '" onclick="setFilter(\'all\')">All</button>' +
           '<button class="filter ' + (state.filter === "completed" ? "active" : "") + '" onclick="setFilter(\'completed\')">Completed</button>' +
-          '<button class="filter ' + (state.filter === "pending" ? "active" : "") + '" onclick="setFilter(\'pending\')">Pending</button>' +
-          '<button class="filter ' + (state.filter === "failed" ? "active" : "") + '" onclick="setFilter(\'failed\')">Failed</button>' +
+          '<button class="filter ' + (state.filter === "pending" ? "active" : "") + '" onclick="setFilter(\'pending\')">Awaiting EFT</button>' +
+          '<button class="filter ' + (state.filter === "failed" ? "active" : "") + '" onclick="setFilter(\'failed\')">Failed / cancelled</button>' +
         '</div><div class="hero-meta">' + esc(list.length) + ' wallet payments</div></div>' +
-        table(["Passenger / reference","Amount","Status","Provider","Date","Action"],rows,"No wallet payments");
+        table(["Passenger / reference","Amount","Status","Method","Date","Action"],rows,"No wallet payments");
     }
 
     function allPayouts() {
@@ -2020,29 +2026,82 @@
       if (!item) return;
 
       const passenger = state.data.commuters.find(function(user) {
-        return user.key === item.uid || user.authUid === item.uid;
+        return user.key === item.passengerId || user.key === item.uid || user.authUid === item.uid;
       });
+
+      const manualEft = item.provider === "manual_eft";
+      const awaiting = manualEft && paymentStatus(item) === "awaiting_payment";
 
       const body =
         '<div class="modal-section"><h3>Payment</h3><div class="detail-grid">' +
-          detail("Passenger",passenger ? passengerName(passenger) : shortId(item.uid)) +
+          detail("Passenger",passenger ? passengerName(passenger) : shortId(item.passengerId || item.uid)) +
           detail("Amount",money(item.amount)) +
           detail("Status",paymentStatus(item)) +
-          detail("Provider",item.provider || (item.pfPaymentId ? "payfast" : "ozow")) +
-          detail("Environment",item.environment || "—") +
+          detail("Method",manualEft ? "FNB manual EFT" : (item.provider || "Legacy payment")) +
+          detail("Bank",item.bank || "—") +
+          detail("Bank account",item.accountNumber || "—") +
+          detail("EFT reference",item.reference || "—") +
+          detail("SMS destination",item.phone || "—") +
+          detail("SMS status",item.smsStatus || "—") +
           detail("Created",when(item.createdAt)) +
-          detail("Completed",when(item.completedAt)) +
-          detail("Provider ID",item.ozowPaymentId || item.pfPaymentId || item.ozowTransactionId || "—") +
+          detail("Completed",when(item.completedAt || item.reconciledAt)) +
+          detail("Bank trace",item.bankTrace || "—") +
         '</div></div>' +
-        '<div class="notice"><strong>Webhook-controlled:</strong> Admin cannot manually convert this payment to successful. This protects passenger wallet credit from unverified bank-payment changes.</div>' +
-        '<div class="modal-section"><div class="fields">' + textArea("paymentNote","Admin note",item.adminNote || "","full") + '</div></div>';
+        (manualEft
+          ? '<div class="notice"><strong>Before crediting:</strong> confirm the FNB bank statement shows the same amount and the exact reference <b>' + esc(item.reference || "") + '</b>. Twilio delivery is not proof of payment.</div>'
+          : '<div class="notice">This is a legacy payment record retained for history.</div>') +
+        '<div class="modal-section"><div class="fields">' +
+          (awaiting ? field("bankTrace","Bank trace / statement note",item.bankTrace || "") : "") +
+          textArea("paymentNote","Admin note",item.adminNote || "","full") +
+        '</div></div>';
 
       openModal(
         "Wallet payment",
-        shortId(item.key),
+        item.reference || shortId(item.key),
         body,
-        '<button class="btn" onclick="closeModal()">Close</button><button class="btn dark" onclick="savePaymentNote(\'' + esc(key) + '\')">Save note</button>'
+        '<button class="btn" onclick="closeModal()">Close</button>' +
+        (awaiting ? '<button class="btn red" onclick="cancelEftPayment(\'' + esc(key) + '\')">Cancel request</button><button class="btn green" onclick="reconcileEftPayment(\'' + esc(key) + '\')">Mark EFT paid & credit wallet</button>' : '') +
+        '<button class="btn dark" onclick="savePaymentNote(\'' + esc(key) + '\')">Save note</button>'
       );
+    }
+
+    async function reconcileEftPayment(key) {
+      const item = state.data.walletPayments.find(function(record){ return record.key === key; });
+      if (!item) return;
+
+      const trace = document.getElementById("bankTrace")?.value?.trim() || "";
+      const note = document.getElementById("paymentNote")?.value?.trim() || "";
+
+      if (!confirm(
+        "Confirm FNB received " +
+        money(item.amount) +
+        " with reference " +
+        (item.reference || "") +
+        "? This will credit the passenger wallet."
+      )) return;
+
+      const result = await manage({
+        action:"reconcileEftTopup",
+        id:key,
+        bankTrace:trace,
+        note:note
+      },"EFT reconciled and wallet credited.");
+
+      toast("Passenger wallet balance: " + money(result?.balance), "success");
+      closeModal();
+    }
+
+    async function cancelEftPayment(key) {
+      const note = document.getElementById("paymentNote")?.value?.trim() || "";
+      if (!confirm("Cancel this pending EFT instruction request?")) return;
+
+      await manage({
+        action:"cancelEftTopup",
+        id:key,
+        note:note
+      },"EFT request cancelled.");
+
+      closeModal();
     }
 
     async function savePaymentNote(key) {
@@ -2134,6 +2193,8 @@
     window.openSupport = openSupport;
     window.saveSupport = saveSupport;
     window.openPayment = openPayment;
+    window.reconcileEftPayment = reconcileEftPayment;
+    window.cancelEftPayment = cancelEftPayment;
     window.savePaymentNote = savePaymentNote;
     window.openPayout = openPayout;
     window.savePayout = savePayout;
