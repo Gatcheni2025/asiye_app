@@ -1310,13 +1310,9 @@ exports.notifyDriversWhenClubReady = functions.database
 
 
 // =================================================================
-// --- OZOW WALLET INTEGRATION DISABLED ---
+// --- LEGACY HOSTED WALLET GATEWAY REMOVED ---
 // =================================================================
-// Ozow is not currently used by Asiye.
-// The previous staging integration and its Secret Manager bindings were
-// intentionally removed so unrelated Firebase Functions deployments do not
-// request OZOW_* secrets. Reintroduce the integration only when Ozow is
-// deliberately enabled again.
+// Wallet funding now uses Twilio SMS instructions for a manual FNB EFT.
 
 // =================================================================
 // --- ASIYE ADMIN CONTROL PLANE ---
