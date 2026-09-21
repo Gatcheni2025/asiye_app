@@ -631,6 +631,20 @@ ASIYE_DRIVER.map = {
 
                 `&steps=true` +
 
+                `&voice_instructions=true` +
+
+                `&banner_instructions=true` +
+
+                `&voice_units=metric` +
+
+                `&language=en` +
+
+                `&roundabout_exits=true` +
+
+                `&annotations=distance%2Cduration%2Cspeed%2Ccongestion%2Ccongestion_numeric%2Cmaxspeed%2Cclosure` +
+
+                `&notifications=all` +
+
                 `&alternatives=false` +
 
                 `&access_token=${encodeURIComponent(token)}`;
@@ -728,7 +742,10 @@ ASIYE_DRIVER.map = {
                     ),
 
                 geometry:
-                    route.geometry
+                    route.geometry,
+
+                rawRoute:
+                    route
             };
 
 
