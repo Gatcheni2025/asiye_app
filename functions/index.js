@@ -120,8 +120,7 @@ exports.exchangeNativeAuthSession =
         const decoded =
           await admin.auth()
             .verifyIdToken(
-              match[1],
-              true
+              match[1]
             );
 
         const customToken =
@@ -143,14 +142,24 @@ exports.exchangeNativeAuthSession =
       } catch (error) {
         console.error(
           "Native auth session exchange failed",
-          error
+          {
+            code:
+              error?.code ||
+              "unknown",
+            message:
+              error?.message ||
+              String(error)
+          }
         );
 
         return response
           .status(401)
           .json({
             error:
-              "Unable to verify the native Firebase session."
+              "Unable to verify the native Firebase session.",
+            code:
+              error?.code ||
+              "native-session-verification-failed"
           });
       }
     }
