@@ -11,6 +11,153 @@ if (admin.apps.length === 0) {
 }
 
 // =================================================================
+// --- NATIVE FIREBASE AUTH -> WEBVIEW SESSION BRIDGE ---
+// =================================================================
+// Flutter completes provider authentication with the native Firebase SDK.
+// The WebView then presents the resulting Firebase ID token here. We verify
+// that token server-side and mint a short-lived custom token for the SAME UID
+// so the Firebase JS SDK can establish the matching authenticated session.
+function nativeAuthCors(request, response) {
+  const origin =
+    request.get("origin") || "";
+
+  const allowedOrigins =
+    new Set([
+      "https://asiye.cloud",
+      "https://www.asiye.cloud",
+      "https://app.asiye.cloud",
+      "https://appassets.androidplatform.net"
+    ]);
+
+  if (
+    allowedOrigins.has(origin) ||
+    origin.startsWith(
+      "https://appassets."
+    ) ||
+    !origin ||
+    origin === "null"
+  ) {
+    response.set(
+      "Access-Control-Allow-Origin",
+      origin && origin !== "null"
+        ? origin
+        : "*"
+    );
+  }
+
+  response.set(
+    "Vary",
+    "Origin"
+  );
+
+  response.set(
+    "Access-Control-Allow-Headers",
+    "Authorization, Content-Type"
+  );
+
+  response.set(
+    "Access-Control-Allow-Methods",
+    "POST, OPTIONS"
+  );
+}
+
+exports.exchangeNativeAuthSession =
+  onRequest(
+    {
+      region:
+        "us-central1"
+    },
+    async (
+      request,
+      response
+    ) => {
+      nativeAuthCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) || ""
+          )
+            .match(
+              /^Bearer (.+)$/
+            );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Native Firebase authentication is required."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1],
+              true
+            );
+
+        const customToken =
+          await admin.auth()
+            .createCustomToken(
+              decoded.uid
+            );
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            uid:
+              decoded.uid,
+            customToken
+          });
+
+      } catch (error) {
+        console.error(
+          "Native auth session exchange failed",
+          error
+        );
+
+        return response
+          .status(401)
+          .json({
+            error:
+              "Unable to verify the native Firebase session."
+          });
+      }
+    }
+  );
+
+
+// =================================================================
 // --- MANUAL EFT WALLET TOP-UP VIA TWILIO SMS ---
 // =================================================================
 // Twilio sends the user's banking instructions. It does not confirm that an
