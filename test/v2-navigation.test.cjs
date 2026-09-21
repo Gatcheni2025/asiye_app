@@ -78,3 +78,69 @@ test('route failures show a retry state without a fabricated ETA', async () => {
     assert.equal(elements.navInstruction.textContent, 'Route unavailable. Tap retry.');
     assert.equal(elements.navEta.textContent, '—');
 });
+
+
+test('traffic-aware navigation shows current speed and posted speed limit', () => {
+    const { nav, elements, location } = setup();
+    nav.target = [.002, 0];
+    nav.route = {
+        geometry: { coordinates: [[0, 0], [.001, 0], [.002, 0]] },
+        legs: [{
+            annotation: {
+                maxspeed: [
+                    { speed: 60, unit: 'km/h' },
+                    { speed: 60, unit: 'km/h' }
+                ],
+                congestion_numeric: [85, 20]
+            },
+            incidents: []
+        }]
+    };
+    nav.stepIndex = 0;
+    nav.steps = [
+        {
+            geometry: { coordinates: [[0, 0], [.001, 0]] },
+            duration: 60,
+            distance: 111
+        },
+        {
+            geometry: { coordinates: [[.001, 0], [.002, 0]] },
+            duration: 60,
+            distance: 111,
+            maneuver: { instruction: 'Continue straight', modifier: 'straight' }
+        }
+    ];
+    location.longitude = .0002;
+    location.speed = 20;
+    nav.update(location);
+    assert.equal(elements.navCurrentSpeed.textContent, '72');
+    assert.equal(elements.navSpeedLimit.textContent, '60');
+    assert.equal(elements.navTrafficAlert.hidden, false);
+    assert.equal(elements.navTrafficAlertText.textContent, 'Heavy traffic ahead');
+});
+
+test('directions request asks Mapbox for traffic, speed-limit and voice guidance data', async () => {
+    const { nav, context } = setup();
+    let requestedUrl = '';
+    context.fetch = async url => {
+        requestedUrl = url;
+        return {
+            ok: true,
+            json: async () => ({
+                routes: [{
+                    distance: 100,
+                    duration: 60,
+                    geometry: { coordinates: [[0, 0], [1, 2]] },
+                    legs: [{ steps: [{ geometry: { coordinates: [[0, 0], [1, 2]] }, distance: 100, duration: 60 }] }]
+                }]
+            })
+        };
+    };
+    nav.target = [1, 2];
+    await nav.fetchRoute();
+    assert.match(requestedUrl, /driving-traffic/);
+    assert.match(requestedUrl, /voice_instructions=true/);
+    assert.match(requestedUrl, /banner_instructions=true/);
+    assert.match(requestedUrl, /maxspeed/);
+    assert.match(requestedUrl, /congestion_numeric/);
+});
