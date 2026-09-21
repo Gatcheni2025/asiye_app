@@ -1959,6 +1959,41 @@ window.ASIYE_PASSENGER_LOGIN = {
         }
 
 
+        const diagnosticCodes = [
+            'auth/app-not-authorized',
+            'auth/invalid-app-credential',
+            'auth/captcha-check-failed',
+            'auth/missing-client-identifier',
+            'auth/operation-not-allowed',
+            'auth/native-session-failed',
+            'auth/native-phone-auth-failed',
+            'auth/session-handoff-failed'
+        ];
+
+        if (
+            diagnosticCodes.includes(
+                error?.code
+            ) &&
+            error?.code &&
+            !message.includes(
+                error.code
+            )
+        ) {
+            message +=
+                ` [${error.code}]`;
+
+            if (
+                error?.message &&
+                !message.includes(
+                    error.message
+                )
+            ) {
+                message +=
+                    ` ${error.message}`;
+            }
+        }
+
+
         const target =
             document.getElementById(
 
