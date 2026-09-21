@@ -2785,19 +2785,71 @@ ASIYE_DRIVER.ui = {
 
         container.innerHTML = `
 
-            <section class="turn-guidance">
-                <div id="navArrow" class="turn-guidance-arrow">↑</div>
-                <div><strong id="navTurnDistance">Trip underway</strong>
-                    <h2 id="navInstruction">Finding your route…</h2></div>
-            </section>
+            <div class="navigation-live-hud">
+                <section class="turn-guidance">
+                    <div id="navArrow" class="turn-guidance-arrow">↑</div>
+                    <div class="turn-guidance-copy">
+                        <strong id="navTurnDistance">Trip underway</strong>
+                        <h2 id="navInstruction">Finding your route…</h2>
+                        <p id="navRoadName" class="nav-road-name"></p>
+                    </div>
+                </section>
+
+                <div class="navigation-driving-status">
+                    <div id="navCurrentSpeedPanel" class="nav-speed-current">
+                        <small>SPEED</small>
+                        <strong id="navCurrentSpeed">0</strong>
+                        <span>km/h</span>
+                    </div>
+
+                    <div class="nav-speed-limit-wrap">
+                        <small>LIMIT</small>
+                        <div class="nav-speed-limit-sign">
+                            <strong id="navSpeedLimit">—</strong>
+                        </div>
+                    </div>
+
+                    <button
+                        id="navVoiceToggle"
+                        class="nav-voice-toggle"
+                        type="button"
+                        aria-pressed="true"
+                    >
+                        <i class="fas fa-volume-high"></i>
+                        <span id="navVoiceLabel">Voice on</span>
+                    </button>
+                </div>
+
+                <div
+                    id="navTrafficAlert"
+                    class="navigation-traffic-alert"
+                    hidden
+                >
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <span id="navTrafficAlertText">Traffic alert</span>
+                </div>
+            </div>
+
             <div class="navigation-summary">
-                <strong id="navEta">—</strong><span id="navDistance">—</span>
+                <strong id="navEta">—</strong>
+                <span id="navDistance">—</span>
                 <span>Arrival <b id="navArrival">—</b></span>
             </div>
-            <p class="navigation-destination">${this.escape(request.destinationName || request.destination || 'Destination')}</p>
+
+            <p class="navigation-destination">
+                <i class="fas fa-location-dot"></i>
+                ${this.escape(request.destinationName || request.destination || 'Destination')}
+            </p>
+
             <div class="navigation-controls">
-                <button id="navFollow" class="driver-btn">Follow car</button>
-                <button id="navRetry" class="driver-btn">Retry route</button>
+                <button id="navFollow" class="driver-btn">
+                    <i class="fas fa-location-arrow"></i>
+                    Follow car
+                </button>
+                <button id="navRetry" class="driver-btn">
+                    <i class="fas fa-rotate-right"></i>
+                    Retry route
+                </button>
             </div>
             <div
                 class="
