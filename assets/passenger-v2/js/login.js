@@ -2236,9 +2236,15 @@ window.onNativeFirebaseAuthSuccess = async function (payload) {
             !response.ok ||
             !session.customToken
         ) {
+            const detail =
+                session.code
+                    ? ` [${session.code}]`
+                    : '';
+
             throw new Error(
-                session.error ||
-                'Unable to create the Asiye Firebase session.'
+                (session.error ||
+                'Unable to create the Asiye Firebase session.') +
+                detail
             );
         }
 
