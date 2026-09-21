@@ -1,10 +1,10 @@
 name: iOS TestFlight Release
-# Release 11.0.24+294: native live face scan and profile visibility
+# Release 11.0.27+297: Twilio EFT, Asiye Work driver SMS, admin/privacy updates
 
 on:
   push:
     branches:
-      - fix/native-authentication
+      - feature/live-face-scan
   workflow_dispatch:
 
 jobs:
@@ -100,8 +100,7 @@ jobs:
         run: pod install --repo-update
 
       - name: Verify release version
-        run: |
-          grep -F "version: 11.0.24+294" pubspec.yaml
+        run: grep -F "version: 11.0.27+297" pubspec.yaml
 
       - name: Build, verify and upload to TestFlight
         working-directory: ./ios
@@ -133,7 +132,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.24-ios
+          name: asiye-11.0.27-ios-testflight
           path: |
             ios/build/ipa/*.ipa
             ios/*.ipa

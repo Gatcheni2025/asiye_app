@@ -1,0 +1,64 @@
+name: Android Testing APK
+# Test release 11.0.27+297
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/live-face-scan
+
+jobs:
+  build-testing-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout app
+        uses: actions/checkout@v5
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify test version
+        run: grep '^version: 11.0.27+297$' pubspec.yaml
+
+      - name: Analyze Flutter code
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Build testing APK
+        run: |
+          flutter build apk --debug --build-name 11.0.27 --build-number 297
+          test -f build/app/outputs/flutter-apk/app-debug.apk
+
+      - name: Verify APK metadata
+        run: |
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "package: name='com.asiyeapp.asiye'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionCode='297'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-debug.apk | grep "versionName='11.0.27'"
+
+      - name: Generate SHA-256
+        run: |
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee build/app/outputs/flutter-apk/app-debug.apk.sha256
+
+      - name: Upload testing APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: asiye-11.0.27-build-297-testing-apk
+          path: |
+            build/app/outputs/flutter-apk/app-debug.apk
+            build/app/outputs/flutter-apk/app-debug.apk.sha256
+          if-no-files-found: error
+          retention-days: 30
