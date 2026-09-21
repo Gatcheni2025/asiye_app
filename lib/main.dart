@@ -14,13 +14,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:system_contact_picker/system_contact_picker.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-import 'package:crypto/crypto.dart';
 
 import 'face_scan_screen.dart';
 
@@ -184,6 +182,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   StreamSubscription<RemoteMessage>? _messageSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
   int? _phoneResendToken;
+  String? _phoneVerificationId;
   int? _lastPromptedReleaseBuild;
   String? _lastPromptedReleaseVersion;
 
@@ -1268,6 +1267,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               forceResend: data['forceResend'] == true,
             );
           }
+          else if (action == 'verifyPhoneAuthCode') {
+            await _verifyPhoneAuthCode(
+              data['code']?.toString() ?? '',
+            );
+          }
           else if (action == 'appReleaseConfig' && data['config'] is Map) {
             await _handleAppReleaseConfig(
               Map<String, dynamic>.from(data['config'] as Map),
@@ -1338,6 +1342,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     await _googleSignIn.signOut().catchError((_) => null);
+
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (error) {
+      debugPrint('Firebase sign-out failed: $error');
+    }
+
+    _phoneVerificationId = null;
+    _phoneResendToken = null;
 
     // Explicitly wipe the JS memory before redirect
     _controller?.runJavaScript("localStorage.clear(); sessionStorage.clear();");
@@ -1418,6 +1431,48 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     );
   }
 
+  Future<void> _sendNativeFirebaseSessionToWeb(
+    UserCredential credential,
+    String provider,
+  ) async {
+    final user = credential.user;
+
+    if (user == null) {
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': provider,
+        'code': 'missing-user',
+        'message': 'Firebase did not return an authenticated user.',
+      });
+      return;
+    }
+
+    try {
+      final idToken = await user.getIdToken(true);
+
+      if (idToken == null || idToken.isEmpty) {
+        throw StateError('Firebase did not return an ID token.');
+      }
+
+      _callWeb('onNativeFirebaseAuthSuccess', {
+        'provider': provider,
+        'firebaseIdToken': idToken,
+        'uid': user.uid,
+        'email': user.email ?? '',
+        'phoneNumber': user.phoneNumber ?? '',
+        'displayName': user.displayName ?? '',
+        'photoUrl': user.photoURL ?? '',
+      });
+    } catch (error) {
+      debugPrint('Unable to create native Firebase session handoff: $error');
+
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': provider,
+        'code': 'session-handoff-failed',
+        'message': error.toString(),
+      });
+    }
+  }
+
   Future<void> _startPhoneVerification(
     String phoneNumber, {
     bool forceResend = false,
@@ -1442,6 +1497,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       final maskedPhone = phoneNumber.length > 5
           ? '${phoneNumber.substring(0, 3)}*****${phoneNumber.substring(phoneNumber.length - 2)}'
           : '***';
+
       debugPrint(
         'Starting phone verification for $maskedPhone (forceResend: $forceResend)',
       );
@@ -1451,30 +1507,59 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         timeout: const Duration(seconds: 60),
         forceResendingToken:
             forceResend ? _phoneResendToken : null,
-        verificationCompleted: (PhoneAuthCredential credential) {
-          final code = credential.smsCode;
-          if (code != null && code.isNotEmpty) {
-            _callWeb('onNativePhoneAutoVerified', {'code': code});
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          try {
+            final result =
+                await FirebaseAuth.instance.signInWithCredential(credential);
+
+            _phoneVerificationId = null;
+
+            await _sendNativeFirebaseSessionToWeb(
+              result,
+              'phone',
+            );
+          } on FirebaseAuthException catch (error) {
+            debugPrint(
+              'Automatic phone verification failed [${error.code}]: ${error.message}',
+            );
+
+            _callWeb('onNativeFirebaseAuthError', {
+              'provider': 'phone',
+              'code': error.code,
+              'message': error.message ?? 'Phone verification failed.',
+            });
+          } catch (error) {
+            _callWeb('onNativeFirebaseAuthError', {
+              'provider': 'phone',
+              'code': 'phone-auto-verification-failed',
+              'message': error.toString(),
+            });
           }
         },
         verificationFailed: (FirebaseAuthException error) {
           debugPrint(
             'Phone verification failed [${error.code}]: ${error.message}',
           );
+
           _callWeb('onNativePhoneAuthError', {
             'code': error.code,
             'message': error.message ?? 'Phone verification failed.',
           });
         },
         codeSent: (String verificationId, int? resendToken) {
+          _phoneVerificationId = verificationId;
           _phoneResendToken = resendToken;
+
           debugPrint('Phone verification code sent successfully.');
+
           _callWeb('onNativePhoneCodeSent', {
             'verificationId': verificationId,
             'resendToken': resendToken,
           });
         },
         codeAutoRetrievalTimeout: (String verificationId) {
+          _phoneVerificationId = verificationId;
+
           _callWeb('onNativePhoneAutoRetrievalTimeout', {
             'verificationId': verificationId,
           });
@@ -1482,6 +1567,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       );
     } catch (error) {
       debugPrint('Native phone auth exception: $error');
+
       _callWeb('onNativePhoneAuthError', {
         'code': 'native-phone-auth-failed',
         'message': error.toString(),
@@ -1489,65 +1575,215 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
-  String _generateNonce([int length = 32]) {
-    const chars =
-        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
-    final random = Random.secure();
-    return List.generate(length, (_) => chars[random.nextInt(chars.length)]).join();
+  Future<void> _verifyPhoneAuthCode(
+    String smsCode,
+  ) async {
+    final verificationId =
+        _phoneVerificationId;
+
+    if (
+      verificationId == null ||
+      verificationId.isEmpty
+    ) {
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'phone',
+        'code': 'missing-verification-id',
+        'message': 'Your verification session expired. Please request a new code.',
+      });
+      return;
+    }
+
+    final code =
+        smsCode.replaceAll(RegExp(r'\D'), '');
+
+    if (code.length != 6) {
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'phone',
+        'code': 'invalid-verification-code',
+        'message': 'Enter the 6-digit verification code.',
+      });
+      return;
+    }
+
+    try {
+      final credential =
+          PhoneAuthProvider.credential(
+            verificationId:
+                verificationId,
+            smsCode:
+                code,
+          );
+
+      final result =
+          await FirebaseAuth.instance
+              .signInWithCredential(
+                credential
+              );
+
+      _phoneVerificationId =
+          null;
+
+      await _sendNativeFirebaseSessionToWeb(
+        result,
+        'phone',
+      );
+
+    } on FirebaseAuthException catch (error) {
+      debugPrint(
+        'Phone code verification failed [${error.code}]: ${error.message}',
+      );
+
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'phone',
+        'code': error.code,
+        'message': error.message ?? 'Unable to verify the SMS code.',
+      });
+    } catch (error) {
+      _callWeb('onNativeFirebaseAuthError', {
+        'provider': 'phone',
+        'code': 'phone-code-verification-failed',
+        'message': error.toString(),
+      });
+    }
   }
 
   Future<void> _signInWithGoogle() async {
     try {
-      await _googleSignIn.signOut().catchError((_) => null);
-      final GoogleSignInAccount? account = await _googleSignIn.authenticate();
+      await _googleSignIn
+          .signOut()
+          .catchError(
+            (_) => null
+          );
+
+      try {
+        await FirebaseAuth.instance
+            .signOut();
+      } catch (_) {}
+
+      final GoogleSignInAccount? account =
+          await _googleSignIn
+              .authenticate();
 
       if (account == null) {
-        if (mounted) setState(() => _isLoading = false);
-        _callWeb('onGoogleNativeLoginError', 'Google sign-in was cancelled.');
+        _callWeb(
+          'onNativeFirebaseAuthError',
+          {
+            'provider': 'google',
+            'code': 'cancelled',
+            'message': 'Google sign-in was cancelled.',
+          },
+        );
         return;
       }
 
-      final GoogleSignInAuthentication auth = account.authentication;
+      final GoogleSignInAuthentication auth =
+          account.authentication;
 
-      final Map<String, dynamic> userData = {
-        "email": account.email,
-        "displayName": account.displayName ?? "",
-        "idToken": auth.idToken ?? "",
-        "accessToken": "",
-        "photoUrl": account.photoUrl ?? "",
-      };
+      if (
+        auth.idToken == null ||
+        auth.idToken!.isEmpty
+      ) {
+        throw StateError(
+          'Google did not return an ID token.'
+        );
+      }
 
-      _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginSuccess === 'function') { window.onGoogleNativeLoginSuccess(${jsonEncode(userData)}); }");
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      _callWeb('onGoogleNativeLoginError', e.toString());
-      return;
+      final firebaseCredential =
+          GoogleAuthProvider
+              .credential(
+                idToken:
+                    auth.idToken,
+              );
+
+      final result =
+          await FirebaseAuth.instance
+              .signInWithCredential(
+                firebaseCredential
+              );
+
+      await _sendNativeFirebaseSessionToWeb(
+        result,
+        'google',
+      );
+
+    } on FirebaseAuthException catch (error) {
+      debugPrint(
+        'Google Firebase authentication failed [${error.code}]: ${error.message}',
+      );
+
+      _callWeb(
+        'onNativeFirebaseAuthError',
+        {
+          'provider': 'google',
+          'code': error.code,
+          'message': error.message ?? 'Google authentication failed.',
+        },
+      );
+
+    } catch (error) {
+      debugPrint(
+        'Google authentication failed: $error'
+      );
+
+      _callWeb(
+        'onNativeFirebaseAuthError',
+        {
+          'provider': 'google',
+          'code': 'native-google-failed',
+          'message': error.toString(),
+        },
+      );
     }
   }
 
   Future<void> _signInWithApple() async {
     try {
-      final rawNonce = _generateNonce();
-      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
-      final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
-        nonce: hashedNonce,
+      try {
+        await FirebaseAuth.instance
+            .signOut();
+      } catch (_) {}
+
+      final appleProvider =
+          AppleAuthProvider();
+
+      final result =
+          await FirebaseAuth.instance
+              .signInWithProvider(
+                appleProvider
+              );
+
+      await _sendNativeFirebaseSessionToWeb(
+        result,
+        'apple',
       );
 
-      final Map<String, dynamic> userData = {
-        "email": credential.email ?? "",
-        "displayName": "${credential.givenName ?? ""} ${credential.familyName ?? ""}".trim(),
-        "identityToken": credential.identityToken ?? "",
-        "userIdentifier": credential.userIdentifier ?? "",
-        "authorizationCode": credential.authorizationCode ?? "",
-        "rawNonce": rawNonce,
-      };
+    } on FirebaseAuthException catch (error) {
+      debugPrint(
+        'Apple Firebase authentication failed [${error.code}]: ${error.message}',
+      );
 
-      _controller?.runJavaScript("if(typeof window.onAppleNativeLoginSuccess === 'function') { window.onAppleNativeLoginSuccess(${jsonEncode(userData)}); }");
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      final String errorMsg = e.toString().contains("canceled") ? "Cancelled" : e.toString();
-      _controller?.runJavaScript("if(typeof window.onAppleNativeLoginError === 'function') { window.onAppleNativeLoginError('${errorMsg.replaceAll("'", "\\'")}'); }");
+      _callWeb(
+        'onNativeFirebaseAuthError',
+        {
+          'provider': 'apple',
+          'code': error.code,
+          'message': error.message ?? 'Apple authentication failed.',
+        },
+      );
+
+    } catch (error) {
+      debugPrint(
+        'Apple authentication failed: $error'
+      );
+
+      _callWeb(
+        'onNativeFirebaseAuthError',
+        {
+          'provider': 'apple',
+          'code': 'native-apple-failed',
+          'message': error.toString(),
+        },
+      );
     }
   }
 
