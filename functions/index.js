@@ -2,8 +2,6 @@ const functions = require("firebase-functions/v1");
 const { onRequest } = require("firebase-functions/v2/https");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
-const crypto = require("crypto");
-const querystring = require("querystring");
 
 // =================================================================
 // --- INITIALIZE FIREBASE ADMIN ---
@@ -13,138 +11,602 @@ if (admin.apps.length === 0) {
 }
 
 // =================================================================
-// --- PAYFAST WALLET CONFIG & HELPERS (2nd Gen) ---
+// --- MANUAL EFT WALLET TOP-UP VIA TWILIO SMS ---
 // =================================================================
-const merchantId = defineSecret("PAYFAST_MERCHANT_ID");
-const merchantKey = defineSecret("PAYFAST_MERCHANT_KEY");
-const passphrase = defineSecret("PAYFAST_PASSPHRASE");
-const processUrl = "https://sandbox.payfast.co.za/eng/process";
-const siteUrl = "https://asiye.cloud";
-const notifyUrl = "https://us-central1-asiye-80386.cloudfunctions.net/payfastWalletNotify";
+// Twilio sends the user's banking instructions. It does not confirm that an
+// EFT reached FNB. A matching bank-statement reference must be reconciled by
+// Asiye Admin (or a future FNB/bank-feed integration) before the wallet is
+// credited.
+const twilioAccountSid =
+  defineSecret("TWILIO_ACCOUNT_SID");
 
-function encode(value) {
-  return encodeURIComponent(String(value).trim())
-    .replace(/%20/g, "+")
-    .replace(/[!'()*]/g, (character) =>
-      "%" + character.charCodeAt(0).toString(16).toUpperCase());
+const twilioAuthToken =
+  defineSecret("TWILIO_AUTH_TOKEN");
+
+const twilioFromNumber =
+  defineSecret("TWILIO_FROM_NUMBER");
+
+const ASIYE_EFT_BANK =
+  "FNB";
+
+const ASIYE_EFT_ACCOUNT =
+  "63182341065";
+
+function walletSmsCors(request, response) {
+  const origin =
+    request.get("origin") || "";
+
+  const allowedOrigins =
+    new Set([
+      "https://asiye.cloud",
+      "https://www.asiye.cloud",
+      "https://app.asiye.cloud"
+    ]);
+
+  if (
+    allowedOrigins.has(origin)
+  ) {
+    response.set(
+      "Access-Control-Allow-Origin",
+      origin
+    );
+  } else if (
+    !origin ||
+    origin === "null" ||
+    origin.startsWith("https://appassets.")
+  ) {
+    response.set(
+      "Access-Control-Allow-Origin",
+      "*"
+    );
+  }
+
+  response.set(
+    "Vary",
+    "Origin"
+  );
+
+  response.set(
+    "Access-Control-Allow-Headers",
+    "Authorization, Content-Type"
+  );
+
+  response.set(
+    "Access-Control-Allow-Methods",
+    "POST, OPTIONS"
+  );
 }
 
-function signature(fields, phrase) {
-  const pairs = Object.entries(fields)
-    .filter(([key, value]) => key !== "signature" && value !== "")
-    .map(([key, value]) => `${key}=${encode(value)}`);
-  if (phrase) pairs.push(`passphrase=${encode(phrase)}`);
-  return crypto.createHash("md5").update(pairs.join("&")).digest("hex");
+function normaliseSmsPhone(rawPhone) {
+  const original =
+    String(rawPhone || "")
+      .trim();
+
+  if (!original) {
+    return null;
+  }
+
+  let digits =
+    original.replace(/\D/g, "");
+
+  if (
+    digits.startsWith("00")
+  ) {
+    digits =
+      digits.substring(2);
+  }
+
+  if (
+    digits.startsWith("27") &&
+    digits.length === 11
+  ) {
+    return "+27" +
+      digits.substring(2);
+  }
+
+  if (
+    digits.startsWith("0") &&
+    digits.length === 10
+  ) {
+    return "+27" +
+      digits.substring(1);
+  }
+
+  if (
+    digits.length === 9
+  ) {
+    return "+27" +
+      digits;
+  }
+
+  if (
+    digits.length >= 8 &&
+    digits.length <= 15
+  ) {
+    return "+" +
+      digits;
+  }
+
+  return null;
 }
 
-function cors(request, response) {
-  const origin = request.get("origin");
-  if (origin === siteUrl) response.set("Access-Control-Allow-Origin", origin);
-  if (!origin || origin === "null") response.set("Access-Control-Allow-Origin", "*");
-  response.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
-  response.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+function eftReferenceFromPhone(phone) {
+  const e164 =
+    normaliseSmsPhone(phone);
+
+  if (!e164) {
+    return "";
+  }
+
+  const digits =
+    e164.replace(/\D/g, "");
+
+  if (
+    digits.startsWith("27") &&
+    digits.length === 11
+  ) {
+    return "0" +
+      digits.substring(2);
+  }
+
+  return digits.slice(-15);
 }
 
-// =================================================================
-// --- NEW WALLET FUNCTIONS (2nd Gen) ---
-// =================================================================
-exports.createPayfastWalletTopup = onRequest(
-  { region: "us-central1", secrets: [merchantId, merchantKey, passphrase] },
-  async (request, response) => {
-    cors(request, response);
-    if (request.method === "OPTIONS") return response.status(204).send("");
-    if (request.method !== "POST") return response.status(405).json({ error: "POST required." });
-    try {
-      const match = (request.get("authorization") || "").match(/^Bearer (.+)$/);
-      if (!match) return response.status(401).json({ error: "Sign in again." });
-      const decoded = await admin.auth().verifyIdToken(match[1]);
-      const amount = Number(request.body?.amount);
-      if (!Number.isFinite(amount) || amount < 10 || amount > 5000) {
-        return response.status(400).json({ error: "Amount must be between R10 and R5,000." });
+async function resolvePassengerForWallet(decoded) {
+  const uid =
+    String(decoded?.uid || "");
+
+  if (!uid) {
+    return null;
+  }
+
+  const directRef =
+    admin.database()
+      .ref(
+        `commuters/${uid}`
+      );
+
+  const directSnapshot =
+    await directRef.once("value");
+
+  if (
+    directSnapshot.exists()
+  ) {
+    return {
+      id:
+        uid,
+      data:
+        directSnapshot.val() || {}
+    };
+  }
+
+  for (
+    const field
+    of [
+      "authUid",
+      "userUid"
+    ]
+  ) {
+    const snapshot =
+      await admin.database()
+        .ref("commuters")
+        .orderByChild(field)
+        .equalTo(uid)
+        .limitToFirst(1)
+        .once("value");
+
+    let match =
+      null;
+
+    snapshot.forEach(
+      child => {
+        if (!match) {
+          match = {
+            id:
+              child.key,
+            data:
+              child.val() || {}
+          };
+        }
       }
+    );
 
-      const paymentId = admin.database().ref("walletPayments").push().key;
-      const fields = {
-        merchant_id: merchantId.value(),
-        merchant_key: merchantKey.value(),
-        return_url: `${siteUrl}/success.html`,
-        cancel_url: `${siteUrl}/cancelled.html`,
-        notify_url: notifyUrl,
-        name_first: decoded.name?.split(" ")[0] || "Asiye",
-        email_address: decoded.email || "",
-        m_payment_id: paymentId,
-        amount: amount.toFixed(2),
-        item_name: "Asiye Wallet Top-up",
-        custom_str1: decoded.uid
-      };
-      fields.signature = signature(fields, passphrase.value());
-
-      await admin.database().ref(`walletPayments/${paymentId}`).set({
-        uid: decoded.uid,
-        amount: amount.toFixed(2),
-        status: "pending",
-        environment: "sandbox",
-        createdAt: admin.database.ServerValue.TIMESTAMP
-      });
-      return response.json({ action: processUrl, fields });
-    } catch (error) {
-      console.error("Create wallet top-up failed", error);
-      return response.status(500).json({ error: "Unable to start the payment." });
+    if (match) {
+      return match;
     }
-  });
+  }
 
-exports.payfastWalletNotify = onRequest(
-  { region: "us-central1", secrets: [merchantId, merchantKey, passphrase] },
+  return {
+    id:
+      uid,
+    data:
+      {}
+  };
+}
+
+async function sendTwilioSms({
+  to,
+  body
+}) {
+  const accountSid =
+    String(
+      twilioAccountSid.value() ||
+      ""
+    ).trim();
+
+  const authToken =
+    String(
+      twilioAuthToken.value() ||
+      ""
+    ).trim();
+
+  const from =
+    normaliseSmsPhone(
+      twilioFromNumber.value()
+    );
+
+  if (
+    !accountSid ||
+    !authToken ||
+    !from
+  ) {
+    throw new Error(
+      "Twilio SMS is not configured."
+    );
+  }
+
+  const endpoint =
+    `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(accountSid)}/Messages.json`;
+
+  const form =
+    new URLSearchParams({
+      To:
+        to,
+      From:
+        from,
+      Body:
+        body
+    });
+
+  const response =
+    await fetch(
+      endpoint,
+      {
+        method:
+          "POST",
+        headers: {
+          "Authorization":
+            "Basic " +
+            Buffer
+              .from(
+                accountSid +
+                ":" +
+                authToken
+              )
+              .toString(
+                "base64"
+              ),
+          "Content-Type":
+            "application/x-www-form-urlencoded"
+        },
+        body:
+          form.toString()
+      }
+    );
+
+  const payload =
+    await response
+      .json()
+      .catch(
+        () => ({})
+      );
+
+  if (
+    !response.ok ||
+    !payload.sid
+  ) {
+    console.error(
+      "Twilio EFT SMS failed",
+      {
+        status:
+          response.status,
+        code:
+          payload.code,
+        message:
+          payload.message
+      }
+    );
+
+    throw new Error(
+      payload.message ||
+      "Unable to send the EFT SMS."
+    );
+  }
+
+  return payload;
+}
+
+exports.createEftSmsTopup = onRequest(
+  {
+    region:
+      "us-central1",
+    secrets: [
+      twilioAccountSid,
+      twilioAuthToken,
+      twilioFromNumber
+    ]
+  },
   async (request, response) => {
-    if (request.method !== "POST") return response.status(405).send("POST required");
-    try {
-      const payload = Object.fromEntries(
-        new URLSearchParams(request.rawBody.toString("utf8")).entries());
-      const receivedSignature = payload.signature;
-      if (!receivedSignature ||
-        signature(payload, passphrase.value()) !== receivedSignature) {
-        return response.status(400).send("Invalid signature");
-      }
-      if (payload.merchant_id !== merchantId.value()) {
-        return response.status(400).send("Invalid merchant");
-      }
+    walletSmsCors(
+      request,
+      response
+    );
 
-      const paymentId = payload.m_payment_id;
-      const ref = admin.database().ref(`walletPayments/${paymentId}`);
-      const snapshot = await ref.once("value");
-      const payment = snapshot.val();
-      if (!payment || payment.status === "complete") return response.status(200).send("OK");
-      if (payload.payment_status !== "COMPLETE" ||
-        Number(payload.amount_gross).toFixed(2) !== Number(payment.amount).toFixed(2) ||
-        payload.custom_str1 !== payment.uid) {
-        return response.status(400).send("Payment mismatch");
-      }
-
-      const validationBody = new URLSearchParams(payload).toString();
-      const validation = await fetch(
-        "https://sandbox.payfast.co.za/eng/query/validate",
-        { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: validationBody });
-      if ((await validation.text()).trim() !== "VALID") {
-        return response.status(400).send("PayFast validation failed");
-      }
-
-      const balanceRef = admin.database().ref(`commuters/${payment.uid}/credits`);
-      const balance = await balanceRef.transaction(current =>
-        Number(current || 0) + Number(payment.amount));
-      const newBalance = Number(balance.snapshot.val() || 0);
-      await admin.database().ref().update({
-        [`commuters/${payment.uid}/walletBalance`]: newBalance,
-        [`walletPayments/${paymentId}/status`]: "complete",
-        [`walletPayments/${paymentId}/pfPaymentId`]: payload.pf_payment_id || "",
-        [`walletPayments/${paymentId}/completedAt`]: admin.database.ServerValue.TIMESTAMP
-      });
-      return response.status(200).send("OK");
-    } catch (error) {
-      console.error("PayFast ITN failed", error);
-      return response.status(500).send("Retry");
+    if (
+      request.method ===
+      "OPTIONS"
+    ) {
+      return response
+        .status(204)
+        .send("");
     }
-  });
 
+    if (
+      request.method !==
+      "POST"
+    ) {
+      return response
+        .status(405)
+        .json({
+          error:
+            "POST required."
+        });
+    }
+
+    try {
+      const match =
+        (
+          request.get(
+            "authorization"
+          ) || ""
+        )
+          .match(
+            /^Bearer (.+)$/
+          );
+
+      if (!match) {
+        return response
+          .status(401)
+          .json({
+            error:
+              "Sign in again before adding funds."
+          });
+      }
+
+      const decoded =
+        await admin.auth()
+          .verifyIdToken(
+            match[1]
+          );
+
+      const amount =
+        Number(
+          request.body?.amount
+        );
+
+      if (
+        !Number.isFinite(amount) ||
+        amount < 10 ||
+        amount > 5000
+      ) {
+        return response
+          .status(400)
+          .json({
+            error:
+              "Amount must be between R10 and R5,000."
+          });
+      }
+
+      const passenger =
+        await resolvePassengerForWallet(
+          decoded
+        );
+
+      const rawPhone =
+        passenger?.data?.phone ||
+        passenger?.data?.phoneNumber ||
+        decoded.phone_number ||
+        "";
+
+      const smsTo =
+        normaliseSmsPhone(
+          rawPhone
+        );
+
+      const reference =
+        eftReferenceFromPhone(
+          rawPhone
+        );
+
+      if (
+        !smsTo ||
+        !reference
+      ) {
+        return response
+          .status(400)
+          .json({
+            error:
+              "Your Asiye account needs a valid mobile number before EFT instructions can be sent."
+          });
+      }
+
+      const passengerId =
+        passenger?.id ||
+        decoded.uid;
+
+      const commuterRef =
+        admin.database()
+          .ref(
+            `commuters/${passengerId}`
+          );
+
+      const current =
+        passenger?.data || {};
+
+      const lastSmsAt =
+        Number(
+          current.lastEftSmsAt ||
+          0
+        );
+
+      if (
+        lastSmsAt &&
+        Date.now() -
+          lastSmsAt <
+          60 * 1000
+      ) {
+        return response
+          .status(429)
+          .json({
+            error:
+              "Please wait a minute before requesting another EFT SMS."
+          });
+      }
+
+      const roundedAmount =
+        Math.round(
+          amount * 100
+        ) / 100;
+
+      const paymentRef =
+        admin.database()
+          .ref(
+            "walletPayments"
+          )
+          .push();
+
+      const paymentId =
+        paymentRef.key;
+
+      await paymentRef.set({
+        uid:
+          decoded.uid,
+        passengerId,
+        phone:
+          smsTo,
+        reference,
+        amount:
+          roundedAmount,
+        currency:
+          "ZAR",
+        provider:
+          "manual_eft",
+        bank:
+          ASIYE_EFT_BANK,
+        accountNumber:
+          ASIYE_EFT_ACCOUNT,
+        status:
+          "awaiting_payment",
+        smsStatus:
+          "sending",
+        createdAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP
+      });
+
+      const message =
+        `Asiye wallet EFT: Pay R${roundedAmount.toFixed(2)} to FNB account ${ASIYE_EFT_ACCOUNT}. Use reference ${reference} exactly. Your wallet is credited after Asiye matches the payment. Request ${String(paymentId).slice(-6)}.`;
+
+      try {
+        const twilioMessage =
+          await sendTwilioSms({
+            to:
+              smsTo,
+            body:
+              message
+          });
+
+        await admin.database()
+          .ref()
+          .update({
+            [`walletPayments/${paymentId}/smsStatus`]:
+              "sent",
+            [`walletPayments/${paymentId}/twilioMessageSid`]:
+              String(
+                twilioMessage.sid
+              ),
+            [`walletPayments/${paymentId}/instructionsSentAt`]:
+              admin.database
+                .ServerValue
+                .TIMESTAMP,
+            [`commuters/${passengerId}/lastEftSmsAt`]:
+              admin.database
+                .ServerValue
+                .TIMESTAMP
+          });
+
+      } catch (smsError) {
+        await paymentRef.update({
+          status:
+            "instructions_failed",
+          smsStatus:
+            "failed",
+          smsError:
+            String(
+              smsError?.message ||
+              "SMS failed"
+            )
+              .slice(0, 300),
+          updatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
+        throw smsError;
+      }
+
+      return response
+        .status(200)
+        .json({
+          ok:
+            true,
+          paymentId,
+          bank:
+            ASIYE_EFT_BANK,
+          accountNumber:
+            ASIYE_EFT_ACCOUNT,
+          reference,
+          amount:
+            roundedAmount,
+          smsTo:
+            smsTo.replace(
+              /(\+27\d{2})\d+(\d{2})$/,
+              "$1•••••$2"
+            ),
+          status:
+            "awaiting_payment",
+          message:
+            "EFT banking instructions were sent by SMS."
+        });
+
+    } catch (error) {
+      console.error(
+        "Create EFT SMS top-up failed",
+        error
+      );
+
+      return response
+        .status(500)
+        .json({
+          error:
+            error?.message ||
+            "Unable to send the EFT instructions."
+        });
+    }
+  }
+);
 
 // =================================================================
 // --- RESTORED: CUSTOM AUTH TOKEN GENERATOR (1st Gen) ---
@@ -167,65 +629,6 @@ exports.createCustomToken = functions.https.onCall(async (data, context) => {
   }
 });
 
-
-// =================================================================
-// --- RESTORED: PAYFAST SUBSCRIPTION ITN HANDLER (1st Gen) ---
-// =================================================================
-exports.payfastITN = functions.https.onRequest(async (req, res) => {
-  res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).send('');
-  }
-
-  if (req.method !== "POST") {
-    return res.status(405).send("Method Not Allowed");
-  }
-
-  try {
-    const receivedData = querystring.parse(req.rawBody.toString());
-    let pfParamString = "";
-    for (const key in receivedData) {
-      if (key !== "signature") {
-        pfParamString += `${key}=${encodeURIComponent(receivedData[key].trim()).replace(/%20/g, "+")}&`;
-      }
-    }
-    pfParamString = pfParamString.slice(0, -1);
-
-    const generatedSignature = crypto.createHash("md5").update(pfParamString).digest("hex");
-
-    if (generatedSignature !== receivedData.signature) {
-      return res.status(400).send("Invalid Signature");
-    }
-
-    const paymentStatus = receivedData.payment_status;
-    const transactionId = receivedData.pf_payment_id;
-    const customPaymentId = receivedData.m_payment_id;
-
-    if (paymentStatus === "COMPLETE") {
-      const parts = customPaymentId.split('-');
-      if (parts.length < 2) {
-        return res.status(400).send("Invalid Payment ID");
-      }
-      const userId = parts[1];
-      const userRef = admin.database().ref(`/commuters/${userId}`);
-      const oneMonthFromNow = new Date().getTime() + (30 * 24 * 60 * 60 * 1000);
-
-      await userRef.update({
-        hasActiveSubscription: true,
-        subscriptionExpiry: oneMonthFromNow,
-        lastTransactionId: transactionId,
-      });
-      console.log(`Successfully activated subscription for user: ${userId}`);
-    }
-    return res.status(200).send("OK");
-  } catch (error) {
-    console.error("Error handling PayFast ITN:", error);
-    return res.status(500).send("Internal Server Error");
-  }
-});
 
 // =================================================================
 // --- RESTORED: CHAT NOTIFICATIONS (1st Gen) ---
