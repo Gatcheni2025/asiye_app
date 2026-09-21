@@ -2899,6 +2899,339 @@ exports.adminManagePlatform = functions.https.onCall(
       };
     }
 
+    if (action === "reconcileEftTopup") {
+      const id =
+        safeAdminString(
+          data?.id,
+          180
+        );
+
+      const bankTrace =
+        safeAdminString(
+          data?.bankTrace,
+          180
+        );
+
+      const note =
+        safeAdminString(
+          data?.note,
+          800
+        );
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Payment ID is required."
+        );
+      }
+
+      const paymentRef =
+        admin.database()
+          .ref(
+            `walletPayments/${id}`
+          );
+
+      const payment =
+        (
+          await paymentRef
+            .once("value")
+        ).val();
+
+      if (!payment) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Wallet top-up was not found."
+        );
+      }
+
+      if (
+        payment.provider !==
+        "manual_eft"
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Only manual EFT top-ups can be reconciled with this action."
+        );
+      }
+
+      if (
+        payment.status ===
+        "complete"
+      ) {
+        return {
+          ok: true,
+          alreadyComplete: true,
+          balance:
+            Number(
+              payment.creditedBalance ||
+              0
+            )
+        };
+      }
+
+      if (
+        payment.status !==
+        "awaiting_payment"
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This EFT top-up is not awaiting payment."
+        );
+      }
+
+      const passengerId =
+        safeAdminString(
+          payment.passengerId ||
+          payment.uid,
+          160
+        );
+
+      const amount =
+        safeAdminNumber(
+          payment.amount,
+          NaN
+        );
+
+      if (
+        !passengerId ||
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "The EFT top-up record is incomplete."
+        );
+      }
+
+      const commuterRef =
+        admin.database()
+          .ref(
+            `commuters/${passengerId}`
+          );
+
+      const markerKey =
+        `manualEft_${id}`;
+
+      const creditResult =
+        await commuterRef
+          .transaction(
+            current => {
+              if (!current) {
+                return;
+              }
+
+              const applied =
+                current
+                  .walletAppliedPayments ||
+                {};
+
+              if (
+                applied[markerKey]
+              ) {
+                return current;
+              }
+
+              const currentBalance =
+                safeAdminNumber(
+                  current.walletBalance ??
+                  current.credits,
+                  0
+                );
+
+              const nextBalance =
+                Math.round(
+                  (
+                    currentBalance +
+                    amount
+                  ) *
+                  100
+                ) / 100;
+
+              applied[markerKey] = {
+                provider:
+                  "manual_eft",
+                paymentId:
+                  id,
+                amount,
+                reference:
+                  payment.reference ||
+                  "",
+                bankTrace:
+                  bankTrace ||
+                  "",
+                appliedAt:
+                  Date.now()
+              };
+
+              current
+                .walletAppliedPayments =
+                applied;
+
+              current.walletBalance =
+                nextBalance;
+
+              current.credits =
+                nextBalance;
+
+              current
+                .walletAdminUpdatedAt =
+                Date.now();
+
+              return current;
+            }
+          );
+
+      if (!creditResult.committed) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Passenger account was not found."
+        );
+      }
+
+      const creditedBalance =
+        safeAdminNumber(
+          creditResult
+            .snapshot
+            .val()
+            ?.walletBalance,
+          0
+        );
+
+      await paymentRef.update({
+        status:
+          "complete",
+        bankTrace:
+          bankTrace,
+        adminNote:
+          note,
+        reconciledAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP,
+        reconciledBy:
+          actor.uid,
+        reconciledByEmail:
+          actor.email ||
+          "",
+        creditedBalance:
+          creditedBalance,
+        completedAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP
+      });
+
+      await writeAdminAudit(
+        actor,
+        "manual_eft_reconciled",
+        id,
+        {
+          passengerId,
+          amount,
+          reference:
+            payment.reference ||
+            "",
+          bankTrace:
+            bankTrace ||
+            "",
+          balanceAfter:
+            creditedBalance
+        }
+      );
+
+      return {
+        ok: true,
+        balance:
+          creditedBalance
+      };
+    }
+
+    if (action === "cancelEftTopup") {
+      const id =
+        safeAdminString(
+          data?.id,
+          180
+        );
+
+      const note =
+        safeAdminString(
+          data?.note,
+          800
+        );
+
+      if (!id) {
+        throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Payment ID is required."
+        );
+      }
+
+      const ref =
+        admin.database()
+          .ref(
+            `walletPayments/${id}`
+          );
+
+      const payment =
+        (
+          await ref
+            .once("value")
+        ).val();
+
+      if (!payment) {
+        throw new functions.https.HttpsError(
+          "not-found",
+          "Wallet top-up was not found."
+        );
+      }
+
+      if (
+        payment.provider !==
+        "manual_eft"
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Only manual EFT top-ups can be cancelled here."
+        );
+      }
+
+      if (
+        payment.status ===
+        "complete"
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "A completed EFT top-up cannot be cancelled."
+        );
+      }
+
+      await ref.update({
+        status:
+          "cancelled",
+        adminNote:
+          note,
+        cancelledAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP,
+        cancelledBy:
+          actor.uid
+      });
+
+      await writeAdminAudit(
+        actor,
+        "manual_eft_cancelled",
+        id,
+        {
+          note
+        }
+      );
+
+      return {
+        ok: true
+      };
+    }
+
     if (action === "updatePaymentNote") {
       const id =
         safeAdminString(
