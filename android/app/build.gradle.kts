@@ -57,7 +57,9 @@ android {
 
     buildTypes {
         getByName("debug") {
-            // Keep the default Android debug signing configuration.
+            if (hasReleaseKeystore) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
         getByName("release") {
             if (hasReleaseKeystore) {
