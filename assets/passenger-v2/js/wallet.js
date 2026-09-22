@@ -5,7 +5,7 @@ ASIYE.wallet = {
     createTopupUrl:
         'https://us-central1-asiye-80386.cloudfunctions.net/createEftSmsTopup',
 
-    async startTopup(amount) {
+    async startTopup(amount, phone = null) {
         const value =
             Number(amount);
 
@@ -33,6 +33,13 @@ ASIYE.wallet = {
             await user
                 .getIdToken();
 
+        const bodyData = {
+            amount: value.toFixed(2)
+        };
+        if (phone) {
+            bodyData.phone = phone;
+        }
+
         const response =
             await fetch(
                 this.createTopupUrl,
@@ -49,10 +56,7 @@ ASIYE.wallet = {
                     },
 
                     body:
-                        JSON.stringify({
-                            amount:
-                                value.toFixed(2)
-                        })
+                        JSON.stringify(bodyData)
                 }
             );
 
