@@ -745,15 +745,6 @@ exports.createEftSmsTopup = onRequest(
                   .TIMESTAMP
             });
         }
-                admin.database
-                  .ServerValue
-                  .TIMESTAMP,
-              [`commuters/${passengerId}/lastEftSmsAt`]:
-                admin.database
-                  .ServerValue
-                  .TIMESTAMP
-            });
-        }
 
       } catch (smsError) {
         /*
@@ -2114,6 +2105,9 @@ exports.reviewDriverEnrollment = functions.https.onCall(
     const reason =
       safeAdminString(data?.reason, 600);
 
+    const documentReview =
+      data?.documentReview || {};
+
     if (!uid) {
       throw new functions.https.HttpsError(
         "invalid-argument",
@@ -2203,6 +2197,29 @@ exports.reviewDriverEnrollment = functions.https.onCall(
         ok: true,
         status: "rejected"
       };
+    }
+
+    const requiredDocuments =
+      [
+        "selfie",
+        "car",
+        "identity",
+        "licence"
+      ];
+
+    const completeDocumentReview =
+      requiredDocuments.every(
+        key =>
+          typeof enrollment.documents?.[key] === "string" &&
+          enrollment.documents[key].trim() &&
+          documentReview[key] === "approved"
+      );
+
+    if (!completeDocumentReview) {
+      throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Open and approve each required driver document before activating this driver."
+      );
     }
 
     const approvedVehicle =
@@ -2412,6 +2429,17 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       `driverEnrollments/${uid}/approvedVehicle`
     ] =
       approvedVehicle;
+
+    updates[
+      `driverEnrollments/${uid}/documentReview`
+    ] = {
+      selfie: "approved",
+      car: "approved",
+      identity: "approved",
+      licence: "approved",
+      reviewedAt: now,
+      reviewedBy: actor.uid
+    };
 
     updates[
       `notifications/taxis/${uid}/admin_review_${Date.now()}`

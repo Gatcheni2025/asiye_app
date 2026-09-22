@@ -17,3 +17,4 @@ node_modules/
 # Flutter/Firebase auto-generated files
 **/.plugin_symlinks/
 .plugin_symlinks/
+firebase-debug.log

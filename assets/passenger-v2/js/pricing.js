@@ -137,21 +137,22 @@ ASIYE.pricing = {
         /*
          * Club pricing:
          *
-         * One total route fare,
-         * split across every paying passenger.
+         * Total amount rate split into the number of passengers plus 15%
          */
+
+        const clubDriverFare = Math.round(goFare * 1.15);
 
         const club4Fare =
 
             Math.ceil(
-                goFare / 4
+                clubDriverFare / 4
             );
 
 
         const club7Fare =
 
             Math.ceil(
-                goFare / 7
+                clubDriverFare / 7
             );
 
 
@@ -167,10 +168,10 @@ ASIYE.pricing = {
                 club7Fare,
 
             club4Total:
-                goFare,
+                club4Fare * 4,
 
             club7Total:
-                goFare
+                club7Fare * 7
         };
     }
 

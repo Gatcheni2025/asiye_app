@@ -125,6 +125,9 @@ ASIYE.club = {
         const fare =
             Number(totalFare || 0);
 
+        const driverBaseFare =
+            Math.round(fare * 1.15);
+
 
         const pricePerPassenger =
 
@@ -133,12 +136,14 @@ ASIYE.club = {
             ? Math.max(
                 1,
                 Math.ceil(
-                    fare /
+                    driverBaseFare /
                     config.capacity
                 )
             )
 
             : 0;
+
+        const driverTotal = pricePerPassenger * config.capacity;
 
 
         return {
@@ -147,7 +152,7 @@ ASIYE.club = {
                 config.capacity,
 
             totalFare:
-                fare,
+                driverTotal,
 
             pricePerPassenger:
                 pricePerPassenger

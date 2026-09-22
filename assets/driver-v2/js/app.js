@@ -968,7 +968,7 @@ ASIYE_DRIVER.ui = {
             isClub
 
             ? Number(
-                request.pricePerPassenger ||
+                request.totalPoolFare ||
                 request.calculatedPrice ||
                 0
             )
@@ -1250,7 +1250,7 @@ ASIYE_DRIVER.ui = {
                 <span>
                     ${
                         isClub
-                        ? 'Per passenger'
+                        ? 'Total payout'
                         : isDelivery
                             ? 'Delivery fare'
                             : 'Trip fare'
@@ -1744,13 +1744,14 @@ ASIYE_DRIVER.ui = {
                 <div>
 
                     <span>
-                        Per passenger
+                        Total payout
                     </span>
 
                     <strong>
                         R${
                             Number(
-                                request.pricePerPassenger ||
+                                request.totalPoolFare ||
+                                request.calculatedPrice ||
                                 0
                             )
                             .toFixed(2)
@@ -3020,25 +3021,13 @@ ASIYE_DRIVER.ui = {
             'club'
         ) {
 
-            const count =
-
-                Number(
-                    request.passengerCount ||
-                    Object.keys(
-                        request.passengers ||
-                        {}
-                    ).length
-                );
-
-
             amount =
 
                 Number(
-                    request.agreedFare ||
-                    request.pricePerPassenger ||
+                    request.totalPoolFare ||
+                    request.calculatedPrice ||
                     0
-                ) *
-                count;
+                );
 
         } else {
 
