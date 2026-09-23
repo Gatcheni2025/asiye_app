@@ -969,7 +969,7 @@ ASIYE_DRIVER.ui = {
 
             ? Number(
                 request.pricePerPassenger ||
-                request.calculatedPrice ||
+                request.agreedFare ||
                 0
             )
 
@@ -979,6 +979,18 @@ ASIYE_DRIVER.ui = {
                 request.calculatedPrice ||
                 0
             );
+
+
+        const poolTotal =
+
+            isClub
+
+            ? Number(
+                request.totalPoolFare ||
+                0
+            )
+
+            : 0;
 
 
         const distance =
@@ -1237,6 +1249,19 @@ ASIYE_DRIVER.ui = {
 
                     </div>
 
+
+                    <div>
+
+                        <span>
+                            Pool total
+                        </span>
+
+                        <strong>
+                            R${poolTotal.toFixed(2)}
+                        </strong>
+
+                    </div>
+
                 </div>
 
                 `
@@ -1250,7 +1275,7 @@ ASIYE_DRIVER.ui = {
                 <span>
                     ${
                         isClub
-                        ? 'Per passenger'
+                        ? 'Passenger fare'
                         : isDelivery
                             ? 'Delivery fare'
                             : 'Trip fare'
@@ -1413,6 +1438,17 @@ ASIYE_DRIVER.ui = {
             'delivery';
 
 
+        const passengerName =
+            request.commuterName ||
+            'Passenger';
+
+
+        const passengerPhoto =
+            request.commuterProfileImageUrl ||
+            request.passengerProfileImageUrl ||
+            '';
+
+
         container.innerHTML = `
 
             <div class="driver-trip-header">
@@ -1461,6 +1497,31 @@ ASIYE_DRIVER.ui = {
 
             </div>
 
+
+            ${
+                !isDelivery
+                ? `
+                    <div class="navigator-passenger driver-passenger-identity">
+                        <div class="navigator-avatar">
+                            ${
+                                passengerPhoto
+                                    ? `<img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">`
+                                    : this.escape(
+                                        passengerName
+                                            .charAt(0)
+                                            .toUpperCase()
+                                    )
+                            }
+                        </div>
+
+                        <div>
+                            <small>PASSENGER</small>
+                            <strong>${this.escape(passengerName)}</strong>
+                        </div>
+                    </div>
+                `
+                : ''
+            }
 
             <div class="driver-trip-card">
 
@@ -1708,13 +1769,33 @@ ASIYE_DRIVER.ui = {
                 <div>
 
                     <span>
-                        Per passenger
+                        Passenger fare
                     </span>
 
                     <strong>
                         R${
                             Number(
                                 request.pricePerPassenger ||
+                                request.agreedFare ||
+                                0
+                            )
+                            .toFixed(2)
+                        }
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Pool total
+                    </span>
+
+                    <strong>
+                        R${
+                            Number(
+                                request.totalPoolFare ||
                                 0
                             )
                             .toFixed(2)
@@ -1989,6 +2070,19 @@ ASIYE_DRIVER.ui = {
         if (!container) return;
 
 
+        const passengerName =
+            passenger.name ||
+            passenger.commuterName ||
+            'Passenger';
+
+
+        const passengerPhoto =
+            passenger.profileImageUrl ||
+            passenger.profile_picture_url ||
+            passenger.profilePhotoUrl ||
+            '';
+
+
         container.innerHTML = `
 
             <div class="driver-trip-header">
@@ -2034,6 +2128,25 @@ ASIYE_DRIVER.ui = {
 
             </div>
 
+
+            <div class="navigator-passenger driver-passenger-identity">
+                <div class="navigator-avatar">
+                    ${
+                        passengerPhoto
+                            ? `<img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">`
+                            : this.escape(
+                                passengerName
+                                    .charAt(0)
+                                    .toUpperCase()
+                            )
+                    }
+                </div>
+
+                <div>
+                    <small>PASSENGER</small>
+                    <strong>${this.escape(passengerName)}</strong>
+                </div>
+            </div>
 
             <div class="driver-trip-card">
 
@@ -2121,7 +2234,9 @@ ASIYE_DRIVER.ui = {
        ======================================================== */
 
     showPickupNavigation(
-        request
+        request,
+        target = null,
+        route = null
     ) {
 
         this.openActiveTripSheet();
@@ -2141,44 +2256,104 @@ ASIYE_DRIVER.ui = {
             'delivery';
 
 
+        const pickupLabel =
+            target?.label ||
+            request.pickupAddress ||
+            (
+                isDelivery
+                    ? 'Parcel pickup'
+                    : 'Passenger pickup'
+            );
+
+
         container.innerHTML = `
 
-            <div class="driver-trip-header">
+            <div class="navigation-phase-label">
+                <span>
+                    <i class="fas fa-location-dot"></i>
+                    ${isDelivery ? 'DRIVE TO SENDER' : 'DRIVE TO PASSENGER'}
+                </span>
+                <strong>${this.escape(pickupLabel)}</strong>
+            </div>
 
-                <div>
+            <div class="navigation-live-hud">
+                <section class="turn-guidance">
+                    <div id="navArrow" class="turn-guidance-arrow">↑</div>
+                    <div class="turn-guidance-copy">
+                        <strong id="navTurnDistance">
+                            ${Number.isFinite(Number(route?.distanceKm))
+                                ? `${Number(route.distanceKm).toFixed(1)} km`
+                                : 'Finding route'}
+                        </strong>
+                        <h2 id="navInstruction">Preparing pickup navigation…</h2>
+                        <p id="navRoadName" class="nav-road-name"></p>
+                    </div>
+                </section>
 
-                    <div class="driver-kicker">
-                        ${isDelivery
-                            ? 'Parcel pickup'
-                            : 'Passenger pickup'}
+                <div class="navigation-driving-status">
+                    <div id="navCurrentSpeedPanel" class="nav-speed-current">
+                        <small>SPEED</small>
+                        <strong id="navCurrentSpeed">0</strong>
+                        <span>km/h</span>
                     </div>
 
-                    <h2 class="driver-title">
-                        ${isDelivery
-                            ? 'Drive to sender'
-                            : 'Drive to passenger'}
-                    </h2>
-
-                    <div class="driver-subtitle">
-
-                        ${
-                            this.escape(
-                                request.pickupAddress ||
-                                'Pickup location'
-                            )
-                        }
-
+                    <div class="nav-speed-limit-wrap">
+                        <small>LIMIT</small>
+                        <div class="nav-speed-limit-sign">
+                            <strong id="navSpeedLimit">—</strong>
+                        </div>
                     </div>
 
+                    <button
+                        id="navVoiceToggle"
+                        class="nav-voice-toggle"
+                        type="button"
+                        aria-pressed="true"
+                    >
+                        <i class="fas fa-volume-high"></i>
+                        <span id="navVoiceLabel">Voice on</span>
+                    </button>
                 </div>
 
+                <div
+                    id="navTrafficAlert"
+                    class="navigation-traffic-alert"
+                    hidden
+                >
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <span id="navTrafficAlertText">Traffic alert</span>
+                </div>
+            </div>
 
-                <div class="driver-trip-status-icon">
+            <div class="navigation-summary">
+                <strong id="navEta">
+                    ${Number.isFinite(Number(route?.durationMinutes))
+                        ? `${Math.max(1, Math.round(Number(route.durationMinutes)))} min`
+                        : '—'}
+                </strong>
+                <span id="navDistance">
+                    ${Number.isFinite(Number(route?.distanceKm))
+                        ? `${Number(route.distanceKm).toFixed(1)} km`
+                        : '—'}
+                </span>
+                <span>Arrival <b id="navArrival">—</b></span>
+            </div>
 
+            <p class="navigation-destination">
+                <i class="fas fa-location-dot"></i>
+                ${this.escape(pickupLabel)}
+            </p>
+
+            <div class="navigation-controls">
+                <button id="navFollow" class="driver-btn">
                     <i class="fas fa-location-arrow"></i>
+                    Follow car
+                </button>
 
-                </div>
-
+                <button id="navRetry" class="driver-btn">
+                    <i class="fas fa-rotate-right"></i>
+                    Retry route
+                </button>
             </div>
 
 
@@ -2219,6 +2394,15 @@ ASIYE_DRIVER.ui = {
                         .markArrived();
                 }
             );
+
+
+        setTimeout(
+            () => {
+                ASIYE_DRIVER.map
+                    ?.resize?.();
+            },
+            120
+        );
     },
 
 
@@ -2263,6 +2447,30 @@ ASIYE_DRIVER.ui = {
                 ?.navigation
                 ?.durationMinutes ??
             null;
+
+
+        const currentPassenger =
+
+            request.passengers
+                ?.[target.id] ||
+            {};
+
+
+        const passengerName =
+
+            currentPassenger.name ||
+            currentPassenger.commuterName ||
+            request.commuterName ||
+            'Passenger';
+
+
+        const passengerPhoto =
+
+            currentPassenger.profileImageUrl ||
+            currentPassenger.profile_picture_url ||
+            request.commuterProfileImageUrl ||
+            request.passengerProfileImageUrl ||
+            '';
 
 
         container.innerHTML = `
@@ -2355,7 +2563,15 @@ ASIYE_DRIVER.ui = {
 
                     <div class="navigator-avatar">
 
-                        <i class="fas fa-user"></i>
+                        ${
+                            passengerPhoto
+                                ? `<img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">`
+                                : this.escape(
+                                    passengerName
+                                        .charAt(0)
+                                        .toUpperCase()
+                                )
+                        }
 
                     </div>
 
@@ -2369,8 +2585,7 @@ ASIYE_DRIVER.ui = {
                         <strong>
 
                             ${this.escape(
-                                request.commuterName ||
-                                'Passenger'
+                                passengerName
                             )}
 
                         </strong>
@@ -2686,19 +2901,71 @@ ASIYE_DRIVER.ui = {
 
         container.innerHTML = `
 
-            <section class="turn-guidance">
-                <div id="navArrow" class="turn-guidance-arrow">↑</div>
-                <div><strong id="navTurnDistance">Trip underway</strong>
-                    <h2 id="navInstruction">Finding your route…</h2></div>
-            </section>
+            <div class="navigation-live-hud">
+                <section class="turn-guidance">
+                    <div id="navArrow" class="turn-guidance-arrow">↑</div>
+                    <div class="turn-guidance-copy">
+                        <strong id="navTurnDistance">Trip underway</strong>
+                        <h2 id="navInstruction">Finding your route…</h2>
+                        <p id="navRoadName" class="nav-road-name"></p>
+                    </div>
+                </section>
+
+                <div class="navigation-driving-status">
+                    <div id="navCurrentSpeedPanel" class="nav-speed-current">
+                        <small>SPEED</small>
+                        <strong id="navCurrentSpeed">0</strong>
+                        <span>km/h</span>
+                    </div>
+
+                    <div class="nav-speed-limit-wrap">
+                        <small>LIMIT</small>
+                        <div class="nav-speed-limit-sign">
+                            <strong id="navSpeedLimit">—</strong>
+                        </div>
+                    </div>
+
+                    <button
+                        id="navVoiceToggle"
+                        class="nav-voice-toggle"
+                        type="button"
+                        aria-pressed="true"
+                    >
+                        <i class="fas fa-volume-high"></i>
+                        <span id="navVoiceLabel">Voice on</span>
+                    </button>
+                </div>
+
+                <div
+                    id="navTrafficAlert"
+                    class="navigation-traffic-alert"
+                    hidden
+                >
+                    <i class="fas fa-triangle-exclamation"></i>
+                    <span id="navTrafficAlertText">Traffic alert</span>
+                </div>
+            </div>
+
             <div class="navigation-summary">
-                <strong id="navEta">—</strong><span id="navDistance">—</span>
+                <strong id="navEta">—</strong>
+                <span id="navDistance">—</span>
                 <span>Arrival <b id="navArrival">—</b></span>
             </div>
-            <p class="navigation-destination">${this.escape(request.destinationName || request.destination || 'Destination')}</p>
+
+            <p class="navigation-destination">
+                <i class="fas fa-location-dot"></i>
+                ${this.escape(request.destinationName || request.destination || 'Destination')}
+            </p>
+
             <div class="navigation-controls">
-                <button id="navFollow" class="driver-btn">Follow car</button>
-                <button id="navRetry" class="driver-btn">Retry route</button>
+                <button id="navFollow" class="driver-btn">
+                    <i class="fas fa-location-arrow"></i>
+                    Follow car
+                </button>
+                <button id="navRetry" class="driver-btn">
+                    <i class="fas fa-rotate-right"></i>
+                    Retry route
+                </button>
             </div>
             <div
                 class="
@@ -2798,25 +3065,13 @@ ASIYE_DRIVER.ui = {
             'club'
         ) {
 
-            const count =
-
-                Number(
-                    request.passengerCount ||
-                    Object.keys(
-                        request.passengers ||
-                        {}
-                    ).length
-                );
-
-
             amount =
 
                 Number(
-                    request.agreedFare ||
-                    request.pricePerPassenger ||
+                    request.totalPoolFare ||
+                    request.calculatedPrice ||
                     0
-                ) *
-                count;
+                );
 
         } else {
 

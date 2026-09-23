@@ -1,10 +1,7 @@
 name: iOS TestFlight Release
-# Release 11.0.23+293: camera, vehicle approval, Work capacity and EFT prep
+# Release 11.0.29+299: Twilio EFT, Asiye Work driver SMS, admin/privacy updates
 
 on:
-  push:
-    branches:
-      - fix/native-authentication
   workflow_dispatch:
 
 jobs:
@@ -101,7 +98,7 @@ jobs:
 
       - name: Verify release version
         run: |
-          grep -F "version: 11.0.23+293" pubspec.yaml
+          grep -F "version: 11.0.29+299" pubspec.yaml
 
       - name: Build, verify and upload to TestFlight
         working-directory: ./ios
@@ -133,7 +130,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.23-ios
+          name: asiye-11.0.29-ios-testflight
           path: |
             ios/build/ipa/*.ipa
             ios/*.ipa

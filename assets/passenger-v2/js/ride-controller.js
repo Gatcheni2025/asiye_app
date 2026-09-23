@@ -1227,11 +1227,11 @@ ASIYE.ride = {
 
                 passenger.price ||
 
+                (request.type === 'club' ? request.pricePerPassenger : null) ||
+
                 request.finalAmount ||
 
                 request.calculatedPrice ||
-
-                request.pricePerPassenger ||
 
                 0
             );

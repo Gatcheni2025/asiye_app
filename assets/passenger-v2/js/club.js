@@ -125,6 +125,11 @@ ASIYE.club = {
         const fare =
             Number(totalFare || 0);
 
+        const workPoolTotal =
+            Math.round(
+                fare * 1.15
+            );
+
 
         const pricePerPassenger =
 
@@ -132,10 +137,13 @@ ASIYE.club = {
 
             ? Math.max(
                 1,
-                Math.ceil(
-                    fare /
-                    config.capacity
-                )
+                Math.round(
+                    (
+                        workPoolTotal /
+                        config.capacity
+                    ) *
+                    100
+                ) / 100
             )
 
             : 0;
@@ -147,7 +155,7 @@ ASIYE.club = {
                 config.capacity,
 
             totalFare:
-                fare,
+                workPoolTotal,
 
             pricePerPassenger:
                 pricePerPassenger
@@ -676,6 +684,12 @@ ASIYE.club = {
                         phone:
                             user.phone || '',
 
+                        profileImageUrl:
+                            user.profile_picture_url ||
+                            user.profileImageUrl ||
+                            user.photoURL ||
+                            '',
+
                         pickupAddress:
                             ASIYE.state.location
                                 .address ||
@@ -752,12 +766,20 @@ ASIYE.club = {
                         );
 
 
+                    /*
+                     * Always recalculate from the stored pool total.
+                     * This also fixes any still-open legacy pool that
+                     * was previously split by 4 or 7 seats.
+                     */
                     const seatPrice =
 
-                        Math.ceil(
-                            totalFare /
-                            config.capacity
-                        );
+                        Math.round(
+                            (
+                                totalFare /
+                                config.capacity
+                            ) *
+                            100
+                        ) / 100;
 
 
                     pool.pricePerPassenger =
@@ -952,6 +974,12 @@ ASIYE.club = {
             phone:
                 user.phone || '',
 
+            profileImageUrl:
+                user.profile_picture_url ||
+                user.profileImageUrl ||
+                user.photoURL ||
+                '',
+
             pickupAddress:
                 pickup.address ||
                 'Current location',
@@ -1063,7 +1091,7 @@ ASIYE.club = {
                 pricing.pricePerPassenger,
 
             pricingVersion:
-                1,
+                2,
 
             commuterId:
                 uid,
@@ -1073,6 +1101,10 @@ ASIYE.club = {
 
             commuterPhone:
                 passenger.phone,
+
+            commuterProfileImageUrl:
+                passenger.profileImageUrl ||
+                '',
 
             commuterLocation: {
 

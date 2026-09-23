@@ -1,12 +1,13 @@
-/* Passenger wallet top-ups. Ozow credentials stay server-side. */
+/* Passenger wallet top-ups via manual EFT instructions sent by Twilio SMS. */
 window.ASIYE = window.ASIYE || {};
 
 ASIYE.wallet = {
     createTopupUrl:
-        'https://us-central1-asiye-80386.cloudfunctions.net/createOzowWalletTopup',
+        'https://us-central1-asiye-80386.cloudfunctions.net/createEftSmsTopup',
 
-    async startTopup(amount) {
-        const value = Number(amount);
+    async startTopup(amount, phone = null) {
+        const value =
+            Number(amount);
 
         if (
             !Number.isFinite(value) ||
@@ -19,7 +20,8 @@ ASIYE.wallet = {
         }
 
         const user =
-            firebase.auth().currentUser;
+            firebase.auth()
+                .currentUser;
 
         if (!user) {
             throw new Error(
@@ -28,7 +30,15 @@ ASIYE.wallet = {
         }
 
         const token =
-            await user.getIdToken();
+            await user
+                .getIdToken();
+
+        const bodyData = {
+            amount: value.toFixed(2)
+        };
+        if (phone) {
+            bodyData.phone = phone;
+        }
 
         const response =
             await fetch(
@@ -36,17 +46,17 @@ ASIYE.wallet = {
                 {
                     method:
                         'POST',
+
                     headers: {
                         'Authorization':
                             `Bearer ${token}`,
+
                         'Content-Type':
                             'application/json'
                     },
+
                     body:
-                        JSON.stringify({
-                            amount:
-                                value.toFixed(2)
-                        })
+                        JSON.stringify(bodyData)
                 }
             );
 
@@ -59,21 +69,14 @@ ASIYE.wallet = {
 
         if (
             !response.ok ||
-            !payment.redirectUrl
+            !payment.ok
         ) {
             throw new Error(
                 payment.error ||
-                'Unable to open the EFT payment.'
+                'Unable to send the EFT banking details.'
             );
         }
 
-        /*
-         * Keep Ozow inside the Asiye WebView. Banking-app links from
-         * the hosted page are handed to the phone by Flutter when
-         * required. Ozow returns to ozowWalletReturn, which Flutter
-         * intercepts and loads the Asiye app again.
-         */
-        window.location.href =
-            payment.redirectUrl;
+        return payment;
     }
 };

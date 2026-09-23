@@ -134,7 +134,7 @@ window.AsiyePages = {
 
                 if (status) {
                     status.textContent =
-                        'Opening the front camera. Take a clear face photo.';
+                        'Opening live face scan. Centre your face and follow the movement prompts.';
                 }
 
                 try {
@@ -147,16 +147,14 @@ window.AsiyePages = {
                      */
                     if (
                         window.AsiyeNativeBridge &&
-                        typeof AsiyeNativeBridge.scanImage ===
+                        typeof AsiyeNativeBridge.scanFace ===
                             'function'
                     ) {
                         const result =
                             await AsiyeNativeBridge
-                                .scanImage({
+                                .scanFace({
                                     purpose:
-                                        'driver-profile',
-                                    facing:
-                                        'front'
+                                        'driver-profile'
                                 });
 
                         if (!result) {
@@ -192,7 +190,7 @@ window.AsiyePages = {
                                     title:
                                         'Driver face scan',
                                     subtitle:
-                                        'Centre your face inside the guide and capture a clear profile photo.'
+                                        'Centre your face inside the guide. Move naturally and smile when prompted.'
                                 });
 
                         blob =
@@ -330,8 +328,33 @@ window.AsiyePages = {
                             ? 'data-driver-profile-status'
                             : 'data-passenger-profile-status'}
                     >
-                        Asiye opens your front camera directly. Take a clear face photo and it becomes your profile picture after it is saved.
+                        Asiye opens a live front-camera scan. Centre your face, move when prompted and smile; the verified final frame becomes your profile picture.
                     </p>
+                </div>
+            `;
+
+            body.innerHTML += `
+                <div class="member-info">
+                    <h3 style="margin-top:0;">Privacy & data</h3>
+
+                    <p>
+                        Review how Asiye handles your personal information or
+                        request deletion of your account and associated data.
+                    </p>
+
+                    <a
+                        class="member-primary"
+                        href="https://asiye.cloud/privacy-policy/"
+                    >
+                        Privacy Policy
+                    </a>
+
+                    <a
+                        class="member-primary member-data-delete"
+                        href="https://asiye.cloud/delete/"
+                    >
+                        Delete my account
+                    </a>
                 </div>
             `;
 
@@ -349,52 +372,245 @@ window.AsiyePages = {
                 );
             }
         } else if (page === 'wallet') {
-            const returnStatus = new URLSearchParams(location.search).get('wallet');
+            const hasPhone = !!(user.phone || user.phoneNumber);
+
+            const phoneInputHtml = hasPhone ? '' : `
+                <div class="wallet-custom" style="margin-bottom:15px; border-top:1px solid #eee; padding-top:15px;">
+                    <label>Mobile number for SMS instructions</label>
+                    <div style="display:flex; align-items:center;">
+                        <span style="font-weight:600; font-size:16px; margin-right:8px; color:#555;">+27</span>
+                        <input
+                            name="phone"
+                            type="tel"
+                            placeholder="e.g. 82 123 4567"
+                            required
+                            style="flex:1;"
+                        >
+                    </div>
+                </div>
+            `;
+
             body.innerHTML =
                 `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
-                (returnStatus === 'success'
-                    ? note('You have returned from the bank payment. Your balance updates only after Ozow securely confirms the EFT.')
-                    : returnStatus === 'cancelled'
-                        ? note('The payment was cancelled and no funds were added.')
-                        : note('Add funds securely from your bank account using Ozow Pay by Bank.')) +
-                `<form class="wallet-topup" data-wallet-topup>
+                note(
+                    `Choose an amount to add. Your FNB EFT details will appear here and Asiye will also send them by SMS. After payment, you will receive an update when the EFT is confirmed and your wallet is credited.`
+                ) +
+                `
+                <form class="wallet-topup" data-wallet-topup>
                     <label>Amount to add</label>
+
                     <div class="wallet-amounts">
                         <button type="button" data-amount="50">R50</button>
                         <button type="button" data-amount="100">R100</button>
                         <button type="button" data-amount="200">R200</button>
                         <button type="button" data-amount="500">R500</button>
                     </div>
+
                     <div class="wallet-custom">
                         <span>R</span>
-                        <input name="amount" type="number" inputmode="decimal" min="10" max="5000" step="0.01" placeholder="Enter amount" required>
+                        <input
+                            name="amount"
+                            type="number"
+                            inputmode="decimal"
+                            min="10"
+                            max="5000"
+                            step="0.01"
+                            placeholder="Enter amount"
+                            required
+                        >
                     </div>
-                    <button class="member-primary" type="submit">Add funds with EFT</button>
-                    <p class="member-note">Ozow staging is enabled for testing. Your wallet is credited automatically only after a verified bank-payment confirmation.</p>
+
+                    ${phoneInputHtml}
+
+                    <button class="member-primary" type="submit">
+                        Add funds with EFT
+                    </button>
+
+                    <div class="member-info" data-eft-result hidden></div>
+
+                    <p class="member-note">
+                        Use the payment reference exactly. Asiye will notify you by SMS when your EFT is matched and the wallet credit is complete.
+                    </p>
                 </form>` +
-                this.row('Currency', 'South African rand · ZAR');
-            const form = body.querySelector('[data-wallet-topup]');
-            const input = form.querySelector('input[name="amount"]');
-            form.querySelectorAll('[data-amount]').forEach(button => {
-                button.onclick = () => {
-                    input.value = button.dataset.amount;
-                    form.querySelectorAll('[data-amount]').forEach(item => item.classList.remove('selected'));
-                    button.classList.add('selected');
+                this.row(
+                    'Currency',
+                    'South African rand · ZAR'
+                );
+
+            const form =
+                body.querySelector(
+                    '[data-wallet-topup]'
+                );
+
+            const input =
+                form.querySelector(
+                    'input[name="amount"]'
+                );
+
+            const phoneInput =
+                form.querySelector(
+                    'input[name="phone"]'
+                );
+
+            const resultBox =
+                form.querySelector(
+                    '[data-eft-result]'
+                );
+
+            form.querySelectorAll(
+                '[data-amount]'
+            )
+                .forEach(
+                    button => {
+                        button.onclick =
+                            () => {
+                                input.value =
+                                    button.dataset.amount;
+
+                                form.querySelectorAll(
+                                    '[data-amount]'
+                                )
+                                    .forEach(
+                                        item =>
+                                            item.classList
+                                                .remove(
+                                                    'selected'
+                                                )
+                                    );
+
+                                button.classList
+                                    .add(
+                                        'selected'
+                                    );
+                            };
+                    }
+                );
+
+            form.onsubmit =
+                async event => {
+                    event.preventDefault();
+
+                    const submit =
+                        form.querySelector(
+                            '[type="submit"]'
+                        );
+
+                    submit.disabled =
+                        true;
+
+                    submit.textContent =
+                        'Sending banking details…';
+
+                    if (resultBox) {
+                        resultBox.hidden =
+                            false;
+
+                        resultBox.innerHTML =
+                            `
+                            <strong>Preparing your EFT payment</strong>
+                            <p class="member-note">
+                                We are generating your banking details and requesting the SMS now…
+                            </p>
+                            `;
+                    }
+
+                    try {
+                        const payment =
+                            await ASIYE.wallet
+                                .startTopup(
+                                    Number(
+                                        input.value
+                                    ),
+                                    phoneInput ? phoneInput.value : null
+                                );
+
+                        if (resultBox) {
+                            const smsQueued =
+                                payment.smsStatus ===
+                                    'sent';
+
+                        if (resultBox) {
+                            resultBox.hidden =
+                                false;
+
+                            const destination = esc(payment.smsTo || 'your registered mobile number');
+
+                            resultBox.innerHTML =
+                                `
+                                <strong>
+                                    ${payment.smsStatus === 'sent'
+                                        ? 'EFT details sent by SMS'
+                                        : 'EFT details ready'}
+                                </strong>
+
+                                <p>
+                                    <b>Bank:</b> ${esc(payment.bank || 'FNB')}<br>
+                                    <b>Account:</b> ${esc(payment.accountNumber || '')}<br>
+                                    <b>Amount:</b> ${esc(this.money(payment.amount))}<br>
+                                    <b>Reference:</b> ${esc(payment.reference || '')}
+                                </p>
+
+                                <p class="member-note">
+                                    ${payment.smsStatus === 'sent'
+                                        ? `SMS sent to ${destination}. Use the reference exactly as shown.`
+                                        : 'The instruction could not be sent right now. You can still use the banking details shown above.'}
+                                </p>
+
+                                <p class="member-note">
+                                    After making the EFT, keep this reference exactly as shown. Asiye will send you an update when the payment is confirmed and your wallet has been credited.
+                                </p>
+                                `;
+                        }
+
+                        const msg = 'FNB EFT details sent by SMS.';
+
+                        app.ui?.toast?.(msg);
+
+                        if (window.Asiye) {
+                            window.Asiye.postMessage(JSON.stringify({
+                                action: 'showNotification',
+                                title: 'Banking Details Sent',
+                                message: msg
+                            }));
+                        } else if (window.Android) {
+                            window.Android.postMessage(JSON.stringify({
+                                action: 'showNotification',
+                                title: 'Banking Details Sent',
+                                message: msg
+                            }));
+                        }
+>>>>>>> Stashed changes
+
+                    } catch (error) {
+                        if (resultBox) {
+                            resultBox.hidden =
+                                false;
+
+                            resultBox.innerHTML =
+                                `
+                                <strong>Unable to prepare EFT payment</strong>
+                                <p class="member-note">
+                                    ${esc(
+                                        error.message ||
+                                        'Please try again.'
+                                    )}
+                                </p>
+                                `;
+                        }
+
+                        app.ui?.toast?.(
+                            error.message ||
+                            'Unable to prepare the EFT banking details.'
+                        );
+
+                    } finally {
+                        submit.disabled =
+                            false;
+
+                        submit.textContent =
+                            'Add funds with EFT';
+                    }
                 };
-            });
-            form.onsubmit = async event => {
-                event.preventDefault();
-                const submit = form.querySelector('[type="submit"]');
-                submit.disabled = true;
-                submit.textContent = 'Opening EFT…';
-                try {
-                    await ASIYE.wallet.startTopup(Number(input.value));
-                } catch (error) {
-                    submit.disabled = false;
-                    submit.textContent = 'Add funds with EFT';
-                    app.ui?.toast?.(error.message || 'Unable to start EFT payment.');
-                }
-            };
         } else if (page === 'vehicle') {
             if (!driver || !id) {
                 body.innerHTML =
@@ -971,10 +1187,252 @@ window.AsiyePages = {
                 () => this.open('support');
         } else if (page === 'support') {
             const config = driver ? window.ASIYE_DRIVER_CONFIG : window.ASIYE_CONFIG;
-            body.innerHTML = `<h2>How can we help?</h2><details class="member-info"><summary>My driver or passenger cannot find me</summary><p>Use Message on your trip to share a nearby landmark and agree on a safe meeting point.</p></details><details class="member-info"><summary>My payment or fare looks incorrect</summary><p>Keep your trip reference and the amount shown on the completed-trip receipt.</p></details><details class="member-info"><summary>Map or location is unavailable</summary><p>Allow location access in your browser or device settings, check your connection, then recenter the map.</p></details>`;
+
+            body.innerHTML = `
+                <h2>How can we help?</h2>
+
+                <details class="member-info">
+                    <summary>My driver or passenger cannot find me</summary>
+                    <p>Use Message on your trip to share a nearby landmark and agree on a safe meeting point.</p>
+                </details>
+
+                <details class="member-info">
+                    <summary>My payment or fare looks incorrect</summary>
+                    <p>Keep your trip reference and the amount shown on the completed-trip receipt.</p>
+                </details>
+
+                <details class="member-info">
+                    <summary>Map or location is unavailable</summary>
+                    <p>Allow location access in your browser or device settings, check your connection, then recenter the map.</p>
+                </details>
+
+                <form class="member-support-form" data-support-form>
+                    <h3>Send a support ticket</h3>
+
+                    <label>
+                        Topic
+                        <select data-support-topic>
+                            <option value="trip">Trip or booking</option>
+                            <option value="payment">Payment or wallet</option>
+                            <option value="account">Account or profile</option>
+                            <option value="driver">Driver / passenger issue</option>
+                            <option value="delivery">Delivery</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Tell us what happened
+                        <textarea
+                            data-support-message
+                            rows="5"
+                            maxlength="1500"
+                            placeholder="Include your trip reference, amount or other useful details."
+                            required
+                        ></textarea>
+                    </label>
+
+                    <button class="member-primary" type="submit">
+                        Send to Asiye Support
+                    </button>
+
+                    <p class="member-note" data-support-status>
+                        Your ticket will be available to the Asiye support team.
+                    </p>
+                </form>
+            `;
+
+            const supportForm =
+                body.querySelector(
+                    '[data-support-form]'
+                );
+
+            supportForm
+                ?.addEventListener(
+                    'submit',
+                    async event => {
+                        event.preventDefault();
+
+                        const authUser =
+                            firebase.auth()
+                                .currentUser;
+
+                        const statusElement =
+                            supportForm
+                                .querySelector(
+                                    '[data-support-status]'
+                                );
+
+                        const button =
+                            supportForm
+                                .querySelector(
+                                    '[type="submit"]'
+                                );
+
+                        const topic =
+                            supportForm
+                                .querySelector(
+                                    '[data-support-topic]'
+                                )
+                                ?.value ||
+                            'other';
+
+                        const message =
+                            supportForm
+                                .querySelector(
+                                    '[data-support-message]'
+                                )
+                                ?.value
+                                .trim() ||
+                            '';
+
+                        if (
+                            !authUser ||
+                            !id
+                        ) {
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    'Sign in again before contacting support.';
+                            }
+
+                            return;
+                        }
+
+                        if (
+                            message.length < 5
+                        ) {
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    'Add a little more detail so support can help.';
+                            }
+
+                            return;
+                        }
+
+                        if (button) {
+                            button.disabled =
+                                true;
+
+                            button.textContent =
+                                'Sending…';
+                        }
+
+                        if (statusElement) {
+                            statusElement.textContent =
+                                'Sending your ticket…';
+                        }
+
+                        try {
+                            const ticketRef =
+                                firebase
+                                    .database()
+                                    .ref(
+                                        'support_chats'
+                                    )
+                                    .push();
+
+                            await ticketRef
+                                .set({
+                                    ticketId:
+                                        ticketRef.key,
+
+                                    userId:
+                                        id,
+
+                                    authUid:
+                                        authUser.uid,
+
+                                    role:
+                                        driver
+                                            ? 'driver'
+                                            : 'passenger',
+
+                                    name:
+                                        user.name ||
+                                        user.fullName ||
+                                        user.firstName ||
+                                        (
+                                            driver
+                                                ? 'Driver'
+                                                : 'Passenger'
+                                        ),
+
+                                    phone:
+                                        user.phone ||
+                                        user.phoneNumber ||
+                                        authUser.phoneNumber ||
+                                        '',
+
+                                    email:
+                                        user.email ||
+                                        authUser.email ||
+                                        '',
+
+                                    subject:
+                                        topic,
+
+                                    message:
+                                        message,
+
+                                    status:
+                                        'open',
+
+                                    createdAt:
+                                        firebase
+                                            .database
+                                            .ServerValue
+                                            .TIMESTAMP,
+
+                                    updatedAt:
+                                        firebase
+                                            .database
+                                            .ServerValue
+                                            .TIMESTAMP
+                                });
+
+                            supportForm
+                                .reset();
+
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    `Ticket ${ticketRef.key.slice(-6)} sent. Asiye Support can now review it.`;
+                            }
+
+                        } catch (error) {
+                            console.error(
+                                'Support ticket could not be sent:',
+                                error
+                            );
+
+                            if (statusElement) {
+                                statusElement.textContent =
+                                    'Could not send the ticket. Check your connection and try again.';
+                            }
+
+                        } finally {
+                            if (button) {
+                                button.disabled =
+                                    false;
+
+                                button.textContent =
+                                    'Send to Asiye Support';
+                            }
+                        }
+                    }
+                );
+
             const email = config?.supportEmail;
-            if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) body.innerHTML += `<a class="member-primary" href="mailto:${encodeURIComponent(email)}">Email support</a>`;
-            else body.innerHTML += note('Direct support contact has not been configured for this app yet.');
+
+            if (
+                email &&
+                /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+                    .test(
+                        email
+                    )
+            ) {
+                body.innerHTML +=
+                    `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`;
+            }
         } else {
             try {
                 if (!id) throw new Error('Sign in to view your records.');

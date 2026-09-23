@@ -112,10 +112,38 @@ window.AsiyeNativeBridge = {
         return this.request('pickContact');
     },
 
+    scanFace({
+        purpose = 'profile'
+    } = {}) {
+        return this.request(
+            'scanFace',
+            {
+                purpose
+            }
+        );
+    },
+
     scanImage({
         purpose = 'image',
         facing = 'rear'
     } = {}) {
+        /*
+         * Backward compatibility:
+         * existing passenger/driver profile code asked for a front
+         * camera "scanImage". Route those profile selfies through the
+         * new native live scanner without changing document scans.
+         */
+        if (
+            facing === 'front' &&
+            /profile|selfie|face/i.test(
+                String(purpose)
+            )
+        ) {
+            return this.scanFace({
+                purpose
+            });
+        }
+
         return this.request('scanImage', {
             purpose,
             facing

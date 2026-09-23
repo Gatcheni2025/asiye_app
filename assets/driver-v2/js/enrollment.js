@@ -101,16 +101,14 @@
                  */
                 if (
                     window.AsiyeNativeBridge &&
-                    typeof AsiyeNativeBridge.scanImage ===
+                    typeof AsiyeNativeBridge.scanFace ===
                         'function'
                 ) {
                     const nativeResult =
                         await AsiyeNativeBridge
-                            .scanImage({
+                            .scanFace({
                                 purpose:
-                                    'driver-profile',
-                                facing:
-                                    'front'
+                                    'driver-profile'
                             });
 
                     if (!nativeResult) {
@@ -134,7 +132,7 @@
                                 title:
                                     'Driver face scan',
                                 subtitle:
-                                    'Centre your face inside the guide and capture a clear profile photo.'
+                                    'Centre your face inside the guide. Move naturally and smile when prompted.'
                             });
 
                     blob =

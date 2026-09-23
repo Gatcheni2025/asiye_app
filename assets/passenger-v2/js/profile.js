@@ -90,7 +90,7 @@ ASIYE.profile = {
                     reject(new Error('The selected image could not be opened.'));
 
                 img.onload = () => {
-                    const maxSide = 1000;
+                    const maxSide = 720;
                     let width = img.naturalWidth || img.width;
                     let height = img.naturalHeight || img.height;
 
@@ -119,7 +119,7 @@ ASIYE.profile = {
                             resolve(blob);
                         },
                         'image/jpeg',
-                        0.78
+                        0.72
                     );
                 };
 
@@ -170,7 +170,8 @@ ASIYE.profile = {
         const updates = {
             profile_picture_url: url,
             profileImageUrl: url,
-            profilePhotoUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+            profilePhotoUpdatedAt: firebase.database.ServerValue.TIMESTAMP,
+            liveSelfieVerifiedAt: firebase.database.ServerValue.TIMESTAMP
         };
 
         await firebase
@@ -337,7 +338,7 @@ ASIYE.profile = {
 
                 if (status) {
                     status.textContent =
-                        'Opening the front camera. Take a clear face photo.';
+                        'Opening live face scan. Centre your face and follow the movement prompts.';
                 }
 
                 try {
@@ -350,16 +351,14 @@ ASIYE.profile = {
                      */
                     if (
                         window.AsiyeNativeBridge &&
-                        typeof AsiyeNativeBridge.scanImage ===
+                        typeof AsiyeNativeBridge.scanFace ===
                             'function'
                     ) {
                         const result =
                             await AsiyeNativeBridge
-                                .scanImage({
+                                .scanFace({
                                     purpose:
-                                        'passenger-profile',
-                                    facing:
-                                        'front'
+                                        'passenger-profile'
                                 });
 
                         if (!result) {
@@ -395,7 +394,7 @@ ASIYE.profile = {
                                     title:
                                         'Passenger face scan',
                                     subtitle:
-                                        'Centre your face inside the guide and capture a clear profile photo.'
+                                        'Centre your face inside the guide. Move naturally and smile when prompted.'
                                 });
 
                         blob =

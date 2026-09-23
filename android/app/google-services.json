@@ -15,6 +15,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "531902350858-84kniq89gljpao0n48e4ogk8jvaqfpkb.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.asiyeapp.asiye",
+            "certificate_hash": "ca0eab862b46c8c87578bbf224a14b2f7fba4a59"
+          }
+        },
+        {
           "client_id": "531902350858-8hpmg60nkeegncd6sd415ab5vm69rdcf.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -47,6 +55,14 @@
           }
         },
         {
+          "client_id": "531902350858-j4rmaf3j5btard1ckkijiebo18s8t0n7.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.asiyeapp.asiye",
+            "certificate_hash": "07c92cbad770666e6d27feaafc5e1a4139870246"
+          }
+        },
+        {
           "client_id": "531902350858-s6ffv07tkt7ep6n7nov3k2653kghr8j9.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
@@ -70,6 +86,14 @@
             {
               "client_id": "531902350858-p5bf7u1goohrufm74tgc4v4vvj4fb4j3.apps.googleusercontent.com",
               "client_type": 3
+            },
+            {
+              "client_id": "531902350858-a0nbhpf7udkj1m67umfm5905q9vs5e46.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.asiyeapp.asiye",
+                "app_store_id": "6765691149"
+              }
             }
           ]
         }

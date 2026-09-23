@@ -29,6 +29,10 @@ ASIYE.map = {
 
     followUser: true,
 
+    tripOverviewActive: false,
+
+    lastTripOverviewFitAt: 0,
+
 
     init() {
 
@@ -212,6 +216,15 @@ ASIYE.map = {
         } else {
             AsiyeLiveCar.move(this.driverMarker, [lng, lat], heading);
         }
+
+        /*
+         * During an active ride keep the passenger aware of both the
+         * moving car and the complete route. We throttle camera changes
+         * so Firebase GPS updates do not make the map feel jumpy.
+         */
+        if (this.tripOverviewActive) {
+            this.fitActiveTrip(false);
+        }
     },
 
     removeDriverMarker() {
@@ -355,6 +368,7 @@ ASIYE.map = {
 
     centerUser(zoom = 15) {
 
+        this.tripOverviewActive = false;
         this.followUser = true;
 
         const location = ASIYE.state.location;
@@ -597,6 +611,9 @@ ASIYE.map = {
 
     fitTrip() {
 
+        this.followUser = false;
+        this.tripOverviewActive = true;
+
         const pickup = ASIYE.state.location;
         const destination = ASIYE.state.destination;
 
@@ -636,6 +653,9 @@ ASIYE.map = {
 
 
     fitRouteGeometry(geometry) {
+
+        this.followUser = false;
+        this.tripOverviewActive = true;
 
         if (
             !this.instance ||
@@ -712,7 +732,128 @@ ASIYE.map = {
     },
 
 
+    /* ========================================================
+       ACTIVE TRIP OVERVIEW
+       ======================================================== */
+
+    fitActiveTrip(force = true) {
+
+        if (!this.instance) return;
+
+        const now = Date.now();
+
+        if (
+            !force &&
+            now - this.lastTripOverviewFitAt < 2500
+        ) {
+            return;
+        }
+
+        const bounds =
+            new mapboxgl.LngLatBounds();
+
+        let hasPoint = false;
+
+        const extend = (lng, lat) => {
+            const x = Number(lng);
+            const y = Number(lat);
+
+            if (
+                !Number.isFinite(x) ||
+                !Number.isFinite(y) ||
+                Math.abs(y) > 90 ||
+                Math.abs(x) > 180
+            ) {
+                return;
+            }
+
+            bounds.extend([x, y]);
+            hasPoint = true;
+        };
+
+        const geometry =
+            this.routeGeometry;
+
+        if (
+            geometry &&
+            Array.isArray(geometry.coordinates)
+        ) {
+            geometry.coordinates.forEach(
+                coord => {
+                    if (
+                        Array.isArray(coord) &&
+                        coord.length >= 2
+                    ) {
+                        extend(coord[0], coord[1]);
+                    }
+                }
+            );
+        }
+
+        const pickup =
+            ASIYE.state?.location || {};
+
+        const destination =
+            ASIYE.state?.destination || {};
+
+        extend(
+            pickup.longitude,
+            pickup.latitude
+        );
+
+        extend(
+            destination.longitude,
+            destination.latitude
+        );
+
+        if (this.driverLocation) {
+            extend(
+                this.driverLocation[1],
+                this.driverLocation[0]
+            );
+        }
+
+        if (!hasPoint || bounds.isEmpty()) return;
+
+        const sheet =
+            document.getElementById('sheetContent');
+
+        const bottomPadding =
+            Math.min(
+                Math.max(
+                    (sheet?.offsetHeight || 280) + 34,
+                    270
+                ),
+                Math.round(window.innerHeight * .58)
+            );
+
+        this.followUser = false;
+        this.tripOverviewActive = true;
+        this.lastTripOverviewFitAt = now;
+
+        this.instance.fitBounds(
+            bounds,
+            {
+                padding: {
+                    top: 105,
+                    right: 38,
+                    bottom: bottomPadding,
+                    left: 38
+                },
+                duration:
+                    force ? 850 : 550,
+                maxZoom: 15.25,
+                essential: true
+            }
+        );
+    },
+
+
     clearTrip() {
+
+        this.tripOverviewActive = false;
+        this.lastTripOverviewFitAt = 0;
+        this.followUser = true;
 
         if (this.destinationMarker) {
 

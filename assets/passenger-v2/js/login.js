@@ -23,6 +23,12 @@ window.ASIYE_PASSENGER_LOGIN = {
     pendingUser:
         null,
 
+    pendingPassengerFaceBlob:
+        null,
+
+    pendingPassengerFacePreviewUrl:
+        null,
+
     nativeVerificationId:
         null,
 
@@ -310,6 +316,19 @@ window.ASIYE_PASSENGER_LOGIN = {
                 () => {
 
                     this.signInWithApple();
+                }
+            );
+
+
+        document
+            .getElementById(
+                'scanPassengerFace'
+            )
+            ?.addEventListener(
+                'click',
+                () => {
+
+                    this.scanPassengerFace();
                 }
             );
 
@@ -663,17 +682,23 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         try {
 
-            const result = this.nativeVerificationId
-                ? await firebase.auth().signInWithCredential(
-                    firebase.auth.PhoneAuthProvider.credential(
-                        this.nativeVerificationId,
-                        code
-                    )
-                )
-                : await this.confirmationResult.confirm(code);
+            if (
+                this.nativeVerificationId &&
+                window.AsiyeNativeAuth?.post({
+                    action: 'verifyPhoneAuthCode',
+                    code
+                })
+            ) {
+                return;
+            }
 
-            this.nativeVerificationId = null;
+            const result =
+                await this.confirmationResult.confirm(
+                    code
+                );
 
+            this.nativeVerificationId =
+                null;
 
             await this.afterAuthentication(
                 result.user
@@ -1198,6 +1223,223 @@ window.ASIYE_PASSENGER_LOGIN = {
 
 
     /* ========================================================
+       NEW PASSENGER LIVE FACE SCAN
+       Same native scanner used by the Account page.
+       ======================================================== */
+
+    async scanPassengerFace() {
+
+        const button =
+            document.getElementById(
+                'scanPassengerFace'
+            );
+
+        const status =
+            document.getElementById(
+                'newPassengerFaceStatus'
+            );
+
+        const preview =
+            document.getElementById(
+                'newPassengerFacePreview'
+            );
+
+        const placeholder =
+            document.getElementById(
+                'newPassengerFacePlaceholder'
+            );
+
+
+        if (!button) {
+            return;
+        }
+
+
+        button.disabled =
+            true;
+
+        button.textContent =
+            'Opening face scan…';
+
+        if (status) {
+            status.textContent =
+                'Centre your face and follow the movement prompts.';
+        }
+
+
+        try {
+
+            if (
+                !window.AsiyePhpImageUpload
+            ) {
+                throw new Error(
+                    'Image upload service is unavailable.'
+                );
+            }
+
+
+            let blob =
+                null;
+
+
+            if (
+                window.AsiyeNativeBridge &&
+                typeof AsiyeNativeBridge.scanFace ===
+                    'function'
+            ) {
+
+                const result =
+                    await AsiyeNativeBridge
+                        .scanFace({
+                            purpose:
+                                'passenger-profile'
+                        });
+
+
+                if (!result) {
+
+                    if (status) {
+                        status.textContent =
+                            'Face scan cancelled. No image was saved.';
+                    }
+
+                    return;
+                }
+
+
+                blob =
+                    AsiyePhpImageUpload
+                        .toBlob(
+                            result
+                        );
+
+            } else if (
+                window.AsiyeFaceScanner
+            ) {
+
+                const result =
+                    await AsiyeFaceScanner
+                        .open({
+                            title:
+                                'Passenger face scan',
+                            subtitle:
+                                'Centre your face inside the guide. Turn your head and smile when prompted.'
+                        });
+
+
+                blob =
+                    result?.blob ||
+                    null;
+
+            } else {
+
+                throw new Error(
+                    'Live face scan is unavailable in this build.'
+                );
+            }
+
+
+            if (!blob) {
+                throw new Error(
+                    'No verified face image was captured.'
+                );
+            }
+
+
+            if (
+                typeof AsiyePhpImageUpload
+                    .compressProfileImage ===
+                    'function'
+            ) {
+                blob =
+                    await AsiyePhpImageUpload
+                        .compressProfileImage(
+                            blob
+                        );
+            }
+
+
+            this.pendingPassengerFaceBlob =
+                blob;
+
+
+            if (
+                this.pendingPassengerFacePreviewUrl
+            ) {
+                URL.revokeObjectURL(
+                    this.pendingPassengerFacePreviewUrl
+                );
+            }
+
+
+            this.pendingPassengerFacePreviewUrl =
+                URL.createObjectURL(
+                    blob
+                );
+
+
+            if (preview) {
+                preview.src =
+                    this.pendingPassengerFacePreviewUrl;
+
+                preview.hidden =
+                    false;
+            }
+
+
+            if (placeholder) {
+                placeholder.hidden =
+                    true;
+            }
+
+
+            if (status) {
+                const sizeKb =
+                    Math.max(
+                        1,
+                        Math.round(
+                            blob.size /
+                            1024
+                        )
+                    );
+
+                status.textContent =
+                    `Face scan complete (${sizeKb} KB). Continue to save your profile.`;
+            }
+
+
+            button.textContent =
+                'Rescan face';
+
+        } catch (error) {
+
+            console.error(
+                'New passenger face scan failed:',
+                error
+            );
+
+
+            if (status) {
+                status.textContent =
+                    error?.message ||
+                    'Could not complete the face scan.';
+            }
+
+
+            button.textContent =
+                this.pendingPassengerFaceBlob
+                    ? 'Rescan face'
+                    : 'Scan face';
+
+        } finally {
+
+            button.disabled =
+                false;
+        }
+    },
+
+
+    /* ========================================================
        CREATE NEW PASSENGER
        ======================================================== */
 
@@ -1239,36 +1481,91 @@ window.ASIYE_PASSENGER_LOGIN = {
         }
 
 
-        const selfieInput =
-            document.getElementById('passengerLiveSelfie');
+        let selfie =
+            this.pendingPassengerFaceBlob;
 
-        const selfie =
-            selfieInput?.files?.[0];
-
-        if (!selfie || !String(selfie.type || '').startsWith('image/')) {
-            this.toast('Take a live selfie to continue.');
+        if (
+            !selfie ||
+            !String(
+                selfie.type ||
+                ''
+            ).startsWith(
+                'image/'
+            )
+        ) {
+            this.toast(
+                'Complete the live face scan to continue.'
+            );
             return;
         }
 
+
+        if (
+            !window.AsiyePhpImageUpload
+        ) {
+            this.toast(
+                'Image upload service is unavailable.'
+            );
+            return;
+        }
+
+
         this.showAuthProgress(
             'Updating your safety profile',
-            'Uploading your live selfie securely…'
+            'Compressing and saving your verified face scan…'
         );
+
 
         let photoURL;
 
+
         try {
-            const photoRef = firebase.storage()
-                .ref(`profile_photos/passengers/${user.uid}/live-selfie.jpg`);
-            await photoRef.put(selfie, {
-                contentType: selfie.type,
-                customMetadata: { capture: 'live-selfie' }
-            });
-            photoURL = await photoRef.getDownloadURL();
+
+            const uploaded =
+                await AsiyePhpImageUpload
+                    .upload(
+                        selfie,
+                        {
+                            userId:
+                                user.uid,
+                            purpose:
+                                'passenger-profile',
+                            filename:
+                                'passenger-profile.jpg'
+                        }
+                    );
+
+
+            photoURL =
+                uploaded.url;
+
+
+            try {
+                await user
+                    .updateProfile({
+                        photoURL
+                    });
+            } catch (profileError) {
+                console.warn(
+                    'Passenger Auth profile photo update skipped:',
+                    profileError
+                );
+            }
+
         } catch (error) {
+
             this.hideAuthProgress();
-            console.error('Passenger selfie upload failed:', error);
-            this.toast('Could not upload your selfie. Check camera and connection permissions.');
+
+            console.error(
+                'Passenger face scan upload failed:',
+                error
+            );
+
+            this.toast(
+                error?.message ||
+                'Could not save your face scan. Check your connection and try again.'
+            );
+
             return;
         }
 
@@ -1311,8 +1608,17 @@ window.ASIYE_PASSENGER_LOGIN = {
             profileImage:
                 photoURL,
 
+            profile_picture_url:
+                photoURL,
+
+            profileImageUrl:
+                photoURL,
+
             photoURL:
                 photoURL,
+
+            profilePhotoUpdatedAt:
+                firebase.database.ServerValue.TIMESTAMP,
 
             liveSelfieVerifiedAt:
                 firebase.database.ServerValue.TIMESTAMP,
@@ -1653,6 +1959,41 @@ window.ASIYE_PASSENGER_LOGIN = {
         }
 
 
+        const diagnosticCodes = [
+            'auth/app-not-authorized',
+            'auth/invalid-app-credential',
+            'auth/captcha-check-failed',
+            'auth/missing-client-identifier',
+            'auth/operation-not-allowed',
+            'auth/native-session-failed',
+            'auth/native-phone-auth-failed',
+            'auth/session-handoff-failed'
+        ];
+
+        if (
+            diagnosticCodes.includes(
+                error?.code
+            ) &&
+            error?.code &&
+            !message.includes(
+                error.code
+            )
+        ) {
+            message +=
+                ` [${error.code}]`;
+
+            if (
+                error?.message &&
+                !message.includes(
+                    error.message
+                )
+            ) {
+                message +=
+                    ` ${error.message}`;
+            }
+        }
+
+
         const target =
             document.getElementById(
 
@@ -1834,6 +2175,203 @@ window.onNativePhoneAuthError = function (payload) {
         'phone'
     );
 };
+
+const ASIYE_NATIVE_SESSION_EXCHANGE_URL =
+    'https://us-central1-asiye-80386.cloudfunctions.net/exchangeNativeAuthSession';
+
+window.onNativeFirebaseAuthSuccess = async function (payload) {
+    const login =
+        window.ASIYE_PASSENGER_LOGIN;
+
+    const provider =
+        String(
+            payload?.provider ||
+            'account'
+        );
+
+    try {
+        if (
+            !payload?.firebaseIdToken
+        ) {
+            throw new Error(
+                'The native Firebase session did not return an ID token.'
+            );
+        }
+
+        login.showAuthProgress(
+            'Signing you in',
+            'Securing your Asiye session...'
+        );
+
+        const response =
+            await fetch(
+                ASIYE_NATIVE_SESSION_EXCHANGE_URL,
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${payload.firebaseIdToken}`,
+
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            provider
+                        })
+                }
+            );
+
+        const session =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+        if (
+            !response.ok ||
+            !session.customToken
+        ) {
+            const detail =
+                session.code
+                    ? ` [${session.code}]`
+                    : '';
+
+            throw new Error(
+                (session.error ||
+                'Unable to create the Asiye Firebase session.') +
+                detail
+            );
+        }
+
+        const result =
+            await firebase
+                .auth()
+                .signInWithCustomToken(
+                    session.customToken
+                );
+
+        if (!result.user) {
+            throw new Error(
+                'Firebase did not return a signed-in user.'
+            );
+        }
+
+        await login.afterAuthentication(
+            result.user
+        );
+
+    } catch (error) {
+        console.error(
+            'Native Firebase session handoff failed:',
+            error
+        );
+
+        login.hideAuthProgress();
+
+        if (
+            provider ===
+            'phone'
+        ) {
+            login.handleAuthError(
+                {
+                    code:
+                        'auth/native-session-failed',
+
+                    message:
+                        error?.message ||
+                        'Unable to complete phone authentication.'
+                },
+                'phone'
+            );
+
+        } else {
+            login.handleSocialError(
+                {
+                    code:
+                        'auth/native-session-failed',
+
+                    message:
+                        error?.message ||
+                        `${provider} authentication failed.`
+                },
+                provider === 'apple'
+                    ? 'Apple'
+                    : 'Google'
+            );
+        }
+    }
+};
+
+window.onNativeFirebaseAuthError = function (payload) {
+    const login =
+        window.ASIYE_PASSENGER_LOGIN;
+
+    const provider =
+        String(
+            payload?.provider ||
+            'account'
+        );
+
+    const code =
+        String(
+            payload?.code ||
+            'native-auth-failed'
+        );
+
+    const message =
+        payload?.message ||
+        'Authentication failed.';
+
+    console.error(
+        'Native Firebase authentication failed:',
+        {
+            provider,
+            code,
+            message
+        }
+    );
+
+    login.hideAuthProgress();
+
+    if (
+        provider ===
+        'phone'
+    ) {
+        login.nativeVerificationId =
+            null;
+
+        login.handleAuthError(
+            {
+                code:
+                    `auth/${code}`,
+
+                message
+            },
+            'phone'
+        );
+
+        return;
+    }
+
+    login.handleSocialError(
+        {
+            code:
+                `auth/${code}`,
+
+            message:
+                `${message} [${code}]`
+        },
+        provider === 'apple'
+            ? 'Apple'
+            : 'Google'
+    );
+};
+
 
 window.onGoogleNativeLoginSuccess = async function (payload) {
     try {
