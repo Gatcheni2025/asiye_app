@@ -1796,3 +1796,80 @@ document.addEventListener(
 
     }
 );
+
+
+/* ASIYE_NATIVE_AUTH_BRIDGE_V1
+   Prefer Flutter native Google/Apple auth inside the Android WebView.
+   Browser Firebase popup remains the fallback for normal web usage. */
+(() => {
+    const login = window.ASIYE_DRIVER_LOGIN;
+    if (!login) return;
+
+    const nativeChannel = () => window.Asiye || window.Android || null;
+    const postNative = (message) => {
+        const channel = nativeChannel();
+        if (!channel || typeof channel.postMessage !== 'function') return false;
+        channel.postMessage(message);
+        return true;
+    };
+
+    const webGoogle = login.signInWithGoogle.bind(login);
+    const webApple = login.signInWithApple.bind(login);
+
+    login.signInWithGoogle = async function () {
+        if (!postNative('triggerGoogleSignIn')) return webGoogle();
+        const button = document.getElementById('googleLoginButton');
+        if (button) { button.disabled = true; button.textContent = 'Connecting to Google...'; }
+    };
+
+    login.signInWithApple = async function () {
+        if (!postNative('triggerAppleSignIn')) return webApple();
+        const button = document.getElementById('appleLoginButton');
+        if (button) { button.disabled = true; button.textContent = 'Connecting to Apple...'; }
+    };
+
+    window.onGoogleNativeLoginSuccess = async (data) => {
+        try {
+            if (!data?.idToken) throw new Error('Google did not return an ID token.');
+            const credential = firebase.auth.GoogleAuthProvider.credential(data.idToken);
+            const result = await firebase.auth().signInWithCredential(credential);
+            if (!result.user) throw new Error('Google authentication failed.');
+            await login.verifyDriverProfile(result.user);
+        } catch (error) {
+            console.error('Native Google Firebase sign-in failed:', error);
+            login.handleSocialError(error, 'Google');
+        } finally {
+            const button = document.getElementById('googleLoginButton');
+            if (button) { button.disabled = false; button.innerHTML = '<span class="social-provider-icon google-icon">G</span><span>Continue with Google</span>'; }
+        }
+    };
+
+    window.onGoogleNativeLoginError = (message) => {
+        const button = document.getElementById('googleLoginButton');
+        if (button) button.disabled = false;
+        if (String(message || '').toLowerCase() !== 'cancelled') login.toast('Google sign-in failed. Please try again.');
+    };
+
+    window.onAppleNativeLoginSuccess = async (data) => {
+        try {
+            if (!data?.identityToken) throw new Error('Apple did not return an identity token.');
+            const provider = new firebase.auth.OAuthProvider('apple.com');
+            const credential = provider.credential({ idToken: data.identityToken });
+            const result = await firebase.auth().signInWithCredential(credential);
+            if (!result.user) throw new Error('Apple authentication failed.');
+            await login.verifyDriverProfile(result.user);
+        } catch (error) {
+            console.error('Native Apple Firebase sign-in failed:', error);
+            login.handleSocialError(error, 'Apple');
+        } finally {
+            const button = document.getElementById('appleLoginButton');
+            if (button) { button.disabled = false; button.innerHTML = '<i class="fab fa-apple"></i><span>Continue with Apple</span>'; }
+        }
+    };
+
+    window.onAppleNativeLoginError = (message) => {
+        const button = document.getElementById('appleLoginButton');
+        if (button) button.disabled = false;
+        if (String(message || '').toLowerCase() !== 'cancelled') login.toast('Apple sign-in failed. Please try again.');
+    };
+})();
