@@ -1091,7 +1091,7 @@ ASIYE.club = {
                 pricing.pricePerPassenger,
 
             pricingVersion:
-                1,
+                2,
 
             commuterId:
                 uid,
