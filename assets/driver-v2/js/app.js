@@ -968,8 +968,8 @@ ASIYE_DRIVER.ui = {
             isClub
 
             ? Number(
-                request.totalPoolFare ||
-                request.calculatedPrice ||
+                request.pricePerPassenger ||
+                request.agreedFare ||
                 0
             )
 
@@ -979,6 +979,18 @@ ASIYE_DRIVER.ui = {
                 request.calculatedPrice ||
                 0
             );
+
+
+        const poolTotal =
+
+            isClub
+
+            ? Number(
+                request.totalPoolFare ||
+                0
+            )
+
+            : 0;
 
 
         const distance =
@@ -1237,6 +1249,19 @@ ASIYE_DRIVER.ui = {
 
                     </div>
 
+
+                    <div>
+
+                        <span>
+                            Pool total
+                        </span>
+
+                        <strong>
+                            R${poolTotal.toFixed(2)}
+                        </strong>
+
+                    </div>
+
                 </div>
 
                 `
@@ -1250,7 +1275,7 @@ ASIYE_DRIVER.ui = {
                 <span>
                     ${
                         isClub
-                        ? 'Total payout'
+                        ? 'Passenger fare'
                         : isDelivery
                             ? 'Delivery fare'
                             : 'Trip fare'
@@ -1744,14 +1769,33 @@ ASIYE_DRIVER.ui = {
                 <div>
 
                     <span>
-                        Total payout
+                        Passenger fare
+                    </span>
+
+                    <strong>
+                        R${
+                            Number(
+                                request.pricePerPassenger ||
+                                request.agreedFare ||
+                                0
+                            )
+                            .toFixed(2)
+                        }
+                    </strong>
+
+                </div>
+
+
+                <div>
+
+                    <span>
+                        Pool total
                     </span>
 
                     <strong>
                         R${
                             Number(
                                 request.totalPoolFare ||
-                                request.calculatedPrice ||
                                 0
                             )
                             .toFixed(2)
