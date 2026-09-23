@@ -1664,7 +1664,7 @@ exports.notifyDriversWhenClubReady = functions
 
     const requiredSeats = Number(
       request.capacity ||
-      (request.clubMode === "club7" ? 7 : 4)
+      (request.clubMode === "club7" ? 5 : 3)
     );
 
     const taxisSnapshot = await admin.database().ref("/taxis").once("value");
@@ -1746,11 +1746,10 @@ exports.notifyDriversWhenClubReady = functions
       );
 
     if (
-      request.clubMode === "club4" &&
-      passengerCount < 3
+      passengerCount < requiredSeats
     ) {
       console.warn(
-        `Club ${requestId} became ready before 3 passengers were recorded.`
+        `Work pool ${requestId} became ready before ${requiredSeats} passengers were recorded.`
       );
 
       return null;
