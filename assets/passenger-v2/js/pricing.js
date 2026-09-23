@@ -48,8 +48,12 @@ ASIYE.pricing = {
 
         club4: {
 
-            divisor:
-                4,
+            /*
+             * 4-seater vehicle = 3 paying passengers.
+             * The driver seat is never included in the fare split.
+             */
+            payingPassengers:
+                3,
 
             minimumFare:
                 18
@@ -58,8 +62,11 @@ ASIYE.pricing = {
 
         club7: {
 
-            divisor:
-                7,
+            /*
+             * Work 7 currently operates with 5 paying passengers.
+             */
+            payingPassengers:
+                5,
 
             minimumFare:
                 15
@@ -135,24 +142,43 @@ ASIYE.pricing = {
 
 
         /*
-         * Club pricing:
+         * Asiye Work pricing:
          *
-         * Total amount rate split into the number of passengers plus 15%
+         * 1. Start with the Asiye Go route fare.
+         * 2. Add 15% to the pool total.
+         * 3. Split that total only between PAYING passengers:
+         *      Work 4 -> 3 passengers
+         *      Work 7 -> 5 passengers
+         *
+         * Example:
+         * R100 Go -> R115 Work pool total
+         * Work 4 -> R115 / 3 = R38.33 per passenger
+         * Work 7 -> R115 / 5 = R23.00 per passenger
          */
 
-        const clubDriverFare = Math.round(goFare * 1.15);
-
-        const club4Fare =
-
-            Math.ceil(
-                clubDriverFare / 4
+        const workPoolTotal =
+            Math.round(
+                goFare * 1.15
             );
 
+        const money =
+            value =>
+                Math.round(
+                    Number(value || 0) * 100
+                ) / 100;
+
+        const club4Fare =
+            money(
+                workPoolTotal /
+                this.rates.club4
+                    .payingPassengers
+            );
 
         const club7Fare =
-
-            Math.ceil(
-                clubDriverFare / 7
+            money(
+                workPoolTotal /
+                this.rates.club7
+                    .payingPassengers
             );
 
 
@@ -168,10 +194,10 @@ ASIYE.pricing = {
                 club7Fare,
 
             club4Total:
-                club4Fare * 4,
+                workPoolTotal,
 
             club7Total:
-                club7Fare * 7
+                workPoolTotal
         };
     }
 
