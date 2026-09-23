@@ -766,17 +766,14 @@ ASIYE.club = {
                         );
 
 
+                    /*
+                     * Always recalculate from the stored pool total.
+                     * This also fixes any still-open legacy pool that
+                     * was previously split by 4 or 7 seats.
+                     */
                     const seatPrice =
 
-                        Number(
-                            pool.pricePerPassenger
-                        ) > 0
-
-                        ? Number(
-                            pool.pricePerPassenger
-                        )
-
-                        : Math.round(
+                        Math.round(
                             (
                                 totalFare /
                                 config.capacity
