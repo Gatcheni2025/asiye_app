@@ -1755,6 +1755,64 @@ exports.notifyDriversWhenClubReady = functions
       return null;
     }
 
+    /*
+     * Canonical Work fare at dispatch time.
+     * This also repairs a legacy pool that was split by 4/7 instead
+     * of the current 3/5 paying-passenger capacity.
+     */
+    const poolTotal =
+      Number(
+        request.totalPoolFare ||
+        0
+      );
+
+    if (
+      Number.isFinite(poolTotal) &&
+      poolTotal > 0
+    ) {
+      const canonicalPassengerFare =
+        Math.round(
+          (
+            poolTotal /
+            requiredSeats
+          ) *
+          100
+        ) / 100;
+
+      const pricingUpdates = {
+        pricePerPassenger:
+          canonicalPassengerFare,
+        agreedFare:
+          canonicalPassengerFare,
+        pricingVersion:
+          2
+      };
+
+      Object.keys(
+        request.passengers ||
+        {}
+      ).forEach(
+        passengerId => {
+          pricingUpdates[
+            `passengers/${passengerId}/price`
+          ] =
+            canonicalPassengerFare;
+        }
+      );
+
+      await change.after.ref
+        .parent
+        .update(
+          pricingUpdates
+        );
+
+      request.pricePerPassenger =
+        canonicalPassengerFare;
+
+      request.agreedFare =
+        canonicalPassengerFare;
+    }
+
     await Promise.all(
       selected.map(
         async candidate => {
