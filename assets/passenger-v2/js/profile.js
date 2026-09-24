@@ -8,13 +8,33 @@ window.ASIYE = window.ASIYE || {};
 ASIYE.profile = {
 
     getUrl(user = ASIYE.state?.user || {}) {
-        return String(
+        const raw = String(
             user.profileImageUrl ||
             user.profile_picture_url ||
+            user.passengerProfileImageUrl ||
             user.profilePhotoUrl ||
             user.photoURL ||
             ''
         ).trim();
+
+        if (!raw) return '';
+
+        try {
+            if (/^https?:\/\//i.test(raw)) {
+                return raw.replace(/^http:/i, 'https:');
+            }
+
+            if (raw.startsWith('//')) {
+                return 'https:' + raw;
+            }
+
+            return new URL(
+                raw.replace(/^\.\//, '').replace(/^\//, ''),
+                'https://app.asiye.cloud/'
+            ).href;
+        } catch (_) {
+            return raw.replace(/^http:/i, 'https:');
+        }
     },
 
     async saveFace(blob, userId = ASIYE.state?.userId) {
