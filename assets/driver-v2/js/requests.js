@@ -1293,6 +1293,24 @@ ASIYE_DRIVER.requests = {
             );
 
 
+            if (
+                claimedRequest.type ===
+                'delivery'
+            ) {
+                await firebase
+                    .database()
+                    .ref(
+                        `delivery_requests/${id}`
+                    )
+                    .update(
+                        updates
+                    )
+                    .catch(
+                        () => {}
+                    );
+            }
+
+
             /* ========================================================
                STEP 10
                UPDATE DRIVER PROFILE
