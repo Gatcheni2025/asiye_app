@@ -3859,6 +3859,14 @@ ASIYE_DRIVER.ui = {
                     image.referrerPolicy =
                         'no-referrer';
 
+                    image.style.width = '100%';
+                    image.style.height = '100%';
+                    image.style.display = 'block';
+                    image.style.objectFit = 'cover';
+                    image.style.objectPosition = '50% 38%';
+
+                    target.style.overflow = 'hidden';
+
                     target.appendChild(
                         image
                     );

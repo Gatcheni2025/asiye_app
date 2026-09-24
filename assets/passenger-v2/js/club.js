@@ -493,6 +493,10 @@ ASIYE.club = {
                 .requirePassengerPin();
 
         await ASIYE.booking.requireTripShare({
+            requestId:
+                poolId,
+            liveTrackingUrl:
+                ASIYE.booking.liveTrackingUrl(poolId),
             pickupPin:
                 pin,
             pickupAddress:
@@ -858,6 +862,10 @@ ASIYE.club = {
 
 
         await ASIYE.booking.requireTripShare({
+            requestId:
+                requestId,
+            liveTrackingUrl:
+                ASIYE.booking.liveTrackingUrl(requestId),
             pickupPin:
                 pin,
             pickupAddress:
@@ -1029,6 +1037,9 @@ ASIYE.club = {
                     .database
                     .ServerValue
                     .TIMESTAMP,
+
+            liveTrackingUrl:
+                ASIYE.booking.liveTrackingUrl(requestId),
 
             commuterLocation: {
 

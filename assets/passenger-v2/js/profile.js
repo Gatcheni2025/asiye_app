@@ -39,6 +39,9 @@ ASIYE.profile = {
         const patch = {
             profileImageUrl: url,
             profile_picture_url: url,
+            faceScanCompleted: true,
+            faceScanVerifiedAt:
+                firebase.database.ServerValue.TIMESTAMP,
             profilePhotoUpdatedAt:
                 firebase.database.ServerValue.TIMESTAMP
         };
@@ -96,13 +99,19 @@ ASIYE.profile = {
     async ensureRequired() {
         const user = ASIYE.state?.user || {};
         const existing = this.getUrl(user);
+        const faceScanCompleted =
+            user.faceScanCompleted === true ||
+            user.faceScanVerified === true;
 
-        if (existing) {
+        // A social-login/avatar image is not enough for the first trip.
+        // The first booking requires a fresh camera face scan. Once saved,
+        // later trips can reuse the verified profile picture.
+        if (existing && faceScanCompleted) {
             return existing;
         }
 
         ASIYE.ui?.toast?.(
-            'A profile face scan is required before you can make a booking.'
+            'Before your first trip, scan your face. The camera photo becomes your Asiye profile picture.'
         );
 
         try {

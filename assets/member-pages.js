@@ -18,18 +18,38 @@
 
     const compressImage = async blob => {
         const bitmap = await createImageBitmap(blob);
-        const maxSide = 1000;
-        const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+
+        // Profile pictures are intentionally square. The native face scan
+        // uses the front camera and asks the user to centre their face, so a
+        // centred square crop gives a consistent, premium avatar everywhere.
+        const sourceSide = Math.min(bitmap.width, bitmap.height);
+        const sourceX = Math.max(0, (bitmap.width - sourceSide) / 2);
+        const sourceY = Math.max(0, (bitmap.height - sourceSide) / 2);
+        const outputSide = Math.min(900, sourceSide);
+
         const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
-        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
-        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        canvas.width = Math.max(1, Math.round(outputSide));
+        canvas.height = Math.max(1, Math.round(outputSide));
+
+        canvas.getContext('2d').drawImage(
+            bitmap,
+            sourceX,
+            sourceY,
+            sourceSide,
+            sourceSide,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
+
         bitmap.close?.();
+
         return await new Promise((resolve, reject) => {
             canvas.toBlob(
                 result => result ? resolve(result) : reject(new Error('Could not prepare profile photo.')),
                 'image/jpeg',
-                0.78
+                0.86
             );
         });
     };
@@ -196,6 +216,13 @@ window.AsiyePages = {
                 url,
             profileImageUrl:
                 url,
+            faceScanCompleted:
+                true,
+            faceScanVerifiedAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP,
             profilePhotoUpdatedAt:
                 firebase
                     .database

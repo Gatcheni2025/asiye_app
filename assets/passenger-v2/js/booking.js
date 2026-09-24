@@ -145,7 +145,12 @@ ASIYE.booking = {
             await this.requirePassengerPin();
 
 
+        const liveTrackingUrl =
+            this.liveTrackingUrl(requestId);
+
         await this.requireTripShare({
+            requestId,
+            liveTrackingUrl,
             pickupPin,
             pickupAddress:
                 pickup.address ||
@@ -283,6 +288,9 @@ ASIYE.booking = {
                     .database
                     .ServerValue
                     .TIMESTAMP,
+
+            liveTrackingUrl:
+                liveTrackingUrl,
 
 
             /* Driver */
@@ -1227,6 +1235,8 @@ ASIYE.booking = {
 
 
     async requireTripShare({
+        requestId = '',
+        liveTrackingUrl = '',
         pickupPin,
         pickupAddress,
         destination,
@@ -1239,8 +1249,12 @@ ASIYE.booking = {
             );
         }
 
+        const trackingUrl =
+            liveTrackingUrl ||
+            this.liveTrackingUrl(requestId);
+
         const text =
-            `I'm booking ${service} with Asiye. Pickup: ${pickupAddress || 'Current location'}. Destination: ${destination || 'Not available'}. Safety PIN: ${pickupPin}. Please keep these trip details until I arrive safely.`;
+            `I'm booking ${service} with Asiye. Pickup: ${pickupAddress || 'Current location'}. Destination: ${destination || 'Not available'}. Safety PIN: ${pickupPin}. Follow my trip live: ${trackingUrl}. Please keep these trip details until I arrive safely.`;
 
         ASIYE.ui?.toast?.(
             'Share this trip with a loved one to continue.'
@@ -1251,6 +1265,14 @@ ASIYE.booking = {
         );
 
         return true;
+    },
+
+
+    liveTrackingUrl(requestId) {
+        const id = String(requestId || '').trim();
+        return id
+            ? `https://app.asiye.cloud/track.html?trip=${encodeURIComponent(id)}`
+            : 'https://app.asiye.cloud/track.html';
     },
 
 

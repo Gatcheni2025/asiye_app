@@ -4887,3 +4887,21 @@ body.navigation-camera-mode #driverNavigationButton {
         right: 8px;
     }
 }
+
+
+/* Profile photo framing: keep the scanned face clean and consistent. */
+.driver-menu-avatar,
+.driver-profile-button {
+    overflow: hidden;
+    padding: 0;
+}
+
+.driver-menu-avatar img,
+.driver-profile-button img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: 50% 38%;
+    border-radius: inherit;
+}
