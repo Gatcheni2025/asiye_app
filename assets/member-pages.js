@@ -272,6 +272,43 @@ window.AsiyePages = {
             };
     },
 
+    async startEftTopup(amount, phone, passengerId, user) {
+        const authUser = firebase.auth().currentUser;
+        if (!authUser) throw new Error('Please sign in again before adding funds.');
+
+        const cleanPhone = String(phone || user?.phone || user?.phoneNumber || '').trim();
+        if (!cleanPhone) throw new Error('Enter the mobile number that should receive your EFT banking details.');
+
+        // Google/Apple users may not have a Firebase Auth phone number. Store the
+        // supplied wallet/SMS number on their commuter profile before requesting
+        // the protected Twilio instruction endpoint.
+        if (passengerId) {
+            await firebase.database().ref(`commuters/${passengerId}`).update({
+                phone: cleanPhone,
+                phoneNumber: cleanPhone,
+                walletSmsPhoneUpdatedAt: firebase.database.ServerValue.TIMESTAMP
+            });
+            if (user) {
+                user.phone = cleanPhone;
+                user.phoneNumber = cleanPhone;
+            }
+        }
+
+        const token = await authUser.getIdToken(true);
+        const endpoint = 'https://us-central1-asiye-80386.cloudfunctions.net/createEftSmsTopup';
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ amount: Number(amount) })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.error || 'Unable to prepare the EFT top-up.');
+        return payload;
+    },
+
     async open(page) {
         this.dialog?.close(); this.dialog?.remove();
         const driver = !!window.ASIYE_DRIVER;
@@ -379,6 +416,21 @@ window.AsiyePages = {
                 ) +
                 `
                 <form class="wallet-topup" data-wallet-topup>
+                    <label>Mobile number for EFT SMS</label>
+                    <div class="wallet-phone">
+                        <span>+27</span>
+                        <input
+                            name="phone"
+                            type="tel"
+                            inputmode="tel"
+                            autocomplete="tel"
+                            value="${esc(user.phone || user.phoneNumber || '')}"
+                            placeholder="e.g. 082 123 4567"
+                            required
+                        >
+                    </div>
+                    <p class="member-note">If you signed in with Google or Apple, add your mobile number here. Asiye will save it to your account and send the FNB banking details to this number via SMS.</p>
+
                     <label>Amount to add</label>
 
                     <div class="wallet-amounts">
@@ -490,13 +542,14 @@ window.AsiyePages = {
                     }
 
                     try {
+                        const phoneInput = form.querySelector('input[name="phone"]');
                         const payment =
-                            await ASIYE.wallet
-                                .startTopup(
-                                    Number(
-                                        input.value
-                                    )
-                                );
+                            await this.startEftTopup(
+                                Number(input.value),
+                                phoneInput?.value || '',
+                                id,
+                                user
+                            );
 
                         if (resultBox) {
                             const smsQueued =
@@ -1511,3 +1564,44 @@ window.AsiyePages = {
         }
     }
 };
+
+
+/* ASIYE_MEMBER_PREMIUM_STYLES_V1 */
+(() => {
+    if (document.getElementById('asiye-member-premium-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'asiye-member-premium-styles';
+    style.textContent = `
+    dialog.member-page{width:min(100% - 20px,520px);max-height:92vh;border:0;border-radius:28px;padding:0;background:#f6f7f9;color:#111;box-shadow:0 28px 80px rgba(0,0,0,.28);overflow:hidden}
+    dialog.member-page::backdrop{background:rgba(9,13,20,.58);backdrop-filter:blur(5px)}
+    .member-page>header{position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;padding:20px 22px 16px;background:rgba(255,255,255,.94);backdrop-filter:blur(16px);border-bottom:1px solid #e9ebef}
+    .member-page>header small{display:block;font-size:10px;font-weight:900;letter-spacing:.14em;color:#777}
+    .member-page>header h1{margin:4px 0 0;font-size:25px;line-height:1.1;letter-spacing:-.03em}
+    .member-page>header button{width:40px;height:40px;border:0;border-radius:50%;background:#eef0f3;font-size:25px;line-height:1;cursor:pointer}
+    .member-page>main{padding:20px 20px 30px;overflow:auto;max-height:calc(92vh - 78px)}
+    .member-page h2{margin:10px 0 18px;font-size:22px;letter-spacing:-.025em}
+    .member-page h3{font-size:16px}
+    .member-avatar{width:76px;height:76px;border-radius:24px;display:grid;place-items:center;background:#111;color:#fff;font-size:30px;font-weight:900;box-shadow:0 10px 24px rgba(0,0,0,.16);overflow:hidden}
+    .member-avatar img{width:100%;height:100%;object-fit:cover}
+    .member-row,.member-info,.member-balance,.wallet-topup{background:#fff;border:1px solid #e7e9ed;border-radius:18px;padding:16px;margin:10px 0;box-shadow:0 6px 22px rgba(17,24,39,.045)}
+    .member-row{display:flex;justify-content:space-between;gap:20px;align-items:center}
+    .member-row span,.member-note{color:#69707d;font-size:12px;line-height:1.55}
+    .member-row strong{font-size:13px;text-align:right}
+    .member-balance{padding:22px;background:linear-gradient(145deg,#111827,#0b0d11);color:#fff}
+    .member-balance small{display:block;color:#b8bec8;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+    .member-balance strong{display:block;margin-top:8px;font-size:32px;letter-spacing:-.04em}
+    .member-primary{display:flex;align-items:center;justify-content:center;width:100%;box-sizing:border-box;border:0;border-radius:15px;padding:14px 16px;margin:10px 0;background:#111;color:#fff;text-decoration:none;font-weight:850;font-size:13px;cursor:pointer}
+    .member-primary:disabled{opacity:.55}
+    .member-data-delete{background:#fff;color:#b42318;border:1px solid #f1d1ce}
+    .wallet-topup label{display:block;margin:14px 0 8px;font-size:11px;font-weight:850;color:#343a46}
+    .wallet-amounts{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+    .wallet-amounts button{border:1px solid #e1e4e9;background:#f7f8fa;border-radius:12px;padding:11px 5px;font-weight:800}
+    .wallet-amounts button.selected{background:#111;color:#fff;border-color:#111}
+    .wallet-custom,.wallet-phone{display:flex;align-items:center;gap:8px;border:1px solid #dfe3e8;background:#fff;border-radius:14px;padding:0 14px}
+    .wallet-custom span,.wallet-phone span{font-weight:850;color:#555}
+    .wallet-custom input,.wallet-phone input{min-width:0;flex:1;border:0;outline:0;background:transparent;padding:14px 0;font-size:15px}
+    .member-profile-photo-actions{margin-top:16px}
+    @media(max-width:420px){dialog.member-page{width:calc(100% - 12px);border-radius:24px}.member-page>main{padding:16px}.wallet-amounts{grid-template-columns:repeat(2,1fr)}}
+    `;
+    document.head.appendChild(style);
+})();
