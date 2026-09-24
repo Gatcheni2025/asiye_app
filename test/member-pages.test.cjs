@@ -17,7 +17,7 @@ function load(driver, fail = false) {
 }
 for (const driver of [false,true]) test(`${driver?'driver':'passenger'} menu pages render content`,async()=>{
     const {pages}=load(driver);
-    const names=driver?['earnings','trips','club','vehicle','safety','support','account']:['trips','wallet','parcels','safety','support','account'];
+    const names=driver?['earnings','trips','club','parcels','vehicle','safety','support','account']:['trips','wallet','parcels','safety','support','account'];
     for(const name of names){await pages.open(name);const html=pages.dialog.querySelector('main').innerHTML;assert.ok(html.length>50,name);assert.ok(!html.includes('Loading…'),name);}
 });
 test('database errors produce a retry page instead of a false empty history',async()=>{
