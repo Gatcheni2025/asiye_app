@@ -447,7 +447,7 @@ window.AsiyePages = {
         const app = driver ? ASIYE_DRIVER : ASIYE;
         const user = (driver ? app.state.driver : app.state.user) || {};
         const id = driver ? app.state.driverId : app.state.userId;
-        const titles = { trips: driver ? 'Trip history' : 'My trips', wallet:'Wallet', parcels:'Parcels', safety:'Safety', support:'Support', account:'Account', earnings:'Earnings', club:'Work rides', vehicle:'Vehicle' };
+        const titles = { trips: driver ? 'Trip history' : 'My trips', wallet:'Wallet', parcels: driver ? 'Parcel deliveries' : 'Parcels', safety:'Safety', support:'Support', account:'Account', earnings:'Earnings', club:'Work rides', vehicle:'Vehicle' };
         if (!titles[page]) return;
         const dialog = document.createElement('dialog');
         this.dialog = dialog;
