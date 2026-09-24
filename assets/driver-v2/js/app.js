@@ -800,7 +800,9 @@ ASIYE_DRIVER.ui = {
         const profileImage =
             driver.profileImageUrl ||
             driver.profile_picture_url ||
+            driver.driverProfileImageUrl ||
             driver.profilePhotoUrl ||
+            driver.photoURL ||
             '';
 
 
@@ -3809,6 +3811,8 @@ ASIYE_DRIVER.ui = {
 
             driver.profile_picture_url ||
             driver.profileImageUrl ||
+            driver.driverProfileImageUrl ||
+            driver.profilePhotoUrl ||
             driver.photoURL ||
             '';
 
@@ -3850,8 +3854,15 @@ ASIYE_DRIVER.ui = {
                             'img'
                         );
 
+                    const cacheStamp =
+                        driver.profilePhotoUpdatedAt ||
+                        driver.faceScanVerifiedAt ||
+                        '';
+
                     image.src =
-                        profileUrl;
+                        cacheStamp
+                            ? profileUrl + (profileUrl.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(cacheStamp)
+                            : profileUrl;
 
                     image.alt =
                         'Driver profile picture';
