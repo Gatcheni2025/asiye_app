@@ -8,45 +8,19 @@ window.ASIYE = window.ASIYE || {};
 ASIYE.pricing = {
 
     /*
-     * Temporary clean V2 pricing.
-     * We can replace these with your exact
-     * production values later.
+     * Market-parity estimate for the standard ride.
+     * This is the single fare source used by both passenger and driver.
+     * It models a typical Uber/Bolt economy quote from route distance/time.
      */
-
     rates: {
-
-        go: {
-
-            baseFare:
-                20,
-
-            perKm:
-                9,
-
-            minimumFare:
-                25
+        market: {
+            baseFare: 12,
+            perKm: 8.25,
+            perMinute: 0.90,
+            bookingFee: 5,
+            minimumFare: 30
         },
-
-
-        club4: {
-
-            divisor:
-                4,
-
-            minimumFare:
-                18
-        },
-
-
-        club7: {
-
-            divisor:
-                7,
-
-            minimumFare:
-                15
-        }
-
+        clubMarkup: 0.15
     },
 
 
@@ -58,71 +32,32 @@ ASIYE.pricing = {
             );
 
 
-        const goConfig =
-            this.rates.go;
+        const durationMinutes = Number(ASIYE.state.route.durationMinutes || 0);
+        const market = this.rates.market;
 
-
-        let goFare =
-
-            goConfig.baseFare +
-
-            (
-                distanceKm *
-                goConfig.perKm
-            );
-
-
-        goFare = Math.max(
-
-            goConfig.minimumFare,
-
-            goFare
+        const marketFare = Math.max(
+            market.minimumFare,
+            market.baseFare +
+            (distanceKm * market.perKm) +
+            (durationMinutes * market.perMinute) +
+            market.bookingFee
         );
 
-
-        goFare =
-            Math.round(
-                goFare
-            );
-
-
-        /*
-         * Club pricing:
-         *
-         * One total route fare,
-         * split across every paying passenger.
-         */
-
-        const club4Fare =
-
-            Math.ceil(
-                goFare / 4
-            );
-
-
-        const club7Fare =
-
-            Math.ceil(
-                goFare / 7
-            );
-
+        // Round the market-equivalent quote to a whole rand. Asiye Go is
+        // exactly this amount. Club is the market quote divided by the seat
+        // count, then 15% added to each individual's share.
+        const goFare = Math.round(marketFare);
+        const club4Fare = Math.ceil((goFare / 4) * (1 + this.rates.clubMarkup));
+        const club7Fare = Math.ceil((goFare / 7) * (1 + this.rates.clubMarkup));
 
         return {
-
-            go:
-                goFare,
-
-            club4:
-                club4Fare,
-
-            club7:
-                club7Fare,
-
-            club4Total:
-                goFare,
-
-            club7Total:
-                goFare
+            marketReference: goFare,
+            go: goFare,
+            club4: club4Fare,
+            club7: club7Fare,
+            club4Total: club4Fare * 4,
+            club7Total: club7Fare * 7,
+            clubMarkupPercent: 15
         };
     }
 
