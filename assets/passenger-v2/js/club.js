@@ -1002,6 +1002,9 @@ ASIYE.club = {
             driverGrossFare:
                 pricing.totalFare,
 
+            commissionRate:
+                0.20,
+
             pricePerPassenger:
                 pricing.pricePerPassenger,
 
