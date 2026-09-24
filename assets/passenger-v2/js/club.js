@@ -482,6 +482,35 @@ ASIYE.club = {
         }
 
 
+        const user =
+            ASIYE.state.user || {};
+
+        const profileImageUrl =
+            ASIYE.profile.getUrl(user);
+
+        const pin =
+            String(
+                Math.floor(
+                    1000 +
+                    Math.random() *
+                    9000
+                )
+            );
+
+        await ASIYE.booking.requireTripShare({
+            pickupPin:
+                pin,
+            pickupAddress:
+                ASIYE.state.location.address ||
+                'Current location',
+            destination:
+                ASIYE.state.destination.address ||
+                ASIYE.state.destination.name,
+            service:
+                'Asiye Club'
+        });
+
+
         const poolRef =
 
             firebase
@@ -540,10 +569,6 @@ ASIYE.club = {
                     }
 
 
-                    const user =
-                        ASIYE.state.user || {};
-
-
                     pool.passengers[uid] = {
 
                         commuterId:
@@ -556,6 +581,24 @@ ASIYE.club = {
 
                         phone:
                             user.phone || '',
+
+                        profileImageUrl:
+                            profileImageUrl,
+
+                        profile_picture_url:
+                            profileImageUrl,
+
+                        pickupPin:
+                            pin,
+
+                        requirePin:
+                            true,
+
+                        safetyShareRequired:
+                            true,
+
+                        safetyShareCompleted:
+                            true,
 
                         pickupAddress:
                             ASIYE.state.location
@@ -821,6 +864,24 @@ ASIYE.club = {
             );
 
 
+        const profileImageUrl =
+            ASIYE.profile.getUrl(user);
+
+
+        await ASIYE.booking.requireTripShare({
+            pickupPin:
+                pin,
+            pickupAddress:
+                pickup.address ||
+                'Current location',
+            destination:
+                destination.address ||
+                destination.name,
+            service:
+                'Asiye Club'
+        });
+
+
         const passenger = {
 
             commuterId:
@@ -833,6 +894,21 @@ ASIYE.club = {
 
             phone:
                 user.phone || '',
+
+            profileImageUrl:
+                profileImageUrl,
+
+            profile_picture_url:
+                profileImageUrl,
+
+            requirePin:
+                true,
+
+            safetyShareRequired:
+                true,
+
+            safetyShareCompleted:
+                true,
 
             pickupAddress:
                 pickup.address ||
@@ -937,6 +1013,30 @@ ASIYE.club = {
 
             commuterPhone:
                 passenger.phone,
+
+            commuterProfileImageUrl:
+                profileImageUrl,
+
+            passengerProfileImageUrl:
+                profileImageUrl,
+
+            requirePin:
+                true,
+
+            pickupPin:
+                pin,
+
+            safetyShareRequired:
+                true,
+
+            safetyShareCompleted:
+                true,
+
+            safetyShareAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP,
 
             commuterLocation: {
 
@@ -1047,6 +1147,9 @@ ASIYE.club = {
     ) {
 
         this.ensureFirebase();
+
+        await ASIYE.profile
+            .ensureRequired();
 
         this.select(type);
 
