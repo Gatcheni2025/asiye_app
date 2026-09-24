@@ -55,6 +55,28 @@
     };
 
     window.AsiyePhpImageUpload = window.AsiyePhpImageUpload || {
+        normalizeUrl(value) {
+            const raw = String(value || '').trim().replace(/\\/g, '/');
+            if (!raw) return '';
+
+            try {
+                if (/^https?:\/\//i.test(raw)) {
+                    return raw.replace(/^http:/i, 'https:');
+                }
+
+                if (raw.startsWith('//')) {
+                    return 'https:' + raw;
+                }
+
+                return new URL(
+                    raw.replace(/^\.\//, '').replace(/^\//, ''),
+                    'https://app.asiye.cloud/'
+                ).href;
+            } catch (_) {
+                return raw.replace(/^http:/i, 'https:');
+            }
+        },
+
         toBlob(value) {
             if (value instanceof Blob) return value;
             if (value?.dataUrl) return dataUrlToBlob(value.dataUrl);
@@ -81,7 +103,7 @@
             if (!response.ok || !rawUrl || /error/i.test(String(rawUrl))) {
                 throw new Error(payload.message || payload.error || 'Profile image upload failed.');
             }
-            const url = String(rawUrl).replace(/^http:/i, 'https:');
+            const url = this.normalizeUrl(rawUrl);
             return { ...payload, url };
         }
     };
@@ -242,9 +264,10 @@ window.AsiyePages = {
             .ref(
                 `taxis/${driverId}`
             )
-            .update(
-                updates
-            );
+            .update({
+                ...updates,
+                'documents/FACE': url
+            });
 
         if (
             ASIYE_DRIVER.state.driver
@@ -253,6 +276,11 @@ window.AsiyePages = {
                 ASIYE_DRIVER.state.driver,
                 updates
             );
+
+            ASIYE_DRIVER.state.driver.documents = {
+                ...(ASIYE_DRIVER.state.driver.documents || {}),
+                FACE: url
+            };
         }
 
         const authUser =
@@ -498,7 +526,7 @@ window.AsiyePages = {
         const note = text => `<p class="member-note">${esc(text)}</p>`;
         if (page === 'account') {
             const initial = esc((user.name || user.firstName || 'A').charAt(0));
-            const photoUrl = !driver && window.ASIYE?.profile
+            const rawPhotoUrl = !driver && window.ASIYE?.profile
                 ? ASIYE.profile.getUrl(user)
                 : (
                     user.profile_picture_url ||
@@ -506,8 +534,14 @@ window.AsiyePages = {
                     user.driverProfileImageUrl ||
                     user.profilePhotoUrl ||
                     user.photoURL ||
+                    user.documents?.FACE ||
                     ''
                 );
+
+            const photoUrl =
+                window.AsiyePhpImageUpload?.normalizeUrl
+                    ? AsiyePhpImageUpload.normalizeUrl(rawPhotoUrl)
+                    : rawPhotoUrl;
             const avatar = photoUrl
                 ? `<div class="member-avatar member-avatar-photo"><img data-passenger-profile-preview src="${esc(photoUrl)}" alt="Profile picture"></div>`
                 : `<div class="member-avatar">${initial}</div>`;
