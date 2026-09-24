@@ -1806,6 +1806,53 @@ document.addEventListener(
     if (!login) return;
 
     const nativeChannel = () => window.Asiye || window.Android || null;
+    const pendingPhoneKey = 'asiyePendingPhoneAuthNumber';
+    const pendingVerificationKey = 'asiyePendingPhoneAuthVerificationId';
+
+    const savePendingPhoneState = (phone, verificationId = '') => {
+        if (phone) localStorage.setItem(pendingPhoneKey, phone);
+        if (verificationId) {
+            localStorage.setItem(pendingVerificationKey, verificationId);
+        } else {
+            localStorage.removeItem(pendingVerificationKey);
+        }
+    };
+
+    const clearPendingPhoneState = () => {
+        localStorage.removeItem(pendingPhoneKey);
+        localStorage.removeItem(pendingVerificationKey);
+    };
+
+    const restorePendingPhoneState = state => {
+        const phone =
+            String(state?.phone || localStorage.getItem(pendingPhoneKey) || '').trim();
+        const verificationId =
+            String(
+                state?.verificationId ||
+                localStorage.getItem(pendingVerificationKey) ||
+                ''
+            ).trim();
+
+        if (phone) {
+            login.currentPhone = phone;
+            const input = document.getElementById('driverPhoneInput');
+            if (input) input.value = phone.replace(/^\+27/, '0');
+            localStorage.setItem(pendingPhoneKey, phone);
+        }
+
+        if (verificationId) {
+            login.nativeVerificationId = verificationId;
+            localStorage.setItem(pendingVerificationKey, verificationId);
+
+            const display = document.getElementById('otpPhoneDisplay');
+            if (display) display.textContent = phone || login.currentPhone || '+27';
+
+            login.showStep('otpStep');
+            if (!login.resendSeconds || login.resendSeconds <= 0) {
+                login.startResendTimer();
+            }
+        }
+    };
     const postNative = (message) => {
         const channel = nativeChannel();
         if (!channel || typeof channel.postMessage !== 'function') return false;
@@ -1939,6 +1986,7 @@ document.addEventListener(
 
         this.currentPhone = phone;
         this.nativeVerificationId = null;
+        savePendingPhoneState(phone);
         const button = document.getElementById('sendOtpButton');
         if (button) { button.disabled = true; button.textContent = 'Sending code...'; }
         const error = document.getElementById('phoneError');
@@ -1984,8 +2032,10 @@ document.addEventListener(
         post({ action: 'verifyPhoneOtp', verificationId: this.nativeVerificationId, code });
     };
 
-    window.onNativePhoneCodeSent = verificationId => {
+    window.onNativePhoneCodeSent = (verificationId, phone) => {
+        if (phone) login.currentPhone = phone;
         login.nativeVerificationId = verificationId;
+        savePendingPhoneState(login.currentPhone, verificationId);
         const display = document.getElementById('otpPhoneDisplay');
         if (display) display.textContent = login.currentPhone || '+27';
         login.showStep('otpStep');
@@ -1994,11 +2044,22 @@ document.addEventListener(
         if (button) { button.disabled = false; button.textContent = 'Continue'; }
     };
 
-    window.onNativePhoneCodeTimeout = verificationId => {
+    window.onNativePhoneCodeTimeout = (verificationId, phone) => {
+        if (phone) login.currentPhone = phone;
         login.nativeVerificationId = verificationId || login.nativeVerificationId;
+        savePendingPhoneState(login.currentPhone, login.nativeVerificationId);
     };
 
+    window.onNativePhoneAuthRestored = state => {
+        restorePendingPhoneState(state || {});
+    };
+
+    queueMicrotask(() => {
+        restorePendingPhoneState({});
+    });
+
     window.onNativePhoneAuthSuccess = async idToken => {
+        clearPendingPhoneState();
         try {
             // Native and WebView Firebase SDKs do not automatically share Auth state.
             // Exchange the native Firebase ID token through the existing backend session bridge.
