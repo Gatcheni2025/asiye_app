@@ -800,7 +800,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       final ImagePicker picker = ImagePicker();
       final XFile? photo = await picker.pickImage(
         source: ImageSource.camera,
-        preferredCameraDevice: CameraDevice.front,
+        preferredCameraDevice:
+            purpose.toLowerCase().contains('vehicle') ||
+                    purpose.toLowerCase().contains('car')
+                ? CameraDevice.rear
+                : CameraDevice.front,
         imageQuality: 82,
         maxWidth: 1280,
         maxHeight: 1280,
