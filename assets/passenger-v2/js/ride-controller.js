@@ -981,6 +981,24 @@ ASIYE.ride = {
         const name = request.driverName || 'Your driver';
         const rating = Number(request.driverRating);
         const phone = String(request.driverPhone || '').replace(/[^\d+]/g, '');
+        const driverPhoto =
+            request.driverProfileImageUrl ||
+            request.profileImageUrl ||
+            request.profile_picture_url ||
+            '';
+        const vehiclePhoto =
+            request.driverVehiclePhoto ||
+            request.vehiclePhoto ||
+            '';
+        const vehicleDescription =
+            [
+                request.vehicleColor,
+                request.vehicleMake,
+                request.vehicleModel,
+                request.vehicleYear
+            ]
+            .filter(Boolean)
+            .join(' ');
         const icons = {
             call: '<path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a14 14 0 0 1-7-7l2-2-2-5Z"/>',
             message: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5A8.5 8.5 0 0 1 10.5 3h2a8.5 8.5 0 0 1 8.5 8.5Z"/><path d="M7 9h9M7 13h6"/>',
@@ -996,12 +1014,26 @@ ASIYE.ride = {
                 </header>
                 <div class="pickup-progress" aria-hidden="true"><span></span><span></span><span></span></div>
                 <div class="pickup-driver">
-                    <div class="pickup-avatar" aria-hidden="true">${escape(name.charAt(0).toUpperCase())}</div>
-                    <div class="pickup-driver-info"><strong>${escape(name)}</strong>
-                        <span>${Number.isFinite(rating) && rating > 0 ? `<span class="pickup-star">★</span> ${rating.toFixed(1)} <span class="pickup-muted">· Driver</span>` : 'Your driver'}</span>
+                    <div class="pickup-avatar" aria-hidden="true">
+                        ${driverPhoto
+                            ? `<img src="${escape(driverPhoto)}" alt="" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`
+                            : escape(name.charAt(0).toUpperCase())}
                     </div>
-                    <div class="pickup-vehicle"><span>Vehicle plate</span><strong>${escape(request.vehicleReg || 'Not available')}</strong></div>
+                    <div class="pickup-driver-info">
+                        <strong>${escape(name)}</strong>
+                        <span>${Number.isFinite(rating) && rating > 0 ? `<span class="pickup-star">★</span> ${rating.toFixed(1)} <span class="pickup-muted">· Verified driver</span>` : 'Verified driver'}</span>
+                        <span class="pickup-muted">${escape(vehicleDescription || 'Vehicle details available')}</span>
+                    </div>
+                    <div class="pickup-vehicle">
+                        <span>Vehicle plate</span>
+                        <strong>${escape(request.vehicleReg || 'Not available')}</strong>
+                    </div>
                 </div>
+                ${vehiclePhoto ? `
+                    <div style="margin:12px 0 0;border-radius:14px;overflow:hidden;background:#f4f4f4;">
+                        <img src="${escape(vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:160px;object-fit:cover;">
+                    </div>
+                ` : ''}
                 <div class="pickup-pin">
                     <div class="pickup-pin-heading"><span>${arrived ? 'Give your driver this PIN' : 'Your pickup PIN'}</span>${icon('safety')}</div>
                     <div class="pickup-pin-digits" aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
@@ -1253,61 +1285,70 @@ ASIYE.ride = {
 
     driverCard(request) {
 
+        const escape =
+            value => ASIYE.ui.escape(value);
+
+        const name =
+            request.driverName ||
+            'Driver';
+
+        const photo =
+            request.driverProfileImageUrl ||
+            request.profileImageUrl ||
+            request.profile_picture_url ||
+            '';
+
+        const carPhoto =
+            request.driverVehiclePhoto ||
+            request.vehiclePhoto ||
+            '';
+
+        const vehicle =
+            [
+                request.vehicleColor,
+                request.vehicleMake,
+                request.vehicleModel,
+                request.vehicleYear
+            ]
+            .filter(Boolean)
+            .join(' ');
+
         return `
-
-            <div class="asiye-driver-card">
-
-                <div class="menu-avatar">
-
-                    ${
-                        ASIYE.ui.escape(
-                            (
-                                request.driverName ||
-                                'D'
-                            )
-                            .charAt(0)
-                        )
-                    }
-
+            <div class="asiye-driver-card" style="align-items:flex-start;">
+                <div class="menu-avatar" style="overflow:hidden;">
+                    ${photo
+                        ? `<img src="${escape(photo)}" alt="${escape(name)}" style="width:100%;height:100%;object-fit:cover;">`
+                        : escape(name.charAt(0).toUpperCase())}
                 </div>
 
-                <div class="asiye-driver-data">
-
+                <div class="asiye-driver-data" style="min-width:0;flex:1;">
                     <div class="asiye-driver-name">
-                        ${
-                            ASIYE.ui.escape(
-                                request.driverName ||
-                                'Driver'
-                            )
-                        }
+                        ${escape(name)}
                     </div>
 
                     <div class="asiye-driver-details">
-                        ★ ${
-                            request.driverRating ||
-                            '5.0'
-                        }
+                        ★ ${escape(request.driverRating || '5.0')} · Verified driver
                     </div>
 
-                    ${
-                        request.vehicleReg
-                        ?
-                        `
-                        <div class="asiye-driver-plate">
-                            ${
-                                ASIYE.ui.escape(
-                                    request.vehicleReg
-                                )
-                            }
-                        </div>
-                        `
-                        :
-                        ''
-                    }
+                    <div class="asiye-driver-details" style="margin-top:5px;">
+                        ${escape(vehicle || 'Vehicle details pending')}
+                    </div>
 
+                    ${request.vehicleReg
+                        ? `<div class="asiye-driver-plate">${escape(request.vehicleReg)}</div>`
+                        : ''}
+
+                    ${request.driverPhone
+                        ? `<div class="asiye-driver-details" style="margin-top:5px;">${escape(request.driverPhone)}</div>`
+                        : ''}
                 </div>
-
             </div>
+
+            ${carPhoto
+                ? `<div style="margin-top:10px;border-radius:14px;overflow:hidden;background:#f4f4f4;">
+                    <img src="${escape(carPhoto)}" alt="Assigned vehicle" style="display:block;width:100%;max-height:170px;object-fit:cover;">
+                   </div>`
+                : ''}
         `;
     },
 
