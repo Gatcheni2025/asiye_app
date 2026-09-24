@@ -1688,10 +1688,19 @@ ASIYE_DRIVER.trip = {
                         driver.netEarnings =
                             driver.totalEarnings;
 
-                        driver.commissionPaid =
+                        driver.commissionAccrued =
                             Math.round(
                                 (
-                                    Number(driver.commissionPaid || 0) +
+                                    Number(driver.commissionAccrued || 0) +
+                                    Number(settlement.platformCommission || 0)
+                                ) *
+                                100
+                            ) / 100;
+
+                        driver.commissionDebt =
+                            Math.round(
+                                (
+                                    Number(driver.commissionDebt || 0) +
                                     Number(settlement.platformCommission || 0)
                                 ) *
                                 100
