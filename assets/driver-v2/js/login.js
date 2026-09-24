@@ -1848,6 +1848,20 @@ document.addEventListener(
             if (display) display.textContent = phone || login.currentPhone || '+27';
 
             login.showStep('otpStep');
+            const otpStep = document.getElementById('otpStep');
+            const otpInput = document.getElementById('driverOtpInput');
+            if (otpStep) {
+                otpStep.classList.add('active');
+                otpStep.style.display = 'block';
+                otpStep.removeAttribute('hidden');
+            }
+            if (otpInput) {
+                otpInput.style.display = 'block';
+                otpInput.style.visibility = 'visible';
+                otpInput.style.opacity = '1';
+                otpInput.disabled = false;
+                requestAnimationFrame(() => otpInput.focus());
+            }
             if (!login.resendSeconds || login.resendSeconds <= 0) {
                 login.startResendTimer();
             }
@@ -2039,6 +2053,24 @@ document.addEventListener(
         const display = document.getElementById('otpPhoneDisplay');
         if (display) display.textContent = login.currentPhone || '+27';
         login.showStep('otpStep');
+        // Ensure the OTP control is visible after Android returns from Play Integrity/reCAPTCHA.
+        const otpStep = document.getElementById('otpStep');
+        const otpInput = document.getElementById('driverOtpInput');
+        if (otpStep) {
+            otpStep.classList.add('active');
+            otpStep.style.display = 'block';
+            otpStep.removeAttribute('hidden');
+        }
+        if (otpInput) {
+            otpInput.style.display = 'block';
+            otpInput.style.visibility = 'visible';
+            otpInput.style.opacity = '1';
+            otpInput.disabled = false;
+            requestAnimationFrame(() => {
+                otpInput.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                otpInput.focus({ preventScroll: true });
+            });
+        }
         login.startResendTimer();
         const button = document.getElementById('sendOtpButton');
         if (button) { button.disabled = false; button.textContent = 'Continue'; }
