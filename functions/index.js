@@ -2045,6 +2045,16 @@ function normaliseApprovedVehicle(input = {}, fallback = {}) {
         fallback.vehicleReg,
         30
       ),
+    year:
+      Math.round(
+        safeAdminNumber(
+          source.year ??
+          source.vehicleYear ??
+          fallback.year ??
+          fallback.vehicleYear,
+          0
+        )
+      ),
     seats
   };
 }
@@ -2106,7 +2116,7 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       admin.database.ServerValue.TIMESTAMP;
 
     const approval = {
-      version: 1,
+      version: 2,
       status: decision,
       reviewedAt: now,
       reviewedBy: actor.uid,
@@ -2168,14 +2178,43 @@ exports.reviewDriverEnrollment = functions.https.onCall(
         enrollment.vehiclePending || enrollment
       );
 
+    const enrollmentProfileImage =
+      safeAdminString(
+        enrollment.profileImageUrl ||
+        enrollment.profile_picture_url ||
+        enrollment.documentUrls?.selfie ||
+        "",
+        2000
+      );
+
+    const enrollmentVehiclePhoto =
+      safeAdminString(
+        enrollment.vehiclePhoto ||
+        enrollment.documentUrls?.car ||
+        "",
+        2000
+      );
+
+    const enrollmentPhone =
+      safeAdminString(
+        enrollment.phone ||
+        "",
+        40
+      );
+
     if (
       !approvedVehicle.make ||
       !approvedVehicle.model ||
-      !approvedVehicle.registration
+      !approvedVehicle.colour ||
+      !approvedVehicle.registration ||
+      !approvedVehicle.year ||
+      !enrollmentPhone ||
+      !enrollmentProfileImage ||
+      !enrollmentVehiclePhoto
     ) {
       throw new functions.https.HttpsError(
         "failed-precondition",
-        "Vehicle make, model and registration are required before approval."
+        "Driver phone, selfie, car photo, vehicle make, model, colour, year and registration are required before approval."
       );
     }
 
@@ -2254,6 +2293,8 @@ exports.reviewDriverEnrollment = functions.https.onCall(
         approvedVehicle.model,
       vehicleColor:
         approvedVehicle.colour,
+      vehicleYear:
+        approvedVehicle.year,
       vehicleSeats:
         approvedVehicle.seats,
       seats:
@@ -2267,6 +2308,8 @@ exports.reviewDriverEnrollment = functions.https.onCall(
           approvedVehicle.model,
         colour:
           approvedVehicle.colour,
+        year:
+          approvedVehicle.year,
         registration:
           approvedVehicle.registration,
         seats:
@@ -2283,18 +2326,15 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       vehicleApprovedBy:
         actor.uid,
       profile_picture_url:
-        enrollment.profile_picture_url ||
-        enrollment.documents?.selfie ||
+        enrollmentProfileImage ||
         currentTaxi.profile_picture_url ||
         "",
       profileImageUrl:
-        enrollment.profile_picture_url ||
-        enrollment.documents?.selfie ||
+        enrollmentProfileImage ||
         currentTaxi.profileImageUrl ||
         "",
       vehiclePhoto:
-        enrollment.vehiclePhoto ||
-        enrollment.documents?.car ||
+        enrollmentVehiclePhoto ||
         currentTaxi.vehiclePhoto ||
         "",
       documents:
@@ -2326,7 +2366,7 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       verifiedBy:
         actor.uid,
       enrollmentVersion:
-        1,
+        Number(enrollment.version || 2),
       updatedAt:
         now
     };
