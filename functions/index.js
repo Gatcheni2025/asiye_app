@@ -3087,6 +3087,65 @@ exports.adminManagePlatform = functions.https.onCall(
             driver.rating,
             0
           ),
+        driverProfileImageUrl:
+          safeAdminString(
+            driver.profileImageUrl ||
+            driver.profile_picture_url ||
+            "",
+            2000
+          ),
+        driverVehiclePhoto:
+          safeAdminString(
+            driver.vehiclePhoto ||
+            driver.carPhoto ||
+            "",
+            2000
+          ),
+        vehiclePhoto:
+          safeAdminString(
+            driver.vehiclePhoto ||
+            driver.carPhoto ||
+            "",
+            2000
+          ),
+        vehicleMake:
+          safeAdminString(
+            driver.vehicleMake ||
+            driver.vehicle?.make ||
+            "",
+            80
+          ),
+        vehicleModel:
+          safeAdminString(
+            driver.vehicleModel ||
+            driver.vehicle?.model ||
+            "",
+            80
+          ),
+        vehicleColor:
+          safeAdminString(
+            driver.vehicleColor ||
+            driver.vehicle?.colour ||
+            driver.vehicle?.color ||
+            "",
+            60
+          ),
+        vehicleYear:
+          Math.round(
+            safeAdminNumber(
+              driver.vehicleYear ||
+              driver.vehicle?.year,
+              0
+            )
+          ),
+        vehicleReg:
+          safeAdminString(
+            driver.vehicleReg ||
+            driver.vehicle?.registration ||
+            driver.taxiRegistrationNumber ||
+            "",
+            30
+          ),
         status:
           request.type ===
           "club"
@@ -3166,6 +3225,20 @@ exports.adminManagePlatform = functions.https.onCall(
           driverId,
           driverName:
             requestPatch.driverName,
+          driverProfileImageUrl:
+            requestPatch.driverProfileImageUrl,
+          vehiclePhoto:
+            requestPatch.vehiclePhoto,
+          vehicleMake:
+            requestPatch.vehicleMake,
+          vehicleModel:
+            requestPatch.vehicleModel,
+          vehicleColor:
+            requestPatch.vehicleColor,
+          vehicleYear:
+            requestPatch.vehicleYear,
+          vehicleReg:
+            requestPatch.vehicleReg,
           title:
             "Driver assigned",
           timestamp
