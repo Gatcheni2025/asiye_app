@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -677,7 +678,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         try {
           final Map<String, dynamic> data = jsonDecode(message);
           final action = data['action'];
-          if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
+          if (action == 'startPhoneSignIn') {
+            await _startPhoneSignIn(data['phone']?.toString() ?? '');
+          }
+          else if (action == 'verifyPhoneOtp') {
+            await _verifyPhoneOtp(data['verificationId']?.toString() ?? '', data['code']?.toString() ?? '');
+          }
+          else if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
             await _saveSessionAndRedirect(data['uid'], data['type']);
           }
           else if (action == 'showNotification') {
@@ -703,6 +710,60 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         } catch(_) {}
       }
     } catch (e) {}
+  }
+
+  Future<void> _startPhoneSignIn(String phone) async {
+    final cleanPhone = phone.trim();
+    if (cleanPhone.isEmpty) {
+      _controller?.runJavaScript("window.onNativePhoneAuthError?.('Enter a valid phone number.');");
+      return;
+    }
+    try {
+      await FirebaseAuth.instance.verifyPhoneNumber(
+        phoneNumber: cleanPhone,
+        timeout: const Duration(seconds: 60),
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          try {
+            final result = await FirebaseAuth.instance.signInWithCredential(credential);
+            final token = await result.user?.getIdToken();
+            if (token != null) {
+              _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
+            }
+          } catch (e) {
+            _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
+          }
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.message ?? e.code)});");
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          _controller?.runJavaScript("window.onNativePhoneCodeSent?.(${jsonEncode(verificationId)});");
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          _controller?.runJavaScript("window.onNativePhoneCodeTimeout?.(${jsonEncode(verificationId)});");
+        },
+      );
+    } catch (e) {
+      _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
+    }
+  }
+
+  Future<void> _verifyPhoneOtp(String verificationId, String code) async {
+    try {
+      if (verificationId.isEmpty || code.length != 6) {
+        throw Exception('Enter the 6-digit verification code.');
+      }
+      final credential = PhoneAuthProvider.credential(
+        verificationId: verificationId,
+        smsCode: code,
+      );
+      final result = await FirebaseAuth.instance.signInWithCredential(credential);
+      final token = await result.user?.getIdToken();
+      if (token == null) throw Exception('Unable to create the authenticated session.');
+      _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
+    } catch (e) {
+      _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
+    }
   }
 
   Future<void> _speakNavigation(String text) async {
