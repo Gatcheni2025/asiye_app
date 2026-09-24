@@ -765,6 +765,21 @@ button:disabled {
 }
 
 
+
+/* Android native phone-auth: keep the OTP field tappable/visible after returning from reCAPTCHA. */
+#otpStep.active .otp-input {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative;
+    z-index: 3;
+    background: #ffffff;
+    color: #111111;
+    -webkit-text-fill-color: #111111;
+    caret-color: #111111;
+    pointer-events: auto !important;
+}
+
 .otp-input:focus {
 
     border-color:
