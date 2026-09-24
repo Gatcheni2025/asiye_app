@@ -803,6 +803,9 @@ ASIYE_DRIVER.ui = {
             driver.driverProfileImageUrl ||
             driver.profilePhotoUrl ||
             driver.photoURL ||
+            driver.documents?.FACE ||
+            driver.faceUrl ||
+            driver.selfieUrl ||
             '';
 
 
@@ -3807,13 +3810,45 @@ ASIYE_DRIVER.ui = {
             .join(' ');
 
 
-        const profileUrl =
+        const profileCandidates =
+            [
+                driver.profile_picture_url,
+                driver.profileImageUrl,
+                driver.driverProfileImageUrl,
+                driver.profilePhotoUrl,
+                driver.photoURL,
+                driver.documents?.FACE,
+                driver.faceUrl,
+                driver.selfieUrl
+            ]
+            .map(value => String(value || '').trim())
+            .filter(Boolean)
+            .map(value => {
+                try {
+                    if (/^https?:\/\//i.test(value)) {
+                        return value.replace(/^http:/i, 'https:');
+                    }
 
-            driver.profile_picture_url ||
-            driver.profileImageUrl ||
-            driver.driverProfileImageUrl ||
-            driver.profilePhotoUrl ||
-            driver.photoURL ||
+                    if (value.startsWith('//')) {
+                        return 'https:' + value;
+                    }
+
+                    return new URL(
+                        value.replace(/^\.\//, '').replace(/^\//, ''),
+                        'https://app.asiye.cloud/'
+                    ).href;
+                } catch (_) {
+                    return value.replace(/^http:/i, 'https:');
+                }
+            })
+            .filter(
+                (value, index, values) =>
+                    values.indexOf(value) === index
+            );
+
+
+        const profileUrl =
+            profileCandidates[0] ||
             '';
 
 
@@ -3859,13 +3894,33 @@ ASIYE_DRIVER.ui = {
                         driver.faceScanVerifiedAt ||
                         '';
 
-                    image.src =
-                        cacheStamp
-                            ? profileUrl + (profileUrl.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(cacheStamp)
-                            : profileUrl;
+                    let candidateIndex = 0;
+
+                    const loadCandidate = () => {
+                        const candidate =
+                            profileCandidates[candidateIndex];
+
+                        if (!candidate) {
+                            target.replaceChildren();
+                            target.textContent = initial;
+                            return;
+                        }
+
+                        image.src =
+                            cacheStamp
+                                ? candidate + (candidate.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(cacheStamp)
+                                : candidate;
+                    };
 
                     image.alt =
                         'Driver profile picture';
+
+                    image.onerror = () => {
+                        candidateIndex += 1;
+                        loadCandidate();
+                    };
+
+                    loadCandidate();
 
                     image.referrerPolicy =
                         'no-referrer';

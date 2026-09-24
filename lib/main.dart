@@ -112,6 +112,65 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   bool _navigationTtsReady = false;
   int? _phoneResendToken;
   String? _phoneVerificationNumber;
+  String? _phoneVerificationId;
+
+  Future<void> _savePendingPhoneAuth({
+    String? phone,
+    String? verificationId,
+    bool clear = false,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    if (clear) {
+      _phoneVerificationNumber = null;
+      _phoneVerificationId = null;
+      _phoneResendToken = null;
+      await prefs.remove('pendingPhoneAuthNumber');
+      await prefs.remove('pendingPhoneAuthVerificationId');
+      return;
+    }
+
+    if (phone != null && phone.isNotEmpty) {
+      _phoneVerificationNumber = phone;
+      await prefs.setString('pendingPhoneAuthNumber', phone);
+    }
+
+    if (verificationId != null && verificationId.isNotEmpty) {
+      _phoneVerificationId = verificationId;
+      await prefs.setString(
+        'pendingPhoneAuthVerificationId',
+        verificationId,
+      );
+    }
+  }
+
+  Future<void> _restorePendingPhoneAuthToWeb() async {
+    final prefs = await SharedPreferences.getInstance();
+    final phone =
+        _phoneVerificationNumber ??
+        prefs.getString('pendingPhoneAuthNumber') ??
+        '';
+    final verificationId =
+        _phoneVerificationId ??
+        prefs.getString('pendingPhoneAuthVerificationId') ??
+        '';
+
+    if (phone.isEmpty && verificationId.isEmpty) return;
+
+    _phoneVerificationNumber =
+        phone.isNotEmpty ? phone : _phoneVerificationNumber;
+    _phoneVerificationId =
+        verificationId.isNotEmpty ? verificationId : _phoneVerificationId;
+
+    final payload = jsonEncode({
+      'phone': phone,
+      'verificationId': verificationId,
+    });
+
+    await _controller?.runJavaScript(
+      "window.onNativePhoneAuthRestored?.($payload);",
+    );
+  }
 
   Future<void> _openNotification(Map<String, dynamic> data) async {
     _pendingNotification = data;
@@ -323,6 +382,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                 }
               """);
             }
+            await _restorePendingPhoneAuthToWeb();
             if (_pendingNotification != null) await _openNotification(_pendingNotification!);
           },
           onNavigationRequest: (request) async {
@@ -757,6 +817,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
 
     try {
+      await _savePendingPhoneAuth(phone: cleanPhone);
+
       // Recover cleanly if Firebase initialization timed out during app startup.
       // Phone authentication must always use the native Firebase SDK in the
       // installed app; the WebView must never be responsible for app verification.
@@ -774,6 +836,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             final result = await FirebaseAuth.instance.signInWithCredential(credential);
             final token = await result.user?.getIdToken();
             if (token != null) {
+              await _savePendingPhoneAuth(clear: true);
               _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
             }
           } catch (e) {
@@ -785,11 +848,29 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         },
         codeSent: (String verificationId, int? resendToken) {
           _phoneVerificationNumber = cleanPhone;
+          _phoneVerificationId = verificationId;
           _phoneResendToken = resendToken;
-          _controller?.runJavaScript("window.onNativePhoneCodeSent?.(${jsonEncode(verificationId)});");
+          unawaited(
+            _savePendingPhoneAuth(
+              phone: cleanPhone,
+              verificationId: verificationId,
+            ),
+          );
+          _controller?.runJavaScript(
+            "window.onNativePhoneCodeSent?.(${jsonEncode(verificationId)}, ${jsonEncode(cleanPhone)});",
+          );
         },
         codeAutoRetrievalTimeout: (String verificationId) {
-          _controller?.runJavaScript("window.onNativePhoneCodeTimeout?.(${jsonEncode(verificationId)});");
+          _phoneVerificationId = verificationId;
+          unawaited(
+            _savePendingPhoneAuth(
+              phone: cleanPhone,
+              verificationId: verificationId,
+            ),
+          );
+          _controller?.runJavaScript(
+            "window.onNativePhoneCodeTimeout?.(${jsonEncode(verificationId)}, ${jsonEncode(cleanPhone)});",
+          );
         },
       );
     } catch (e) {
@@ -799,16 +880,25 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _verifyPhoneOtp(String verificationId, String code) async {
     try {
-      if (verificationId.isEmpty || code.length != 6) {
+      final prefs = await SharedPreferences.getInstance();
+      final resolvedVerificationId =
+          verificationId.isNotEmpty
+              ? verificationId
+              : (_phoneVerificationId ??
+                  prefs.getString('pendingPhoneAuthVerificationId') ??
+                  '');
+
+      if (resolvedVerificationId.isEmpty || code.length != 6) {
         throw Exception('Enter the 6-digit verification code.');
       }
       final credential = PhoneAuthProvider.credential(
-        verificationId: verificationId,
+        verificationId: resolvedVerificationId,
         smsCode: code,
       );
       final result = await FirebaseAuth.instance.signInWithCredential(credential);
       final token = await result.user?.getIdToken();
       if (token == null) throw Exception('Unable to create the authenticated session.');
+      await _savePendingPhoneAuth(clear: true);
       _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
     } catch (e) {
       _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
