@@ -270,6 +270,10 @@ ASIYE.ui = {
                         .preferredRideType =
                         'club4';
 
+                    ASIYE.state.ui
+                        .preferredService =
+                        null;
+
 
                     ASIYE.ui
                         .renderDestinationSearch();
@@ -682,7 +686,7 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'go',
                 'Asiye Go',
-                'Private ride · Leave immediately',
+                'Private ride · 15% below market reference',
                 prices.go,
                 'fa-car-side'
             )}
