@@ -216,6 +216,10 @@ window.AsiyePages = {
                 url,
             profileImageUrl:
                 url,
+            photoURL:
+                url,
+            driverProfileImageUrl:
+                url,
             faceScanCompleted:
                 true,
             faceScanVerifiedAt:
@@ -493,7 +497,7 @@ window.AsiyePages = {
             const initial = esc((user.name || user.firstName || 'A').charAt(0));
             const photoUrl = !driver && window.ASIYE?.profile
                 ? ASIYE.profile.getUrl(user)
-                : (user.profile_picture_url || user.profileImageUrl || '');
+                : (user.profile_picture_url || user.profileImageUrl || user.driverProfileImageUrl || user.photoURL || '');
             const avatar = photoUrl
                 ? `<div class="member-avatar member-avatar-photo"><img data-passenger-profile-preview src="${esc(photoUrl)}" alt="Profile picture"></div>`
                 : `<div class="member-avatar">${initial}</div>`;
