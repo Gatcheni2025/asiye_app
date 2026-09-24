@@ -1261,24 +1261,6 @@ ASIYE_DRIVER.ui = {
 
                 <div class="driver-club-summary">
 
-                    <div>
-
-                        <span>
-                            Departure
-                        </span>
-
-                        <strong>
-                            ${
-                                this.escape(
-                                    request.departureTime ||
-                                    request.morningDeparture ||
-                                    '—'
-                                )
-                            }
-                        </strong>
-
-                    </div>
-
 
                     <div>
 
@@ -1783,24 +1765,6 @@ ASIYE_DRIVER.ui = {
 
             <div class="driver-club-summary">
 
-                <div>
-
-                    <span>
-                        Departure
-                    </span>
-
-                    <strong>
-                        ${
-                            this.escape(
-                                request.departureTime ||
-                                request.morningDeparture ||
-                                '—'
-                            )
-                        }
-                    </strong>
-
-                </div>
-
 
                 <div>
 
@@ -1970,24 +1934,6 @@ ASIYE_DRIVER.ui = {
 
                     <strong>
                         ${capacity}/${capacity}
-                    </strong>
-
-                </div>
-
-
-                <div>
-
-                    <span>
-                        Departure
-                    </span>
-
-                    <strong>
-                        ${
-                            this.escape(
-                                request.departureTime ||
-                                'Ready'
-                            )
-                        }
                     </strong>
 
                 </div>
