@@ -1873,3 +1873,86 @@ document.addEventListener(
         if (String(message || '').toLowerCase() !== 'cancelled') login.toast('Apple sign-in failed. Please try again.');
     };
 })();
+
+/* ASIYE_NATIVE_PHONE_AUTH_V2
+   Android uses Firebase's native PhoneAuthProvider so Play Integrity /
+   reCAPTCHA app verification happens outside the WebView. Web keeps the
+   existing Firebase JS phone flow. */
+(() => {
+    const login = window.ASIYE_DRIVER_LOGIN;
+    if (!login) return;
+    const nativeChannel = () => window.Asiye || window.Android || null;
+    const post = payload => {
+        const channel = nativeChannel();
+        if (!channel || typeof channel.postMessage !== 'function') return false;
+        channel.postMessage(JSON.stringify(payload));
+        return true;
+    };
+    const webSendOtp = login.sendOtp.bind(login);
+    const webVerifyOtp = login.verifyOtp.bind(login);
+
+    login.sendOtp = async function () {
+        const input = document.getElementById('driverPhoneInput');
+        const phone = this.normalizePhone(input?.value);
+        if (!phone || !post({ action: 'startPhoneSignIn', phone })) return webSendOtp();
+        this.currentPhone = phone;
+        const button = document.getElementById('sendOtpButton');
+        if (button) { button.disabled = true; button.textContent = 'Sending code...'; }
+        const error = document.getElementById('phoneError');
+        if (error) error.textContent = '';
+    };
+
+    login.verifyOtp = async function () {
+        if (!this.nativeVerificationId) return webVerifyOtp();
+        const code = String(document.getElementById('driverOtpInput')?.value || '').replace(/\D/g,'');
+        if (code.length !== 6) {
+            const el = document.getElementById('otpError');
+            if (el) el.textContent = 'Enter the 6-digit verification code.';
+            return;
+        }
+        post({ action: 'verifyPhoneOtp', verificationId: this.nativeVerificationId, code });
+    };
+
+    window.onNativePhoneCodeSent = verificationId => {
+        login.nativeVerificationId = verificationId;
+        const display = document.getElementById('otpPhoneDisplay');
+        if (display) display.textContent = login.currentPhone || '+27';
+        login.showStep('otpStep');
+        login.startResendTimer();
+        const button = document.getElementById('sendOtpButton');
+        if (button) { button.disabled = false; button.textContent = 'Continue'; }
+    };
+
+    window.onNativePhoneCodeTimeout = verificationId => {
+        login.nativeVerificationId = verificationId || login.nativeVerificationId;
+    };
+
+    window.onNativePhoneAuthSuccess = async idToken => {
+        try {
+            const result = await firebase.auth().signInWithCustomToken ? null : null;
+            // Native and WebView Firebase SDKs do not automatically share Auth state.
+            // Exchange the native Firebase ID token through the existing backend session bridge.
+            const response = await fetch('https://us-central1-asiye-80386.cloudfunctions.net/exchangeNativeAuthSession', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + idToken, 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const payload = await response.json();
+            if (!response.ok || !payload.customToken) throw new Error(payload.error || 'Unable to verify the native session.');
+            const signedIn = await firebase.auth().signInWithCustomToken(payload.customToken);
+            if (!signedIn.user) throw new Error('Phone authentication failed.');
+            await login.verifyDriverProfile(result.user);
+        } catch (error) {
+            console.error('Native phone session exchange failed:', error);
+            login.toast(error.message || 'Phone authentication failed.');
+        }
+    };
+
+    window.onNativePhoneAuthError = message => {
+        const error = document.getElementById(login.nativeVerificationId ? 'otpError' : 'phoneError');
+        if (error) error.textContent = String(message || 'Phone authentication failed.');
+        const button = document.getElementById('sendOtpButton');
+        if (button) { button.disabled = false; button.textContent = 'Continue'; }
+        login.toast(String(message || 'Phone authentication failed.'));
+    };
+})();
