@@ -283,9 +283,12 @@ ASIYE.ui = {
                 'click',
                 () => {
 
-                    ASIYE.ui.toast(
-                        'Parcel service will be connected next.'
-                    );
+                    ASIYE.state.ui
+                        .preferredService =
+                        'parcel';
+
+                    ASIYE.ui
+                        .renderDestinationSearch();
                 }
             );
 
@@ -583,6 +586,20 @@ ASIYE.ui = {
 
         const prices =
             ASIYE.pricing.calculate();
+
+
+        if (
+            ASIYE.state.ui.preferredService ===
+            'parcel'
+        ) {
+            ASIYE.state.ui.preferredService =
+                null;
+
+            ASIYE.parcels
+                ?.renderBooking?.();
+
+            return;
+        }
 
 
         ASIYE.state.booking.fare =
