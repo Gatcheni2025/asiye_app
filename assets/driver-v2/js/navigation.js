@@ -160,6 +160,19 @@ ASIYE_DRIVER.navigator = {
                     ) {
                         this.follow =
                             false;
+
+                        const followButton =
+                            document.getElementById(
+                                'navFollow'
+                            );
+
+                        if (followButton) {
+                            followButton.classList.add(
+                                'attention'
+                            );
+                            followButton.innerHTML =
+                                '<i class="fas fa-location-arrow"></i> Recenter';
+                        }
                     }
                 }
             );
@@ -175,6 +188,13 @@ ASIYE_DRIVER.navigator = {
                 () => {
                     this.follow =
                         true;
+
+                    follow.classList.remove(
+                        'attention'
+                    );
+
+                    follow.innerHTML =
+                        '<i class="fas fa-location-arrow"></i> Follow';
 
                     this.update(
                         ASIYE_DRIVER
@@ -193,6 +213,20 @@ ASIYE_DRIVER.navigator = {
             retry.onclick =
                 () =>
                     this.fetchRoute();
+        }
+
+        const overview =
+            document.getElementById(
+                'navOverview'
+            );
+
+        if (overview) {
+            overview.onclick =
+                () => {
+                    this.follow = false;
+                    ASIYE_DRIVER.map
+                        ?.showRouteOverview?.();
+                };
         }
 
         const voice =
@@ -1388,48 +1422,12 @@ ASIYE_DRIVER.navigator = {
             this.navigationMode &&
             this.follow
         ) {
-            const sheet =
-                document.getElementById(
-                    'activeTripContent'
+            ASIYE_DRIVER.map
+                ?.followDriverNavigationView?.(
+                    location.latitude,
+                    location.longitude,
+                    location.heading
                 );
-
-            map.easeTo({
-                center:
-                    point,
-                zoom:
-                    17.25,
-                pitch:
-                    58,
-                bearing:
-                    Number.isFinite(
-                        location.heading
-                    )
-                        ? location.heading
-                        : map.getBearing(),
-                padding: {
-                    top:
-                        145,
-                    bottom:
-                        Math.min(
-                            (
-                                sheet
-                                    ?.offsetHeight ||
-                                250
-                            ) + 24,
-                            window
-                                .innerHeight *
-                                .46
-                        ),
-                    left:
-                        34,
-                    right:
-                        34
-                },
-                duration:
-                    650,
-                essential:
-                    true
-            });
         }
 
         if (!this.route) {
