@@ -14,3 +14,8 @@
 # Flutter/plugin registrants and native bridge classes are resolved by name.
 -keep class io.flutter.** { *; }
 -keep class io.flutter.plugins.** { *; }
+
+
+# Flutter's deferred-component manager references Play Core classes even when
+# this app does not use deferred components. They are optional at runtime.
+-dontwarn com.google.android.play.core.**
