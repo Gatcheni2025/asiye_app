@@ -1103,6 +1103,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       } catch (_) {}
 
       final appleProvider = AppleAuthProvider();
+      appleProvider.addScope('email');
+      appleProvider.addScope('name');
       final result = await FirebaseAuth.instance.signInWithProvider(appleProvider);
       final token = await result.user?.getIdToken();
 
