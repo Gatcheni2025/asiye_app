@@ -150,7 +150,7 @@
                 seats: 4
             };
 
-            await firebase.database().ref(`driverEnrollments/${user.uid}`).set({
+            const enrollmentRecord = {
                 version: 2,
                 status: 'pending',
                 fullName: String(data.get('fullName')).trim(),
@@ -176,7 +176,43 @@
                 },
                 consent: true,
                 submittedAt: firebase.database.ServerValue.TIMESTAMP
-            });
+            };
+
+            await firebase.database()
+                .ref(`driverEnrollments/${user.uid}`)
+                .set(enrollmentRecord);
+
+            // Seed the driver's own taxi profile while keeping it locked
+            // offline. Approval promotes these verified enrollment fields.
+            await firebase.database()
+                .ref(`taxis/${user.uid}`)
+                .update({
+                    name: enrollmentRecord.fullName,
+                    fullName: enrollmentRecord.fullName,
+                    phone: enrollmentRecord.phone,
+                    authUid: user.uid,
+                    userUid: user.uid,
+                    profile_picture_url: documentUrls.selfie,
+                    profileImageUrl: documentUrls.selfie,
+                    vehiclePhoto: documentUrls.car,
+                    vehicleMake: vehiclePending.make,
+                    vehicleModel: vehiclePending.model,
+                    vehicleColor: vehiclePending.colour,
+                    vehicleYear: vehiclePending.year,
+                    vehicleReg: vehiclePending.registration,
+                    taxiRegistrationNumber: vehiclePending.registration,
+                    vehiclePending,
+                    vehicleApproved: false,
+                    vehicleApprovalStatus: 'pending',
+                    verificationStatus: 'pending',
+                    provisionalActivation: false,
+                    isOnline: false,
+                    isBroadcasting: false,
+                    isFull: false,
+                    enrollmentVersion: 2,
+                    updatedAt: firebase.database.ServerValue.TIMESTAMP
+                });
+
             form.reset(); form.hidden = true; status.textContent='Application submitted. Waiting for verification. We will review your details before you can start driving.';
         } catch (error) {
             if (error.code === 'storage/unauthorized') {
