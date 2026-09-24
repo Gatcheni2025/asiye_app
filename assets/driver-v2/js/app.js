@@ -1794,8 +1794,8 @@ ASIYE_DRIVER.ui = {
                     <i class="fas fa-location-arrow"></i>
 
                     ${isDelivery
-                        ? 'Collect parcel'
-                        : 'Start pickup'}
+                        ? 'Navigate to sender'
+                        : 'Start navigation'}
 
                 </button>
 
@@ -2377,20 +2377,16 @@ ASIYE_DRIVER.ui = {
 
         this.openActiveTripSheet();
 
-
         const container =
             document.getElementById(
                 'activeTripContent'
             );
 
-
         if (!container) return;
-
 
         const isDelivery =
             request.type ===
             'delivery';
-
 
         const pickupLabel =
             target?.label ||
@@ -2401,32 +2397,56 @@ ASIYE_DRIVER.ui = {
                     : 'Passenger pickup'
             );
 
+        const passengerName =
+            request.commuterName ||
+            'Passenger';
+
+        const passengerPhoto =
+            request.commuterProfileImageUrl ||
+            request.passengerProfileImageUrl ||
+            '';
 
         container.innerHTML = `
 
-            <div class="navigation-phase-label">
-                <span>
-                    <i class="fas fa-location-dot"></i>
-                    ${isDelivery ? 'DRIVE TO SENDER' : 'DRIVE TO PASSENGER'}
-                </span>
-                <strong>${this.escape(pickupLabel)}</strong>
-            </div>
+            <div class="waze-navigation-shell">
 
-            <div class="navigation-live-hud">
-                <section class="turn-guidance">
-                    <div id="navArrow" class="turn-guidance-arrow">↑</div>
-                    <div class="turn-guidance-copy">
-                        <strong id="navTurnDistance">
-                            ${Number.isFinite(Number(route?.distanceKm))
-                                ? `${Number(route.distanceKm).toFixed(1)} km`
-                                : 'Finding route'}
-                        </strong>
-                        <h2 id="navInstruction">Preparing pickup navigation…</h2>
-                        <p id="navRoadName" class="nav-road-name"></p>
+                <div class="waze-nav-top">
+
+                    <div class="navigation-phase-label">
+                        <span>
+                            <i class="fas fa-location-dot"></i>
+                            ${isDelivery ? 'DRIVE TO SENDER' : 'DRIVE TO PASSENGER'}
+                        </span>
+                        <strong>${this.escape(pickupLabel)}</strong>
                     </div>
-                </section>
 
-                <div class="navigation-driving-status">
+                    <div class="navigation-live-hud">
+                        <section class="turn-guidance">
+                            <div id="navArrow" class="turn-guidance-arrow">↑</div>
+                            <div class="turn-guidance-copy">
+                                <strong id="navTurnDistance">
+                                    ${Number.isFinite(Number(route?.distanceKm))
+                                        ? `${Number(route.distanceKm).toFixed(1)} km`
+                                        : 'Finding route'}
+                                </strong>
+                                <h2 id="navInstruction">Preparing pickup navigation…</h2>
+                                <p id="navRoadName" class="nav-road-name"></p>
+                            </div>
+                        </section>
+
+                        <div
+                            id="navTrafficAlert"
+                            class="navigation-traffic-alert"
+                            hidden
+                        >
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <span id="navTrafficAlertText">Traffic alert</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="waze-nav-side">
                     <div id="navCurrentSpeedPanel" class="nav-speed-current">
                         <small>SPEED</small>
                         <strong id="navCurrentSpeed">0</strong>
@@ -2451,72 +2471,68 @@ ASIYE_DRIVER.ui = {
                     </button>
                 </div>
 
-                <div
-                    id="navTrafficAlert"
-                    class="navigation-traffic-alert"
-                    hidden
-                >
-                    <i class="fas fa-triangle-exclamation"></i>
-                    <span id="navTrafficAlertText">Traffic alert</span>
+                <div class="waze-nav-bottom">
+
+                    <div class="waze-trip-target">
+                        <div class="navigator-avatar">
+                            ${passengerPhoto
+                                ? `<img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">`
+                                : this.escape(
+                                    passengerName
+                                        .charAt(0)
+                                        .toUpperCase()
+                                )}
+                        </div>
+                        <div>
+                            <small>${isDelivery ? 'SENDER / PICKUP' : 'PASSENGER PICKUP'}</small>
+                            <strong>${this.escape(passengerName)}</strong>
+                            <span>${this.escape(pickupLabel)}</span>
+                        </div>
+                    </div>
+
+                    <div class="navigation-summary">
+                        <strong id="navEta">
+                            ${Number.isFinite(Number(route?.durationMinutes))
+                                ? `${Math.max(1, Math.round(Number(route.durationMinutes)))} min`
+                                : '—'}
+                        </strong>
+                        <span id="navDistance">
+                            ${Number.isFinite(Number(route?.distanceKm))
+                                ? `${Number(route.distanceKm).toFixed(1)} km`
+                                : '—'}
+                        </span>
+                        <span>Arrival <b id="navArrival">—</b></span>
+                    </div>
+
+                    <div class="navigation-controls">
+                        <button id="navFollow" class="driver-btn">
+                            <i class="fas fa-location-arrow"></i>
+                            Follow
+                        </button>
+
+                        <button id="navOverview" class="driver-btn">
+                            <i class="fas fa-map"></i>
+                            Overview
+                        </button>
+
+                        <button id="navRetry" class="driver-btn">
+                            <i class="fas fa-rotate-right"></i>
+                            Route
+                        </button>
+                    </div>
+
+                    <button
+                        id="driverMarkArrived"
+                        class="driver-btn driver-btn-primary driver-btn-full navigation-main-action"
+                    >
+                        <i class="fas fa-flag-checkered"></i>
+                        I have arrived
+                    </button>
+
                 </div>
-            </div>
-
-            <div class="navigation-summary">
-                <strong id="navEta">
-                    ${Number.isFinite(Number(route?.durationMinutes))
-                        ? `${Math.max(1, Math.round(Number(route.durationMinutes)))} min`
-                        : '—'}
-                </strong>
-                <span id="navDistance">
-                    ${Number.isFinite(Number(route?.distanceKm))
-                        ? `${Number(route.distanceKm).toFixed(1)} km`
-                        : '—'}
-                </span>
-                <span>Arrival <b id="navArrival">—</b></span>
-            </div>
-
-            <p class="navigation-destination">
-                <i class="fas fa-location-dot"></i>
-                ${this.escape(pickupLabel)}
-            </p>
-
-            <div class="navigation-controls">
-                <button id="navFollow" class="driver-btn">
-                    <i class="fas fa-location-arrow"></i>
-                    Follow car
-                </button>
-
-                <button id="navRetry" class="driver-btn">
-                    <i class="fas fa-rotate-right"></i>
-                    Retry route
-                </button>
-            </div>
-
-
-            <div
-                class="
-                    driver-trip-actions
-                    single
-                "
-            >
-
-                <button
-                    id="driverMarkArrived"
-                    class="
-                        driver-btn
-                        driver-btn-primary
-                    "
-                >
-
-                    <i class="fas fa-flag-checkered"></i>
-
-                    I have arrived
-
-                </button>
 
             </div>
         `;
-
 
         document
             .getElementById(
@@ -2525,12 +2541,10 @@ ASIYE_DRIVER.ui = {
             ?.addEventListener(
                 'click',
                 () => {
-
                     ASIYE_DRIVER.trip
                         .markArrived();
                 }
             );
-
 
         setTimeout(
             () => {
@@ -3025,29 +3039,71 @@ ASIYE_DRIVER.ui = {
 
         this.openActiveTripSheet();
 
-
         const container =
             document.getElementById(
                 'activeTripContent'
             );
 
-
         if (!container) return;
 
+        const destination =
+            request.destinationName ||
+            request.destination ||
+            'Destination';
+
+        const passengerCount =
+            request.type === 'club'
+                ? Object.values(
+                    request.passengers || {}
+                ).filter(
+                    passenger =>
+                        !String(
+                            passenger?.status || ''
+                        ).includes('cancelled')
+                ).length
+                : 1;
 
         container.innerHTML = `
 
-            <div class="navigation-live-hud">
-                <section class="turn-guidance">
-                    <div id="navArrow" class="turn-guidance-arrow">↑</div>
-                    <div class="turn-guidance-copy">
-                        <strong id="navTurnDistance">Trip underway</strong>
-                        <h2 id="navInstruction">Finding your route…</h2>
-                        <p id="navRoadName" class="nav-road-name"></p>
-                    </div>
-                </section>
+            <div class="waze-navigation-shell">
 
-                <div class="navigation-driving-status">
+                <div class="waze-nav-top">
+
+                    <div class="navigation-phase-label">
+                        <span>
+                            <i class="fas fa-route"></i>
+                            ${request.type === 'delivery'
+                                ? 'DELIVER PARCEL'
+                                : request.type === 'club'
+                                    ? `DROP OFF ${passengerCount} PASSENGERS`
+                                    : 'DRIVE TO DESTINATION'}
+                        </span>
+                        <strong>${this.escape(destination)}</strong>
+                    </div>
+
+                    <div class="navigation-live-hud">
+                        <section class="turn-guidance">
+                            <div id="navArrow" class="turn-guidance-arrow">↑</div>
+                            <div class="turn-guidance-copy">
+                                <strong id="navTurnDistance">Trip underway</strong>
+                                <h2 id="navInstruction">Finding your route…</h2>
+                                <p id="navRoadName" class="nav-road-name"></p>
+                            </div>
+                        </section>
+
+                        <div
+                            id="navTrafficAlert"
+                            class="navigation-traffic-alert"
+                            hidden
+                        >
+                            <i class="fas fa-triangle-exclamation"></i>
+                            <span id="navTrafficAlertText">Traffic alert</span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="waze-nav-side">
                     <div id="navCurrentSpeedPanel" class="nav-speed-current">
                         <small>SPEED</small>
                         <strong id="navCurrentSpeed">0</strong>
@@ -3072,63 +3128,60 @@ ASIYE_DRIVER.ui = {
                     </button>
                 </div>
 
-                <div
-                    id="navTrafficAlert"
-                    class="navigation-traffic-alert"
-                    hidden
-                >
-                    <i class="fas fa-triangle-exclamation"></i>
-                    <span id="navTrafficAlertText">Traffic alert</span>
+                <div class="waze-nav-bottom">
+
+                    <div class="waze-trip-target waze-trip-destination">
+                        <div class="waze-destination-icon">
+                            <i class="fas fa-location-dot"></i>
+                        </div>
+                        <div>
+                            <small>DESTINATION</small>
+                            <strong>${this.escape(destination)}</strong>
+                            <span>
+                                ${request.type === 'club'
+                                    ? `${passengerCount} passengers onboard`
+                                    : request.type === 'delivery'
+                                        ? 'Parcel recipient'
+                                        : 'Passenger drop-off'}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="navigation-summary">
+                        <strong id="navEta">—</strong>
+                        <span id="navDistance">—</span>
+                        <span>Arrival <b id="navArrival">—</b></span>
+                    </div>
+
+                    <div class="navigation-controls">
+                        <button id="navFollow" class="driver-btn">
+                            <i class="fas fa-location-arrow"></i>
+                            Follow
+                        </button>
+                        <button id="navOverview" class="driver-btn">
+                            <i class="fas fa-map"></i>
+                            Overview
+                        </button>
+                        <button id="navRetry" class="driver-btn">
+                            <i class="fas fa-rotate-right"></i>
+                            Route
+                        </button>
+                    </div>
+
+                    <button
+                        id="driverCompleteTrip"
+                        class="driver-btn driver-btn-primary driver-btn-full navigation-main-action"
+                    >
+                        <i class="fas fa-check"></i>
+                        ${request.type === 'delivery'
+                            ? 'Complete delivery'
+                            : 'Complete trip'}
+                    </button>
+
                 </div>
-            </div>
-
-            <div class="navigation-summary">
-                <strong id="navEta">—</strong>
-                <span id="navDistance">—</span>
-                <span>Arrival <b id="navArrival">—</b></span>
-            </div>
-
-            <p class="navigation-destination">
-                <i class="fas fa-location-dot"></i>
-                ${this.escape(request.destinationName || request.destination || 'Destination')}
-            </p>
-
-            <div class="navigation-controls">
-                <button id="navFollow" class="driver-btn">
-                    <i class="fas fa-location-arrow"></i>
-                    Follow car
-                </button>
-                <button id="navRetry" class="driver-btn">
-                    <i class="fas fa-rotate-right"></i>
-                    Retry route
-                </button>
-            </div>
-            <div
-                class="
-                    driver-trip-actions
-                    single
-                "
-            >
-
-                <button
-                    id="driverCompleteTrip"
-                    class="
-                        driver-btn
-                        driver-btn-primary
-                    "
-                >
-
-                    <i class="fas fa-check"></i>
-
-                    ${request.type === 'delivery'
-                        ? 'Complete delivery'
-                        : 'Complete trip'}
-
-                </button>
 
             </div>
         `;
-
 
         ASIYE_DRIVER.navigator?.start(request);
 
@@ -3139,19 +3192,14 @@ ASIYE_DRIVER.ui = {
             ?.addEventListener(
                 'click',
                 () => {
-
                     this.confirm(
-
                         request.type === 'delivery'
                             ? 'Complete delivery'
                             : 'Complete trip',
-
                         request.type === 'delivery'
                             ? 'Confirm that the parcel has reached the recipient.'
                             : 'Confirm that you have reached the destination.',
-
                         async () => {
-
                             await ASIYE_DRIVER.trip
                                 .completeTrip();
                         }
