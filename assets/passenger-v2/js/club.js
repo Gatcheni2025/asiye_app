@@ -489,13 +489,8 @@ ASIYE.club = {
             ASIYE.profile.getUrl(user);
 
         const pin =
-            String(
-                Math.floor(
-                    1000 +
-                    Math.random() *
-                    9000
-                )
-            );
+            await ASIYE.booking
+                .requirePassengerPin();
 
         await ASIYE.booking.requireTripShare({
             pickupPin:
