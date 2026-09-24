@@ -1734,6 +1734,10 @@ document.addEventListener(
     const login = window.ASIYE_PASSENGER_LOGIN;
     if (!login) return;
     const nativeChannel = () => window.Asiye || window.Android || null;
+    const isInstalledAssetApp = () =>
+        location.protocol === 'file:' ||
+        location.hostname === 'appassets.androidplatform.net' ||
+        /flutter_assets|\/assets\/passenger-v2\//i.test(location.href);
 
     // The installed Flutter app has a native Firebase phone-auth bridge.
     // Never initialize the browser reCAPTCHA verifier inside that WebView.
@@ -1763,8 +1767,16 @@ document.addEventListener(
         const phone = this.normalizePhone(input?.value);
         if (!phone) return webSendOtp();
 
-        // Hosted website: use Firebase JS auth. Installed app: native only.
-        if (!nativeChannel()) return webSendOtp();
+        // Hosted website may use Firebase JS auth. The installed app must
+        // never fall back to browser reCAPTCHA if its native bridge is absent.
+        if (!nativeChannel()) {
+            if (!isInstalledAssetApp()) return webSendOtp();
+            const error = document.getElementById('phoneError');
+            const message = 'Native phone authentication is unavailable. Please reopen Asiye and try again.';
+            if (error) error.textContent = message;
+            this.toast(message);
+            return;
+        }
         if (!post({ action: 'startPhoneSignIn', phone })) {
             const error = document.getElementById('phoneError');
             const message = 'Native phone authentication is unavailable. Please reopen Asiye and try again.';
@@ -1783,7 +1795,14 @@ document.addEventListener(
 
     login.resendOtp = async function () {
         if (!this.currentPhone) return;
-        if (!nativeChannel()) return webResendOtp();
+        if (!nativeChannel()) {
+            if (!isInstalledAssetApp()) return webResendOtp();
+            const error = document.getElementById('otpError');
+            const message = 'Native phone authentication is unavailable. Please reopen Asiye and try again.';
+            if (error) error.textContent = message;
+            this.toast(message);
+            return;
+        }
         if (!post({ action: 'resendPhoneOtp', phone: this.currentPhone })) {
             const error = document.getElementById('otpError');
             const message = 'Native phone authentication is unavailable. Please reopen Asiye and try again.';
@@ -1804,7 +1823,7 @@ document.addEventListener(
 
     login.verifyOtp = async function () {
         if (!this.nativeVerificationId) {
-            if (!nativeChannel()) return webVerifyOtp();
+            if (!nativeChannel() && !isInstalledAssetApp()) return webVerifyOtp();
             const el = document.getElementById('otpError');
             const message = 'Request a new SMS code before verifying.';
             if (el) el.textContent = message;
