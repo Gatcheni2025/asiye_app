@@ -1019,6 +1019,29 @@ ASIYE_DRIVER.ui = {
             );
 
 
+        const commissionRate =
+            Number(
+                request.commissionRate ||
+                0.20
+            );
+
+        const platformCommission =
+            Math.round(
+                fare *
+                commissionRate *
+                100
+            ) / 100;
+
+        const driverNetFare =
+            Math.round(
+                (
+                    fare -
+                    platformCommission
+                ) *
+                100
+            ) / 100;
+
+
         const distance =
 
             Number(
@@ -1291,19 +1314,28 @@ ASIYE_DRIVER.ui = {
             <div class="driver-request-price">
 
                 <span>
-                    ${
-                        isClub
+                    ${isClub
                         ? 'Trip gross'
                         : isDelivery
-                            ? 'Delivery fare'
-                            : 'Trip fare'
-                    }
+                            ? 'Delivery gross'
+                            : 'Trip gross'}
                 </span>
 
                 <strong>
                     R${fare.toFixed(2)}
                 </strong>
 
+            </div>
+
+            <div class="driver-request-meta" style="margin-top:8px;">
+                <div>
+                    <span>Asiye commission</span>
+                    <strong>20% · R${platformCommission.toFixed(2)}</strong>
+                </div>
+                <div>
+                    <span>You receive</span>
+                    <strong>R${driverNetFare.toFixed(2)}</strong>
+                </div>
             </div>
         `;
 
