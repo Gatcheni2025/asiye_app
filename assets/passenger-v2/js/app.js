@@ -780,8 +780,8 @@ ASIYE.ui = {
 
 
                     /*
-                     * Club flow — collect schedule
-                     * first, then book.
+                     * Club flow — no departure time is requested.
+                     * Confirm the shared ride immediately.
                      */
 
                     if (
@@ -789,7 +789,9 @@ ASIYE.ui = {
                         type === 'club7'
                     ) {
 
-                        this.renderClubSchedule();
+                        ASIYE.club.select(type);
+                        ASIYE.state.booking.club.departureTime = null;
+                        this.renderClubConfirmation();
 
                         return;
                     }
@@ -1232,12 +1234,6 @@ ASIYE.ui = {
             : prices.club4;
 
 
-        const time =
-            ASIYE.state.booking
-                .club
-                .departureTime;
-
-
         container.innerHTML = `
 
             <div class="sheet-page-header">
@@ -1330,17 +1326,6 @@ ASIYE.ui = {
 
                 <div>
 
-                    <span>Departure</span>
-
-                    <strong>
-                        ${time}
-                    </strong>
-
-                </div>
-
-
-                <div>
-
                     <span>Distance</span>
 
                     <strong>
@@ -1405,7 +1390,7 @@ ASIYE.ui = {
                 'click',
                 () => {
 
-                    this.renderClubSchedule();
+                    this.renderRideSelection();
                 }
             );
 
@@ -1433,22 +1418,13 @@ ASIYE.ui = {
                 .rideType;
 
 
-        const time =
-            ASIYE.state.booking
-                .club
-                .departureTime;
-
-
         const button =
             document.getElementById(
                 'bookClubNow'
             );
 
 
-        if (
-            !type ||
-            !time
-        ) {
+        if (!type) {
 
             return;
         }
@@ -1486,7 +1462,7 @@ ASIYE.ui = {
 
                     type,
 
-                    time
+                    null
                 );
 
 
@@ -1638,22 +1614,6 @@ ASIYE.ui = {
 
 
             <div class="club-summary-grid">
-
-                <div>
-
-                    <span>
-                        Departure
-                    </span>
-
-                    <strong>
-                        ${
-                            request.departureTime ||
-                            '—'
-                        }
-                    </strong>
-
-                </div>
-
 
                 <div>
 
