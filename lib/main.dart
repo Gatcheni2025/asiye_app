@@ -581,7 +581,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         Permission.notification,
         Permission.photos,
       ].request();
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Permission request failed: $e');
+    }
   }
 
   Future<String> _determineStartPage() async {
@@ -654,10 +656,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             } else {
               await launchUrl(Uri.parse(webUrl), mode: LaunchMode.externalApplication);
             }
-          } catch (e) {}
+          } catch (e) {
+            debugPrint('Unable to open share link: $e');
+          }
           break;
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Native share request failed: $e');
+    }
   }
 
   void _handleJsCalls(String message) async {
@@ -724,9 +730,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               Share.share(text);
             }
           }
-        } catch(_) {}
+        } catch (e) {
+          debugPrint('Unable to decode native WebView action: $e');
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      debugPrint('Native WebView bridge failed: $e');
+    }
   }
 
   Future<void> _startPhoneSignIn(
@@ -1008,12 +1018,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Future<void> _signInWithGoogle() async {
     try {
       await _googleSignIn.signOut().catchError((_) => null);
-      final GoogleSignInAccount? account = await _googleSignIn.authenticate();
-
-      if (account == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
-      }
+      final GoogleSignInAccount account = await _googleSignIn.authenticate();
 
       final GoogleSignInAuthentication auth = account.authentication;
 
