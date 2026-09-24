@@ -1670,7 +1670,7 @@ document.addEventListener(
             const credential = firebase.auth.GoogleAuthProvider.credential(data.idToken);
             const result = await firebase.auth().signInWithCredential(credential);
             if (!result.user) throw new Error('Google authentication failed.');
-            await login.afterAuthentication(result.user);
+            await login.afterAuthentication(signedIn.user);
         } catch (error) {
             console.error('Native Google Firebase sign-in failed:', error);
             login.handleSocialError(error, 'Google');
@@ -1765,7 +1765,6 @@ document.addEventListener(
 
     window.onNativePhoneAuthSuccess = async idToken => {
         try {
-            const result = await firebase.auth().signInWithCustomToken ? null : null;
             // Native and WebView Firebase SDKs do not automatically share Auth state.
             // Exchange the native Firebase ID token through the existing backend session bridge.
             const response = await fetch('https://us-central1-asiye-80386.cloudfunctions.net/exchangeNativeAuthSession', {
@@ -1785,10 +1784,15 @@ document.addEventListener(
     };
 
     window.onNativePhoneAuthError = message => {
+        const rawMessage = String(message || 'Phone authentication failed.');
+        const expiredCaptcha = /recaptcha/i.test(rawMessage) && /expired/i.test(rawMessage);
+        const displayMessage = expiredCaptcha
+            ? 'Security verification expired. Please tap Continue with phone and complete verification again.'
+            : rawMessage;
         const error = document.getElementById(login.nativeVerificationId ? 'otpError' : 'phoneError');
-        if (error) error.textContent = String(message || 'Phone authentication failed.');
+        if (error) error.textContent = displayMessage;
         const button = document.getElementById('sendOtpButton');
         if (button) { button.disabled = false; button.textContent = 'Continue with phone'; }
-        login.toast(String(message || 'Phone authentication failed.'));
+        login.toast(displayMessage);
     };
 })();
