@@ -640,6 +640,35 @@ ASIYE_DRIVER.ui = {
             driver.registrationNumber;
 
 
+        const year =
+            Number(
+                vehicle.year ||
+                driver.vehicleYear ||
+                driver.year ||
+                0
+            );
+
+
+        const phone =
+            driver.phone ||
+            driver.phoneNumber ||
+            '';
+
+
+        const profileImage =
+            driver.profileImageUrl ||
+            driver.profile_picture_url ||
+            driver.profilePhotoUrl ||
+            '';
+
+
+        const vehiclePhoto =
+            driver.vehiclePhoto ||
+            driver.carPhoto ||
+            driver.documents?.carUrl ||
+            '';
+
+
         const approved =
             driver.vehicleApproved ===
                 true ||
@@ -657,6 +686,11 @@ ASIYE_DRIVER.ui = {
             model &&
             colour &&
             registration &&
+            Number.isInteger(year) &&
+            year >= 1990 &&
+            phone &&
+            profileImage &&
+            vehiclePhoto &&
             Number.isInteger(seats) &&
             seats > 0
         );
@@ -714,7 +748,7 @@ ASIYE_DRIVER.ui = {
             !this.hasApprovedVehicle()
         ) {
             this.toast(
-                'Your vehicle must be approved with type, make, model, colour and seats before you can go online.',
+                'Complete your approved driver profile first: selfie, car photo, phone, make, model, colour, year, registration and seats are required before you can go online.',
                 'warning'
             );
 
@@ -3057,10 +3091,30 @@ ASIYE_DRIVER.ui = {
         }
 
 
+        const grossFare =
+            Number(
+                request.driverGrossFare ||
+                amount ||
+                0
+            );
+
+        const commission =
+            Number(
+                request.platformCommission ||
+                (grossFare * 0.20)
+            );
+
+        const netFare =
+            Number(
+                request.driverNetFare ||
+                (grossFare - commission)
+            );
+
+
         if (fareElement) {
 
             fareElement.textContent =
-                `R${amount.toFixed(2)}`;
+                `R${netFare.toFixed(2)}`;
         }
 
 
@@ -3075,7 +3129,14 @@ ASIYE_DRIVER.ui = {
                         request.paymentMethod ||
                         'cash'
                     ) +
-                    ' payment</p>';
+                    ' payment</p>' +
+                    '<p style="margin-top:10px;">Gross R' +
+                    grossFare.toFixed(2) +
+                    ' · Asiye commission 20% R' +
+                    commission.toFixed(2) +
+                    ' · You receive R' +
+                    netFare.toFixed(2) +
+                    '</p>';
 
                 overlay.classList.add(
                     'open'
@@ -3095,6 +3156,7 @@ ASIYE_DRIVER.ui = {
 
             details.innerHTML = `
                 <p>${request.type === 'club' ? 'Asiye Work trip completed' : ASIYE_DRIVER.ui.escape(request.paymentMethod || 'cash') + ' payment'}</p>
+                <p style="margin-top:10px;">Gross R${grossFare.toFixed(2)} · Asiye commission 20% R${commission.toFixed(2)} · You receive R${netFare.toFixed(2)}</p>
                 ${unrated.length ? `
                     <section style="margin-top:16px;">
                         <strong>Rate your passenger</strong>
