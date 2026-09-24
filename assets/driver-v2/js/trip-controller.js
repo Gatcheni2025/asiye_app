@@ -1061,6 +1061,16 @@ ASIYE_DRIVER.trip = {
                 next.commuterName ||
                 'Passenger',
 
+            commuterProfileImageUrl:
+                next.profileImageUrl ||
+                next.profile_picture_url ||
+                '',
+
+            passengerProfileImageUrl:
+                next.profileImageUrl ||
+                next.profile_picture_url ||
+                '',
+
             pickupAddress:
                 next.pickupAddress,
 
@@ -1077,20 +1087,6 @@ ASIYE_DRIVER.trip = {
                     next.longitude
             }
         });
-
-
-        if (
-            ASIYE_DRIVER.ui &&
-            typeof ASIYE_DRIVER.ui
-                .showClubPickup ===
-                'function'
-        ) {
-
-            ASIYE_DRIVER.ui
-                .showClubPickup(
-                    next
-                );
-        }
     },
 
 
