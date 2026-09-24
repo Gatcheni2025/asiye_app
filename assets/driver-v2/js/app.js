@@ -1035,6 +1035,16 @@ ASIYE_DRIVER.ui = {
             );
 
 
+        const passengerPhoto =
+            request.commuterProfileImageUrl ||
+            request.passengerProfileImageUrl ||
+            '';
+
+        const passengerName =
+            request.commuterName ||
+            'Passenger';
+
+
         const passengerCount =
 
             isClub
@@ -1105,6 +1115,19 @@ ASIYE_DRIVER.ui = {
                 }
 
             </div>
+
+
+            ${passengerPhoto ? `
+                <div class="navigator-passenger driver-passenger-identity" style="margin:12px 0;">
+                    <div class="navigator-avatar">
+                        <img src="${this.escape(passengerPhoto)}" alt="${this.escape(passengerName)}">
+                    </div>
+                    <div>
+                        <small>${isDelivery ? 'SENDER' : 'PASSENGER'}</small>
+                        <strong>${this.escape(passengerName)}</strong>
+                    </div>
+                </div>
+            ` : ''}
 
 
             <div class="driver-request-route">
@@ -1512,7 +1535,7 @@ ASIYE_DRIVER.ui = {
 
 
             ${
-                !isDelivery
+                passengerPhoto
                 ? `
                     <div class="navigator-passenger driver-passenger-identity">
                         <div class="navigator-avatar">
@@ -1528,7 +1551,7 @@ ASIYE_DRIVER.ui = {
                         </div>
 
                         <div>
-                            <small>PASSENGER</small>
+                            <small>${isDelivery ? 'SENDER' : 'PASSENGER'}</small>
                             <strong>${this.escape(passengerName)}</strong>
                         </div>
                     </div>
@@ -3324,10 +3347,13 @@ ASIYE_DRIVER.ui = {
 
                                 <div class="club-passenger-top">
 
-                                    <div class="club-passenger-number">
+                                    <div class="club-passenger-number" style="overflow:hidden;">
 
                                         ${
-                                            index + 1
+                                            passenger.profileImageUrl ||
+                                            passenger.profile_picture_url
+                                                ? `<img src="${this.escape(passenger.profileImageUrl || passenger.profile_picture_url)}" alt="" style="width:100%;height:100%;object-fit:cover;">`
+                                                : index + 1
                                         }
 
                                     </div>
