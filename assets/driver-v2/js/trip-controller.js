@@ -1791,6 +1791,24 @@ ASIYE_DRIVER.trip = {
         );
 
 
+        if (
+            request.type ===
+            'delivery'
+        ) {
+            await firebase
+                .database()
+                .ref(
+                    `delivery_requests/${this.requestId}`
+                )
+                .update(
+                    updates
+                )
+                .catch(
+                    () => {}
+                );
+        }
+
+
         /*
          * Notifications.
          */
@@ -1894,7 +1912,7 @@ ASIYE_DRIVER.trip = {
         }
 
 
-        await this.requestRef.update({
+        const cancellationPatch = {
 
             status:
                 'cancelled_by_driver',
@@ -1908,7 +1926,30 @@ ASIYE_DRIVER.trip = {
                     .database
                     .ServerValue
                     .TIMESTAMP
-        });
+        };
+
+
+        await this.requestRef.update(
+            cancellationPatch
+        );
+
+
+        if (
+            this.request.type ===
+            'delivery'
+        ) {
+            await firebase
+                .database()
+                .ref(
+                    `delivery_requests/${this.requestId}`
+                )
+                .update(
+                    cancellationPatch
+                )
+                .catch(
+                    () => {}
+                );
+        }
 
 
         if (
