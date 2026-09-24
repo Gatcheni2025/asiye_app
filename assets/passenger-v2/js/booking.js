@@ -255,6 +255,9 @@ ASIYE.booking = {
             finalAmount:
                 fare,
 
+            commissionRate:
+                0.20,
+
             paymentMethod:
                 ASIYE.state.booking
                     .paymentMethod ||
