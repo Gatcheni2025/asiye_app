@@ -39,6 +39,9 @@ ASIYE.profile = {
         const patch = {
             profileImageUrl: url,
             profile_picture_url: url,
+            profilePhotoUrl: url,
+            photoURL: url,
+            passengerProfileImageUrl: url,
             faceScanCompleted: true,
             faceScanVerifiedAt:
                 firebase.database.ServerValue.TIMESTAMP,

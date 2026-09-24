@@ -77,10 +77,11 @@
             });
 
             const payload = await response.json().catch(() => ({}));
-            const url = payload.url || payload.fileUrl || payload.file_url || '';
-            if (!response.ok || !url || /error/i.test(String(url))) {
+            const rawUrl = payload.url || payload.fileUrl || payload.file_url || '';
+            if (!response.ok || !rawUrl || /error/i.test(String(rawUrl))) {
                 throw new Error(payload.message || payload.error || 'Profile image upload failed.');
             }
+            const url = String(rawUrl).replace(/^http:/i, 'https:');
             return { ...payload, url };
         }
     };
@@ -215,6 +216,12 @@ window.AsiyePages = {
             profile_picture_url:
                 url,
             profileImageUrl:
+                url,
+            driverProfileImageUrl:
+                url,
+            profilePhotoUrl:
+                url,
+            photoURL:
                 url,
             faceScanCompleted:
                 true,
@@ -493,7 +500,14 @@ window.AsiyePages = {
             const initial = esc((user.name || user.firstName || 'A').charAt(0));
             const photoUrl = !driver && window.ASIYE?.profile
                 ? ASIYE.profile.getUrl(user)
-                : (user.profile_picture_url || user.profileImageUrl || '');
+                : (
+                    user.profile_picture_url ||
+                    user.profileImageUrl ||
+                    user.driverProfileImageUrl ||
+                    user.profilePhotoUrl ||
+                    user.photoURL ||
+                    ''
+                );
             const avatar = photoUrl
                 ? `<div class="member-avatar member-avatar-photo"><img data-passenger-profile-preview src="${esc(photoUrl)}" alt="Profile picture"></div>`
                 : `<div class="member-avatar">${initial}</div>`;
