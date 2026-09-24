@@ -807,6 +807,13 @@ window.AsiyePages = {
                         user.vehicleColor ||
                         user.color
                     ),
+                year:
+                    pick(
+                        pendingVehicle.year,
+                        approvedVehicle.year,
+                        user.vehicleYear ||
+                        user.year
+                    ),
                 seats:
                     pick(
                         pendingVehicle.seats,
@@ -909,6 +916,41 @@ window.AsiyePages = {
                     </label>
 
                     <label>
+                        Vehicle year
+                        <input
+                            name="year"
+                            type="number"
+                            inputmode="numeric"
+                            min="1990"
+                            max="2027"
+                            step="1"
+                            value="${esc(current.year)}"
+                            placeholder="e.g. 2023"
+                            required
+                        >
+                    </label>
+
+                    <div class="member-info">
+                        <strong>Vehicle photo</strong>
+                        <p class="member-note">
+                            Capture the actual car showing its colour and registration plate.
+                        </p>
+                        ${user.vehiclePhoto
+                            ? `<img data-driver-car-preview src="${esc(user.vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`
+                            : `<img data-driver-car-preview alt="Driver vehicle" hidden style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`}
+                        <button
+                            type="button"
+                            class="member-primary"
+                            data-driver-car-camera
+                        >
+                            ${user.vehiclePhoto ? 'Retake car photo' : 'Take car photo'}
+                        </button>
+                        <p class="member-note" data-driver-car-status>
+                            A car photo is required before you can go online.
+                        </p>
+                    </div>
+
+                    <label>
                         Passenger seats
                         <input
                             name="seats"
@@ -965,6 +1007,108 @@ window.AsiyePages = {
                     '[data-vehicle-status]'
                 );
 
+            const carButton =
+                body.querySelector(
+                    '[data-driver-car-camera]'
+                );
+
+            const carStatus =
+                body.querySelector(
+                    '[data-driver-car-status]'
+                );
+
+            const carPreview =
+                body.querySelector(
+                    '[data-driver-car-preview]'
+                );
+
+            if (carButton) {
+                carButton.onclick =
+                    async () => {
+                        carButton.disabled =
+                            true;
+                        carButton.textContent =
+                            'Opening camera…';
+
+                        try {
+                            const capture =
+                                await AsiyeFaceCapture
+                                    .capture(
+                                        'driver-vehicle'
+                                    );
+
+                            if (carStatus) {
+                                carStatus.textContent =
+                                    'Uploading vehicle photo…';
+                            }
+
+                            const uploaded =
+                                await AsiyePhpImageUpload
+                                    .upload(
+                                        capture,
+                                        {
+                                            userId:
+                                                id,
+                                            purpose:
+                                                'driver-vehicle',
+                                            filename:
+                                                'driver-vehicle.jpg'
+                                        }
+                                    );
+
+                            await firebase
+                                .database()
+                                .ref(
+                                    `taxis/${id}`
+                                )
+                                .update({
+                                    vehiclePhoto:
+                                        uploaded.url,
+                                    vehiclePhotoUpdatedAt:
+                                        firebase
+                                            .database
+                                            .ServerValue
+                                            .TIMESTAMP
+                                });
+
+                            user.vehiclePhoto =
+                                uploaded.url;
+
+                            if (carPreview) {
+                                carPreview.src =
+                                    uploaded.url;
+                                carPreview.hidden =
+                                    false;
+                            }
+
+                            if (carStatus) {
+                                carStatus.textContent =
+                                    'Vehicle photo saved. Submit the vehicle details below for approval.';
+                            }
+
+                            carButton.textContent =
+                                'Retake car photo';
+
+                        } catch (error) {
+                            if (carStatus) {
+                                carStatus.textContent =
+                                    error?.message ||
+                                    'Vehicle photo was not saved.';
+                            }
+
+                            carButton.textContent =
+                                user.vehiclePhoto
+                                    ? 'Retake car photo'
+                                    : 'Take car photo';
+
+                        } finally {
+                            carButton.disabled =
+                                false;
+                        }
+                    };
+            }
+
+
             form.onsubmit =
                 async event => {
                     event.preventDefault();
@@ -1010,6 +1154,12 @@ window.AsiyePages = {
                                 ) ||
                                 ''
                             ).trim(),
+                        year:
+                            Number(
+                                data.get(
+                                    'year'
+                                )
+                            ),
                         seats:
                             Number(
                                 data.get(
@@ -1033,6 +1183,28 @@ window.AsiyePages = {
                     ) {
                         vehicleStatus.textContent =
                             'Complete type, make, model, colour and registration before submitting.';
+                        return;
+                    }
+
+                    if (
+                        !Number.isInteger(
+                            vehiclePending.year
+                        ) ||
+                        vehiclePending.year <
+                            1990 ||
+                        vehiclePending.year >
+                            2027
+                    ) {
+                        vehicleStatus.textContent =
+                            'Enter a valid four-digit vehicle year.';
+                        return;
+                    }
+
+                    if (
+                        !user.vehiclePhoto
+                    ) {
+                        vehicleStatus.textContent =
+                            'Take and save a clear photo of your car before submitting.';
                         return;
                     }
 
