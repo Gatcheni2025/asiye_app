@@ -1,3 +1,148 @@
+/* ASIYE_PROFILE_MEDIA_BRIDGE_V1
+   Shared camera, image compression/upload and required-share helpers. */
+(() => {
+    let pendingFaceCapture = null;
+    let pendingTripShare = null;
+
+    const nativeChannel = () => window.Asiye || window.Android || null;
+
+    const dataUrlToBlob = dataUrl => {
+        const [head, body] = String(dataUrl || '').split(',');
+        if (!head || !body) throw new Error('Camera image is unavailable.');
+        const mime = (head.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+        const bytes = atob(body);
+        const buffer = new Uint8Array(bytes.length);
+        for (let i = 0; i < bytes.length; i += 1) buffer[i] = bytes.charCodeAt(i);
+        return new Blob([buffer], { type: mime });
+    };
+
+    const compressImage = async blob => {
+        const bitmap = await createImageBitmap(blob);
+        const maxSide = 1000;
+        const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+        canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+        canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+        bitmap.close?.();
+        return await new Promise((resolve, reject) => {
+            canvas.toBlob(
+                result => result ? resolve(result) : reject(new Error('Could not prepare profile photo.')),
+                'image/jpeg',
+                0.78
+            );
+        });
+    };
+
+    window.AsiyePhpImageUpload = window.AsiyePhpImageUpload || {
+        toBlob(value) {
+            if (value instanceof Blob) return value;
+            if (value?.dataUrl) return dataUrlToBlob(value.dataUrl);
+            if (typeof value === 'string' && value.startsWith('data:')) return dataUrlToBlob(value);
+            throw new Error('Unsupported profile image.');
+        },
+
+        async upload(value, options = {}) {
+            const source = this.toBlob(value);
+            const compressed = await compressImage(source);
+            const form = new FormData();
+            form.append('file', compressed, options.filename || 'profile.jpg');
+            form.append('api_key', 'asiye_secure_upload_2025');
+            form.append('userId', String(options.userId || 'asiye-user'));
+            if (options.purpose) form.append('purpose', String(options.purpose));
+
+            const response = await fetch('https://app.asiye.cloud/upload_handler.php', {
+                method: 'POST',
+                body: form
+            });
+
+            const payload = await response.json().catch(() => ({}));
+            const url = payload.url || payload.fileUrl || payload.file_url || '';
+            if (!response.ok || !url || /error/i.test(String(url))) {
+                throw new Error(payload.message || payload.error || 'Profile image upload failed.');
+            }
+            return { ...payload, url };
+        }
+    };
+
+    window.AsiyeFaceCapture = window.AsiyeFaceCapture || {
+        async capture(purpose = 'profile') {
+            if (pendingFaceCapture) throw new Error('Camera is already open.');
+            const channel = nativeChannel();
+            if (!channel || typeof channel.postMessage !== 'function') {
+                throw new Error('Live camera is available in the installed Asiye app.');
+            }
+
+            return await new Promise((resolve, reject) => {
+                const timeout = setTimeout(() => {
+                    pendingFaceCapture = null;
+                    reject(new Error('Camera timed out. Please try again.'));
+                }, 120000);
+
+                pendingFaceCapture = {
+                    resolve: value => { clearTimeout(timeout); pendingFaceCapture = null; resolve(value); },
+                    reject: error => { clearTimeout(timeout); pendingFaceCapture = null; reject(error); }
+                };
+
+                channel.postMessage(JSON.stringify({
+                    action: 'captureFacePhoto',
+                    purpose
+                }));
+            });
+        }
+    };
+
+    window.onNativeFaceCaptureSuccess = payload => {
+        pendingFaceCapture?.resolve(payload);
+    };
+
+    window.onNativeFaceCaptureError = message => {
+        const text = String(message || 'Camera failed.');
+        pendingFaceCapture?.reject(
+            new Error(text.toLowerCase() === 'cancelled' ? 'Face scan cancelled.' : text)
+        );
+    };
+
+    window.AsiyeTripShare = window.AsiyeTripShare || {
+        async require(text) {
+            const channel = nativeChannel();
+
+            if (channel && typeof channel.postMessage === 'function') {
+                if (pendingTripShare) throw new Error('Share sheet is already open.');
+                return await new Promise((resolve, reject) => {
+                    const timeout = setTimeout(() => {
+                        pendingTripShare = null;
+                        reject(new Error('Share was not completed. Please share the trip to continue.'));
+                    }, 120000);
+
+                    pendingTripShare = {
+                        resolve: value => { clearTimeout(timeout); pendingTripShare = null; resolve(value); },
+                        reject: error => { clearTimeout(timeout); pendingTripShare = null; reject(error); }
+                    };
+
+                    channel.postMessage(JSON.stringify({
+                        action: 'shareTrip',
+                        text
+                    }));
+                });
+            }
+
+            if (navigator.share) {
+                await navigator.share({ title: 'My Asiye trip', text });
+                return true;
+            }
+
+            throw new Error('Trip sharing is required. Please use the installed Asiye app.');
+        }
+    };
+
+    window.onNativeTripShareResult = result => {
+        if (!pendingTripShare) return;
+        if (result?.shared) pendingTripShare.resolve(true);
+        else pendingTripShare.reject(new Error('Share your trip with a loved one to continue.'));
+    };
+})();
+
 /* Shared account pages. Opening a page does not replace the active trip UI. */
 window.AsiyePages = {
     escape(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); },
@@ -146,28 +291,15 @@ window.AsiyePages = {
                      * a gallery/file picker for the profile photo.
                      */
                     if (
-                        window.AsiyeNativeBridge &&
-                        typeof AsiyeNativeBridge.scanFace ===
+                        window.AsiyeFaceCapture &&
+                        typeof AsiyeFaceCapture.capture ===
                             'function'
                     ) {
                         const result =
-                            await AsiyeNativeBridge
-                                .scanFace({
-                                    purpose:
-                                        'driver-profile'
-                                });
-
-                        if (!result) {
-                            if (status) {
-                                status.textContent =
-                                    'Camera cancelled. No photo was changed.';
-                            }
-
-                            button.textContent =
-                                'Scan face';
-
-                            return;
-                        }
+                            await AsiyeFaceCapture
+                                .capture(
+                                    'driver-profile'
+                                );
 
                         if (!window.AsiyePhpImageUpload) {
                             throw new Error(
