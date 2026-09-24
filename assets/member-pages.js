@@ -451,7 +451,8 @@ window.AsiyePages = {
         if (!titles[page]) return;
         const dialog = document.createElement('dialog');
         this.dialog = dialog;
-        dialog.className = 'member-page';
+        dialog.className =
+            `member-page member-page-${page} ${driver ? 'member-page-driver' : 'member-page-passenger'}`;
         dialog.setAttribute('aria-label', titles[page]);
         dialog.innerHTML = `<header><div><small>ASIYE · ${driver ? 'DRIVER' : 'PASSENGER'}</small><h1>${titles[page]}</h1></div><button aria-label="Close page">×</button></header><main><p class="member-note">Loading…</p></main>`;
         document.body.append(dialog);
@@ -849,22 +850,48 @@ window.AsiyePages = {
                     user.vehiclePending
                 );
 
-            body.innerHTML = `
-                <div class="member-balance">
-                    <small>Vehicle approval</small>
-                    <strong>${
-                        approvalStatus === 'approved'
-                            ? 'Approved'
-                            : hasPending
-                                ? 'Pending review'
-                                : 'Action required'
-                    }</strong>
-                </div>
+            const vehicleStateClass =
+                approvalStatus === 'approved'
+                    ? 'approved'
+                    : hasPending
+                        ? 'pending'
+                        : 'required';
 
-                <p class="member-note">
+            body.innerHTML = `
+                <section class="member-status-hero member-vehicle-status ${vehicleStateClass}">
+                    <div class="member-status-icon">
+                        <i class="fas ${
+                            approvalStatus === 'approved'
+                                ? 'fa-circle-check'
+                                : hasPending
+                                    ? 'fa-clock'
+                                    : 'fa-triangle-exclamation'
+                        }"></i>
+                    </div>
+                    <div>
+                        <small>VEHICLE STATUS</small>
+                        <h2>${
+                            approvalStatus === 'approved'
+                                ? 'Vehicle approved'
+                                : hasPending
+                                    ? 'Vehicle under review'
+                                    : 'Vehicle setup required'
+                        }</h2>
+                        <p>
+                            ${
+                                approvalStatus === 'approved'
+                                    ? 'Your approved vehicle is ready to receive Asiye bookings.'
+                                    : hasPending
+                                        ? 'Your latest vehicle details are waiting for administrator approval.'
+                                        : 'Complete your vehicle details and photo before you can drive.'
+                            }
+                        </p>
+                    </div>
+                </section>
+
+                <p class="member-note member-section-intro">
                     Add or edit the vehicle you drive on Asiye. Any change
-                    must be reviewed by an administrator before you can go
-                    online again.
+                    must be reviewed before the vehicle can go online again.
                 </p>
 
                 <form
@@ -1323,12 +1350,23 @@ window.AsiyePages = {
                 : [];
 
             body.innerHTML = `
-                <h2>Trusted family & live location</h2>
+                <section class="member-status-hero member-safety-hero">
+                    <div class="member-status-icon">
+                        <i class="fas fa-shield-heart"></i>
+                    </div>
+                    <div>
+                        <small>DRIVER SAFETY</small>
+                        <h2>Trusted family & live location</h2>
+                        <p>
+                            Keep people you trust connected to your driving account
+                            and share your active trip location when you need to.
+                        </p>
+                    </div>
+                </section>
 
-                <p class="member-note">
-                    Your primary safety contact is saved once and stays
-                    connected to your Asiye account. You can add more trusted
-                    people here at any time.
+                <p class="member-note member-section-intro">
+                    Your primary safety contact stays connected to your Asiye
+                    account. You can add more trusted people at any time.
                 </p>
 
                 <div data-family-list>
@@ -1889,10 +1927,16 @@ window.AsiyePages = {
                         ) || 0;
 
                     html +=
-                        `<div class="member-balance"><small>Net completed earnings</small><strong>${this.money(totals.net)}</strong></div>` +
-                        `<div class="member-row"><span>Gross fares</span><strong>${this.money(totals.gross)}</strong></div>` +
-                        `<div class="member-row"><span>Asiye commission · 20%</span><strong>${this.money(totals.commission)}</strong></div>` +
-                        `<div class="member-row"><span>Commission balance due</span><strong>${this.money(commissionDebt)}</strong></div>` +
+                        `<section class="member-earnings-hero">
+                            <small>NET COMPLETED EARNINGS</small>
+                            <strong>${this.money(totals.net)}</strong>
+                            <span>After Asiye 20% commission</span>
+                        </section>` +
+                        `<div class="member-earnings-grid">
+                            <div><span>Gross fares</span><strong>${this.money(totals.gross)}</strong></div>
+                            <div><span>Asiye commission</span><strong>${this.money(totals.commission)}</strong><small>20%</small></div>
+                            <div class="member-earnings-debt"><span>Commission due</span><strong>${this.money(commissionDebt)}</strong></div>
+                        </div>` +
                         note(
                             'Asiye deducts 20% from every completed Go, Work and Parcel trip. Cash-collected commission is recorded as commission due.'
                         );
@@ -2031,7 +2075,41 @@ window.AsiyePages = {
     .wallet-custom span,.wallet-phone span{font-weight:850;color:#555}
     .wallet-custom input,.wallet-phone input{min-width:0;flex:1;border:0;outline:0;background:transparent;padding:14px 0;font-size:15px}
     .member-profile-photo-actions{margin-top:16px}
-    @media(max-width:420px){dialog.member-page{width:calc(100% - 12px);border-radius:24px}.member-page>main{padding:16px}.wallet-amounts{grid-template-columns:repeat(2,1fr)}}
+    .member-page-driver{--member-accent:#15805d;--member-accent-soft:#eaf8f1}
+    .member-page-driver>header small{color:var(--member-accent)}
+    .member-page-driver .member-primary{background:#132a24}
+    .member-section-intro{margin:14px 2px 18px}
+    .member-status-hero{display:flex;align-items:flex-start;gap:15px;padding:20px;border-radius:22px;margin:2px 0 16px;background:linear-gradient(145deg,#142d27,#0d1f1b);color:#fff;box-shadow:0 14px 34px rgba(14,48,38,.18)}
+    .member-status-hero .member-status-icon{width:48px;height:48px;flex:0 0 48px;border-radius:16px;display:grid;place-items:center;background:rgba(255,255,255,.12);font-size:20px}
+    .member-status-hero small{display:block;font-size:9px;font-weight:950;letter-spacing:.12em;color:#9edfc4}
+    .member-status-hero h2{margin:4px 0 5px;font-size:21px;line-height:1.1;color:#fff}
+    .member-status-hero p{margin:0;color:rgba(255,255,255,.74);font-size:12px;line-height:1.5}
+    .member-vehicle-status.approved{background:linear-gradient(145deg,#0f5c42,#17382f)}
+    .member-vehicle-status.pending{background:linear-gradient(145deg,#6f5115,#3b321d)}
+    .member-vehicle-status.required{background:linear-gradient(145deg,#7a2a27,#3d2424)}
+    .member-page form.member-vehicle-form,.member-family-form{display:grid;gap:12px;padding:16px;border:1px solid #e5e9e7;border-radius:20px;background:#fff;box-shadow:0 8px 26px rgba(18,42,34,.05)}
+    .member-page form.member-vehicle-form label,.member-family-form label{display:grid;gap:7px;color:#323b38;font-size:11px;font-weight:850}
+    .member-page form.member-vehicle-form input,.member-page form.member-vehicle-form select,.member-family-form input,.member-family-form select{width:100%;box-sizing:border-box;border:1px solid #dfe5e2;border-radius:13px;background:#f8faf9;padding:13px 14px;color:#111;font:inherit;font-size:14px;outline:0}
+    .member-page form.member-vehicle-form input:focus,.member-page form.member-vehicle-form select:focus,.member-family-form input:focus,.member-family-form select:focus{border-color:#62b995;box-shadow:0 0 0 3px rgba(58,166,121,.12);background:#fff}
+    .member-family-row{align-items:flex-start}
+    .member-family-row strong{display:grid;gap:3px}
+    .member-family-row strong small{font-size:11px;color:#69707d;font-weight:650}
+    .member-safety-badge{display:inline-flex;margin-top:5px;padding:4px 7px;border-radius:999px;background:#eaf8f1;color:#137755;font-size:8px;font-style:normal;font-weight:900;letter-spacing:.04em}
+    .asiye-safety-secondary{border:1px solid #dfe5e2!important;background:#f5f8f7!important;color:#173e32!important}
+    .member-earnings-hero{padding:22px;border-radius:23px;background:linear-gradient(145deg,#0b1714,#173f34);color:#fff;box-shadow:0 16px 38px rgba(10,45,35,.2)}
+    .member-earnings-hero small{display:block;color:#92d9bb;font-size:9px;font-weight:950;letter-spacing:.13em}
+    .member-earnings-hero strong{display:block;margin-top:7px;font-size:35px;letter-spacing:-.04em}
+    .member-earnings-hero span{display:block;margin-top:5px;color:rgba(255,255,255,.68);font-size:11px}
+    .member-earnings-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0}
+    .member-earnings-grid>div{position:relative;padding:16px;border:1px solid #e4e9e6;border-radius:17px;background:#fff}
+    .member-earnings-grid span{display:block;color:#747c79;font-size:10px;font-weight:800}
+    .member-earnings-grid strong{display:block;margin-top:6px;font-size:18px}
+    .member-earnings-grid small{position:absolute;right:10px;top:10px;padding:3px 6px;border-radius:999px;background:#edf7f3;color:#147a59;font-size:8px;font-weight:900}
+    .member-earnings-grid .member-earnings-debt{grid-column:1/-1;background:#fff8ed;border-color:#f2dfbf}
+    .member-trip{overflow:hidden;border:1px solid #e4e8e6;border-radius:17px;background:#fff;margin:10px 0}
+    .member-trip summary{padding:14px 15px;cursor:pointer}
+    .member-page-driver.member-page-earnings>main{background:linear-gradient(180deg,#f4f8f6 0,#f7f8fa 260px)}
+    @media(max-width:420px){dialog.member-page{width:calc(100% - 12px);border-radius:24px}.member-page>main{padding:16px}.wallet-amounts{grid-template-columns:repeat(2,1fr)}.member-earnings-grid{grid-template-columns:1fr}.member-earnings-grid .member-earnings-debt{grid-column:auto}}
     `;
     document.head.appendChild(style);
 })();
