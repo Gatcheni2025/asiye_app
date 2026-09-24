@@ -815,6 +815,17 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _captureFacePhoto(String purpose) async {
     try {
+      final cameraStatus = await Permission.camera.request();
+      if (!cameraStatus.isGranted) {
+        final message = cameraStatus.isPermanentlyDenied
+            ? 'Camera permission is disabled. Enable Camera for Asiye in Settings and try again.'
+            : 'Camera permission is required to capture your profile picture.';
+        _controller?.runJavaScript(
+          "window.onNativeFaceCaptureError?.(${jsonEncode(message)});",
+        );
+        return;
+      }
+
       final ImagePicker picker = ImagePicker();
       final XFile? photo = await picker.pickImage(
         source: ImageSource.camera,
@@ -826,9 +837,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         // Keep the camera payload small before it crosses the Flutter/WebView
         // bridge. The WebView then performs the final square crop/compression
         // before sending the file to upload_handler.php.
-        imageQuality: 70,
-        maxWidth: 900,
-        maxHeight: 900,
+        // Keep the bridge payload deliberately small. The WebView performs
+        // the final compression before the PHP multipart upload.
+        imageQuality: 48,
+        maxWidth: 640,
+        maxHeight: 640,
       );
 
       if (photo == null) {
