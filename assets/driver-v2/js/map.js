@@ -343,6 +343,95 @@ ASIYE_DRIVER.map = {
 
 
     /* ========================================================
+       NAVIGATION CAMERA
+       ======================================================== */
+
+    followDriverNavigationView(
+        latitude,
+        longitude,
+        heading = null
+    ) {
+        const lat = Number(latitude);
+        const lng = Number(longitude);
+
+        if (
+            !this.instance ||
+            !Number.isFinite(lat) ||
+            !Number.isFinite(lng)
+        ) {
+            return;
+        }
+
+        const bearing =
+            Number.isFinite(Number(heading))
+                ? Number(heading)
+                : this.instance.getBearing();
+
+        const sheet =
+            document.getElementById(
+                'activeTripContent'
+            );
+
+        this.instance.easeTo({
+            center: [lng, lat],
+            zoom: 17.8,
+            pitch: 62,
+            bearing,
+            padding: {
+                top: 190,
+                bottom: Math.min(
+                    (sheet?.offsetHeight || 210) + 80,
+                    window.innerHeight * 0.42
+                ),
+                left: 28,
+                right: 28
+            },
+            duration: 520,
+            essential: true
+        });
+    },
+
+
+    followDriverTopView(
+        latitude,
+        longitude,
+        zoom = 16
+    ) {
+        const lat = Number(latitude);
+        const lng = Number(longitude);
+
+        if (
+            !this.instance ||
+            !Number.isFinite(lat) ||
+            !Number.isFinite(lng)
+        ) {
+            return;
+        }
+
+        this.instance.easeTo({
+            center: [lng, lat],
+            zoom,
+            pitch: 0,
+            bearing: 0,
+            padding: 0,
+            duration: 520,
+            essential: true
+        });
+    },
+
+
+    showRouteOverview() {
+        if (
+            this.routeGeometry?.coordinates?.length
+        ) {
+            this.fitRoute(
+                this.routeGeometry
+            );
+        }
+    },
+
+
+    /* ========================================================
        ROUTE TO PICKUP / DESTINATION
        ======================================================== */
 
@@ -788,10 +877,10 @@ ASIYE_DRIVER.map = {
             paint: {
 
                 'line-color':
-                    '#111111',
+                    '#19a974',
 
                 'line-width':
-                    5,
+                    6,
 
                 'line-opacity':
                     .95
