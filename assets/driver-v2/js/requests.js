@@ -312,6 +312,17 @@ ASIYE_DRIVER.requests = {
         }
 
 
+        if (
+            ASIYE_DRIVER.ui &&
+            typeof ASIYE_DRIVER.ui.hasApprovedVehicle ===
+                'function' &&
+            !ASIYE_DRIVER.ui.hasApprovedVehicle(driver)
+        ) {
+
+            return false;
+        }
+
+
         /*
          * Already driving another booking.
          */
@@ -460,6 +471,18 @@ ASIYE_DRIVER.requests = {
 
             throw new Error(
                 'Missing driver or request.'
+            );
+        }
+
+
+        if (
+            ASIYE_DRIVER.ui &&
+            typeof ASIYE_DRIVER.ui.hasApprovedVehicle ===
+                'function' &&
+            !ASIYE_DRIVER.ui.hasApprovedVehicle(driver)
+        ) {
+            throw new Error(
+                'Complete your approved selfie, car photo, phone and vehicle details before accepting bookings.'
             );
         }
 
@@ -1037,6 +1060,31 @@ ASIYE_DRIVER.requests = {
                 '';
 
 
+            const vehicleYear =
+
+                Number(
+                    driver.vehicleYear ||
+                    driver.vehicle?.year ||
+                    driver.year ||
+                    0
+                );
+
+
+            const driverProfileImageUrl =
+
+                driver.profileImageUrl ||
+                driver.profile_picture_url ||
+                driver.profilePhotoUrl ||
+                '';
+
+
+            const vehiclePhoto =
+
+                driver.vehiclePhoto ||
+                driver.carPhoto ||
+                '';
+
+
             const vehicleInfo =
 
                 [
@@ -1188,8 +1236,20 @@ ASIYE_DRIVER.requests = {
                 vehicleColor:
                     vehicleColor,
 
+                vehicleYear:
+                    vehicleYear,
+
                 vehicleReg:
                     vehicleReg,
+
+                driverProfileImageUrl:
+                    driverProfileImageUrl,
+
+                driverVehiclePhoto:
+                    vehiclePhoto,
+
+                vehiclePhoto:
+                    vehiclePhoto,
 
                 status:
                     nextStatus,
@@ -1456,8 +1516,17 @@ ASIYE_DRIVER.requests = {
                                 vehicleColor:
                                     vehicleColor,
 
+                                vehicleYear:
+                                    vehicleYear,
+
                                 vehicleReg:
                                     vehicleReg,
+
+                                driverProfileImageUrl:
+                                    driverProfileImageUrl,
+
+                                driverVehiclePhoto:
+                                    vehiclePhoto,
 
                                 timestamp:
 
