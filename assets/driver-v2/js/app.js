@@ -968,8 +968,12 @@ ASIYE_DRIVER.ui = {
             isClub
 
             ? Number(
-                request.pricePerPassenger ||
-                request.calculatedPrice ||
+                request.driverGrossFare ||
+                request.totalPoolFare ||
+                (
+                    Number(request.pricePerPassenger || 0) *
+                    Number(request.capacity || request.maxCapacity || 1)
+                ) ||
                 0
             )
 
