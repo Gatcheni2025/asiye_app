@@ -20,6 +20,7 @@ ASIYE.pricing = {
             bookingFee: 5,
             minimumFare: 30
         },
+        goDiscount: 0.15,
         clubMarkup: 0.15
     },
 
@@ -43,20 +44,25 @@ ASIYE.pricing = {
             market.bookingFee
         );
 
-        // Round the market-equivalent quote to a whole rand. Asiye Go is
-        // exactly this amount. Club is the market quote divided by the seat
-        // count, then 15% added to each individual's share.
-        const goFare = Math.round(marketFare);
-        const club4Fare = Math.ceil((goFare / 4) * (1 + this.rates.clubMarkup));
-        const club7Fare = Math.ceil((goFare / 7) * (1 + this.rates.clubMarkup));
+        // Asiye Go is intentionally 15% below the internal Uber/Bolt
+        // market-reference estimate. Club remains based on the undiscouted
+        // market reference, split by seats and then marked up 15%.
+        const marketReferenceFare = Math.round(marketFare);
+        const goFare = Math.max(
+            1,
+            Math.round(marketReferenceFare * (1 - this.rates.goDiscount))
+        );
+        const club4Fare = Math.ceil((marketReferenceFare / 4) * (1 + this.rates.clubMarkup));
+        const club7Fare = Math.ceil((marketReferenceFare / 7) * (1 + this.rates.clubMarkup));
 
         return {
-            marketReference: goFare,
+            marketReference: marketReferenceFare,
             go: goFare,
             club4: club4Fare,
             club7: club7Fare,
             club4Total: club4Fare * 4,
             club7Total: club7Fare * 7,
+            goDiscountPercent: 15,
             clubMarkupPercent: 15
         };
     }
