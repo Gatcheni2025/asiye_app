@@ -38,7 +38,7 @@ android {
 
     defaultConfig {
         applicationId = "com.asiyeapp.asiye"
-        minSdk = flutter.minSdkVersion
+        minSdk = 24
         multiDexEnabled = true
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -70,5 +70,8 @@ flutter {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-    implementation("com.google.android.recaptcha:recaptcha:18.5.1")
+    // Firebase Auth uses a Custom Tab for its reCAPTCHA fallback. Keep the
+    // AndroidX browser implementation explicit so the redirect can return
+    // cleanly to the app when Play Integrity is unavailable.
+    implementation("androidx.browser:browser:1.8.0")
 }
