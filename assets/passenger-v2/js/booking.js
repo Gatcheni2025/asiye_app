@@ -958,23 +958,46 @@ ASIYE.booking = {
              * GO
              */
 
+            const cancellationPatch = {
+
+                status:
+                    'cancelled_by_commuter',
+
+                cancelledAt:
+
+                    firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP
+            };
+
+
             await firebase
                 .database()
                 .ref(
                     `requests/${requestId}`
                 )
-                .update({
+                .update(
+                    cancellationPatch
+                );
 
-                    status:
-                        'cancelled_by_commuter',
 
-                    cancelledAt:
-
-                        firebase
-                            .database
-                            .ServerValue
-                            .TIMESTAMP
-                });
+            if (
+                request.type ===
+                'delivery'
+            ) {
+                await firebase
+                    .database()
+                    .ref(
+                        `delivery_requests/${requestId}`
+                    )
+                    .update(
+                        cancellationPatch
+                    )
+                    .catch(
+                        () => {}
+                    );
+            }
         }
 
 
