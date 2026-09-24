@@ -27,6 +27,61 @@ ASIYE.ride = {
     currentDriverId:
         null,
 
+    lastApproachRouteAt:
+        0,
+
+    lastApproachRoutePoint:
+        null,
+
+    async refreshLiveTripRoute(driverLatitude, driverLongitude) {
+        const now = Date.now();
+        const previous = this.lastApproachRoutePoint;
+        const movedEnough = !previous ||
+            Math.abs(previous[0] - driverLatitude) > 0.0008 ||
+            Math.abs(previous[1] - driverLongitude) > 0.0008;
+
+        if (!movedEnough && now - this.lastApproachRouteAt < 12000) return;
+
+        const request = ASIYE.state.booking?.request || {};
+        const status = String(request.status || '');
+        const onboard = ['passenger_onboard','all_onboard','in_transit'].includes(status);
+        const passenger = this.getPassengerData(request) || {};
+
+        const targetLat = Number(onboard
+            ? (request.destinationLatitude ?? ASIYE.state.destination?.latitude)
+            : (passenger.pickupLatitude ?? request.pickupLatitude ?? ASIYE.state.location?.latitude));
+        const targetLng = Number(onboard
+            ? (request.destinationLongitude ?? ASIYE.state.destination?.longitude)
+            : (passenger.pickupLongitude ?? request.pickupLongitude ?? ASIYE.state.location?.longitude));
+
+        if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) return;
+
+        const token = window.ASIYE_CONFIG?.mapboxToken;
+        if (!token) return;
+
+        this.lastApproachRouteAt = now;
+        this.lastApproachRoutePoint = [driverLatitude, driverLongitude];
+
+        try {
+            const url =
+                'https://api.mapbox.com/directions/v5/mapbox/driving-traffic/' +
+                `${driverLongitude},${driverLatitude};${targetLng},${targetLat}` +
+                '?geometries=geojson&overview=full&steps=false&alternatives=false' +
+                `&access_token=${encodeURIComponent(token)}`;
+
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`Directions failed: ${response.status}`);
+            const data = await response.json();
+            const geometry = data.routes?.[0]?.geometry;
+            if (!geometry) return;
+
+            ASIYE.map?.drawRoute?.(geometry);
+            ASIYE.map?.fitActiveTrip?.(false);
+        } catch (error) {
+            console.warn('Live driver route update failed:', error);
+        }
+    },
+
 
     /* ========================================================
        START
@@ -1391,13 +1446,17 @@ ASIYE.ride = {
 
                     ASIYE.map
                         ?.showDriverLocation?.(
-
                             latitude,
-
                             longitude,
-
                             heading
                         );
+
+                    // Draw the actual road route between the moving driver and
+                    // the passenger pickup (then driver to destination onboard).
+                    this.refreshLiveTripRoute(
+                        latitude,
+                        longitude
+                    );
                 }
             );
     },
@@ -1433,6 +1492,9 @@ ASIYE.ride = {
 
         this.currentDriverId =
             null;
+
+        this.lastApproachRouteAt = 0;
+        this.lastApproachRoutePoint = null;
 
 
         ASIYE.map
