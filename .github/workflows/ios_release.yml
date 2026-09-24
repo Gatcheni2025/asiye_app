@@ -9,7 +9,7 @@ on:
 jobs:
   build-and-release-ios:
     runs-on: macos-latest
-    
+
     steps:
       - name: Checkout App Code
         uses: actions/checkout@v5
@@ -17,17 +17,32 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          flutter-version: "3.47.2"
+          channel: stable
+          cache: true
 
       - name: Install Flutter Dependencies
         run: flutter pub get
 
-      - name: Build and Upload to TestFlight 
+      - name: Configure Match Git Authentication
+        shell: bash
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_PAT" ]; then
+            echo "GH_PAT secret is missing."
+            exit 1
+          fi
+
+          # fastlane match expects HTTP Basic Authorization to be Base64 encoded.
+          # Using x-access-token works for GitHub fine-grained/classic PATs.
+          MATCH_AUTH="$(printf 'x-access-token:%s' "$GH_PAT" | base64 | tr -d '\n')"
+          echo "MATCH_GIT_BASIC_AUTHORIZATION=$MATCH_AUTH" >> "$GITHUB_ENV"
+
+      - name: Build and Upload to TestFlight
         working-directory: ./ios
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
-          # Mapping GH_PAT secret to the variable Fastlane expects
-          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.GH_PAT }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
