@@ -112,18 +112,12 @@ ASIYE.club = {
 
 
         const pricePerPassenger =
-
             fare > 0
-
-            ? Math.max(
-                1,
-                Math.ceil(
-                    fare /
-                    config.capacity
-                )
-            )
-
+            ? Math.max(1, Math.ceil((fare / config.capacity) * 1.15))
             : 0;
+
+        const clubTotal =
+            pricePerPassenger * config.capacity;
 
 
         return {
@@ -132,6 +126,9 @@ ASIYE.club = {
                 config.capacity,
 
             totalFare:
+                clubTotal,
+
+            marketReferenceFare:
                 fare,
 
             pricePerPassenger:
@@ -652,11 +649,17 @@ ASIYE.club = {
                         );
 
 
-                    const seatPrice =
+                    const marketReference =
+                        Number(
+                            pool.marketReferenceFare ||
+                            pool.totalPoolFare ||
+                            pool.calculatedPrice ||
+                            0
+                        );
 
+                    const seatPrice =
                         Math.ceil(
-                            totalFare /
-                            config.capacity
+                            (marketReference / config.capacity) * 1.15
                         );
 
 
@@ -937,6 +940,12 @@ ASIYE.club = {
                 config.maxWaitMinutes,
 
             totalPoolFare:
+                pricing.totalFare,
+
+            marketReferenceFare:
+                pricing.marketReferenceFare,
+
+            driverGrossFare:
                 pricing.totalFare,
 
             pricePerPassenger:
