@@ -7,6 +7,152 @@ window.ASIYE_DRIVER =
     window.ASIYE_DRIVER || {};
 
 
+ASIYE_DRIVER.metrics = ASIYE_DRIVER.metrics || {
+    rating(driver = {}) {
+        const summary = driver.ratingSummary || {};
+        const count = Math.max(
+            0,
+            Number(
+                summary.count ??
+                driver.ratingCount ??
+                driver.totalRatings ??
+                0
+            ) || 0
+        );
+
+        const total = Number(summary.total || 0);
+        const direct = Number(
+            driver.rating ??
+            driver.averageRating ??
+            0
+        );
+
+        const value =
+            count > 0 && Number.isFinite(total) && total > 0
+                ? total / count
+                : (
+                    Number.isFinite(direct) && direct > 0
+                        ? direct
+                        : null
+                );
+
+        return {
+            count,
+            value
+        };
+    },
+
+    grossFare(ride = {}) {
+        if (ride.type === 'club') {
+            const active =
+                Object.values(ride.passengers || {})
+                    .filter(
+                        passenger =>
+                            !String(
+                                passenger?.status || ''
+                            ).includes('cancelled')
+                    ).length;
+
+            return Number(
+                ride.driverGrossFare ??
+                ride.totalPoolFare ??
+                (
+                    Number(ride.pricePerPassenger || 0) *
+                    active
+                ) ??
+                0
+            ) || 0;
+        }
+
+        return Number(
+            ride.driverGrossFare ??
+            ride.finalAmount ??
+            ride.agreedFare ??
+            ride.calculatedPrice ??
+            0
+        ) || 0;
+    },
+
+    netFare(ride = {}) {
+        const gross = this.grossFare(ride);
+        const commission = Number(
+            ride.platformCommission ??
+            (gross * 0.20)
+        ) || 0;
+
+        return Number(
+            ride.driverNetFare ??
+            (gross - commission)
+        ) || 0;
+    },
+
+    async refresh(driverId) {
+        if (!driverId || !window.firebase?.database) return;
+
+        try {
+            const snapshot =
+                await firebase
+                    .database()
+                    .ref('requests')
+                    .orderByChild('taxiId')
+                    .equalTo(driverId)
+                    .limitToLast(100)
+                    .once('value');
+
+            const now = new Date();
+            const startOfToday =
+                new Date(
+                    now.getFullYear(),
+                    now.getMonth(),
+                    now.getDate()
+                ).getTime();
+
+            let todayTrips = 0;
+            let todayEarnings = 0;
+            let todayGross = 0;
+
+            snapshot.forEach(child => {
+                const ride = child.val() || {};
+                if (ride.status !== 'completed') return;
+
+                const completedAt =
+                    Number(
+                        ride.completedAt ||
+                        ride.tripCompletedAt ||
+                        ride.updatedAt ||
+                        ride.createdAt ||
+                        0
+                    );
+
+                if (completedAt >= startOfToday) {
+                    todayTrips += 1;
+                    todayGross += this.grossFare(ride);
+                    todayEarnings += this.netFare(ride);
+                }
+            });
+
+            const driver =
+                ASIYE_DRIVER.state?.driver;
+
+            if (driver) {
+                driver.todayTrips = todayTrips;
+                driver.todayGrossEarnings =
+                    Math.round(todayGross * 100) / 100;
+                driver.todayEarnings =
+                    Math.round(todayEarnings * 100) / 100;
+                driver.dailyTrips = todayTrips;
+                driver.dailyEarnings = driver.todayEarnings;
+            }
+        } catch (error) {
+            console.warn(
+                'Driver metrics refresh failed:',
+                error
+            );
+        }
+    }
+};
+
+
 ASIYE_DRIVER.ui = {
 
     requestTimer:
@@ -150,7 +296,7 @@ ASIYE_DRIVER.ui = {
                     "
                 >
 
-                    <i class="fas ${isDelivery ? 'fa-box' : 'fa-car-side'}"></i>
+                    <i class="fas fa-car-side"></i>
 
                 </div>
 
@@ -337,19 +483,19 @@ ASIYE_DRIVER.ui = {
         const earnings =
 
             Number(
-                driver.todayEarnings ||
-                driver.dailyEarnings ||
+                driver.todayEarnings ??
+                driver.dailyEarnings ??
                 0
-            );
+            ) || 0;
 
 
         const trips =
 
             Number(
-                driver.todayTrips ||
-                driver.dailyTrips ||
+                driver.todayTrips ??
+                driver.dailyTrips ??
                 0
-            );
+            ) || 0;
 
 
         const ratingInfo =
@@ -440,42 +586,38 @@ ASIYE_DRIVER.ui = {
 
             <div class="driver-stat-grid">
 
-                <div class="driver-stat-card">
-
+                <div class="driver-stat-card driver-stat-card-earnings">
+                    <span class="driver-stat-icon"><i class="fas fa-coins"></i></span>
                     <span class="driver-stat-value">
                         R${earnings.toFixed(0)}
                     </span>
-
                     <span class="driver-stat-label">
-                        Today
+                        Net today
                     </span>
-
                 </div>
 
 
                 <div class="driver-stat-card">
-
+                    <span class="driver-stat-icon"><i class="fas fa-route"></i></span>
                     <span class="driver-stat-value">
                         ${trips}
                     </span>
-
                     <span class="driver-stat-label">
-                        Trips
+                        Trips today
                     </span>
-
                 </div>
 
 
-                <div class="driver-stat-card">
-
+                <div class="driver-stat-card driver-stat-card-rating">
+                    <span class="driver-stat-icon"><i class="fas fa-star"></i></span>
                     <span class="driver-stat-value">
                         ${ratingDisplay}
                     </span>
-
                     <span class="driver-stat-label">
-                        Rating
+                        ${ratingInfo.count === 1
+                            ? '1 rating'
+                            : `${ratingInfo.count} ratings`}
                     </span>
-
                 </div>
 
             </div>
