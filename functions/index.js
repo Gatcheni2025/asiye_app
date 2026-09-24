@@ -2599,6 +2599,29 @@ exports.adminManagePlatform = functions.https.onCall(
         }
       }
 
+      if ("vehicleYear" in source) {
+        const vehicleYear =
+          Math.round(
+            safeAdminNumber(
+              source.vehicleYear,
+              0
+            )
+          );
+
+        if (
+          vehicleYear < 1990 ||
+          vehicleYear > 2100
+        ) {
+          throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Vehicle year is invalid."
+          );
+        }
+
+        patch.vehicleYear =
+          vehicleYear;
+      }
+
       if ("vehicleSeats" in source) {
         patch.vehicleSeats =
           Math.min(
@@ -4125,6 +4148,8 @@ exports.adminManagePlatform = functions.https.onCall(
               approvedVehicle.model,
             vehicleColor:
               approvedVehicle.colour,
+            vehicleYear:
+              approvedVehicle.year,
             vehicleSeats:
               approvedVehicle.seats,
             seats:
