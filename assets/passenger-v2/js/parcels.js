@@ -210,7 +210,8 @@ ASIYE.parcels = {
             );
 
         const pickupPin =
-            ASIYE.booking.generatePin();
+            await ASIYE.booking
+                .requirePassengerPin();
 
         await ASIYE.booking.requireTripShare({
             pickupPin,
