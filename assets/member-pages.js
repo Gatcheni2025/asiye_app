@@ -1833,32 +1833,158 @@ window.AsiyePages = {
                             ) || 0;
                         };
 
-                    const sum =
+                    const totals =
                         rides.reduce(
                             (
-                                total,
+                                result,
                                 ride
-                            ) =>
-                                total +
-                                grossFare(
-                                    ride
-                                ),
-                            0
+                            ) => {
+                                const gross =
+                                    Number(
+                                        ride.driverGrossFare ??
+                                        grossFare(ride) ??
+                                        0
+                                    ) || 0;
+
+                                const commission =
+                                    Number(
+                                        ride.platformCommission ??
+                                        (
+                                            gross *
+                                            0.20
+                                        )
+                                    ) || 0;
+
+                                const net =
+                                    Number(
+                                        ride.driverNetFare ??
+                                        (
+                                            gross -
+                                            commission
+                                        )
+                                    ) || 0;
+
+                                result.gross +=
+                                    gross;
+
+                                result.commission +=
+                                    commission;
+
+                                result.net +=
+                                    net;
+
+                                return result;
+                            },
+                            {
+                                gross: 0,
+                                commission: 0,
+                                net: 0
+                            }
                         );
 
+                    const commissionDebt =
+                        Number(
+                            user.commissionDebt ||
+                            0
+                        ) || 0;
+
                     html +=
-                        `<div class="member-balance"><small>Completed fares</small><strong>${this.money(sum)}</strong></div>` +
+                        `<div class="member-balance"><small>Net completed earnings</small><strong>${this.money(totals.net)}</strong></div>` +
+                        `<div class="member-row"><span>Gross fares</span><strong>${this.money(totals.gross)}</strong></div>` +
+                        `<div class="member-row"><span>Asiye commission · 20%</span><strong>${this.money(totals.commission)}</strong></div>` +
+                        `<div class="member-row"><span>Commission balance due</span><strong>${this.money(commissionDebt)}</strong></div>` +
                         note(
-                            'Gross completed Asiye Go, Work and Delivery fares shown before platform fees or other deductions.'
+                            'Asiye deducts 20% from every completed Go, Work and Parcel trip. Cash-collected commission is recorded as commission due.'
                         );
                 }
                 html += note('Showing up to 100 recent records per booking type.');
                 if (!rides.length) html += `<div class="member-empty"><h2>No ${page === 'parcels' ? 'parcels' : 'trips'} yet</h2><p>Your records will appear here once available.</p></div>`;
                 rides.forEach(ride => {
                     const passenger = ride.passengers?.[id] || {};
-                    const amount = driver ? (ride.finalAmount ?? ride.calculatedPrice ?? ride.price) : (passenger.finalAmount ?? passenger.price ?? ride.finalAmount ?? ride.calculatedPrice ?? ride.pricePerPassenger ?? ride.price);
-                    const stamp = Number(ride.timestamp || ride.createdAt);
-                    html += `<details class="member-trip"><summary><span><small>${esc(String(ride.status || 'Booked').replace(/_/g,' '))}</small><strong>${esc(ride.destination || ride.destinationName || ride.dropoffAddress || 'Trip')}</strong></span><b>${this.money(amount)}</b></summary><div>${this.row('Date', stamp && Number.isFinite(stamp) ? new Date(stamp).toLocaleString() : 'Not recorded')}${this.row('Reference',ride.key)}${this.row('Service',ride.type || 'Ride')}${this.row('Payment',passenger.paymentMethod || ride.paymentMethod)}</div></details>`;
+
+                    const fallbackAmount =
+                        driver
+                            ? (
+                                ride.finalAmount ??
+                                ride.calculatedPrice ??
+                                ride.price
+                            )
+                            : (
+                                passenger.finalAmount ??
+                                passenger.price ??
+                                ride.finalAmount ??
+                                ride.calculatedPrice ??
+                                ride.pricePerPassenger ??
+                                ride.price
+                            );
+
+                    const amount =
+                        page === 'earnings' &&
+                        driver
+                            ? (
+                                ride.driverNetFare ??
+                                (
+                                    Number(
+                                        ride.driverGrossFare ??
+                                        fallbackAmount ??
+                                        0
+                                    ) *
+                                    0.80
+                                )
+                            )
+                            : fallbackAmount;
+
+                    const stamp =
+                        Number(
+                            ride.completedAt ||
+                            ride.timestamp ||
+                            ride.createdAt
+                        );
+
+                    const earningsDetails =
+                        page === 'earnings' &&
+                        driver
+                            ? (
+                                this.row(
+                                    'Gross fare',
+                                    this.money(
+                                        Number(
+                                            ride.driverGrossFare ??
+                                            fallbackAmount ??
+                                            0
+                                        )
+                                    )
+                                ) +
+                                this.row(
+                                    'Asiye commission · 20%',
+                                    this.money(
+                                        Number(
+                                            ride.platformCommission ??
+                                            (
+                                                Number(
+                                                    ride.driverGrossFare ??
+                                                    fallbackAmount ??
+                                                    0
+                                                ) *
+                                                0.20
+                                            )
+                                        )
+                                    )
+                                ) +
+                                this.row(
+                                    'Driver net',
+                                    this.money(
+                                        Number(
+                                            ride.driverNetFare ??
+                                            amount ??
+                                            0
+                                        )
+                                    )
+                                )
+                            )
+                            : '';
+
+                    html += `<details class="member-trip"><summary><span><small>${esc(String(ride.status || 'Booked').replace(/_/g,' '))}</small><strong>${esc(ride.destination || ride.destinationName || ride.dropoffAddress || 'Trip')}</strong></span><b>${this.money(amount)}</b></summary><div>${this.row('Date', stamp && Number.isFinite(stamp) ? new Date(stamp).toLocaleString() : 'Not recorded')}${this.row('Reference',ride.key)}${this.row('Service',ride.type || 'Ride')}${this.row('Payment',passenger.paymentMethod || ride.paymentMethod)}${earningsDetails}</div></details>`;
                 });
                 body.innerHTML = html;
             } catch (error) {
