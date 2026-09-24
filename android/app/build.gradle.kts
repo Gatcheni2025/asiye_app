@@ -53,8 +53,13 @@ android {
             // 3. SWITCH FROM "debug" TO "release"
             signingConfig = signingConfigs.getByName("release")
 
-            isMinifyEnabled = false // Usually false for debug/initial builds
-            isShrinkResources = false
+            // Enable R8 optimization/obfuscation for Google Play production builds.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
