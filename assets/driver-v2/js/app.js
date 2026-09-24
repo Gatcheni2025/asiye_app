@@ -1070,8 +1070,8 @@ ASIYE_DRIVER.ui = {
                 (
                     request.clubMode ===
                     'club7'
-                    ? 5
-                    : 3
+                    ? 7
+                    : 4
                 )
             )
 
@@ -1293,7 +1293,7 @@ ASIYE_DRIVER.ui = {
                 <span>
                     ${
                         isClub
-                        ? 'Per passenger'
+                        ? 'Trip gross'
                         : isDelivery
                             ? 'Delivery fare'
                             : 'Trip fare'
