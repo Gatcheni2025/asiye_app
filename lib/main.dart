@@ -708,6 +708,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           else if (action == 'hidePreloader') {
             if (mounted) setState(() => _isLoading = false);
           }
+          else if (action == 'captureFacePhoto') {
+            await _captureFacePhoto(
+              data['purpose']?.toString() ?? 'profile',
+            );
+          }
+          else if (action == 'shareTrip') {
+            await _shareTripRequired(
+              data['text']?.toString() ?? '',
+            );
+          }
           else if (action == 'share') {
             final String text = data['text'] ?? '';
             if (text.isNotEmpty) {
@@ -782,6 +792,78 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
     } catch (e) {
       _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
+    }
+  }
+
+  Future<void> _captureFacePhoto(String purpose) async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? photo = await picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.front,
+        imageQuality: 82,
+        maxWidth: 1280,
+        maxHeight: 1280,
+      );
+
+      if (photo == null) {
+        _controller?.runJavaScript(
+          "window.onNativeFaceCaptureError?.('cancelled');",
+        );
+        return;
+      }
+
+      final bytes = await photo.readAsBytes();
+      if (bytes.isEmpty) {
+        throw Exception('Camera returned an empty image.');
+      }
+
+      final mime =
+          (photo.mimeType != null && photo.mimeType!.startsWith('image/'))
+              ? photo.mimeType!
+              : 'image/jpeg';
+
+      final payload = {
+        'purpose': purpose,
+        'dataUrl': 'data:$mime;base64,${base64Encode(bytes)}',
+      };
+
+      _controller?.runJavaScript(
+        "window.onNativeFaceCaptureSuccess?.(${jsonEncode(payload)});",
+      );
+    } catch (e) {
+      _controller?.runJavaScript(
+        "window.onNativeFaceCaptureError?.(${jsonEncode(e.toString())});",
+      );
+    }
+  }
+
+  Future<void> _shareTripRequired(String text) async {
+    if (text.trim().isEmpty) {
+      _controller?.runJavaScript(
+        "window.onNativeTripShareResult?.({shared:false,error:'Trip details are unavailable.'});",
+      );
+      return;
+    }
+
+    try {
+      final result = await Share.share(text);
+      final shared =
+          result.status == ShareResultStatus.success;
+
+      _controller?.runJavaScript(
+        "window.onNativeTripShareResult?.(${jsonEncode({
+          'shared': shared,
+          'status': result.status.name,
+        })});",
+      );
+    } catch (e) {
+      _controller?.runJavaScript(
+        "window.onNativeTripShareResult?.(${jsonEncode({
+          'shared': false,
+          'error': e.toString(),
+        })});",
+      );
     }
   }
 
