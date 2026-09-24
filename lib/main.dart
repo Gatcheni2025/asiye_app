@@ -18,6 +18,8 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:convert';
 
+import 'face_scan_screen.dart';
+
 bool _isFirebaseInitialized = false;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
@@ -815,21 +817,57 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _captureFacePhoto(String purpose) async {
     try {
-      final ImagePicker picker = ImagePicker();
-      final XFile? photo = await picker.pickImage(
-        source: ImageSource.camera,
-        preferredCameraDevice:
-            purpose.toLowerCase().contains('vehicle') ||
-                    purpose.toLowerCase().contains('car')
-                ? CameraDevice.rear
-                : CameraDevice.front,
-        // Keep the camera payload small before it crosses the Flutter/WebView
-        // bridge. The WebView then performs the final square crop/compression
-        // before sending the file to upload_handler.php.
-        imageQuality: 70,
-        maxWidth: 900,
-        maxHeight: 900,
-      );
+      final cameraStatus = await Permission.camera.request();
+      if (!cameraStatus.isGranted) {
+        final message = cameraStatus.isPermanentlyDenied
+            ? 'Camera permission is disabled. Enable Camera for Asiye in Settings and try again.'
+            : 'Camera permission is required to capture your profile picture.';
+        _controller?.runJavaScript(
+          "window.onNativeFaceCaptureError?.(${jsonEncode(message)});",
+        );
+        return;
+      }
+
+      final normalizedPurpose = purpose.toLowerCase();
+      final isVehicle =
+          normalizedPurpose.contains('vehicle') ||
+          normalizedPurpose.contains('car') ||
+          normalizedPurpose.contains('licence') ||
+          normalizedPurpose.contains('license') ||
+          normalizedPurpose.contains('document');
+
+      XFile? photo;
+
+      if (!isVehicle) {
+        final title = normalizedPurpose.contains('driver')
+            ? 'Driver live face scan'
+            : 'Passenger live face scan';
+
+        final path = await Navigator.of(context).push<String>(
+          MaterialPageRoute<String>(
+            fullscreenDialog: true,
+            builder: (_) => AsiyeLiveFaceScanScreen(title: title),
+          ),
+        );
+
+        if (path == null || path.isEmpty) {
+          _controller?.runJavaScript(
+            "window.onNativeFaceCaptureError?.('cancelled');",
+          );
+          return;
+        }
+
+        photo = XFile(path);
+      } else {
+        final picker = ImagePicker();
+        photo = await picker.pickImage(
+          source: ImageSource.camera,
+          preferredCameraDevice: CameraDevice.rear,
+          imageQuality: 65,
+          maxWidth: 1280,
+          maxHeight: 1280,
+        );
+      }
 
       if (photo == null) {
         _controller?.runJavaScript(
@@ -851,12 +889,17 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       final payload = {
         'purpose': purpose,
         'dataUrl': 'data:$mime;base64,${base64Encode(bytes)}',
+        'liveCapture': !isVehicle,
+        'checks': !isVehicle
+            ? ['single_face', 'head_movement', 'smile']
+            : <String>[],
       };
 
       _controller?.runJavaScript(
         "window.onNativeFaceCaptureSuccess?.(${jsonEncode(payload)});",
       );
     } catch (e) {
+      debugPrint('Native camera/face scan failed: $e');
       _controller?.runJavaScript(
         "window.onNativeFaceCaptureError?.(${jsonEncode(e.toString())});",
       );
@@ -1051,6 +1094,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _signInWithApple() async {
     try {
+      // Start Apple authentication from a clean native Firebase session.
+      // On Android this uses a Custom Tab; on iOS Firebase uses the native
+      // Apple provider. The Android manifest must not use an empty taskAffinity
+      // or the browser cannot return reliably to Asiye.
+      try {
+        await FirebaseAuth.instance.signOut();
+      } catch (_) {}
+
       final appleProvider = AppleAuthProvider();
       final result = await FirebaseAuth.instance.signInWithProvider(appleProvider);
       final token = await result.user?.getIdToken();
