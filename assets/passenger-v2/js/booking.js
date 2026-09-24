@@ -72,6 +72,11 @@ ASIYE.booking = {
             ASIYE.state.user || {};
 
 
+        const profileImageUrl =
+            await ASIYE.profile
+                .ensureRequired();
+
+
         const pickup =
             ASIYE.state.location;
 
@@ -140,6 +145,19 @@ ASIYE.booking = {
             this.generatePin();
 
 
+        await this.requireTripShare({
+            pickupPin,
+            pickupAddress:
+                pickup.address ||
+                'Current location',
+            destination:
+                destination.address ||
+                destination.name,
+            service:
+                'Asiye Go'
+        });
+
+
         const requestData = {
 
             requestId:
@@ -172,6 +190,12 @@ ASIYE.booking = {
                 user.phone ||
                 user.phoneNumber ||
                 '',
+
+            commuterProfileImageUrl:
+                profileImageUrl,
+
+            passengerProfileImageUrl:
+                profileImageUrl,
 
 
             /* Pickup */
@@ -244,6 +268,18 @@ ASIYE.booking = {
 
             pickupPin:
                 pickupPin,
+
+            safetyShareRequired:
+                true,
+
+            safetyShareCompleted:
+                true,
+
+            safetyShareAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP,
 
 
             /* Driver */
@@ -1027,6 +1063,34 @@ ASIYE.booking = {
         localStorage.removeItem(
             'currentRequestId'
         );
+    },
+
+
+    async requireTripShare({
+        pickupPin,
+        pickupAddress,
+        destination,
+        service = 'Asiye trip'
+    }) {
+
+        if (!window.AsiyeTripShare) {
+            throw new Error(
+                'Trip sharing is required before booking. Update the Asiye app and try again.'
+            );
+        }
+
+        const text =
+            `I'm booking ${service} with Asiye. Pickup: ${pickupAddress || 'Current location'}. Destination: ${destination || 'Not available'}. Safety PIN: ${pickupPin}. Please keep these trip details until I arrive safely.`;
+
+        ASIYE.ui?.toast?.(
+            'Share this trip with a loved one to continue.'
+        );
+
+        await AsiyeTripShare.require(
+            text
+        );
+
+        return true;
     },
 
 
