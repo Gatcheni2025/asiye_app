@@ -54,6 +54,12 @@ jobs:
         continue-on-error: true
         run: flutter analyze --no-fatal-infos
 
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          find assets -type f -name "*.js" -print0 | xargs -0 -n1 node --check
+          node --check functions/index.js
+
       - name: Build release APK
         run: flutter build apk --release
 
@@ -74,13 +80,13 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.33-303-apk
+          name: asiye-11.0.34-304-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.33-303-aab
+          name: asiye-11.0.34-304-aab
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
