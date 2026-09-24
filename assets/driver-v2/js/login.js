@@ -1834,7 +1834,7 @@ document.addEventListener(
             const credential = firebase.auth.GoogleAuthProvider.credential(data.idToken);
             const result = await firebase.auth().signInWithCredential(credential);
             if (!result.user) throw new Error('Google authentication failed.');
-            await login.verifyDriverProfile(signedIn.user);
+            await login.verifyDriverProfile(result.user);
         } catch (error) {
             console.error('Native Google Firebase sign-in failed:', error);
             login.handleSocialError(error, 'Google');
@@ -1852,6 +1852,22 @@ document.addEventListener(
 
     window.onAppleNativeLoginSuccess = async (data) => {
         try {
+            if (data?.firebaseIdToken) {
+                const response = await fetch('https://us-central1-asiye-80386.cloudfunctions.net/exchangeNativeAuthSession', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + data.firebaseIdToken, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                const payload = await response.json();
+                if (!response.ok || !payload.customToken) {
+                    throw new Error(payload.error || 'Unable to verify the Apple session.');
+                }
+                const signedIn = await firebase.auth().signInWithCustomToken(payload.customToken);
+                if (!signedIn.user) throw new Error('Apple authentication failed.');
+                await login.verifyDriverProfile(signedIn.user);
+                return;
+            }
+
             if (!data?.identityToken) throw new Error('Apple did not return an identity token.');
             const provider = new firebase.auth.OAuthProvider('apple.com');
             const credential = provider.credential({ idToken: data.identityToken });
@@ -1890,15 +1906,32 @@ document.addEventListener(
     };
     const webSendOtp = login.sendOtp.bind(login);
     const webVerifyOtp = login.verifyOtp.bind(login);
+    const webResendOtp = login.resendOtp.bind(login);
 
     login.sendOtp = async function () {
         const input = document.getElementById('driverPhoneInput');
         const phone = this.normalizePhone(input?.value);
         if (!phone || !post({ action: 'startPhoneSignIn', phone })) return webSendOtp();
         this.currentPhone = phone;
+        this.nativeVerificationId = null;
         const button = document.getElementById('sendOtpButton');
         if (button) { button.disabled = true; button.textContent = 'Sending code...'; }
         const error = document.getElementById('phoneError');
+        if (error) error.textContent = '';
+    };
+
+    login.resendOtp = async function () {
+        if (!this.currentPhone || !post({ action: 'resendPhoneOtp', phone: this.currentPhone })) {
+            return webResendOtp();
+        }
+
+        const button = document.getElementById('resendOtpButton');
+        if (button) {
+            button.disabled = true;
+            button.textContent = 'Sending new code...';
+        }
+
+        const error = document.getElementById('otpError');
         if (error) error.textContent = '';
     };
 
@@ -1940,7 +1973,7 @@ document.addEventListener(
             if (!response.ok || !payload.customToken) throw new Error(payload.error || 'Unable to verify the native session.');
             const signedIn = await firebase.auth().signInWithCustomToken(payload.customToken);
             if (!signedIn.user) throw new Error('Phone authentication failed.');
-            await login.verifyDriverProfile(result.user);
+            await login.verifyDriverProfile(signedIn.user);
         } catch (error) {
             console.error('Native phone session exchange failed:', error);
             login.toast(error.message || 'Phone authentication failed.');
@@ -1957,6 +1990,11 @@ document.addEventListener(
         if (error) error.textContent = displayMessage;
         const button = document.getElementById('sendOtpButton');
         if (button) { button.disabled = false; button.textContent = 'Continue'; }
+        const resendButton = document.getElementById('resendOtpButton');
+        if (resendButton && login.resendSeconds <= 0) {
+            resendButton.disabled = false;
+            resendButton.textContent = 'Resend code';
+        }
         login.toast(displayMessage);
     };
 })();
