@@ -142,7 +142,7 @@ ASIYE.booking = {
 
 
         const pickupPin =
-            this.generatePin();
+            await this.requirePassengerPin();
 
 
         await this.requireTripShare({
@@ -1088,6 +1088,140 @@ ASIYE.booking = {
 
         localStorage.removeItem(
             'currentRequestId'
+        );
+    },
+
+
+    async requirePassengerPin() {
+
+        return await new Promise(
+            (resolve, reject) => {
+
+                const dialog =
+                    document.createElement(
+                        'dialog'
+                    );
+
+                dialog.setAttribute(
+                    'aria-label',
+                    'Create trip PIN'
+                );
+
+                dialog.style.cssText =
+                    'border:0;border-radius:22px;padding:0;max-width:360px;width:calc(100% - 32px);box-shadow:0 22px 60px rgba(0,0,0,.28);';
+
+                dialog.innerHTML = `
+                    <form method="dialog" style="padding:22px;font-family:inherit;">
+                        <div style="font-size:11px;font-weight:900;letter-spacing:.12em;color:#777;">TRIP SAFETY</div>
+                        <h2 style="margin:7px 0 8px;font-size:24px;">Create your 4-digit PIN</h2>
+                        <p style="margin:0 0 16px;color:#666;line-height:1.5;">
+                            You will give this PIN to your verified driver only when you are ready to start the trip.
+                        </p>
+                        <input
+                            data-trip-pin
+                            type="password"
+                            inputmode="numeric"
+                            autocomplete="off"
+                            maxlength="4"
+                            pattern="[0-9]{4}"
+                            placeholder="••••"
+                            required
+                            style="width:100%;box-sizing:border-box;text-align:center;font-size:28px;letter-spacing:.55em;padding:14px;border:1px solid #ddd;border-radius:14px;"
+                        >
+                        <p data-trip-pin-error style="min-height:18px;margin:7px 0;color:#b42318;font-size:12px;"></p>
+                        <button type="submit" value="confirm" style="width:100%;border:0;border-radius:14px;padding:14px;background:#111;color:#fff;font-weight:900;">
+                            Continue
+                        </button>
+                        <button type="button" data-trip-pin-cancel style="width:100%;border:0;background:transparent;padding:13px;font-weight:800;">
+                            Cancel booking
+                        </button>
+                    </form>
+                `;
+
+                document.body.appendChild(
+                    dialog
+                );
+
+                const input =
+                    dialog.querySelector(
+                        '[data-trip-pin]'
+                    );
+
+                const error =
+                    dialog.querySelector(
+                        '[data-trip-pin-error]'
+                    );
+
+                const cleanup =
+                    () => {
+                        dialog.close?.();
+                        dialog.remove();
+                    };
+
+                dialog.querySelector(
+                    '[data-trip-pin-cancel]'
+                ).onclick =
+                    () => {
+                        cleanup();
+                        reject(
+                            new Error(
+                                'Booking cancelled. A 4-digit trip PIN is required.'
+                            )
+                        );
+                    };
+
+                dialog.addEventListener(
+                    'cancel',
+                    event => {
+                        event.preventDefault();
+                        cleanup();
+                        reject(
+                            new Error(
+                                'Booking cancelled. A 4-digit trip PIN is required.'
+                            )
+                        );
+                    }
+                );
+
+                dialog.querySelector(
+                    'form'
+                ).onsubmit =
+                    event => {
+                        event.preventDefault();
+
+                        const pin =
+                            String(
+                                input.value ||
+                                ''
+                            )
+                            .replace(
+                                /\D/g,
+                                ''
+                            );
+
+                        if (
+                            !/^\d{4}$/.test(
+                                pin
+                            )
+                        ) {
+                            error.textContent =
+                                'Enter exactly four numbers.';
+                            input.focus();
+                            return;
+                        }
+
+                        cleanup();
+                        resolve(
+                            pin
+                        );
+                    };
+
+                dialog.showModal();
+                setTimeout(
+                    () => input.focus(),
+                    80
+                );
+            }
         );
     },
 
