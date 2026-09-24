@@ -1898,6 +1898,20 @@ document.addEventListener(
     const login = window.ASIYE_DRIVER_LOGIN;
     if (!login) return;
     const nativeChannel = () => window.Asiye || window.Android || null;
+
+    // The installed Flutter app has a native Firebase phone-auth bridge.
+    // Never initialize the browser reCAPTCHA verifier inside that WebView.
+    // Normal hosted-web usage keeps the existing Firebase JS/reCAPTCHA flow.
+    const webPrepareRecaptcha = login.prepareRecaptcha.bind(login);
+    login.prepareRecaptcha = function () {
+        if (nativeChannel()) {
+            try { this.recaptchaVerifier?.clear?.(); } catch (_) {}
+            this.recaptchaVerifier = null;
+            return;
+        }
+        return webPrepareRecaptcha();
+    };
+
     const post = payload => {
         const channel = nativeChannel();
         if (!channel || typeof channel.postMessage !== 'function') return false;
@@ -1911,7 +1925,18 @@ document.addEventListener(
     login.sendOtp = async function () {
         const input = document.getElementById('driverPhoneInput');
         const phone = this.normalizePhone(input?.value);
-        if (!phone || !post({ action: 'startPhoneSignIn', phone })) return webSendOtp();
+        if (!phone) return webSendOtp();
+
+        // Hosted website: use Firebase JS auth. Installed app: native only.
+        if (!nativeChannel()) return webSendOtp();
+        if (!post({ action: 'startPhoneSignIn', phone })) {
+            const error = document.getElementById('phoneError');
+            const message = 'Native phone authentication is unavailable. Please reopen Asiye and try again.';
+            if (error) error.textContent = message;
+            this.toast(message);
+            return;
+        }
+
         this.currentPhone = phone;
         this.nativeVerificationId = null;
         const button = document.getElementById('sendOtpButton');
@@ -1921,8 +1946,14 @@ document.addEventListener(
     };
 
     login.resendOtp = async function () {
-        if (!this.currentPhone || !post({ action: 'resendPhoneOtp', phone: this.currentPhone })) {
-            return webResendOtp();
+        if (!this.currentPhone) return;
+        if (!nativeChannel()) return webResendOtp();
+        if (!post({ action: 'resendPhoneOtp', phone: this.currentPhone })) {
+            const error = document.getElementById('otpError');
+            const message = 'Native phone authentication is unavailable. Please reopen Asiye and try again.';
+            if (error) error.textContent = message;
+            this.toast(message);
+            return;
         }
 
         const button = document.getElementById('resendOtpButton');
@@ -1936,7 +1967,14 @@ document.addEventListener(
     };
 
     login.verifyOtp = async function () {
-        if (!this.nativeVerificationId) return webVerifyOtp();
+        if (!this.nativeVerificationId) {
+            if (!nativeChannel()) return webVerifyOtp();
+            const el = document.getElementById('otpError');
+            const message = 'Request a new SMS code before verifying.';
+            if (el) el.textContent = message;
+            this.toast(message);
+            return;
+        }
         const code = String(document.getElementById('driverOtpInput')?.value || '').replace(/\D/g,'');
         if (code.length !== 6) {
             const el = document.getElementById('otpError');
