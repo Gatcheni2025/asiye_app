@@ -160,7 +160,7 @@ ASIYE.club = {
          */
 
         const totalFare =
-            prices.go;
+            prices.marketReference;
 
 
         const pricing =
@@ -410,31 +410,14 @@ ASIYE.club = {
 
 
             /*
-             * Departure time comparison.
-             */
-
-            const departureDifference =
-
-                this.timeDifferenceMinutes(
-
-                    departureTime,
-
-                    pool.departureTime
-                );
-
-
-            /*
              * Current compatibility rules:
-             *
-             * pickup within 3km
-             * destination within 5km
-             * departure within 20 minutes
+             * pickup within 3km and destination within 5km.
+             * Club no longer asks for or matches by departure time.
              */
 
             if (
                 pickupDistance > 3 ||
-                destinationDistance > 5 ||
-                departureDifference > 20
+                destinationDistance > 5
             ) {
 
                 return;
@@ -445,12 +428,7 @@ ASIYE.club = {
 
                 pickupDistance +
 
-                destinationDistance +
-
-                (
-                    departureDifference /
-                    10
-                );
+                destinationDistance;
 
 
             if (
@@ -804,7 +782,7 @@ ASIYE.club = {
                 type,
 
                 ASIYE.pricing.calculate()
-                    .go
+                    .marketReference
             );
 
 
