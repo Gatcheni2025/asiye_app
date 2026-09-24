@@ -755,6 +755,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
 
     try {
+      // Recover cleanly if Firebase initialization timed out during app startup.
+      // Phone authentication must always use the native Firebase SDK in the
+      // installed app; the WebView must never be responsible for app verification.
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
+      _isFirebaseInitialized = Firebase.apps.isNotEmpty;
+
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: cleanPhone,
         timeout: const Duration(seconds: 60),
@@ -815,9 +823,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                     purpose.toLowerCase().contains('car')
                 ? CameraDevice.rear
                 : CameraDevice.front,
-        imageQuality: 82,
-        maxWidth: 1280,
-        maxHeight: 1280,
+        // Keep the camera payload small before it crosses the Flutter/WebView
+        // bridge. The WebView then performs the final square crop/compression
+        // before sending the file to upload_handler.php.
+        imageQuality: 70,
+        maxWidth: 900,
+        maxHeight: 900,
       );
 
       if (photo == null) {
