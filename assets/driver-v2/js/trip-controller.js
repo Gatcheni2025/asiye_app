@@ -1533,10 +1533,204 @@ ASIYE_DRIVER.trip = {
             this.request;
 
 
+        const activeClubPassengers =
+            request.type === 'club'
+                ? Object.values(request.passengers || {})
+                    .filter(passenger =>
+                        ![
+                            'cancelled',
+                            'cancelled_by_commuter',
+                            'cancelled_by_driver',
+                            'cancelled_by_admin',
+                            'rejected'
+                        ].includes(passenger?.status)
+                    ).length
+                : 1;
+
+
+        const grossFare =
+            Math.max(
+                0,
+                Number(
+                    request.type === 'club'
+                        ? (
+                            request.driverGrossFare ||
+                            (
+                                Number(request.pricePerPassenger || 0) *
+                                activeClubPassengers
+                            ) ||
+                            request.totalPoolFare ||
+                            request.calculatedPrice ||
+                            0
+                        )
+                        : (
+                            request.agreedFare ||
+                            request.finalAmount ||
+                            request.calculatedPrice ||
+                            0
+                        )
+                )
+            );
+
+
+        const commissionRate =
+            0.20;
+
+
+        const platformCommission =
+            Math.round(
+                grossFare *
+                commissionRate *
+                100
+            ) / 100;
+
+
+        const driverNetFare =
+            Math.round(
+                (
+                    grossFare -
+                    platformCommission
+                ) *
+                100
+            ) / 100;
+
+
+        const settlementId =
+            `${this.requestId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+
+        const settlementRef =
+            this.requestRef.child(
+                'driverSettlement'
+            );
+
+
+        const settlementResult =
+            await settlementRef.transaction(
+                current => {
+
+                    if (current) {
+                        return;
+                    }
+
+                    return {
+                        settlementId,
+                        grossFare,
+                        commissionRate,
+                        platformCommission,
+                        driverNetFare,
+                        createdAt:
+                            firebase
+                                .database
+                                .ServerValue
+                                .TIMESTAMP
+                    };
+                }
+            );
+
+
+        const settlement =
+            settlementResult.snapshot.val() ||
+            {
+                grossFare,
+                commissionRate,
+                platformCommission,
+                driverNetFare
+            };
+
+
+        const settlementCreated =
+            settlement.settlementId ===
+            settlementId;
+
+
+        if (
+            settlementCreated &&
+            request.taxiId
+        ) {
+
+            await firebase
+                .database()
+                .ref(
+                    `taxis/${request.taxiId}`
+                )
+                .transaction(
+                    driver => {
+
+                        if (!driver) {
+                            return driver;
+                        }
+
+                        driver.totalTrips =
+                            Number(
+                                driver.totalTrips ||
+                                0
+                            ) + 1;
+
+                        driver.grossEarnings =
+                            Math.round(
+                                (
+                                    Number(driver.grossEarnings || 0) +
+                                    Number(settlement.grossFare || 0)
+                                ) *
+                                100
+                            ) / 100;
+
+                        driver.totalEarnings =
+                            Math.round(
+                                (
+                                    Number(driver.totalEarnings || 0) +
+                                    Number(settlement.driverNetFare || 0)
+                                ) *
+                                100
+                            ) / 100;
+
+                        driver.netEarnings =
+                            driver.totalEarnings;
+
+                        driver.commissionPaid =
+                            Math.round(
+                                (
+                                    Number(driver.commissionPaid || 0) +
+                                    Number(settlement.platformCommission || 0)
+                                ) *
+                                100
+                            ) / 100;
+
+                        driver.lastTripGross =
+                            Number(settlement.grossFare || 0);
+
+                        driver.lastTripCommission =
+                            Number(settlement.platformCommission || 0);
+
+                        driver.lastTripNet =
+                            Number(settlement.driverNetFare || 0);
+
+                        return driver;
+                    }
+                );
+        }
+
+
         const updates = {
 
             status:
                 'completed',
+
+            commissionRate:
+                Number(settlement.commissionRate || commissionRate),
+
+            driverGrossFare:
+                Number(settlement.grossFare || grossFare),
+
+            platformCommission:
+                Number(settlement.platformCommission || platformCommission),
+
+            driverNetFare:
+                Number(settlement.driverNetFare || driverNetFare),
+
+            commissionApplied:
+                true,
 
             completedAt:
 
