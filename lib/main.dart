@@ -14,7 +14,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -109,6 +108,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Map<String, dynamic>? _pendingNotification;
   final FlutterTts _navigationTts = FlutterTts();
   bool _navigationTtsReady = false;
+  int? _phoneResendToken;
+  String? _phoneVerificationNumber;
 
   Future<void> _openNotification(Map<String, dynamic> data) async {
     _pendingNotification = data;
@@ -681,6 +682,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           if (action == 'startPhoneSignIn') {
             await _startPhoneSignIn(data['phone']?.toString() ?? '');
           }
+          else if (action == 'resendPhoneOtp') {
+            await _startPhoneSignIn(
+              data['phone']?.toString() ?? '',
+              forceResend: true,
+            );
+          }
           else if (action == 'verifyPhoneOtp') {
             await _verifyPhoneOtp(data['verificationId']?.toString() ?? '', data['code']?.toString() ?? '');
           }
@@ -712,16 +719,26 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     } catch (e) {}
   }
 
-  Future<void> _startPhoneSignIn(String phone) async {
+  Future<void> _startPhoneSignIn(
+    String phone, {
+    bool forceResend = false,
+  }) async {
     final cleanPhone = phone.trim();
     if (cleanPhone.isEmpty) {
       _controller?.runJavaScript("window.onNativePhoneAuthError?.('Enter a valid phone number.');");
       return;
     }
+
+    if (_phoneVerificationNumber != cleanPhone) {
+      _phoneVerificationNumber = cleanPhone;
+      _phoneResendToken = null;
+    }
+
     try {
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: cleanPhone,
         timeout: const Duration(seconds: 60),
+        forceResendingToken: forceResend ? _phoneResendToken : null,
         verificationCompleted: (PhoneAuthCredential credential) async {
           try {
             final result = await FirebaseAuth.instance.signInWithCredential(credential);
@@ -737,6 +754,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.message ?? e.code)});");
         },
         codeSent: (String verificationId, int? resendToken) {
+          _phoneVerificationNumber = cleanPhone;
+          _phoneResendToken = resendToken;
           _controller?.runJavaScript("window.onNativePhoneCodeSent?.(${jsonEncode(verificationId)});");
         },
         codeAutoRetrievalTimeout: (String verificationId) {
@@ -930,22 +949,28 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _signInWithApple() async {
     try {
-      final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
-      );
+      final appleProvider = AppleAuthProvider();
+      final result = await FirebaseAuth.instance.signInWithProvider(appleProvider);
+      final token = await result.user?.getIdToken();
+
+      if (token == null || token.isEmpty) {
+        throw Exception('Apple sign-in did not return an authenticated Firebase session.');
+      }
 
       final Map<String, dynamic> userData = {
-        "email": credential.email ?? "",
-        "displayName": "${credential.givenName ?? ""} ${credential.familyName ?? ""}".trim(),
-        "identityToken": credential.identityToken ?? "",
-        "userIdentifier": credential.userIdentifier ?? "",
-        "authorizationCode": credential.authorizationCode ?? "",
+        "firebaseIdToken": token,
+        "email": result.user?.email ?? "",
+        "displayName": result.user?.displayName ?? "",
       };
 
       _controller?.runJavaScript("if(typeof window.onAppleNativeLoginSuccess === 'function') { window.onAppleNativeLoginSuccess(${jsonEncode(userData)}); }");
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
-      final String errorMsg = e.toString().contains("canceled") ? "Cancelled" : e.toString();
+      final lower = e.toString().toLowerCase();
+      final String errorMsg =
+          (lower.contains("canceled") || lower.contains("cancelled"))
+              ? "Cancelled"
+              : e.toString();
       _controller?.runJavaScript("if(typeof window.onAppleNativeLoginError === 'function') { window.onAppleNativeLoginError('${errorMsg.replaceAll("'", "\\'")}'); }");
     }
   }
