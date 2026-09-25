@@ -1840,6 +1840,9 @@ document.addEventListener(
             localStorage.setItem(pendingPhoneKey, phone);
         }
 
+        // A reCAPTCHA return can restore the app before codeSent reaches the
+        // current WebView. If native auth is still in progress, keep the login
+        // screen in OTP mode instead of sending the user back to phone entry.
         if (verificationId) {
             login.nativeVerificationId = verificationId;
             localStorage.setItem(pendingVerificationKey, verificationId);
