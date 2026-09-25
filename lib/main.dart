@@ -127,12 +127,14 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _phoneResendToken = null;
       await prefs.remove('pendingPhoneAuthNumber');
       await prefs.remove('pendingPhoneAuthVerificationId');
+      await prefs.remove('pendingPhoneAuthInProgress');
       return;
     }
 
     if (phone != null && phone.isNotEmpty) {
       _phoneVerificationNumber = phone;
       await prefs.setString('pendingPhoneAuthNumber', phone);
+      await prefs.setBool('pendingPhoneAuthInProgress', true);
     }
 
     if (verificationId != null && verificationId.isNotEmpty) {
@@ -154,8 +156,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         _phoneVerificationId ??
         prefs.getString('pendingPhoneAuthVerificationId') ??
         '';
+    final inProgress = prefs.getBool('pendingPhoneAuthInProgress') ?? false;
 
-    if (phone.isEmpty && verificationId.isEmpty) return;
+    if (phone.isEmpty && verificationId.isEmpty && !inProgress) return;
 
     _phoneVerificationNumber =
         phone.isNotEmpty ? phone : _phoneVerificationNumber;
@@ -165,6 +168,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     final payload = jsonEncode({
       'phone': phone,
       'verificationId': verificationId,
+      'inProgress': inProgress,
     });
 
     await _controller?.runJavaScript(
@@ -383,6 +387,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               """);
             }
             await _restorePendingPhoneAuthToWeb();
+            // login.js can finish initializing just after onPageFinished. Retry
+            // restoration so a reCAPTCHA return can never strand the user on
+            // the phone-number step after the SMS has already been sent.
+            Future.delayed(const Duration(milliseconds: 250), () {
+              _restorePendingPhoneAuthToWeb();
+            });
+            Future.delayed(const Duration(milliseconds: 900), () {
+              _restorePendingPhoneAuthToWeb();
+            });
             if (_pendingNotification != null) await _openNotification(_pendingNotification!);
           },
           onNavigationRequest: (request) async {
@@ -846,19 +859,25 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         verificationFailed: (FirebaseAuthException e) {
           _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.message ?? e.code)});");
         },
-        codeSent: (String verificationId, int? resendToken) {
+        codeSent: (String verificationId, int? resendToken) async {
           _phoneVerificationNumber = cleanPhone;
           _phoneVerificationId = verificationId;
           _phoneResendToken = resendToken;
-          unawaited(
-            _savePendingPhoneAuth(
-              phone: cleanPhone,
-              verificationId: verificationId,
-            ),
+
+          // reCAPTCHA may recreate/resume the Activity and therefore reload the
+          // WebView. Persist the verification ID before touching the web UI.
+          await _savePendingPhoneAuth(
+            phone: cleanPhone,
+            verificationId: verificationId,
           );
-          _controller?.runJavaScript(
+
+          await _controller?.runJavaScript(
             "window.onNativePhoneCodeSent?.(${jsonEncode(verificationId)}, ${jsonEncode(cleanPhone)});",
           );
+
+          // Run the restoration path too. This is intentionally idempotent and
+          // covers the race where login.js was recreated while reCAPTCHA returned.
+          await _restorePendingPhoneAuthToWeb();
         },
         codeAutoRetrievalTimeout: (String verificationId) {
           _phoneVerificationId = verificationId;
