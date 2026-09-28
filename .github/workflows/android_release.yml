@@ -9,6 +9,16 @@ on:
       - "assets/**"
       - "android/**"
       - "pubspec.yaml"
+      - "test/**"
+      - ".github/workflows/android_release.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "lib/**"
+      - "assets/**"
+      - "android/**"
+      - "pubspec.yaml"
+      - "test/**"
       - ".github/workflows/android_release.yml"
 
 jobs:
@@ -50,6 +60,15 @@ jobs:
       - name: Get packages
         run: flutter pub get
 
+      - name: Read app version
+        shell: bash
+        run: |
+          APP_VERSION=$(awk '/^version:/ {print $2}' pubspec.yaml)
+          ARTIFACT_VERSION="${APP_VERSION/+/-}"
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_ENV"
+          echo "ARTIFACT_VERSION=$ARTIFACT_VERSION" >> "$GITHUB_ENV"
+          echo "Building Asiye $APP_VERSION"
+
       - name: Analyze
         continue-on-error: true
         run: flutter analyze --no-fatal-infos
@@ -59,6 +78,10 @@ jobs:
         run: |
           find assets -type f -name "*.js" -print0 | xargs -0 -n1 node --check
           node --check functions/index.js
+
+      - name: Test authentication
+        run: |
+          node --test test/login-otp.test.cjs test/native-auth-session.test.cjs
 
       - name: Build release APK
         run: flutter build apk --release
@@ -80,13 +103,13 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.41-311-apk
+          name: asiye-${{ env.ARTIFACT_VERSION }}-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
 
       - name: Upload AAB
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.41-311-aab
+          name: asiye-${{ env.ARTIFACT_VERSION }}-aab
           path: build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
