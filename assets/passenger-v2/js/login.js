@@ -1943,6 +1943,7 @@ document.addEventListener(
             if (!response.ok || !payload.customToken) throw new Error(payload.error || 'Unable to verify the native session.');
             const signedIn = await firebase.auth().signInWithCustomToken(payload.customToken);
             if (!signedIn.user) throw new Error('Phone authentication failed.');
+            login.toast('OTP verified successfully. Signing you in...');
             await login.afterAuthentication(signedIn.user);
         } catch (error) {
             console.error('Native phone session exchange failed:', error);
