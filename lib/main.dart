@@ -19,11 +19,15 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'face_scan_screen.dart';
+import 'dart:io' show Platform;
 
 bool _isFirebaseInitialized = false;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-const bool isTest = bool.fromEnvironment('FLUTTER_TEST', defaultValue: false);
+bool get isTest =>
+    const bool.fromEnvironment('FLUTTER_TEST', defaultValue: false) ||
+    (!kIsWeb && Platform.environment.containsKey('FLUTTER_TEST')) ||
+    WidgetsBinding.instance.runtimeType.toString().contains('Test');
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -197,9 +201,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   StreamSubscription<String>? _tokenSubscription;
   StreamSubscription<RemoteMessage>? _messageSubscription;
   StreamSubscription<RemoteMessage>? _openedSubscription;
+  Timer? _loadingTimeoutTimer;
 
   @override
   void dispose() {
+    _loadingTimeoutTimer?.cancel();
     _positionSubscription?.cancel();
     _tokenSubscription?.cancel();
     _messageSubscription?.cancel();
@@ -308,7 +314,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       return; 
     }
 
-   Future.delayed(const Duration(seconds: 5), () {
+    _loadingTimeoutTimer = Timer(const Duration(seconds: 5), () {
       if (mounted && _isLoading) {
         setState(() => _isLoading = false);
       }
@@ -675,6 +681,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         case 'driver': return 'assets/driver-v2/index.html';
         case 'rank_manager': return 'assets/taxiRank.html';
         case 'handler': return 'assets/handler.html';
+        case 'passenger':
         case 'commuter': return 'assets/passenger-v2/index.html';
       }
     }
@@ -1211,6 +1218,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     if (type == 'driver') target = 'assets/driver-v2/index.html';
     if (type == 'handler') target = 'assets/handler.html';
     if (type == 'rank_manager') target = 'assets/taxiRank.html';
+    if (type == 'commuter' || type == 'passenger') target = 'assets/passenger-v2/index.html';
 
     _controller?.loadFlutterAsset(target);
   }

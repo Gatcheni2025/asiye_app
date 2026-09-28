@@ -6,7 +6,7 @@ const path = require('node:path');
 function element() { return { innerHTML:'', children:{}, setAttribute(){}, append(){}, close(){}, remove(){}, showModal(){}, addEventListener(){}, querySelector(key){ return this.children[key] ||= element(); } }; }
 function load(driver, fail = false) {
     const queries=[];
-    const context = { document:{createElement:element,body:element()},
+    const context = { document:{createElement:element,body:element(),head:{appendChild:()=>{}},getElementById:()=>null},
         firebase:{database:()=>({ref(root){queries.push(root);return {orderByChild(){return this;},equalTo(){return this;},startAt(){return this;},limitToLast(){return this;},async once(){if(fail)throw Error('denied');return {forEach(){}};}};}})},
         [driver?'ASIYE_DRIVER':'ASIYE']:{state:{userId:'p',driverId:'d',user:{name:'Passenger',credits:0},driver:{name:'Driver',vehicleReg:'TEST'}}}
     };

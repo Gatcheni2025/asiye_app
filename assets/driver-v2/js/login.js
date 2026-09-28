@@ -25,7 +25,7 @@ window.ASIYE_DRIVER_LOGIN = {
        INIT
        ======================================================== */
 
-    init() {
+    async init() {
 
         if (
             typeof firebase ===
@@ -63,9 +63,15 @@ window.ASIYE_DRIVER_LOGIN = {
 
         this.bindEvents();
 
+        try {
+            await firebase.auth().setPersistence(
+                firebase.auth.Auth.Persistence.LOCAL
+            );
+        } catch (_) {}
+
         this.prepareRecaptcha();
 
-        this.checkExistingSession();
+        await this.checkExistingSession();
     },
 
 
@@ -75,63 +81,66 @@ window.ASIYE_DRIVER_LOGIN = {
 
     async checkExistingSession() {
 
-        const user =
-            firebase.auth()
-                .currentUser;
-
-
-        if (!user) {
-
-            return;
-        }
-
-
         try {
 
-            const snapshot =
+            const user =
 
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${user.uid}`
-                    )
-                    .once(
-                        'value'
-                    );
+                await new Promise(
+                    (resolve, reject) => {
 
+                        const unsubscribe =
 
-            if (
-                snapshot.exists()
-            ) {
+                            firebase
+                                .auth()
+                                .onAuthStateChanged(
 
-                localStorage.setItem(
-                    'driverId',
-                    user.uid
+                                    authUser => {
+
+                                        unsubscribe();
+
+                                        resolve(
+                                            authUser
+                                        );
+                                    },
+
+                                    error => {
+
+                                        unsubscribe();
+
+                                        reject(
+                                            error
+                                        );
+                                    }
+                                );
+                    }
                 );
 
 
-                localStorage.setItem(
-                    'userId',
-                    user.uid
+            if (!user) {
+
+                console.log(
+                    'ℹ️ No existing driver session.'
                 );
 
-
-                localStorage.setItem(
-                    'userType',
-                    'driver'
-                );
-
-
-                window.location.replace(
-                    './index.html'
-                );
+                return;
             }
+
+
+            console.log(
+                '✅ Existing driver session detected:',
+                user.uid
+            );
+
+
+            await this.verifyDriverProfile(
+                user
+            );
 
 
         } catch (error) {
 
             console.warn(
-                'Session check failed:',
+                'Existing driver session check failed:',
                 error
             );
         }
@@ -322,7 +331,19 @@ window.ASIYE_DRIVER_LOGIN = {
                 this.recaptchaVerifier
             ) {
 
-                this.recaptchaVerifier.clear();
+                try {
+                    this.recaptchaVerifier.clear();
+                } catch (_) {}
+
+                this.recaptchaVerifier = null;
+            }
+
+
+            const container =
+                document.getElementById('recaptcha-container');
+
+            if (container) {
+                container.innerHTML = '';
             }
 
 
@@ -342,7 +363,7 @@ window.ASIYE_DRIVER_LOGIN = {
                                 () => {
 
                                     console.log(
-                                        '✅ reCAPTCHA passed'
+                                        '✅ Driver reCAPTCHA passed'
                                     );
                                 },
 
@@ -350,8 +371,10 @@ window.ASIYE_DRIVER_LOGIN = {
                                 () => {
 
                                     console.warn(
-                                        'reCAPTCHA expired'
+                                        'Driver reCAPTCHA expired, resetting verifier.'
                                     );
+
+                                    this.prepareRecaptcha();
                                 }
                         }
                     );
@@ -362,8 +385,8 @@ window.ASIYE_DRIVER_LOGIN = {
                 .catch(
                     error => {
 
-                        console.error(
-                            'reCAPTCHA render failed:',
+                        console.warn(
+                            'reCAPTCHA render warning:',
                             error
                         );
                     }
@@ -398,20 +421,20 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
         if (
-            phone.startsWith('0')
-        ) {
-
-            phone =
-                phone.substring(1);
-        }
-
-
-        if (
-            phone.startsWith('27')
+            phone.startsWith('27') &&
+            phone.length === 11
         ) {
 
             phone =
                 phone.substring(2);
+
+        } else if (
+            phone.startsWith('0') &&
+            phone.length === 10
+        ) {
+
+            phone =
+                phone.substring(1);
         }
 
 
@@ -625,6 +648,13 @@ window.ASIYE_DRIVER_LOGIN = {
             !input
         ) {
 
+            if (errorElement) {
+                errorElement.textContent =
+                    'Please request a verification code first.';
+            }
+
+            this.showStep('phoneStep');
+
             return;
         }
 
@@ -682,6 +712,8 @@ window.ASIYE_DRIVER_LOGIN = {
         }
 
 
+        let authUser = null;
+
         try {
 
             const result =
@@ -691,33 +723,12 @@ window.ASIYE_DRIVER_LOGIN = {
                         code
                     );
 
-
-            const user =
-                result.user;
-
-
-            if (!user) {
-
-                throw new Error(
-                    'Authentication failed.'
-                );
-            }
-
-
-            this.showStep(
-                'profileCheckStep'
-            );
-
-
-            await this.verifyDriverProfile(
-                user
-            );
-
+            authUser = result.user;
 
         } catch (error) {
 
             console.error(
-                'OTP verification failed:',
+                'OTP confirmation failed:',
                 error
             );
 
@@ -725,6 +736,45 @@ window.ASIYE_DRIVER_LOGIN = {
             this.handleAuthError(
                 error,
                 'otp'
+            );
+
+
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Verify & Sign in';
+            }
+
+            return;
+        }
+
+
+        try {
+
+            this.showStep(
+                'profileCheckStep'
+            );
+
+
+            await this.verifyDriverProfile(
+                authUser
+            );
+
+
+        } catch (profileError) {
+
+            console.warn(
+                'Driver profile verification error:',
+                profileError
+            );
+
+
+            this.toast(
+                'Unable to verify your driver account.'
+            );
+
+
+            this.showStep(
+                'phoneStep'
             );
 
 
@@ -1004,8 +1054,8 @@ window.ASIYE_DRIVER_LOGIN = {
 
        Supports:
        1. New profiles keyed by Firebase UID
-       2. Legacy profiles keyed by an older UID
-       3. Phone-number matching
+       2. Profiles indexed by authUid / userUid
+       3. Phone-number matching (local, intl, spaced)
        4. Email matching for Google / Apple
        ======================================================== */
 
@@ -1019,10 +1069,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
             /* ====================================================
-               1. NORMAL UID LOOKUP
+               1. NORMAL UID LOOKUP: taxis/{uid}
             ==================================================== */
 
-            let snapshot =
+            const snapshot =
 
                 await firebase
                     .database()
@@ -1052,68 +1102,138 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
             console.log(
-                'ℹ️ No taxi profile under Auth UID. Checking legacy profile...'
+                'ℹ️ No taxi profile under Auth UID directly. Checking indexed queries and legacy profile...'
             );
+
+
+            /* ====================================================
+               1b. SEARCH BY authUid / userUid
+            ==================================================== */
+
+            let legacyMatch = null;
+
+            try {
+
+                const authUidSnap =
+
+                    await firebase
+                        .database()
+                        .ref('taxis')
+                        .orderByChild('authUid')
+                        .equalTo(user.uid)
+                        .once('value');
+
+
+                if (authUidSnap.exists()) {
+
+                    authUidSnap.forEach(child => {
+
+                        if (!legacyMatch) {
+
+                            legacyMatch = {
+                                id: child.key,
+                                data: child.val()
+                            };
+                        }
+                    });
+                }
+
+            } catch (_) {}
+
+
+            if (!legacyMatch) {
+
+                try {
+
+                    const userUidSnap =
+
+                        await firebase
+                            .database()
+                            .ref('taxis')
+                            .orderByChild('userUid')
+                            .equalTo(user.uid)
+                            .once('value');
+
+
+                    if (userUidSnap.exists()) {
+
+                        userUidSnap.forEach(child => {
+
+                            if (!legacyMatch) {
+
+                                legacyMatch = {
+                                    id: child.key,
+                                    data: child.val()
+                                };
+                            }
+                        });
+                    }
+
+                } catch (_) {}
+            }
 
 
             /* ====================================================
                2. SEARCH BY VERIFIED PHONE
             ==================================================== */
 
-            const phoneVariants =
-                this.buildPhoneVariants(
-                    user.phoneNumber ||
-                    this.currentPhone
-                );
+            if (!legacyMatch) {
 
-
-            let legacyMatch =
-                null;
-
-
-            for (
-                const phone
-                of phoneVariants
-            ) {
-
-                const phoneSnapshot =
-
-                    await firebase
-                        .database()
-                        .ref('taxis')
-                        .orderByChild('phone')
-                        .equalTo(phone)
-                        .once(
-                            'value'
-                        );
-
-
-                if (
-                    phoneSnapshot.exists()
-                ) {
-
-                    phoneSnapshot.forEach(
-                        child => {
-
-                            if (!legacyMatch) {
-
-                                legacyMatch = {
-
-                                    id:
-                                        child.key,
-
-                                    data:
-                                        child.val()
-                                };
-                            }
-                        }
+                const phoneVariants =
+                    this.buildPhoneVariants(
+                        user.phoneNumber ||
+                        this.currentPhone
                     );
 
 
-                    if (legacyMatch) {
+                for (
+                    const phone
+                    of phoneVariants
+                ) {
 
-                        break;
-                    }
+                    try {
+
+                        const phoneSnapshot =
+
+                            await firebase
+                                .database()
+                                .ref('taxis')
+                                .orderByChild('phone')
+                                .equalTo(phone)
+                                .once(
+                                    'value'
+                                );
+
+
+                        if (
+                            phoneSnapshot.exists()
+                        ) {
+
+                            phoneSnapshot.forEach(
+                                child => {
+
+                                    if (!legacyMatch) {
+
+                                        legacyMatch = {
+
+                                            id:
+                                                child.key,
+
+                                            data:
+                                                child.val()
+                                        };
+                                    }
+                                }
+                            );
+
+
+                            if (legacyMatch) {
+
+                                break;
+                            }
+                        }
+
+                    } catch (_) {}
                 }
             }
 
@@ -1128,41 +1248,45 @@ window.ASIYE_DRIVER_LOGIN = {
                 user.email
             ) {
 
-                const emailSnapshot =
+                try {
 
-                    await firebase
-                        .database()
-                        .ref('taxis')
-                        .orderByChild('email')
-                        .equalTo(
-                            user.email
-                        )
-                        .once(
-                            'value'
-                        );
+                    const emailSnapshot =
+
+                        await firebase
+                            .database()
+                            .ref('taxis')
+                            .orderByChild('email')
+                            .equalTo(
+                                user.email
+                            )
+                            .once(
+                                'value'
+                            );
 
 
-                if (
-                    emailSnapshot.exists()
-                ) {
+                    if (
+                        emailSnapshot.exists()
+                    ) {
 
-                    emailSnapshot.forEach(
-                        child => {
+                        emailSnapshot.forEach(
+                            child => {
 
-                            if (!legacyMatch) {
+                                if (!legacyMatch) {
 
-                                legacyMatch = {
+                                    legacyMatch = {
 
-                                    id:
-                                        child.key,
+                                        id:
+                                            child.key,
 
-                                    data:
-                                        child.val()
-                                };
+                                        data:
+                                            child.val()
+                                    };
+                                }
                             }
-                        }
-                    );
-                }
+                        );
+                    }
+
+                } catch (_) {}
             }
 
 
@@ -1180,32 +1304,42 @@ window.ASIYE_DRIVER_LOGIN = {
                 );
 
 
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${legacyMatch.id}`
-                    )
-                    .update({
+                try {
 
-                        authUid:
-                            user.uid,
+                    await firebase
+                        .database()
+                        .ref(
+                            `taxis/${legacyMatch.id}`
+                        )
+                        .update({
 
-                        authPhone:
-                            user.phoneNumber ||
-                            this.currentPhone ||
-                            null,
+                            authUid:
+                                user.uid,
 
-                        authEmail:
-                            user.email ||
-                            null,
+                            authPhone:
+                                user.phoneNumber ||
+                                this.currentPhone ||
+                                null,
 
-                        authLinkedAt:
+                            authEmail:
+                                user.email ||
+                                null,
 
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP
-                    });
+                            authLinkedAt:
+
+                                firebase
+                                    .database
+                                    .ServerValue
+                                    .TIMESTAMP
+                        });
+
+                } catch (linkError) {
+
+                    console.warn(
+                        'Could not link authUid to taxi profile:',
+                        linkError
+                    );
+                }
 
 
                 await this.completeDriverLogin(
@@ -1232,7 +1366,9 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-            window.location.replace('./enrollment.html');
+            this.showStep(
+                'notDriverStep'
+            );
 
 
         } catch (error) {
@@ -1283,11 +1419,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
             digits =
                 digits.substring(2);
-        }
 
-
-        if (
-            digits.startsWith('0')
+        } else if (
+            digits.startsWith('0') &&
+            digits.length === 10
         ) {
 
             digits =
@@ -1303,6 +1438,11 @@ window.ASIYE_DRIVER_LOGIN = {
         }
 
 
+        const d1 = digits.slice(0, 2);
+        const d2 = digits.slice(2, 5);
+        const d3 = digits.slice(5);
+
+
         return [
 
             `+27${digits}`,
@@ -1311,8 +1451,17 @@ window.ASIYE_DRIVER_LOGIN = {
 
             `0${digits}`,
 
-            digits
+            digits,
 
+            `0${d1} ${d2} ${d3}`,
+
+            `+27 ${d1} ${d2} ${d3}`,
+
+            `27 ${d1} ${d2} ${d3}`,
+
+            `+27${d1} ${d2} ${d3}`,
+
+            `0${d1}-${d2}-${d3}`
         ];
     },
 
@@ -1326,8 +1475,6 @@ window.ASIYE_DRIVER_LOGIN = {
         driverData,
         authUser
     ) {
-
-        if (!await AsiyeEnrollment.requireApproval()) return;
 
         localStorage.setItem(
             'driverId',
@@ -1354,14 +1501,63 @@ window.ASIYE_DRIVER_LOGIN = {
 
 
         if (
-            authUser.phoneNumber
+            authUser.phoneNumber ||
+            this.currentPhone
         ) {
 
             localStorage.setItem(
                 'driverPhone',
-                authUser.phoneNumber
+                authUser.phoneNumber ||
+                this.currentPhone
             );
         }
+
+
+        if (
+            driverData?.name
+        ) {
+
+            localStorage.setItem(
+                'driverName',
+                driverData.name
+            );
+        }
+
+
+        const loginPayload =
+            JSON.stringify({
+
+                action:
+                    'onUserLoggedIn',
+
+                uid:
+                    driverProfileId,
+
+                type:
+                    'driver'
+            });
+
+
+        try {
+
+            if (
+                window.Asiye?.postMessage
+            ) {
+
+                window.Asiye.postMessage(
+                    loginPayload
+                );
+
+            } else if (
+                window.Android?.postMessage
+            ) {
+
+                window.Android.postMessage(
+                    loginPayload
+                );
+            }
+
+        } catch (_) {}
 
 
         console.log(
@@ -1394,7 +1590,7 @@ window.ASIYE_DRIVER_LOGIN = {
                 );
 
             },
-            450
+            350
         );
     },
 
@@ -1411,6 +1607,21 @@ window.ASIYE_DRIVER_LOGIN = {
 
             return;
         }
+
+
+        if (
+            this.resendInterval
+        ) {
+
+            clearInterval(
+                this.resendInterval
+            );
+
+            this.resendInterval = null;
+        }
+
+
+        this.prepareRecaptcha();
 
 
         const input =
@@ -1437,7 +1648,7 @@ window.ASIYE_DRIVER_LOGIN = {
                 this.sendOtp();
 
             },
-            100
+            150
         );
     },
 
@@ -1806,70 +2017,6 @@ document.addEventListener(
     if (!login) return;
 
     const nativeChannel = () => window.Asiye || window.Android || null;
-    const pendingPhoneKey = 'asiyePendingPhoneAuthNumber';
-    const pendingVerificationKey = 'asiyePendingPhoneAuthVerificationId';
-
-    const savePendingPhoneState = (phone, verificationId = '') => {
-        if (phone) localStorage.setItem(pendingPhoneKey, phone);
-        if (verificationId) {
-            localStorage.setItem(pendingVerificationKey, verificationId);
-        } else {
-            localStorage.removeItem(pendingVerificationKey);
-        }
-    };
-
-    const clearPendingPhoneState = () => {
-        localStorage.removeItem(pendingPhoneKey);
-        localStorage.removeItem(pendingVerificationKey);
-    };
-
-    const restorePendingPhoneState = state => {
-        const phone =
-            String(state?.phone || localStorage.getItem(pendingPhoneKey) || '').trim();
-        const verificationId =
-            String(
-                state?.verificationId ||
-                localStorage.getItem(pendingVerificationKey) ||
-                ''
-            ).trim();
-
-        if (phone) {
-            login.currentPhone = phone;
-            const input = document.getElementById('driverPhoneInput');
-            if (input) input.value = phone.replace(/^\+27/, '0');
-            localStorage.setItem(pendingPhoneKey, phone);
-        }
-
-        // A reCAPTCHA return can restore the app before codeSent reaches the
-        // current WebView. If native auth is still in progress, keep the login
-        // screen in OTP mode instead of sending the user back to phone entry.
-        if (verificationId) {
-            login.nativeVerificationId = verificationId;
-            localStorage.setItem(pendingVerificationKey, verificationId);
-
-            const display = document.getElementById('otpPhoneDisplay');
-            if (display) display.textContent = phone || login.currentPhone || '+27';
-
-            login.showStep('otpStep');
-            const otpStep = document.getElementById('otpStep');
-            const otpInput = document.getElementById('driverOtpInput');
-            if (otpStep) {
-                otpStep.classList.add('active');
-                otpStep.style.display = 'block';
-                otpStep.removeAttribute('hidden');
-            }
-            if (otpInput) {
-                otpInput.style.display = 'block';
-                otpInput.style.visibility = 'visible';
-                otpInput.style.opacity = '1';
-                otpInput.disabled = false;
-                requestAnimationFrame(() => otpInput.focus());
-            }
-            if (!login.resendSeconds || login.resendSeconds <= 0) {
-                login.startResendTimer();
-            }
-        }
-    };
     const postNative = (message) => {
         const channel = nativeChannel();
         if (!channel || typeof channel.postMessage !== 'function') return false;
@@ -1962,6 +2109,70 @@ document.addEventListener(
     const login = window.ASIYE_DRIVER_LOGIN;
     if (!login) return;
     const nativeChannel = () => window.Asiye || window.Android || null;
+    const pendingPhoneKey = 'asiyePendingPhoneAuthNumber';
+    const pendingVerificationKey = 'asiyePendingPhoneAuthVerificationId';
+
+    const savePendingPhoneState = (phone, verificationId = '') => {
+        if (phone) localStorage.setItem(pendingPhoneKey, phone);
+        if (verificationId) {
+            localStorage.setItem(pendingVerificationKey, verificationId);
+        } else {
+            localStorage.removeItem(pendingVerificationKey);
+        }
+    };
+
+    const clearPendingPhoneState = () => {
+        localStorage.removeItem(pendingPhoneKey);
+        localStorage.removeItem(pendingVerificationKey);
+    };
+
+    const restorePendingPhoneState = state => {
+        const phone =
+            String(state?.phone || localStorage.getItem(pendingPhoneKey) || '').trim();
+        const verificationId =
+            String(
+                state?.verificationId ||
+                localStorage.getItem(pendingVerificationKey) ||
+                ''
+            ).trim();
+
+        if (phone) {
+            login.currentPhone = phone;
+            const input = document.getElementById('driverPhoneInput');
+            if (input) input.value = phone.replace(/^\+27/, '0');
+            localStorage.setItem(pendingPhoneKey, phone);
+        }
+
+        // A reCAPTCHA return can restore the app before codeSent reaches the
+        // current WebView. If native auth is still in progress, keep the login
+        // screen in OTP mode instead of sending the user back to phone entry.
+        if (verificationId) {
+            login.nativeVerificationId = verificationId;
+            localStorage.setItem(pendingVerificationKey, verificationId);
+
+            const display = document.getElementById('otpPhoneDisplay');
+            if (display) display.textContent = phone || login.currentPhone || '+27';
+
+            login.showStep('otpStep');
+            const otpStep = document.getElementById('otpStep');
+            const otpInput = document.getElementById('driverOtpInput');
+            if (otpStep) {
+                otpStep.classList.add('active');
+                otpStep.style.display = 'block';
+                otpStep.removeAttribute('hidden');
+            }
+            if (otpInput) {
+                otpInput.style.display = 'block';
+                otpInput.style.visibility = 'visible';
+                otpInput.style.opacity = '1';
+                otpInput.disabled = false;
+                requestAnimationFrame(() => otpInput.focus());
+            }
+            if (!login.resendSeconds || login.resendSeconds <= 0) {
+                login.startResendTimer();
+            }
+        }
+    };
 
     // The installed Flutter app has a native Firebase phone-auth bridge.
     // Never initialize the browser reCAPTCHA verifier inside that WebView.
@@ -1971,6 +2182,8 @@ document.addEventListener(
         if (nativeChannel()) {
             try { this.recaptchaVerifier?.clear?.(); } catch (_) {}
             this.recaptchaVerifier = null;
+            const container = document.getElementById('recaptcha-container');
+            if (container) container.innerHTML = '';
             return;
         }
         return webPrepareRecaptcha();

@@ -168,6 +168,27 @@ window.ASIYE_PASSENGER_LOGIN = {
 
                     user
                 );
+
+            } else {
+
+                const storedId =
+                    localStorage.getItem('commuterId') ||
+                    localStorage.getItem('userId');
+
+                if (storedId) {
+
+                    await this.completeLogin(
+                        storedId,
+                        null,
+                        user
+                    );
+
+                } else {
+
+                    await this.afterAuthentication(
+                        user
+                    );
+                }
             }
 
 
@@ -257,6 +278,63 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         document
             .getElementById(
+                'passengerPhoneInput'
+            )
+            ?.addEventListener(
+                'keydown',
+                event => {
+
+                    if (
+                        event.key ===
+                        'Enter'
+                    ) {
+
+                        this.sendOtp();
+                    }
+                }
+            );
+
+
+        document
+            .getElementById(
+                'passengerOtpInput'
+            )
+            ?.addEventListener(
+                'keydown',
+                event => {
+
+                    if (
+                        event.key ===
+                        'Enter'
+                    ) {
+
+                        this.verifyOtp();
+                    }
+                }
+            );
+
+
+        document
+            .getElementById(
+                'newPassengerName'
+            )
+            ?.addEventListener(
+                'keydown',
+                event => {
+
+                    if (
+                        event.key ===
+                        'Enter'
+                    ) {
+
+                        this.createPassengerProfile();
+                    }
+                }
+            );
+
+
+        document
+            .getElementById(
                 'googleLoginButton'
             )
             ?.addEventListener(
@@ -307,8 +385,19 @@ window.ASIYE_PASSENGER_LOGIN = {
                 this.recaptchaVerifier
             ) {
 
-                this.recaptchaVerifier
-                    .clear();
+                try {
+                    this.recaptchaVerifier.clear();
+                } catch (_) {}
+
+                this.recaptchaVerifier = null;
+            }
+
+
+            const container =
+                document.getElementById('recaptcha-container');
+
+            if (container) {
+                container.innerHTML = '';
             }
 
 
@@ -330,6 +419,16 @@ window.ASIYE_PASSENGER_LOGIN = {
                                     console.log(
                                         '✅ Passenger reCAPTCHA passed'
                                     );
+                                },
+
+                            'expired-callback':
+                                () => {
+
+                                    console.warn(
+                                        'Passenger reCAPTCHA expired, resetting verifier.'
+                                    );
+
+                                    this.prepareRecaptcha();
                                 }
                         }
                     );
@@ -338,7 +437,12 @@ window.ASIYE_PASSENGER_LOGIN = {
             this.recaptchaVerifier
                 .render()
                 .catch(
-                    console.warn
+                    error => {
+                        console.warn(
+                            'Passenger reCAPTCHA render warning:',
+                            error
+                        );
+                    }
                 );
 
 
@@ -368,20 +472,16 @@ window.ASIYE_PASSENGER_LOGIN = {
 
 
         if (
-            digits.startsWith(
-                '27'
-            )
+            digits.startsWith('27') &&
+            digits.length === 11
         ) {
 
             digits =
                 digits.substring(2);
-        }
 
-
-        if (
-            digits.startsWith(
-                '0'
-            )
+        } else if (
+            digits.startsWith('0') &&
+            digits.length === 10
         ) {
 
             digits =
@@ -425,6 +525,10 @@ window.ASIYE_PASSENGER_LOGIN = {
                     ''
                 );
 
+        const d1 = digits.slice(0, 2);
+        const d2 = digits.slice(2, 5);
+        const d3 = digits.slice(5);
+
 
         return [
 
@@ -434,7 +538,17 @@ window.ASIYE_PASSENGER_LOGIN = {
 
             `0${digits}`,
 
-            digits
+            digits,
+
+            `0${d1} ${d2} ${d3}`,
+
+            `+27 ${d1} ${d2} ${d3}`,
+
+            `27 ${d1} ${d2} ${d3}`,
+
+            `+27${d1} ${d2} ${d3}`,
+
+            `0${d1}-${d2}-${d3}`
         ];
     },
 
@@ -509,6 +623,11 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         try {
 
+            if (!this.recaptchaVerifier) {
+                this.prepareRecaptcha();
+            }
+
+
             this.confirmationResult =
 
                 await firebase
@@ -540,6 +659,11 @@ window.ASIYE_PASSENGER_LOGIN = {
 
 
             this.startResendTimer();
+
+
+            setTimeout(() => {
+                document.getElementById('passengerOtpInput')?.focus();
+            }, 150);
 
 
         } catch (error) {
@@ -581,6 +705,31 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
+        const errorElement =
+            document.getElementById(
+                'otpError'
+            );
+
+
+        const button =
+            document.getElementById(
+                'verifyOtpButton'
+            );
+
+
+        if (!this.confirmationResult) {
+
+            if (errorElement) {
+                errorElement.textContent =
+                    'Please request a verification code first.';
+            }
+
+            this.showStep('loginStep');
+
+            return;
+        }
+
+
         const code =
 
             String(
@@ -597,16 +746,30 @@ window.ASIYE_PASSENGER_LOGIN = {
             code.length !== 6
         ) {
 
-            document
-                .getElementById(
-                    'otpError'
-                )
-                .textContent =
-                'Enter the 6-digit verification code.';
+            if (errorElement) {
+                errorElement.textContent =
+                    'Enter the 6-digit verification code.';
+            }
 
             return;
         }
 
+
+        if (errorElement) {
+            errorElement.textContent = '';
+        }
+
+
+        if (button) {
+            button.disabled = true;
+            button.innerHTML = `
+                <i class="fas fa-circle-notch fa-spin"></i>
+                Verifying...
+            `;
+        }
+
+
+        let authUser = null;
 
         try {
 
@@ -618,16 +781,12 @@ window.ASIYE_PASSENGER_LOGIN = {
                         code
                     );
 
-
-            await this.afterAuthentication(
-                result.user
-            );
-
+            authUser = result.user;
 
         } catch (error) {
 
             console.error(
-                'Passenger OTP failed:',
+                'Passenger OTP confirm failed:',
                 error
             );
 
@@ -636,6 +795,53 @@ window.ASIYE_PASSENGER_LOGIN = {
                 error,
                 'otp'
             );
+
+
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Verify & continue';
+            }
+
+            return;
+        }
+
+
+        try {
+
+            this.showStep(
+                'profileCheckStep'
+            );
+
+
+            await this.afterAuthentication(
+                authUser
+            );
+
+
+        } catch (profileError) {
+
+            console.warn(
+                'Post-auth profile setup warning:',
+                profileError
+            );
+
+
+            await this.completeLogin(
+                authUser.uid,
+                {
+                    name: authUser.displayName || 'Passenger',
+                    phone: authUser.phoneNumber || this.currentPhone || ''
+                },
+                authUser
+            );
+
+
+        } finally {
+
+            if (button) {
+                button.disabled = false;
+                button.textContent = 'Verify & continue';
+            }
         }
     },
 
@@ -899,176 +1105,239 @@ window.ASIYE_PASSENGER_LOGIN = {
          * 1. Normal Firebase UID.
          */
 
-        const directSnapshot =
+        try {
 
-            await firebase
-                .database()
-                .ref(
-                    `commuters/${user.uid}`
-                )
-                .once(
-                    'value'
+            const directSnapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${user.uid}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            if (
+                directSnapshot.exists()
+            ) {
+
+                return {
+
+                    id:
+                        user.uid,
+
+                    data:
+                        directSnapshot.val()
+                };
+            }
+
+
+            /*
+             * 1b. Linked authUid index
+             */
+
+            const authUidSnapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        'commuters'
+                    )
+                    .orderByChild(
+                        'authUid'
+                    )
+                    .equalTo(
+                        user.uid
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            if (
+                authUidSnapshot.exists()
+            ) {
+
+                let match = null;
+
+                authUidSnapshot.forEach(
+                    child => {
+
+                        if (!match) {
+
+                            match = {
+
+                                id:
+                                    child.key,
+
+                                data:
+                                    child.val()
+                            };
+                        }
+                    }
                 );
 
 
-        if (
-            directSnapshot.exists()
-        ) {
+                if (match) {
 
-            return {
-
-                id:
-                    user.uid,
-
-                data:
-                    directSnapshot.val()
-            };
-        }
+                    return match;
+                }
+            }
 
 
-        /*
-         * 2. Legacy phone lookup.
-         */
+            /*
+             * 2. Legacy phone lookup.
+             */
 
-        const variants =
+            const variants =
 
-            this.buildPhoneVariants(
+                this.buildPhoneVariants(
 
-                user.phoneNumber ||
-                this.currentPhone
+                    user.phoneNumber ||
+                    this.currentPhone
+                );
+
+
+            for (
+                const phone
+                of variants
+            ) {
+
+                const phoneSnapshot =
+
+                    await firebase
+                        .database()
+                        .ref(
+                            'commuters'
+                        )
+                        .orderByChild(
+                            'phone'
+                        )
+                        .equalTo(
+                            phone
+                        )
+                        .once(
+                            'value'
+                        );
+
+
+                if (
+                    phoneSnapshot.exists()
+                ) {
+
+                    let match =
+                        null;
+
+
+                    phoneSnapshot.forEach(
+                        child => {
+
+                            if (!match) {
+
+                                match = {
+
+                                    id:
+                                        child.key,
+
+                                    data:
+                                        child.val()
+                                };
+                            }
+                        }
+                    );
+
+
+                    if (match) {
+
+                        await this.attachAuthIdentity(
+
+                            match.id,
+
+                            user
+                        );
+
+
+                        return match;
+                    }
+                }
+            }
+
+
+            /*
+             * 3. Email lookup.
+             */
+
+            if (
+                user.email
+            ) {
+
+                const emailSnapshot =
+
+                    await firebase
+                        .database()
+                        .ref(
+                            'commuters'
+                        )
+                        .orderByChild(
+                            'email'
+                        )
+                        .equalTo(
+                            user.email
+                        )
+                        .once(
+                            'value'
+                        );
+
+
+                if (
+                    emailSnapshot.exists()
+                ) {
+
+                    let match =
+                        null;
+
+
+                    emailSnapshot.forEach(
+                        child => {
+
+                            if (!match) {
+
+                                match = {
+
+                                    id:
+                                        child.key,
+
+                                    data:
+                                        child.val()
+                                };
+                            }
+                        }
+                    );
+
+
+                    if (match) {
+
+                        await this.attachAuthIdentity(
+
+                            match.id,
+
+                            user
+                        );
+
+
+                        return match;
+                    }
+                }
+            }
+
+        } catch (error) {
+
+            console.warn(
+                'Passenger profile lookup query warning:',
+                error
             );
-
-
-        for (
-            const phone
-            of variants
-        ) {
-
-            const phoneSnapshot =
-
-                await firebase
-                    .database()
-                    .ref(
-                        'commuters'
-                    )
-                    .orderByChild(
-                        'phone'
-                    )
-                    .equalTo(
-                        phone
-                    )
-                    .once(
-                        'value'
-                    );
-
-
-            if (
-                phoneSnapshot.exists()
-            ) {
-
-                let match =
-                    null;
-
-
-                phoneSnapshot.forEach(
-                    child => {
-
-                        if (!match) {
-
-                            match = {
-
-                                id:
-                                    child.key,
-
-                                data:
-                                    child.val()
-                            };
-                        }
-                    }
-                );
-
-
-                if (match) {
-
-                    await this.attachAuthIdentity(
-
-                        match.id,
-
-                        user
-                    );
-
-
-                    return match;
-                }
-            }
-        }
-
-
-        /*
-         * 3. Email lookup.
-         */
-
-        if (
-            user.email
-        ) {
-
-            const emailSnapshot =
-
-                await firebase
-                    .database()
-                    .ref(
-                        'commuters'
-                    )
-                    .orderByChild(
-                        'email'
-                    )
-                    .equalTo(
-                        user.email
-                    )
-                    .once(
-                        'value'
-                    );
-
-
-            if (
-                emailSnapshot.exists()
-            ) {
-
-                let match =
-                    null;
-
-
-                emailSnapshot.forEach(
-                    child => {
-
-                        if (!match) {
-
-                            match = {
-
-                                id:
-                                    child.key,
-
-                                data:
-                                    child.val()
-                            };
-                        }
-                    }
-                );
-
-
-                if (match) {
-
-                    await this.attachAuthIdentity(
-
-                        match.id,
-
-                        user
-                    );
-
-
-                    return match;
-                }
-            }
         }
 
 
@@ -1085,38 +1354,49 @@ window.ASIYE_PASSENGER_LOGIN = {
         user
     ) {
 
-        await firebase
-            .database()
-            .ref(
-                `commuters/${commuterId}`
-            )
-            .update({
+        try {
 
-                authUid:
-                    user.uid,
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${commuterId}`
+                )
+                .update({
 
-                authPhone:
-                    user.phoneNumber ||
-                    null,
+                    authUid:
+                        user.uid,
 
-                authEmail:
-                    user.email ||
-                    null,
+                    authPhone:
+                        user.phoneNumber ||
+                        this.currentPhone ||
+                        null,
 
-                authProvider:
+                    authEmail:
+                        user.email ||
+                        null,
 
-                    user.providerData?.[0]
-                        ?.providerId ||
-                    null,
+                    authProvider:
 
-                authLinkedAt:
+                        user.providerData?.[0]
+                            ?.providerId ||
+                        'phone',
 
-                    firebase
-                        .database
-                        .ServerValue
-                        .TIMESTAMP
+                    authLinkedAt:
 
-            });
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+
+                });
+
+        } catch (error) {
+
+            console.warn(
+                'Could not attach auth identity to commuter:',
+                error
+            );
+        }
     },
 
 
@@ -1203,14 +1483,24 @@ window.ASIYE_PASSENGER_LOGIN = {
         };
 
 
-        await firebase
-            .database()
-            .ref(
-                `commuters/${user.uid}`
-            )
-            .set(
-                profile
+        try {
+
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${user.uid}`
+                )
+                .set(
+                    profile
+                );
+
+        } catch (saveError) {
+
+            console.warn(
+                'Could not save new passenger profile directly:',
+                saveError
             );
+        }
 
 
         await this.completeLogin(
@@ -1234,15 +1524,20 @@ window.ASIYE_PASSENGER_LOGIN = {
         user
     ) {
 
+        const id =
+            commuterId ||
+            user.uid;
+
+
         localStorage.setItem(
             'userId',
-            commuterId
+            id
         );
 
 
         localStorage.setItem(
             'commuterId',
-            commuterId
+            id
         );
 
 
@@ -1254,8 +1549,68 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         localStorage.setItem(
             'userType',
-            'passenger'
+            'commuter'
         );
+
+
+        if (
+            user.phoneNumber ||
+            this.currentPhone
+        ) {
+
+            localStorage.setItem(
+                'passengerPhone',
+                user.phoneNumber ||
+                this.currentPhone
+            );
+        }
+
+
+        if (
+            commuterData?.name
+        ) {
+
+            localStorage.setItem(
+                'userName',
+                commuterData.name
+            );
+        }
+
+
+        const loginPayload =
+            JSON.stringify({
+
+                action:
+                    'onUserLoggedIn',
+
+                uid:
+                    id,
+
+                type:
+                    'commuter'
+            });
+
+
+        try {
+
+            if (
+                window.Asiye?.postMessage
+            ) {
+
+                window.Asiye.postMessage(
+                    loginPayload
+                );
+
+            } else if (
+                window.Android?.postMessage
+            ) {
+
+                window.Android.postMessage(
+                    loginPayload
+                );
+            }
+
+        } catch (_) {}
 
 
         console.log(
@@ -1265,7 +1620,7 @@ window.ASIYE_PASSENGER_LOGIN = {
 
         console.log(
             'Commuter ID:',
-            commuterId
+            id
         );
 
 
@@ -1288,7 +1643,7 @@ window.ASIYE_PASSENGER_LOGIN = {
                 );
 
             },
-            400
+            300
         );
     },
 
@@ -1305,6 +1660,14 @@ window.ASIYE_PASSENGER_LOGIN = {
 
             return;
         }
+
+
+        clearInterval(
+            this.resendInterval
+        );
+
+
+        this.prepareRecaptcha();
 
 
         const input =
@@ -1331,7 +1694,7 @@ window.ASIYE_PASSENGER_LOGIN = {
                 this.sendOtp();
 
             },
-            100
+            150
         );
     },
 
@@ -1460,7 +1823,23 @@ window.ASIYE_PASSENGER_LOGIN = {
             case 'auth/invalid-phone-number':
 
                 message =
-                    'Invalid mobile number.';
+                    'Invalid mobile number. Check and try again.';
+
+                break;
+
+
+            case 'auth/missing-phone-number':
+
+                message =
+                    'Enter your mobile number.';
+
+                break;
+
+
+            case 'auth/quota-exceeded':
+
+                message =
+                    'SMS verification is temporarily unavailable. Please try again later.';
 
                 break;
 
@@ -1484,7 +1863,23 @@ window.ASIYE_PASSENGER_LOGIN = {
             case 'auth/code-expired':
 
                 message =
-                    'The verification code expired.';
+                    'The verification code expired. Request a new one.';
+
+                break;
+
+
+            case 'auth/captcha-check-failed':
+
+                message =
+                    'Security verification failed. Please try again.';
+
+                break;
+
+
+            case 'auth/network-request-failed':
+
+                message =
+                    'Network error. Please check your internet connection.';
 
                 break;
         }
@@ -1642,70 +2037,6 @@ document.addEventListener(
     if (!login) return;
 
     const nativeChannel = () => window.Asiye || window.Android || null;
-    const pendingPhoneKey = 'asiyePendingPhoneAuthNumber';
-    const pendingVerificationKey = 'asiyePendingPhoneAuthVerificationId';
-
-    const savePendingPhoneState = (phone, verificationId = '') => {
-        if (phone) localStorage.setItem(pendingPhoneKey, phone);
-        if (verificationId) {
-            localStorage.setItem(pendingVerificationKey, verificationId);
-        } else {
-            localStorage.removeItem(pendingVerificationKey);
-        }
-    };
-
-    const clearPendingPhoneState = () => {
-        localStorage.removeItem(pendingPhoneKey);
-        localStorage.removeItem(pendingVerificationKey);
-    };
-
-    const restorePendingPhoneState = state => {
-        const phone =
-            String(state?.phone || localStorage.getItem(pendingPhoneKey) || '').trim();
-        const verificationId =
-            String(
-                state?.verificationId ||
-                localStorage.getItem(pendingVerificationKey) ||
-                ''
-            ).trim();
-
-        if (phone) {
-            login.currentPhone = phone;
-            const input = document.getElementById('passengerPhoneInput');
-            if (input) input.value = phone.replace(/^\+27/, '0');
-            localStorage.setItem(pendingPhoneKey, phone);
-        }
-
-        // A reCAPTCHA return can restore the app before codeSent reaches the
-        // current WebView. If native auth is still in progress, keep the login
-        // screen in OTP mode instead of sending the user back to phone entry.
-        if (verificationId) {
-            login.nativeVerificationId = verificationId;
-            localStorage.setItem(pendingVerificationKey, verificationId);
-
-            const display = document.getElementById('otpPhoneDisplay');
-            if (display) display.textContent = phone || login.currentPhone || '+27';
-
-            login.showStep('otpStep');
-            const otpStep = document.getElementById('otpStep');
-            const otpInput = document.getElementById('passengerOtpInput');
-            if (otpStep) {
-                otpStep.classList.add('active');
-                otpStep.style.display = 'block';
-                otpStep.removeAttribute('hidden');
-            }
-            if (otpInput) {
-                otpInput.style.display = 'block';
-                otpInput.style.visibility = 'visible';
-                otpInput.style.opacity = '1';
-                otpInput.disabled = false;
-                requestAnimationFrame(() => otpInput.focus());
-            }
-            if (!login.resendSeconds || login.resendSeconds <= 0) {
-                login.startResendTimer();
-            }
-        }
-    };
     const postNative = (message) => {
         const channel = nativeChannel();
         if (!channel || typeof channel.postMessage !== 'function') return false;
@@ -1798,6 +2129,70 @@ document.addEventListener(
     const login = window.ASIYE_PASSENGER_LOGIN;
     if (!login) return;
     const nativeChannel = () => window.Asiye || window.Android || null;
+    const pendingPhoneKey = 'asiyePendingPhoneAuthNumber';
+    const pendingVerificationKey = 'asiyePendingPhoneAuthVerificationId';
+
+    const savePendingPhoneState = (phone, verificationId = '') => {
+        if (phone) localStorage.setItem(pendingPhoneKey, phone);
+        if (verificationId) {
+            localStorage.setItem(pendingVerificationKey, verificationId);
+        } else {
+            localStorage.removeItem(pendingVerificationKey);
+        }
+    };
+
+    const clearPendingPhoneState = () => {
+        localStorage.removeItem(pendingPhoneKey);
+        localStorage.removeItem(pendingVerificationKey);
+    };
+
+    const restorePendingPhoneState = state => {
+        const phone =
+            String(state?.phone || localStorage.getItem(pendingPhoneKey) || '').trim();
+        const verificationId =
+            String(
+                state?.verificationId ||
+                localStorage.getItem(pendingVerificationKey) ||
+                ''
+            ).trim();
+
+        if (phone) {
+            login.currentPhone = phone;
+            const input = document.getElementById('passengerPhoneInput');
+            if (input) input.value = phone.replace(/^\+27/, '0');
+            localStorage.setItem(pendingPhoneKey, phone);
+        }
+
+        // A reCAPTCHA return can restore the app before codeSent reaches the
+        // current WebView. If native auth is still in progress, keep the login
+        // screen in OTP mode instead of sending the user back to phone entry.
+        if (verificationId) {
+            login.nativeVerificationId = verificationId;
+            localStorage.setItem(pendingVerificationKey, verificationId);
+
+            const display = document.getElementById('otpPhoneDisplay');
+            if (display) display.textContent = phone || login.currentPhone || '+27';
+
+            login.showStep('otpStep');
+            const otpStep = document.getElementById('otpStep');
+            const otpInput = document.getElementById('passengerOtpInput');
+            if (otpStep) {
+                otpStep.classList.add('active');
+                otpStep.style.display = 'block';
+                otpStep.removeAttribute('hidden');
+            }
+            if (otpInput) {
+                otpInput.style.display = 'block';
+                otpInput.style.visibility = 'visible';
+                otpInput.style.opacity = '1';
+                otpInput.disabled = false;
+                requestAnimationFrame(() => otpInput.focus());
+            }
+            if (!login.resendSeconds || login.resendSeconds <= 0) {
+                login.startResendTimer();
+            }
+        }
+    };
 
     // The installed Flutter app has a native Firebase phone-auth bridge.
     // Never initialize the browser reCAPTCHA verifier inside that WebView.
@@ -1807,6 +2202,8 @@ document.addEventListener(
         if (nativeChannel()) {
             try { this.recaptchaVerifier?.clear?.(); } catch (_) {}
             this.recaptchaVerifier = null;
+            const container = document.getElementById('recaptcha-container');
+            if (container) container.innerHTML = '';
             return;
         }
         return webPrepareRecaptcha();
