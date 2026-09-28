@@ -983,9 +983,26 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     if (_phoneVerificationNumber != cleanPhone) {
       _phoneVerificationNumber = cleanPhone;
       _phoneResendToken = null;
+      _phoneVerificationId = null;
     }
 
     try {
+      final existingUser =
+          FirebaseAuth.instance.currentUser;
+
+      if (existingUser != null &&
+          existingUser.phoneNumber != cleanPhone) {
+        await FirebaseAuth.instance.signOut();
+      }
+
+      if (mounted) {
+        setState(() {
+          _showNativeOtp = false;
+          _nativeOtpBusy = false;
+          _nativeOtpError = null;
+        });
+      }
+
       await _savePendingPhoneAuth(phone: cleanPhone);
 
       // Recover cleanly if Firebase initialization timed out during app startup.
@@ -1034,8 +1051,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           final message =
               error.message ?? error.code;
 
+          await _savePendingPhoneAuth(
+            clear: true,
+          );
+
           if (mounted) {
             setState(() {
+              _showNativeOtp = false;
               _nativeOtpBusy = false;
               _nativeOtpError = message;
             });
