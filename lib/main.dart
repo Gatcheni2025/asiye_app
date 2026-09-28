@@ -19,7 +19,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'face_scan_screen.dart';
-import 'dart:io' show Platform;
+import 'dart:io' show ContentType, HttpClient, HttpHeaders, Platform;
 
 bool _isFirebaseInitialized = false;
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
@@ -184,6 +184,149 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     );
   }
 
+  Future<void> _restoreNativePhoneAuthState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final phone = prefs.getString('pendingPhoneAuthNumber') ?? '';
+    final verificationId =
+        prefs.getString('pendingPhoneAuthVerificationId') ?? '';
+    final inProgress =
+        prefs.getBool('pendingPhoneAuthInProgress') ?? false;
+
+    if (!inProgress || phone.isEmpty || verificationId.isEmpty) {
+      return;
+    }
+
+    _phoneVerificationNumber = phone;
+    _phoneVerificationId = verificationId;
+
+    if (mounted) {
+      setState(() {
+        _showNativeOtp = true;
+        _nativeOtpBusy = false;
+        _nativeOtpError = null;
+      });
+    }
+  }
+
+  static const String _nativeAuthExchangeUrl =
+      'https://us-central1-asiye-80386.cloudfunctions.net/exchangeNativeAuthSession';
+
+  Future<Map<String, dynamic>> _exchangeNativeFirebaseSession(
+    User user,
+  ) async {
+    final idToken = await user.getIdToken(true);
+
+    if (idToken == null || idToken.isEmpty) {
+      throw Exception(
+        'Firebase did not return a valid authenticated session.',
+      );
+    }
+
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
+
+    try {
+      final request = await client
+          .postUrl(Uri.parse(_nativeAuthExchangeUrl))
+          .timeout(const Duration(seconds: 20));
+
+      request.headers.set(
+        HttpHeaders.authorizationHeader,
+        'Bearer $idToken',
+      );
+      request.headers.contentType = ContentType.json;
+      request.write('{}');
+
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
+      final responseBody = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 20));
+
+      Map<String, dynamic> payload = <String, dynamic>{};
+      if (responseBody.trim().isNotEmpty) {
+        final decoded = jsonDecode(responseBody);
+        if (decoded is Map) {
+          payload = Map<String, dynamic>.from(decoded);
+        }
+      }
+
+      final customToken =
+          payload['customToken']?.toString().trim() ?? '';
+      final returnedUid =
+          payload['uid']?.toString().trim() ?? '';
+
+      if (response.statusCode < 200 ||
+          response.statusCode >= 300 ||
+          customToken.isEmpty) {
+        final message =
+            payload['error']?.toString().trim();
+        throw Exception(
+          message?.isNotEmpty == true
+              ? message
+              : 'Unable to create the Asiye login session '
+                  '(HTTP ${response.statusCode}).',
+        );
+      }
+
+      if (returnedUid.isNotEmpty && returnedUid != user.uid) {
+        throw Exception(
+          'Authentication session mismatch. Please sign in again.',
+        );
+      }
+
+      return <String, dynamic>{
+        'customToken': customToken,
+        'uid': user.uid,
+      };
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<void> _sendNativeAuthSessionToWeb(
+    User user,
+    String provider,
+  ) async {
+    final exchange =
+        await _exchangeNativeFirebaseSession(user);
+
+    final payload = <String, dynamic>{
+      'provider': provider,
+      'customToken': exchange['customToken'],
+      'uid': user.uid,
+      'phoneNumber': user.phoneNumber ?? '',
+      'email': user.email ?? '',
+      'displayName': user.displayName ?? '',
+      'photoURL': user.photoURL ?? '',
+    };
+
+    await _controller?.runJavaScript(
+      "window.onNativeAuthSession?.(${jsonEncode(payload)});",
+    );
+  }
+
+  Future<void> _sendNativeAuthError(
+    String provider,
+    Object error,
+  ) async {
+    final message = error.toString().replaceFirst(
+      'Exception: ',
+      '',
+    );
+
+    final payload = <String, dynamic>{
+      'provider': provider,
+      'message': message,
+    };
+
+    await _controller?.runJavaScript(
+      "window.onNativeAuthSessionError?.(${jsonEncode(payload)});",
+    );
+  }
+
   Future<void> _openNotification(Map<String, dynamic> data) async {
     _pendingNotification = data;
     try {
@@ -296,6 +439,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   void initState() {
     super.initState();
     _initializeApp();
+    unawaited(_restoreNativePhoneAuthState());
   }
 
  Future<void> _initializeApp() async {
@@ -858,18 +1002,49 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         forceResendingToken: forceResend ? _phoneResendToken : null,
         verificationCompleted: (PhoneAuthCredential credential) async {
           try {
-            final result = await FirebaseAuth.instance.signInWithCredential(credential);
-            final token = await result.user?.getIdToken();
-            if (token != null) {
-              await _savePendingPhoneAuth(clear: true);
-              _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
+            final result =
+                await FirebaseAuth.instance.signInWithCredential(
+              credential,
+            );
+            final user = result.user;
+            if (user == null) {
+              throw Exception(
+                'Phone authentication did not return a user.',
+              );
             }
-          } catch (e) {
-            _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
+
+            await _sendNativeAuthSessionToWeb(
+              user,
+              'phone',
+            );
+            await _savePendingPhoneAuth(clear: true);
+
+            if (mounted) {
+              setState(() {
+                _showNativeOtp = false;
+                _nativeOtpBusy = false;
+                _nativeOtpError = null;
+              });
+            }
+          } catch (error) {
+            await _sendNativeAuthError('phone', error);
           }
         },
-        verificationFailed: (FirebaseAuthException e) {
-          _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.message ?? e.code)});");
+        verificationFailed: (FirebaseAuthException error) async {
+          final message =
+              error.message ?? error.code;
+
+          if (mounted) {
+            setState(() {
+              _nativeOtpBusy = false;
+              _nativeOtpError = message;
+            });
+          }
+
+          await _sendNativeAuthError(
+            'phone',
+            Exception(message),
+          );
         },
         codeSent: (String verificationId, int? resendToken) async {
           _phoneVerificationNumber = cleanPhone;
@@ -918,53 +1093,107 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
-  Future<void> _verifyPhoneOtp(String verificationId, String code) async {
+  Future<void> _verifyPhoneOtp(
+    String verificationId,
+    String code,
+  ) async {
     try {
-      if (mounted) setState(() { _nativeOtpBusy = true; _nativeOtpError = null; });
-      final prefs = await SharedPreferences.getInstance();
+      if (mounted) {
+        setState(() {
+          _nativeOtpBusy = true;
+          _nativeOtpError = null;
+        });
+      }
+
+      final digits =
+          code.replaceAll(RegExp(r'[^0-9]'), '');
+      final prefs =
+          await SharedPreferences.getInstance();
       final resolvedVerificationId =
           verificationId.isNotEmpty
               ? verificationId
               : (_phoneVerificationId ??
-                  prefs.getString('pendingPhoneAuthVerificationId') ??
+                  prefs.getString(
+                    'pendingPhoneAuthVerificationId',
+                  ) ??
                   '');
 
-      if (resolvedVerificationId.isEmpty || code.length != 6) {
-        throw Exception('Enter the 6-digit verification code.');
+      if (resolvedVerificationId.isEmpty ||
+          digits.length != 6) {
+        throw Exception(
+          'Enter the 6-digit verification code.',
+        );
       }
-      final credential = PhoneAuthProvider.credential(
-        verificationId: resolvedVerificationId,
-        smsCode: code,
+
+      User? user = FirebaseAuth.instance.currentUser;
+
+      // If the OTP was already accepted natively but the WebView handoff
+      // failed, retry only the session exchange instead of consuming the
+      // verification code a second time.
+      if (user == null ||
+          (_phoneVerificationNumber != null &&
+              user.phoneNumber != _phoneVerificationNumber)) {
+        final credential =
+            PhoneAuthProvider.credential(
+          verificationId: resolvedVerificationId,
+          smsCode: digits,
+        );
+
+        final result =
+            await FirebaseAuth.instance.signInWithCredential(
+          credential,
+        );
+        user = result.user;
+      }
+
+      if (user == null) {
+        throw Exception(
+          'Phone authentication did not return a user.',
+        );
+      }
+
+      await _sendNativeAuthSessionToWeb(
+        user,
+        'phone',
       );
-      final result = await FirebaseAuth.instance.signInWithCredential(credential);
-      final token = await result.user?.getIdToken();
-      if (token == null) throw Exception('Unable to create the authenticated session.');
       await _savePendingPhoneAuth(clear: true);
 
-      // Keep the native layer visible long enough to confirm success, then hand
-      // the authenticated token to the role-specific WebView login flow.
       if (mounted) {
         setState(() {
           _nativeOtpBusy = false;
           _nativeOtpError = null;
+          _showNativeOtp = false;
         });
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('OTP verified successfully. Signing you in...'),
+            content: Text(
+              'OTP verified successfully. Signing you in...',
+            ),
             duration: Duration(seconds: 2),
           ),
         );
       }
+    } catch (error) {
+      final message = error
+          .toString()
+          .replaceFirst(
+            'Exception: ',
+            '',
+          );
 
-      await _controller?.runJavaScript(
-        "window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});",
+      if (mounted) {
+        setState(() {
+          _nativeOtpBusy = false;
+          _nativeOtpError = message;
+          _showNativeOtp = true;
+        });
+      }
+
+      await _sendNativeAuthError(
+        'phone',
+        error,
       );
-
-      if (mounted) setState(() { _showNativeOtp = false; });
-    } catch (e) {
-      final message = e.toString().replaceFirst('Exception: ', '');
-      if (mounted) setState(() { _nativeOtpBusy = false; _nativeOtpError = message; });
-      _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
     }
   }
 
@@ -1146,13 +1375,36 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   }
 
   Future<void> _performLogout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
-    await _googleSignIn.signOut().catchError((_) => null);
+    final prefs =
+        await SharedPreferences.getInstance();
 
-    // Explicitly wipe the JS memory before redirect
-    _controller?.runJavaScript("localStorage.clear(); sessionStorage.clear();");
-    _controller?.loadFlutterAsset('assets/passenger-v2/login.html');
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {}
+
+    try {
+      await _googleSignIn.signOut();
+    } catch (_) {}
+
+    await _savePendingPhoneAuth(clear: true);
+    await prefs.clear();
+
+    _nativeOtpController.clear();
+
+    if (mounted) {
+      setState(() {
+        _showNativeOtp = false;
+        _nativeOtpBusy = false;
+        _nativeOtpError = null;
+      });
+    }
+
+    await _controller?.runJavaScript(
+      "localStorage.clear(); sessionStorage.clear();",
+    );
+    await _controller?.loadFlutterAsset(
+      'assets/passenger-v2/login.html',
+    );
   }
 
   Future<void> _getCurrentLocation({bool highAccuracy = true}) async {
@@ -1225,62 +1477,115 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _signInWithGoogle() async {
     try {
-      await _googleSignIn.signOut().catchError((_) => null);
-      final GoogleSignInAccount account = await _googleSignIn.authenticate();
+      try {
+        await FirebaseAuth.instance.signOut();
+      } catch (_) {}
 
-      final GoogleSignInAuthentication auth = account.authentication;
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
 
-      final Map<String, dynamic> userData = {
-        "email": account.email,
-        "displayName": account.displayName ?? "",
-        "idToken": auth.idToken ?? "",
-        "accessToken": "",
-        "photoUrl": account.photoUrl ?? "",
-      };
+      final account =
+          await _googleSignIn.authenticate();
+      final auth =
+          account.authentication;
+      final idToken =
+          auth.idToken;
 
-      _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginSuccess === 'function') { window.onGoogleNativeLoginSuccess(${jsonEncode(userData)}); }");
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      if (e.toString().toLowerCase().contains("canceled")) return;
-      _controller?.runJavaScript("if(typeof window.onGoogleNativeLoginError === 'function') { window.onGoogleNativeLoginError('${e.toString().replaceAll("'", "\\'")}'); }");
+      if (idToken == null ||
+          idToken.isEmpty) {
+        throw Exception(
+          'Google did not return a valid identity token.',
+        );
+      }
+
+      final credential =
+          GoogleAuthProvider.credential(
+        idToken: idToken,
+      );
+
+      final result =
+          await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final user =
+          result.user;
+
+      if (user == null) {
+        throw Exception(
+          'Google authentication did not return a user.',
+        );
+      }
+
+      await _sendNativeAuthSessionToWeb(
+        user,
+        'google',
+      );
+    } catch (error) {
+      final lower =
+          error.toString().toLowerCase();
+
+      if (lower.contains('cancelled') ||
+          lower.contains('canceled')) {
+        await _sendNativeAuthError(
+          'google',
+          Exception('Cancelled'),
+        );
+        return;
+      }
+
+      await _sendNativeAuthError(
+        'google',
+        error,
+      );
     }
   }
 
   Future<void> _signInWithApple() async {
     try {
-      // Start Apple authentication from a clean native Firebase session.
-      // On Android this uses a Custom Tab; on iOS Firebase uses the native
-      // Apple provider. The Android manifest must not use an empty taskAffinity
-      // or the browser cannot return reliably to Asiye.
       try {
         await FirebaseAuth.instance.signOut();
       } catch (_) {}
 
-      final appleProvider = AppleAuthProvider();
-      appleProvider.addScope('email');
-      appleProvider.addScope('name');
-      final result = await FirebaseAuth.instance.signInWithProvider(appleProvider);
-      final token = await result.user?.getIdToken();
+      final provider =
+          AppleAuthProvider()
+            ..addScope('email')
+            ..addScope('name');
 
-      if (token == null || token.isEmpty) {
-        throw Exception('Apple sign-in did not return an authenticated Firebase session.');
+      final result =
+          await FirebaseAuth.instance.signInWithProvider(
+        provider,
+      );
+      final user =
+          result.user;
+
+      if (user == null) {
+        throw Exception(
+          'Apple authentication did not return a user.',
+        );
       }
 
-      final Map<String, dynamic> userData = {
-        "firebaseIdToken": token,
-        "email": result.user?.email ?? "",
-        "displayName": result.user?.displayName ?? "",
-      };
+      await _sendNativeAuthSessionToWeb(
+        user,
+        'apple',
+      );
+    } catch (error) {
+      final lower =
+          error.toString().toLowerCase();
 
-      _controller?.runJavaScript("if(typeof window.onAppleNativeLoginSuccess === 'function') { window.onAppleNativeLoginSuccess(${jsonEncode(userData)}); }");
-    } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
-      final lower = e.toString().toLowerCase();
-      final String errorMsg =
-          (lower.contains("canceled") || lower.contains("cancelled"))
-              ? "Cancelled"
-              : e.toString();
-      _controller?.runJavaScript("if(typeof window.onAppleNativeLoginError === 'function') { window.onAppleNativeLoginError('${errorMsg.replaceAll("'", "\\'")}'); }");
+      if (lower.contains('cancelled') ||
+          lower.contains('canceled')) {
+        await _sendNativeAuthError(
+          'apple',
+          Exception('Cancelled'),
+        );
+        return;
+      }
+
+      await _sendNativeAuthError(
+        'apple',
+        error,
+      );
     }
   }
 
