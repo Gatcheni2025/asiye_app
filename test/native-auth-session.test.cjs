@@ -75,7 +75,8 @@ function createContext(role = 'passenger', options = {}) {
             log: () => {},
             warn: () => {},
             error: () => {}
-        }
+        },
+        queueMicrotask: fn => fn()
     };
 
     if (role === 'driver') {
