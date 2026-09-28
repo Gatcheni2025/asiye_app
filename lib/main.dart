@@ -113,6 +113,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   int? _phoneResendToken;
   String? _phoneVerificationNumber;
   String? _phoneVerificationId;
+  bool _showNativeOtp = false;
+  bool _nativeOtpBusy = false;
+  String? _nativeOtpError;
+  final TextEditingController _nativeOtpController = TextEditingController();
 
   Future<void> _savePendingPhoneAuth({
     String? phone,
@@ -201,6 +205,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _messageSubscription?.cancel();
     _openedSubscription?.cancel();
     _navigationTts.stop();
+    _nativeOtpController.dispose();
     super.dispose();
   }
 
@@ -871,12 +876,21 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             verificationId: verificationId,
           );
 
+          if (mounted) {
+            setState(() {
+              _showNativeOtp = true;
+              _nativeOtpBusy = false;
+              _nativeOtpError = null;
+              _nativeOtpController.clear();
+            });
+          }
+
           await _controller?.runJavaScript(
             "window.onNativePhoneCodeSent?.(${jsonEncode(verificationId)}, ${jsonEncode(cleanPhone)});",
           );
 
-          // Run the restoration path too. This is intentionally idempotent and
-          // covers the race where login.js was recreated while reCAPTCHA returned.
+          // Keep the WebView in sync as a fallback, but the OTP entry itself is
+          // now native so a reCAPTCHA/WebView reload cannot hide it.
           await _restorePendingPhoneAuthToWeb();
         },
         codeAutoRetrievalTimeout: (String verificationId) {
@@ -899,6 +913,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _verifyPhoneOtp(String verificationId, String code) async {
     try {
+      if (mounted) setState(() { _nativeOtpBusy = true; _nativeOtpError = null; });
       final prefs = await SharedPreferences.getInstance();
       final resolvedVerificationId =
           verificationId.isNotEmpty
@@ -918,8 +933,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       final token = await result.user?.getIdToken();
       if (token == null) throw Exception('Unable to create the authenticated session.');
       await _savePendingPhoneAuth(clear: true);
+      if (mounted) setState(() { _showNativeOtp = false; _nativeOtpBusy = false; });
       _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
     } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      if (mounted) setState(() { _nativeOtpBusy = false; _nativeOtpError = message; });
       _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
     }
   }
@@ -1239,6 +1257,91 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
+  Widget _buildNativeOtpCard() {
+    final phone = _phoneVerificationNumber ?? '';
+    return Positioned.fill(
+      child: Material(
+        color: Colors.black54,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 430),
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text('Enter verification code',
+                      style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.black)),
+                    const SizedBox(height: 8),
+                    Text('We sent a 6-digit OTP to $phone',
+                      style: const TextStyle(fontSize: 15, color: Colors.black54)),
+                    const SizedBox(height: 22),
+                    TextField(
+                      controller: _nativeOtpController,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      maxLength: 6,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: 8),
+                      decoration: InputDecoration(
+                        counterText: '',
+                        hintText: '000000',
+                        errorText: _nativeOtpError,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      onChanged: (value) {
+                        final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+                        if (digits != value) {
+                          _nativeOtpController.value = TextEditingValue(
+                            text: digits,
+                            selection: TextSelection.collapsed(offset: digits.length),
+                          );
+                        }
+                      },
+                      onSubmitted: (_) {
+                        if (!_nativeOtpBusy && _nativeOtpController.text.length == 6) {
+                          _verifyPhoneOtp('', _nativeOtpController.text);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 56,
+                      child: FilledButton(
+                        onPressed: _nativeOtpBusy ? null : () {
+                          _verifyPhoneOtp('', _nativeOtpController.text.trim());
+                        },
+                        style: FilledButton.styleFrom(backgroundColor: Colors.black),
+                        child: _nativeOtpBusy
+                          ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Text('Verify & sign in', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _nativeOtpBusy ? null : () {
+                        if (_phoneVerificationNumber != null) {
+                          _startPhoneSignIn(_phoneVerificationNumber!, forceResend: true);
+                        }
+                      },
+                      child: const Text('Resend code'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1247,6 +1350,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         children: [
           if (_controller != null) WebViewWidget(controller: _controller!),
           if (_controller == null || _isLoading) _buildNativePreloader(),
+          if (_showNativeOtp) _buildNativeOtpCard(),
         ],
       ),
     );
