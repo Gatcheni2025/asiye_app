@@ -933,8 +933,27 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       final token = await result.user?.getIdToken();
       if (token == null) throw Exception('Unable to create the authenticated session.');
       await _savePendingPhoneAuth(clear: true);
-      if (mounted) setState(() { _showNativeOtp = false; _nativeOtpBusy = false; });
-      _controller?.runJavaScript("window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});");
+
+      // Keep the native layer visible long enough to confirm success, then hand
+      // the authenticated token to the role-specific WebView login flow.
+      if (mounted) {
+        setState(() {
+          _nativeOtpBusy = false;
+          _nativeOtpError = null;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('OTP verified successfully. Signing you in...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      await _controller?.runJavaScript(
+        "window.onNativePhoneAuthSuccess?.(${jsonEncode(token)});",
+      );
+
+      if (mounted) setState(() { _showNativeOtp = false; });
     } catch (e) {
       final message = e.toString().replaceFirst('Exception: ', '');
       if (mounted) setState(() { _nativeOtpBusy = false; _nativeOtpError = message; });
