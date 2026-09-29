@@ -1059,3 +1059,36 @@ button:disabled {
     }
 
 }
+
+/* Premium login refresh — unified passenger/driver authentication */
+.login-card {
+  border: 1px solid rgba(17,17,17,.06);
+  box-shadow: 0 24px 70px rgba(17,17,17,.10);
+}
+.login-step { animation: asiyeAuthIn .22s ease both; }
+.phone-wrapper, .phone-input-wrapper, .otp-input {
+  box-shadow: inset 0 0 0 1px rgba(17,17,17,.04);
+}
+.otp-input {
+  letter-spacing: .42em;
+  font-variant-numeric: tabular-nums;
+}
+.login-error:empty { display:none; }
+.login-error:not(:empty) {
+  margin-top: 12px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: #fff4f4;
+  line-height: 1.45;
+}
+#profileCheckStep.active {
+  min-height: 260px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+}
+@keyframes asiyeAuthIn {
+  from { opacity:0; transform:translateY(8px); }
+  to { opacity:1; transform:translateY(0); }
+}
