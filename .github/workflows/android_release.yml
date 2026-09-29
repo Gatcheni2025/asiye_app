@@ -98,7 +98,27 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
           echo "Release signing certificate fingerprints:"
-          keytool -list -v -keystore android/app/asiye-release.jks -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD" | grep -E "SHA1:|SHA256:"
+          CERTS=$(keytool -list -v -keystore android/app/asiye-release.jks -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD")
+          echo "$CERTS" | grep -E "SHA1:|SHA256:"
+          ACTUAL_SHA1=$(echo "$CERTS" | sed -n 's/.*SHA1: //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          ACTUAL_SHA256=$(echo "$CERTS" | sed -n 's/.*SHA256: //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          echo "RELEASE_SHA1=$ACTUAL_SHA1" >> "$GITHUB_ENV"
+          echo "RELEASE_SHA256=$ACTUAL_SHA256" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json, os, sys
+          data=json.load(open("android/app/google-services.json", encoding="utf-8"))
+          hashes=set()
+          for client in data.get("client", []):
+              for oauth in client.get("oauth_client", []):
+                  info=oauth.get("android_info") or {}
+                  if info.get("package_name")=="com.asiyeapp.asiye" and info.get("certificate_hash"):
+                      hashes.add(info["certificate_hash"].lower())
+          sha1=os.environ.get("RELEASE_SHA1","").lower()
+          print("Firebase google-services SHA-1 fingerprints:", ", ".join(sorted(hashes)) or "NONE")
+          if sha1 and sha1 not in hashes:
+              print("::error::Release SHA-1 is not registered in android/app/google-services.json. Firebase Phone Auth reCAPTCHA will fail.")
+              sys.exit(1)
+          PY
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
