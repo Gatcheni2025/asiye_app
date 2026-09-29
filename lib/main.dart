@@ -136,6 +136,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       await prefs.remove('pendingPhoneAuthNumber');
       await prefs.remove('pendingPhoneAuthVerificationId');
       await prefs.remove('pendingPhoneAuthInProgress');
+      await prefs.remove('pendingPhoneAuthStartedAt');
       return;
     }
 
@@ -143,6 +144,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _phoneVerificationNumber = phone;
       await prefs.setString('pendingPhoneAuthNumber', phone);
       await prefs.setBool('pendingPhoneAuthInProgress', true);
+      await prefs.setInt(
+        'pendingPhoneAuthStartedAt',
+        DateTime.now().millisecondsSinceEpoch,
+      );
     }
 
     if (verificationId != null && verificationId.isNotEmpty) {
@@ -193,6 +198,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         prefs.getBool('pendingPhoneAuthInProgress') ?? false;
 
     if (!inProgress || phone.isEmpty || verificationId.isEmpty) {
+      return;
+    }
+
+    // Do not resurrect an OTP prompt indefinitely on every fresh app launch.
+    // Firebase phone verification codes are short-lived; if the app was not
+    // actively returned from verification, reset to the normal login screen.
+    final startedAt = prefs.getInt('pendingPhoneAuthStartedAt') ?? 0;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (startedAt <= 0 || now - startedAt > const Duration(minutes: 5).inMilliseconds) {
+      await _savePendingPhoneAuth(clear: true);
       return;
     }
 
