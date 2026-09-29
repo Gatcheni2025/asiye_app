@@ -915,9 +915,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   void _handleJsCalls(String message) async {
     try {
       if (message == "triggerGoogleSignIn" || message == "startGoogleSignIn") {
-        _signInWithGoogle();
+        await _signInWithGoogle();
       } else if (message == "triggerAppleSignIn" || message == "startAppleSignIn") {
-        _signInWithApple();
+        await _signInWithApple();
       } else if (message == "performLogout") {
         _performLogout();
       } else if (message.startsWith("getCurrentLocation") || message.startsWith("requestLocation")) {
