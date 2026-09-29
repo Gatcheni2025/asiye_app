@@ -104,6 +104,8 @@ jobs:
           ACTUAL_SHA256=$(echo "$CERTS" | sed -n 's/.*SHA256: //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')
           echo "RELEASE_SHA1=$ACTUAL_SHA1" >> "$GITHUB_ENV"
           echo "RELEASE_SHA256=$ACTUAL_SHA256" >> "$GITHUB_ENV"
+          export RELEASE_SHA1="$ACTUAL_SHA1"
+          export RELEASE_SHA256="$ACTUAL_SHA256"
           python3 - <<'PY'
           import json, os, sys
           data=json.load(open("android/app/google-services.json", encoding="utf-8"))
