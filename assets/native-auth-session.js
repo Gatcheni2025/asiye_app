@@ -76,6 +76,10 @@
         'asiyePendingPhoneAuthNumber';
     const pendingVerificationKey =
         'asiyePendingPhoneAuthVerificationId';
+    const pendingStartedAtKey =
+        'asiyePendingPhoneAuthStartedAt';
+    const pendingTtlMs =
+        5 * 60 * 1000;
 
     let sessionPromise = null;
 
@@ -134,6 +138,10 @@
                 pendingPhoneKey,
                 phone
             );
+            localStorage.setItem(
+                pendingStartedAtKey,
+                String(Date.now())
+            );
         }
 
         if (verificationId) {
@@ -154,6 +162,9 @@
         );
         localStorage.removeItem(
             pendingVerificationKey
+        );
+        localStorage.removeItem(
+            pendingStartedAtKey
         );
 
         login.nativeVerificationId =
@@ -294,6 +305,28 @@
                     ) ||
                     ''
                 ).trim();
+
+            const startedAt =
+                Number(
+                    localStorage.getItem(
+                        pendingStartedAtKey
+                    ) || 0
+                );
+            const fresh =
+                startedAt > 0 &&
+                Date.now() - startedAt <
+                    pendingTtlMs;
+
+            // Never let stale OTP state take over the landing screen.
+            // Native callbacks with a current verificationId are authoritative;
+            // localStorage is only a short-lived recovery aid.
+            if (
+                !state?.verificationId &&
+                (!fresh || !verificationId)
+            ) {
+                clearPendingPhoneState();
+                return;
+            }
 
             if (phone) {
                 login.currentPhone =
