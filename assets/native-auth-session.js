@@ -853,6 +853,43 @@
             );
         };
 
+    const wireProviderButtons = () => {
+        const send = document.getElementById(ids.send);
+        const google = document.getElementById('googleLoginButton');
+        const apple = document.getElementById('appleLoginButton');
+
+        // Bind directly as well as overriding the login methods. This removes
+        // dependency on whichever listener an older role login script attached
+        // during DOMContentLoaded.
+        if (send && !send.dataset.asiyeNativeBound) {
+            send.dataset.asiyeNativeBound = '1';
+            send.addEventListener('click', event => {
+                if (!isInstalledApp()) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                login.sendOtp();
+            }, true);
+        }
+        if (google && !google.dataset.asiyeNativeBound) {
+            google.dataset.asiyeNativeBound = '1';
+            google.addEventListener('click', event => {
+                if (!isInstalledApp()) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                login.signInWithGoogle();
+            }, true);
+        }
+        if (apple && !apple.dataset.asiyeNativeBound) {
+            apple.dataset.asiyeNativeBound = '1';
+            apple.addEventListener('click', event => {
+                if (!isInstalledApp()) return;
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                login.signInWithApple();
+            }, true);
+        }
+    };
+
     /* ---------------------------------------------------------
        Native callbacks
        --------------------------------------------------------- */
@@ -934,6 +971,8 @@
                 payload || {}
             );
         };
+
+    wireProviderButtons();
 
     // Compatibility aliases for a partially upgraded WebView/native pair.
     window.onNativePhoneAuthSuccess =
