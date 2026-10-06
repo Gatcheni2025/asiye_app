@@ -1,5 +1,6 @@
 /* Shared passenger/driver chat. Access is enforced by Firebase database rules. */
 window.AsiyeTripChat = {
+    unread: new Map(),
     close() {
         if (this.query && this.listener) this.query.off('value', this.listener);
         this.query = null;
@@ -51,8 +52,11 @@ window.AsiyeTripChat = {
         dialog.addEventListener('cancel', event => { event.preventDefault(); this.close(); });
         const messages = dialog.querySelector('.trip-chat-messages');
         const status = dialog.querySelector('.trip-chat-status');
-        const ref = firebase.database().ref(`tripChats/${requestId}/${passengerId}`);
+        const roomKey = `${requestId}/${passengerId}`;
+        const ref = firebase.database().ref(`tripChats/${roomKey}`);
         const query = ref.orderByChild('createdAt').limitToLast(100);
+        this.unread.set(roomKey, 0);
+        this.updateBadge();
         this.query = query;
         this.listener = query.on('value', snapshot => {
             if (this.dialog !== dialog) return;
@@ -92,13 +96,44 @@ window.AsiyeTripChat = {
             } finally { button.disabled = false; }
         };
         dialog.showModal();
+    },
+    updateBadge() {
+        const total = [...this.unread.values()].reduce((sum, value) => sum + value, 0);
+        document.querySelectorAll('[data-trip-chat-badge]').forEach(node => {
+            node.textContent = total > 99 ? '99+' : String(total);
+            node.hidden = total === 0;
+        });
+    },
+    watch(request, requestId, passengerId) {
+        if (!requestId || !request || !firebase.auth().currentUser) return;
+        const driver = !!window.ASIYE_DRIVER;
+        const app = driver ? ASIYE_DRIVER : ASIYE;
+        if (!driver) passengerId = app.state.userId;
+        const members = request.type === 'club'
+            ? Object.keys(request.passengers || {})
+            : [request.commuterId];
+        passengerId ||= members[0];
+        if (!passengerId || !members.includes(passengerId)) return;
+        const roomKey = `${requestId}/${passengerId}`;
+        const ref = firebase.database().ref(`tripChats/${roomKey}`).orderByChild('createdAt').limitToLast(1);
+        let ready = false;
+        ref.on('value', snapshot => {
+            if (!ready) { ready = true; return; }
+            if (this.dialog) return;
+            let latest = null;
+            snapshot.forEach(child => { latest = child.val(); });
+            if (!latest || latest.senderUid === firebase.auth().currentUser?.uid) return;
+            this.unread.set(roomKey, (this.unread.get(roomKey) || 0) + 1);
+            this.updateBadge();
+            app.ui.toast(driver ? 'New message from passenger' : 'New message from your driver');
+        });
     }
 };
 document.addEventListener('DOMContentLoaded', () => {
     if (!window.ASIYE_DRIVER) return;
     const button = document.createElement('button');
     button.className = 'driver-chat-launch';
-    button.textContent = 'Message passenger';
+    button.innerHTML = 'Message passenger <span data-trip-chat-badge hidden>0</span>';
     button.onclick = () => AsiyeTripChat.open(ASIYE_DRIVER.trip.request, ASIYE_DRIVER.trip.requestId, ASIYE_DRIVER.trip.currentPassengerId);
     document.body.append(button);
 });
