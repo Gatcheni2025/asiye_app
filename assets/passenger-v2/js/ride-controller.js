@@ -150,6 +150,8 @@ ASIYE.ride = {
                     ASIYE.state.booking.request =
                         request;
 
+                    window.AsiyeTripChat?.watchTrip?.(request, requestId);
+
 
                     this.handleRequest(
                         request
