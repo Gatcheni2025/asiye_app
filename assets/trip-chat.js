@@ -1,6 +1,7 @@
 /* Shared passenger/driver chat. Access is enforced by Firebase database rules. */
 window.AsiyeTripChat = {
     unread: new Map(),
+    watches: new Map(),
     close() {
         if (this.query && this.listener) this.query.off('value', this.listener);
         this.query = null;
@@ -115,9 +116,10 @@ window.AsiyeTripChat = {
         passengerId ||= members[0];
         if (!passengerId || !members.includes(passengerId)) return;
         const roomKey = `${requestId}/${passengerId}`;
+        if (this.watches.has(roomKey)) return;
         const ref = firebase.database().ref(`tripChats/${roomKey}`).orderByChild('createdAt').limitToLast(1);
         let ready = false;
-        ref.on('value', snapshot => {
+        const listener = ref.on('value', snapshot => {
             if (!ready) { ready = true; return; }
             if (this.dialog) return;
             let latest = null;
@@ -127,6 +129,26 @@ window.AsiyeTripChat = {
             this.updateBadge();
             app.ui.toast(driver ? 'New message from passenger' : 'New message from your driver');
         });
+        this.watches.set(roomKey, { ref, listener });
+    },
+    watchTrip(request, requestId) {
+        if (!request || !requestId) return;
+        const driver = !!window.ASIYE_DRIVER;
+        if (driver && request.type === 'club') {
+            Object.keys(request.passengers || {}).forEach(id => this.watch(request, requestId, id));
+        } else {
+            this.watch(request, requestId);
+        }
+    },
+    stopWatchingTrip(requestId) {
+        const prefix = `${requestId}/`;
+        for (const [key, watch] of this.watches.entries()) {
+            if (!key.startsWith(prefix)) continue;
+            watch.ref.off('value', watch.listener);
+            this.watches.delete(key);
+            this.unread.delete(key);
+        }
+        this.updateBadge();
     }
 };
 document.addEventListener('DOMContentLoaded', () => {
