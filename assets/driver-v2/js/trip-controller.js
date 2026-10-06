@@ -112,6 +112,8 @@ ASIYE_DRIVER.trip = {
                         .activeRequest =
                         request;
 
+                    window.AsiyeTripChat?.watchTrip?.(request, requestId);
+
 
                     this.handleState(
                         request
