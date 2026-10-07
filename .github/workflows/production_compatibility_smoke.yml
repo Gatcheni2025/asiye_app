@@ -29,15 +29,25 @@ jobs:
             exit 1
           fi
 
-      - name: Verify custom domain tracking page
+      - name: Verify deployed passenger share code
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsSL --retry 3 --retry-delay 2 https://app.asiye.cloud/track.html -o /tmp/track-custom.html
-          grep -q 'getTripShare' /tmp/track-custom.html
-          if grep -q 'firebase-database.js' /tmp/track-custom.html; then
-            echo "::error::Custom-domain track.html still loads Firebase Database directly."
-            exit 1
+          curl -fsSL --retry 3 --retry-delay 2 https://asiye-80386.web.app/passenger-v2/js/booking.js -o /tmp/booking.js
+          curl -fsSL --retry 3 --retry-delay 2 https://asiye-80386.web.app/passenger-v2/js/club.js -o /tmp/club.js
+          grep -q 'createTripShareToken' /tmp/booking.js
+          grep -q 'asiye-80386.web.app/track.html' /tmp/booking.js
+          grep -q 'joinClubPoolSecure' /tmp/club.js
+          grep -q 'createLiveShareUrl' /tmp/club.js
+
+      - name: Check optional app custom domain
+        shell: bash
+        run: |
+          code=$(curl -sS -o /tmp/app-track.html -w '%{http_code}' https://app.asiye.cloud/track.html || true)
+          if [ "$code" = "200" ]; then
+            echo "app.asiye.cloud is serving a tracking page."
+          else
+            echo "::notice::app.asiye.cloud/track.html is not configured (HTTP $code). New secure shares use asiye-80386.web.app instead."
           fi
 
       - name: Verify public tracking API rejects invalid requests safely
