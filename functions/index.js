@@ -4878,17 +4878,14 @@ exports.confirmTripWalletReady =
 
 
 // =================================================================
-// --- AUTHENTICATED PROFILE IMAGE UPLOAD PROXY ---
+// --- AUTHENTICATED PROFILE IMAGE STORAGE ---
 // =================================================================
-// The installed WebView cannot reliably POST multipart data directly to the
-// legacy PHP host because browser CORS rules can block the request. Keep the
-// existing PHP storage service, but send the image through an authenticated
-// Firebase Function so the mobile app never depends on cross-origin PHP CORS.
-const PROFILE_UPLOAD_ENDPOINT =
-  "https://app.asiye.cloud/upload_handler.php";
-
-const PROFILE_UPLOAD_API_KEY =
-  "asiye_secure_upload_2025";
+// Profile scans are stored directly in Firebase Storage. The old PHP uploader
+// at app.asiye.cloud/upload_handler.php no longer exists and returned the
+// LiteSpeed 404 page seen on-device. Writing through Admin SDK also guarantees
+// the profile URL is allocated to the correct commuter/taxi record.
+const PROFILE_STORAGE_BUCKET =
+  "asiye-80386.firebasestorage.app";
 
 function safeProfileId(value) {
   const id =
@@ -4932,6 +4929,39 @@ async function profileOwnedByAuth(
   return (
     profile.authUid === authUid ||
     profile.userUid === authUid
+  );
+}
+
+function profileImageExtension(
+  mimeType
+) {
+  if (
+    mimeType === "image/png"
+  ) {
+    return "png";
+  }
+
+  if (
+    mimeType === "image/webp"
+  ) {
+    return "webp";
+  }
+
+  return "jpg";
+}
+
+function firebaseStorageDownloadUrl({
+  bucketName,
+  objectPath,
+  token
+}) {
+  return (
+    "https://firebasestorage.googleapis.com/v0/b/" +
+    encodeURIComponent(bucketName) +
+    "/o/" +
+    encodeURIComponent(objectPath) +
+    "?alt=media&token=" +
+    encodeURIComponent(token)
   );
 }
 
@@ -5096,143 +5126,163 @@ exports.uploadProfileImageProxy =
             });
         }
 
-        const requestedName =
-          String(
-            request.body?.filename ||
-            "profile.jpg"
-          )
-            .replace(
-              /[^A-Za-z0-9._-]/g,
-              "-"
-            )
-            .slice(
-              0,
-              100
-            ) ||
-          "profile.jpg";
-
-        const form =
-          new FormData();
-
-        form.append(
-          "file",
-          new Blob(
-            [bytes],
-            {
-              type:
-                mimeType
-            }
-          ),
-          requestedName
-        );
-
-        form.append(
-          "api_key",
-          PROFILE_UPLOAD_API_KEY
-        );
-
-        form.append(
-          "userId",
-          userId
-        );
-
-        form.append(
-          "purpose",
-          purpose
-        );
-
-        const uploadResponse =
-          await fetch(
-            PROFILE_UPLOAD_ENDPOINT,
-            {
-              method:
-                "POST",
-              body:
-                form
-            }
+        const extension =
+          profileImageExtension(
+            mimeType
           );
 
-        const rawText =
-          await uploadResponse
-            .text();
+        const roleFolder =
+          role === "driver"
+            ? "drivers"
+            : "passengers";
 
-        let payload =
-          {};
+        const objectPath =
+          `profile-images/${roleFolder}/${userId}/profile.${extension}`;
 
-        try {
-          payload =
-            JSON.parse(
-              rawText ||
-              "{}"
+        const downloadToken =
+          require("node:crypto")
+            .randomUUID();
+
+        const bucket =
+          admin.storage()
+            .bucket(
+              PROFILE_STORAGE_BUCKET
             );
-        } catch (_) {
-          payload = {
-            error:
-              rawText
-          };
-        }
 
-        const rawUrl =
-          String(
-            payload.url ||
-            payload.fileUrl ||
-            payload.file_url ||
-            ""
-          )
-            .trim();
-
-        if (
-          !uploadResponse.ok ||
-          !rawUrl ||
-          /error/i.test(
-            rawUrl
-          )
-        ) {
-          console.error(
-            "Profile image PHP upload failed",
-            {
-              status:
-                uploadResponse.status,
-              message:
-                payload.message ||
-                payload.error ||
-                rawText
-            }
+        const file =
+          bucket.file(
+            objectPath
           );
 
-          return response
-            .status(502)
-            .json({
-              error:
-                payload.message ||
-                payload.error ||
-                "Profile image storage failed."
-            });
-        }
+        await file.save(
+          bytes,
+          {
+            resumable:
+              false,
+            metadata: {
+              contentType:
+                mimeType,
+              cacheControl:
+                "private,max-age=300",
+              metadata: {
+                firebaseStorageDownloadTokens:
+                  downloadToken,
+                asiyeProfileRole:
+                  role,
+                asiyeProfileId:
+                  userId,
+                asiyeAuthUid:
+                  decoded.uid
+              }
+            }
+          }
+        );
+
+        const url =
+          firebaseStorageDownloadUrl({
+            bucketName:
+              PROFILE_STORAGE_BUCKET,
+            objectPath,
+            token:
+              downloadToken
+          });
+
+        const now =
+          admin.database
+            .ServerValue
+            .TIMESTAMP;
+
+        const patch =
+          role === "driver"
+            ? {
+                profile_picture_url:
+                  url,
+                profileImageUrl:
+                  url,
+                driverProfileImageUrl:
+                  url,
+                profilePhotoUrl:
+                  url,
+                photoURL:
+                  url,
+                faceScanCompleted:
+                  true,
+                faceScanVerified:
+                  true,
+                faceScanVerifiedAt:
+                  now,
+                profilePhotoUpdatedAt:
+                  now,
+                profileImageStoragePath:
+                  objectPath,
+                "documents/FACE":
+                  url
+              }
+            : {
+                profileImageUrl:
+                  url,
+                profile_picture_url:
+                  url,
+                profilePhotoUrl:
+                  url,
+                photoURL:
+                  url,
+                passengerProfileImageUrl:
+                  url,
+                faceScanCompleted:
+                  true,
+                faceScanVerified:
+                  true,
+                faceScanVerifiedAt:
+                  now,
+                profilePhotoUpdatedAt:
+                  now,
+                profileImageStoragePath:
+                  objectPath
+              };
+
+        await admin.database()
+          .ref(
+            `${rootName}/${userId}`
+          )
+          .update(
+            patch
+          );
 
         return response
           .status(200)
           .json({
             ok:
               true,
-            url:
-              rawUrl,
+            url,
             fileUrl:
-              rawUrl
+              url,
+            storagePath:
+              objectPath,
+            profileRoot:
+              rootName,
+            profileId:
+              userId
           });
 
       } catch (error) {
         console.error(
-          "Profile image proxy failed",
-          error
+          "Profile image storage failed",
+          {
+            code:
+              error?.code ||
+              "unknown",
+            message:
+              error?.message ||
+              String(error)
+          }
         );
 
         return response
           .status(500)
           .json({
             error:
-              error?.message ||
-              "Unable to save profile picture."
+              "Unable to save the profile picture. Please try again."
           });
       }
     }
