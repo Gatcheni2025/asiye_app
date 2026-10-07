@@ -179,9 +179,9 @@ test('Club passenger may update own member state but not another passenger', asy
   }));
 });
 
-test('real Club join transaction remains allowed for authenticated joining passenger', async () => {
+test('direct client Club join transaction is blocked; pool-wide joining is server-owned', async () => {
   const db = dbFor('club-join-auth');
-  await assertSucceeds(runTransaction(
+  await assertFails(runTransaction(
     ref(db, 'requests/club-open'),
     pool => {
       if (!pool) return pool;
@@ -219,6 +219,42 @@ test('passenger can notify assigned driver and unrelated user cannot forge that 
   await assertFails(set(
     ref(dbFor('attacker-auth'), 'notifications/taxis/driver-record/forged'),
     { requestId: 'trip1', type: 'passenger_message' }
+  ));
+});
+
+test('passenger cannot clear an assigned taxi or mark a trip completed', async () => {
+  await assertFails(update(ref(dbFor('passenger-auth'), 'requests/trip1'), {
+    taxiId: null
+  }));
+
+  await assertFails(update(ref(dbFor('passenger-auth'), 'requests/trip1'), {
+    status: 'completed'
+  }));
+});
+
+test('notification recipient may delete own notification but unrelated user may not', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'notifications/taxis/driver-record/delete-me'), {
+      requestId: 'trip1',
+      type: 'ride_request'
+    });
+  });
+
+  await assertSucceeds(set(
+    ref(dbFor('driver-auth'), 'notifications/taxis/driver-record/delete-me'),
+    null
+  ));
+
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'notifications/taxis/driver-record/keep-me'), {
+      requestId: 'trip1',
+      type: 'ride_request'
+    });
+  });
+
+  await assertFails(set(
+    ref(dbFor('attacker-auth'), 'notifications/taxis/driver-record/keep-me'),
+    null
   ));
 });
 
