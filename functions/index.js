@@ -4585,6 +4585,45 @@ exports.joinClubPoolSecure = onRequest(
           currentRequest: poolId
         });
 
+      const shareToken =
+        validTripShareToken(
+          request.body?.shareToken
+        );
+
+      if (shareToken) {
+        const tokenRef =
+          admin.database()
+            .ref(
+              `tripShareTokens/${shareToken}`
+            );
+
+        const tokenSnapshot =
+          await tokenRef
+            .once("value");
+
+        const share =
+          tokenSnapshot.val();
+
+        if (
+          share &&
+          share.requestId === poolId &&
+          share.issuedToUid === decoded.uid &&
+          String(
+            share.passengerId ||
+            ""
+          ) === passengerId
+        ) {
+          await tokenRef.update({
+            active:
+              true,
+            activatedAt:
+              admin.database
+                .ServerValue
+                .TIMESTAMP
+          });
+        }
+      }
+
       const saved = result.snapshot.val() || {};
 
       return response.status(200).json({
