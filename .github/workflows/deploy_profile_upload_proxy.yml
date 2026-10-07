@@ -12,6 +12,7 @@ permissions:
   contents: read
 
 # Deploy latest device-readiness fixes, including secure Go ride dispatch.
+# Includes server-side driver vehicle review to avoid protected-field permission errors.
 
 jobs:
   deploy:
@@ -56,5 +57,5 @@ jobs:
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:uploadProfileImageProxy,functions:confirmTripWalletReady,functions:dispatchGoRideRequest"
+          --only "functions:uploadProfileImageProxy,functions:confirmTripWalletReady,functions:dispatchGoRideRequest,functions:submitDriverVehicleForReview"
           --non-interactive
