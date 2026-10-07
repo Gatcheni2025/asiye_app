@@ -383,3 +383,175 @@ test('trip chat allows participants and blocks unrelated authenticated users', a
     }
   ));
 });
+
+
+test('passenger cannot mint wallet balance or payment markers from the client', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'commuters/p1'), {
+      walletBalance: 100,
+      credits: 100,
+      walletAppliedPayments: {
+        existing: {
+          provider: 'server',
+          amount: 100
+        }
+      },
+      walletUpdatedAt: 1
+    });
+  });
+
+  const db = dbFor('passenger-auth');
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    walletBalance: 9999
+  }));
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    credits: 9999
+  }));
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    walletAppliedPayments: {
+      forged: {
+        provider: 'paystack',
+        amount: 9999
+      }
+    }
+  }));
+
+  await assertSucceeds(update(ref(db, 'commuters/p1'), {
+    name: 'Passenger One Updated'
+  }));
+});
+
+test('wallet payment ledger is not readable or writable by normal clients', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'walletPayments/ASIYE-TEST-1234'), {
+      uid: 'passenger-auth',
+      passengerId: 'p1',
+      provider: 'paystack',
+      amount: 100,
+      status: 'initialized'
+    });
+  });
+
+  await assertFails(
+    get(ref(dbFor('passenger-auth'), 'walletPayments/ASIYE-TEST-1234'))
+  );
+
+  await assertFails(
+    set(ref(dbFor('passenger-auth'), 'walletPayments/ASIYE-FORGED-1'), {
+      uid: 'passenger-auth',
+      provider: 'paystack',
+      amount: 5000,
+      status: 'complete'
+    })
+  );
+});
+
+test('support ticket creation requires authenticated ownership and starts open', async () => {
+  const ownTicket = ref(dbFor('passenger-auth'), 'support_chats/ticket-own');
+
+  await assertSucceeds(set(ownTicket, {
+    ticketId: 'ticket-own',
+    userId: 'p1',
+    authUid: 'passenger-auth',
+    role: 'passenger',
+    subject: 'payment',
+    message: 'Please check my payment.',
+    status: 'open',
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  }));
+
+  await assertFails(set(
+    ref(dbFor('attacker-auth'), 'support_chats/ticket-forged'),
+    {
+      ticketId: 'ticket-forged',
+      userId: 'p1',
+      authUid: 'passenger-auth',
+      role: 'passenger',
+      subject: 'account',
+      message: 'Forged',
+      status: 'open',
+      createdAt: serverTimestamp()
+    }
+  ));
+
+  await assertFails(update(ownTicket, {
+    status: 'resolved'
+  }));
+});
+
+test('legacy driver application is self-submission only and no longer public', async () => {
+  const anonymous = env.unauthenticatedContext().database();
+
+  await assertFails(set(
+    ref(anonymous, 'driver_applications/public-application'),
+    {
+      userUid: 'driver-auth',
+      status: 'pending'
+    }
+  ));
+
+  await assertSucceeds(set(
+    ref(dbFor('driver-auth'), 'driver_applications/own-application'),
+    {
+      userUid: 'driver-auth',
+      status: 'pending',
+      fullName: 'Driver One'
+    }
+  ));
+
+  await assertFails(set(
+    ref(dbFor('attacker-auth'), 'driver_applications/forged-application'),
+    {
+      userUid: 'driver-auth',
+      status: 'pending',
+      fullName: 'Forged Driver'
+    }
+  ));
+});
+
+test('remaining legacy communication trees no longer allow anonymous access', async () => {
+  const anonymous = env.unauthenticatedContext().database();
+
+  for (const pathName of [
+    'chats/sample',
+    'subscriptions/sample',
+    'ambassador_team_chat/sample'
+  ]) {
+    await assertFails(get(ref(anonymous, pathName)));
+    await assertFails(set(ref(anonymous, pathName), {
+      test: true
+    }));
+  }
+
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), 'chats/compatibility-chat'),
+    {
+      test: true
+    }
+  ));
+});
+
+test('voucher usage, settings writes, admin queue and market ad writes are protected', async () => {
+  const db = dbFor('passenger-auth');
+
+  await assertFails(set(ref(db, 'voucherUsage/forged'), {
+    code: 'FREE'
+  }));
+
+  await assertFails(update(ref(db, 'settings'), {
+    platformFee: 0
+  }));
+
+  await assertFails(set(ref(db, 'admin_queue/forged'), {
+    action: 'approve'
+  }));
+
+  await assertFails(set(ref(db, 'marketAds/forged'), {
+    userId: 'passenger-auth',
+    status: 'active'
+  }));
+});
