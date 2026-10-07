@@ -1,0 +1,51 @@
+name: Profile and Go Dispatch Smoke
+
+on:
+  push:
+    branches:
+      - security-payments-phase5
+    paths:
+      - '.github/workflows/profile_go_dispatch_smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify face storage and Go driver dispatch
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate to Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Validate smoke scripts
+        run: |
+          node --check functions/profile-image-storage-validation.js
+          node --check functions/go-driver-dispatch-validation.js
+
+      - name: Run profile image storage smoke
+        working-directory: functions
+        run: node profile-image-storage-validation.js
+
+      - name: Run Go driver dispatch smoke
+        working-directory: functions
+        run: node go-driver-dispatch-validation.js
