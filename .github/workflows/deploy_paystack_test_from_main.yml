@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
 
+# Redeploy after automatic app-return fix.
+
 jobs:
   deploy-and-smoke:
     name: Deploy Paystack test backend and validate
