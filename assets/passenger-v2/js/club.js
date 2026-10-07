@@ -620,7 +620,12 @@ ASIYE.club = {
                                 departureTime,
 
                             paymentMethod:
-                                'wallet',
+                                String(
+                                    ASIYE.state.booking
+                                        .paymentMethod ||
+                                    'cash'
+                                )
+                                .toLowerCase(),
 
                             profileImageUrl:
                                 profileImageUrl
@@ -792,7 +797,12 @@ ASIYE.club = {
                 pricing.pricePerPassenger,
 
             paymentMethod:
-                'wallet',
+                String(
+                    ASIYE.state.booking
+                        .paymentMethod ||
+                    'cash'
+                )
+                .toLowerCase(),
 
             status:
                 'waiting_pool',
@@ -929,7 +939,12 @@ ASIYE.club = {
                     .durationMinutes,
 
             paymentMethod:
-                'wallet',
+                String(
+                    ASIYE.state.booking
+                        .paymentMethod ||
+                    'cash'
+                )
+                .toLowerCase(),
 
             requirePin:
                 true,
@@ -1078,21 +1093,34 @@ ASIYE.club = {
                 0
             );
 
-        if (
-            !ASIYE.wallet ||
-            typeof ASIYE.wallet.requireFare !==
-                'function'
-        ) {
-            throw new Error(
-                'Asiye Wallet is unavailable. Reopen the app and try again.'
-            );
-        }
+        const paymentMethod =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
 
-        await ASIYE.wallet
-            .requireFare(
-                requiredFare,
-                this.getConfig(type).name
-            );
+        if (
+            paymentMethod ===
+            'wallet'
+        ) {
+            if (
+                !ASIYE.wallet ||
+                typeof ASIYE.wallet.requireFare !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Asiye Wallet is unavailable. Reopen the app and try again.'
+                );
+            }
+
+            await ASIYE.wallet
+                .requireFare(
+                    requiredFare,
+                    this.getConfig(type).name
+                );
+        }
 
         await ASIYE.profile
             .ensureRequired();
