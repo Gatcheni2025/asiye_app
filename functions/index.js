@@ -229,7 +229,7 @@ function walletSmsCors(request, response) {
 
   response.set(
     "Access-Control-Allow-Headers",
-    "Authorization, Content-Type"
+    "Authorization, X-Firebase-Auth, Content-Type"
   );
 
   response.set(
