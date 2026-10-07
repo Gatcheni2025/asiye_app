@@ -4476,6 +4476,408 @@ exports.submitAccountDeletionRequest = onRequest(
 
 
 // =================================================================
+// --- SERVER-SIDE ASIYE WALLET RIDE READINESS CHECK ---
+// =================================================================
+// Before a driver completes a wallet-funded trip, verify the passenger(s)
+// still have enough confirmed wallet value for the fare. This is intentionally
+// a server-side check so a modified WebView cannot fake the balance result.
+async function driverOwnsTrip(decodedUid, trip) {
+  if (
+    !decodedUid ||
+    !trip
+  ) {
+    return false;
+  }
+
+  if (
+    trip.driverAuthUid ===
+      decodedUid
+  ) {
+    return true;
+  }
+
+  const taxiId =
+    String(
+      trip.taxiId ||
+      trip.driverId ||
+      ""
+    ).trim();
+
+  if (!taxiId) {
+    return false;
+  }
+
+  if (taxiId === decodedUid) {
+    return true;
+  }
+
+  const taxi =
+    (
+      await admin.database()
+        .ref(
+          `taxis/${taxiId}`
+        )
+        .once(
+          "value"
+        )
+    ).val() || {};
+
+  return (
+    taxi.authUid === decodedUid ||
+    taxi.userUid === decodedUid
+  );
+}
+
+function tripPassengerFare(
+  trip,
+  passenger = null
+) {
+  const raw =
+    trip?.type === "club"
+      ? (
+          passenger?.price ??
+          trip?.pricePerPassenger ??
+          0
+        )
+      : (
+          trip?.agreedFare ??
+          trip?.finalAmount ??
+          trip?.calculatedPrice ??
+          0
+        );
+
+  const fare =
+    Number(raw);
+
+  return Number.isFinite(fare)
+    ? Math.max(
+        0,
+        Math.round(fare * 100) / 100
+      )
+    : 0;
+}
+
+async function passengerWalletStatus(
+  passengerId,
+  required
+) {
+  const id =
+    String(
+      passengerId ||
+      ""
+    ).trim();
+
+  if (!id) {
+    return {
+      id,
+      balance:
+        0,
+      required,
+      sufficient:
+        false
+    };
+  }
+
+  const profile =
+    (
+      await admin.database()
+        .ref(
+          `commuters/${id}`
+        )
+        .once(
+          "value"
+        )
+    ).val() || {};
+
+  const balance =
+    Number(
+      profile.walletBalance ??
+      profile.credits ??
+      0
+    );
+
+  const safeBalance =
+    Number.isFinite(balance)
+      ? Math.round(
+          balance * 100
+        ) / 100
+      : 0;
+
+  return {
+    id,
+    name:
+      profile.name ||
+      profile.firstName ||
+      "Passenger",
+    balance:
+      safeBalance,
+    required,
+    sufficient:
+      safeBalance + 0.00001 >=
+      required
+  };
+}
+
+exports.confirmTripWalletReady =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Driver authentication is required."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const requestId =
+          String(
+            request.body?.requestId ||
+            ""
+          ).trim();
+
+        if (
+          !/^[A-Za-z0-9_-]{1,128}$/.test(
+            requestId
+          )
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Trip reference is invalid."
+            });
+        }
+
+        const trip =
+          (
+            await admin.database()
+              .ref(
+                `requests/${requestId}`
+              )
+              .once(
+                "value"
+              )
+          ).val();
+
+        if (!trip) {
+          return response
+            .status(404)
+            .json({
+              error:
+                "Trip was not found."
+            });
+        }
+
+        if (
+          !await driverOwnsTrip(
+            decoded.uid,
+            trip
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "Only the assigned driver can complete this trip."
+            });
+        }
+
+        const statuses =
+          [];
+
+        if (
+          trip.type ===
+            "club"
+        ) {
+          for (
+            const [
+              passengerId,
+              passenger
+            ]
+            of Object.entries(
+              trip.passengers ||
+              {}
+            )
+          ) {
+            if (
+              [
+                "cancelled",
+                "cancelled_by_commuter",
+                "cancelled_by_driver",
+                "cancelled_by_admin",
+                "rejected"
+              ].includes(
+                String(
+                  passenger?.status ||
+                  ""
+                )
+              )
+            ) {
+              continue;
+            }
+
+            const method =
+              String(
+                passenger?.paymentMethod ||
+                trip.paymentMethod ||
+                "wallet"
+              )
+                .toLowerCase();
+
+            if (
+              method !==
+                "wallet"
+            ) {
+              continue;
+            }
+
+            const required =
+              tripPassengerFare(
+                trip,
+                passenger
+              );
+
+            statuses.push(
+              await passengerWalletStatus(
+                passengerId,
+                required
+              )
+            );
+          }
+        } else {
+          const method =
+            String(
+              trip.paymentMethod ||
+              "wallet"
+            )
+              .toLowerCase();
+
+          if (
+            method ===
+              "wallet"
+          ) {
+            const required =
+              tripPassengerFare(
+                trip
+              );
+
+            statuses.push(
+              await passengerWalletStatus(
+                trip.commuterId,
+                required
+              )
+            );
+          }
+        }
+
+        const insufficient =
+          statuses.filter(
+            item =>
+              !item.sufficient
+          );
+
+        if (
+          insufficient.length
+        ) {
+          const first =
+            insufficient[0];
+
+          return response
+            .status(409)
+            .json({
+              ok:
+                false,
+              ready:
+                false,
+              error:
+                `${first.name}'s Asiye Wallet has R${first.balance.toFixed(2)} but R${first.required.toFixed(2)} is required before this trip can be completed.`,
+              insufficient
+            });
+        }
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            ready:
+              true,
+            wallets:
+              statuses
+          });
+
+      } catch (error) {
+        console.error(
+          "Trip wallet readiness check failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to verify the Asiye Wallet."
+          });
+      }
+    }
+  );
+
+
+// =================================================================
 // --- AUTHENTICATED PROFILE IMAGE UPLOAD PROXY ---
 // =================================================================
 // The installed WebView cannot reliably POST multipart data directly to the
