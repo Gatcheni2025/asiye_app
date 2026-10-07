@@ -72,11 +72,6 @@ ASIYE.booking = {
             ASIYE.state.user || {};
 
 
-        const profileImageUrl =
-            await ASIYE.profile
-                .ensureRequired();
-
-
         const pickup =
             ASIYE.state.location;
 
@@ -97,6 +92,29 @@ ASIYE.booking = {
             Number(
                 quote.go || 0
             );
+
+
+        if (
+            !ASIYE.wallet ||
+            typeof ASIYE.wallet.requireFare !==
+                'function'
+        ) {
+            throw new Error(
+                'Asiye Wallet is unavailable. Reopen the app and try again.'
+            );
+        }
+
+
+        await ASIYE.wallet
+            .requireFare(
+                fare,
+                'Asiye Go'
+            );
+
+
+        const profileImageUrl =
+            await ASIYE.profile
+                .ensureRequired();
 
 
         if (
@@ -246,9 +264,7 @@ ASIYE.booking = {
                 0.20,
 
             paymentMethod:
-                ASIYE.state.booking
-                    .paymentMethod ||
-                'cash',
+                'wallet',
 
 
             /* Safety */
