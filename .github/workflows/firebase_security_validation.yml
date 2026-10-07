@@ -10,6 +10,7 @@ on:
       - 'functions/club-pool-security.js'
       - 'functions/trip-share-security.js'
       - 'functions/paystack-wallet.js'
+      - 'functions/paystack-test-validation.js'
       - 'assets/member-pages.js'
       - 'assets/passenger-v2/js/booking.js'
       - 'assets/passenger-v2/js/club.js'
@@ -28,6 +29,7 @@ on:
       - 'functions/club-pool-security.js'
       - 'functions/trip-share-security.js'
       - 'functions/paystack-wallet.js'
+      - 'functions/paystack-test-validation.js'
       - 'assets/member-pages.js'
       - 'assets/passenger-v2/js/booking.js'
       - 'assets/passenger-v2/js/club.js'
@@ -66,6 +68,7 @@ jobs:
           node --check functions/club-pool-security.js
           node --check functions/trip-share-security.js
           node --check functions/paystack-wallet.js
+          node --check functions/paystack-test-validation.js
           node --check assets/member-pages.js
           node --check assets/passenger-v2/js/booking.js
           node --check assets/passenger-v2/js/club.js
