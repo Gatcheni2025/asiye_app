@@ -4930,8 +4930,18 @@ p{color:#596170;line-height:1.55}
 <body>
 <main>
 <strong>Payment submitted</strong>
-<p>Return to the Asiye app and tap <b>Check payment</b>. Your wallet is credited only after Asiye verifies the payment with Paystack.</p>
+<p>Your payment has been submitted. Asiye is returning you to the app and will verify the payment before updating your wallet.</p>
 <div class="ref">${reference ? "Reference: " + reference : "Payment reference received"}</div>
+<p><a id="backToAsiye" href="asiye://payment-complete?reference=${encodeURIComponent(reference)}" style="display:inline-block;padding:14px 18px;border-radius:14px;background:#111;color:#fff;text-decoration:none;font-weight:700">Return to Asiye</a></p>
+<script>
+(function(){
+  var reference = ${JSON.stringify(reference)};
+  var target = "asiye://payment-complete?reference=" + encodeURIComponent(reference || "");
+  setTimeout(function(){
+    try { window.location.replace(target); } catch (_) {}
+  }, 500);
+})();
+</script>
 </main>
 </body>
 </html>`
