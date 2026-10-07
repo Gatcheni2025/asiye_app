@@ -1512,7 +1512,7 @@ ASIYE_DRIVER.trip = {
     },
 
 
-    async confirmWalletReady() {
+    async settleSelectedPayments() {
         const request =
             this.request;
 
@@ -1521,45 +1521,6 @@ ASIYE_DRIVER.trip = {
             request.type ===
                 'delivery'
         ) {
-            return true;
-        }
-
-        const usesWallet =
-            request.type ===
-                'club'
-                ? Object.values(
-                    request.passengers ||
-                    {}
-                ).some(
-                    passenger =>
-                        ![
-                            'cancelled',
-                            'cancelled_by_commuter',
-                            'cancelled_by_driver',
-                            'cancelled_by_admin',
-                            'rejected'
-                        ].includes(
-                            String(
-                                passenger?.status ||
-                                ''
-                            )
-                        ) &&
-                        String(
-                            passenger?.paymentMethod ||
-                            request.paymentMethod ||
-                            'wallet'
-                        )
-                            .toLowerCase() ===
-                            'wallet'
-                )
-                : String(
-                    request.paymentMethod ||
-                    'wallet'
-                )
-                    .toLowerCase() ===
-                    'wallet';
-
-        if (!usesWallet) {
             return true;
         }
 
@@ -1584,7 +1545,7 @@ ASIYE_DRIVER.trip = {
         try {
             response =
                 await fetch(
-                    'https://us-central1-asiye-80386.cloudfunctions.net/confirmTripWalletReady',
+                    'https://us-central1-asiye-80386.cloudfunctions.net/settleTripPayment',
                     {
                         method:
                             'POST',
@@ -1603,7 +1564,7 @@ ASIYE_DRIVER.trip = {
                 );
         } catch (error) {
             throw new Error(
-                'Unable to check the Asiye Wallet. Check your connection and try again.'
+                'Unable to settle the passenger payment. Check your connection and try again.'
             );
         }
 
@@ -1616,12 +1577,12 @@ ASIYE_DRIVER.trip = {
 
         if (
             !response.ok ||
-            payload.ready !==
+            payload.settled !==
                 true
         ) {
             throw new Error(
                 payload.error ||
-                'The passenger Asiye Wallet must have enough funds before this trip can be completed.'
+                'The selected payment method is not ready to complete this trip.'
             );
         }
 
@@ -1650,12 +1611,12 @@ ASIYE_DRIVER.trip = {
 
         try {
             await this
-                .confirmWalletReady();
+                .settleSelectedPayments();
         } catch (error) {
             ASIYE_DRIVER.ui
                 ?.toast?.(
                     error?.message ||
-                    'Unable to verify the Asiye Wallet.',
+                    'Unable to settle the passenger payment.',
                     'danger'
                 );
 
