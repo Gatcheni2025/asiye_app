@@ -52,6 +52,14 @@
         },
         "taxiId": {
           ".validate": "!newData.exists() || newData.val() === data.val() || newData.val() === auth.uid || root.child('taxis').child(newData.val()).child('authUid').val() === auth.uid || root.child('taxis').child(newData.val()).child('userUid').val() === auth.uid || root.child('admins').child(auth.uid).exists()"
+        },
+        "passengers": {
+          "$passenger": {
+            ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || data.parent().parent().child('driverAuthUid').val() === auth.uid || (data.parent().parent().child('taxiId').exists() && (data.parent().parent().child('taxiId').val() === auth.uid || root.child('taxis').child(data.parent().parent().child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(data.parent().parent().child('taxiId').val()).child('userUid').val() === auth.uid)) || ($passenger === auth.uid || root.child('commuters').child($passenger).child('authUid').val() === auth.uid))",
+            "commuterId": {
+              ".validate": "!newData.exists() || newData.val() === $passenger || newData.val() === data.val()"
+            }
+          }
         }
       }
     },
@@ -59,13 +67,19 @@
       "commuters": {
         "$commuter": {
           ".read": "auth != null && (auth.uid === $commuter || root.child('commuters').child($commuter).child('authUid').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
-          ".write": "auth != null"
+          ".write": "auth != null",
+          "$notification": {
+            ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || !newData.exists() || !newData.child('requestId').exists() || root.child('requests').child(newData.child('requestId').val()).child('driverAuthUid').val() === auth.uid || (root.child('requests').child(newData.child('requestId').val()).child('taxiId').exists() && (root.child('requests').child(newData.child('requestId').val()).child('taxiId').val() === auth.uid || root.child('taxis').child(root.child('requests').child(newData.child('requestId').val()).child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(root.child('requests').child(newData.child('requestId').val()).child('taxiId').val()).child('userUid').val() === auth.uid)))"
+          }
         }
       },
       "taxis": {
         "$taxi": {
           ".read": "auth != null && (auth.uid === $taxi || root.child('taxis').child($taxi).child('authUid').val() === auth.uid || root.child('taxis').child($taxi).child('userUid').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
-          ".write": "auth != null"
+          ".write": "auth != null",
+          "$notification": {
+            ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || !newData.exists() || !newData.child('requestId').exists() || root.child('requests').child(newData.child('requestId').val()).child('commuterId').val() === auth.uid || root.child('commuters').child(root.child('requests').child(newData.child('requestId').val()).child('commuterId').val()).child('authUid').val() === auth.uid || root.child('requests').child(newData.child('requestId').val()).child('passengers').child(auth.uid).exists())"
+          }
         }
       },
       "$other": {
