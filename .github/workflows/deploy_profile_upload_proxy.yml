@@ -13,6 +13,7 @@ permissions:
 
 # Deploy latest device-readiness fixes, including secure Go ride dispatch.
 # Includes server-side driver vehicle review to avoid protected-field permission errors.
+# Redeploy timestamp correction.
 
 jobs:
   deploy:
