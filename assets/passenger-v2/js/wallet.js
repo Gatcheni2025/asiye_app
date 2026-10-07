@@ -213,6 +213,168 @@ ASIYE.payments = {
             );
     },
 
+    clubPrepareInFlight:
+        new Set(),
+
+    async handleTripState(
+        request
+    ) {
+        if (
+            !request ||
+            request.type !==
+                'club' ||
+            request.poolReady !==
+                true
+        ) {
+            return false;
+        }
+
+        const passengerId =
+            String(
+                ASIYE.state.userId ||
+                ''
+            );
+
+        const passenger =
+            request.passengers?.[
+                passengerId
+            ];
+
+        if (!passenger) {
+            return false;
+        }
+
+        const method =
+            String(
+                passenger.paymentMethod ||
+                request.paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+        const status =
+            String(
+                passenger.paymentStatus ||
+                ''
+            );
+
+        if (
+            method !==
+                'card'
+        ) {
+            if (
+                status ===
+                    'wallet_insufficient'
+            ) {
+                ASIYE.ui?.toast?.(
+                    'Your Club is full, but your Asiye Wallet needs more funds before collection can start.'
+                );
+            }
+
+            return false;
+        }
+
+        if (
+            [
+                'held',
+                'captured'
+            ].includes(
+                status
+            )
+        ) {
+            const hasPin =
+                /^\d{4}$/.test(
+                    String(
+                        passenger.pickupPin ||
+                        ''
+                    )
+                );
+
+            if (
+                !hasPin ||
+                passenger.safetyShareCompleted !==
+                    true
+            ) {
+                await ASIYE.club
+                    ?.finalizePaidPassenger?.(
+                        request.requestId ||
+                        ASIYE.state.booking
+                            .requestId
+                    );
+            }
+
+            return true;
+        }
+
+        if (
+            status !==
+                'payment_required'
+        ) {
+            return false;
+        }
+
+        const requestId =
+            String(
+                request.requestId ||
+                ASIYE.state.booking
+                    .requestId ||
+                ''
+            );
+
+        if (!requestId) {
+            return false;
+        }
+
+        const pending =
+            this.pendingCard();
+
+        if (
+            pending?.requestId ===
+                requestId
+        ) {
+            return true;
+        }
+
+        if (
+            this.clubPrepareInFlight
+                .has(
+                    requestId
+                )
+        ) {
+            return true;
+        }
+
+        this.clubPrepareInFlight
+            .add(
+                requestId
+            );
+
+        try {
+            const result =
+                await this.prepare(
+                    requestId
+                );
+
+            if (
+                result?.paymentPending ===
+                    true
+            ) {
+                ASIYE.ui?.toast?.(
+                    'Your Club is full. Complete your Paystack card payment to create your pickup PIN.'
+                );
+            }
+
+            return true;
+
+        } finally {
+            this.clubPrepareInFlight
+                .delete(
+                    requestId
+                );
+        }
+    },
+
+
     async handleCardReturn(reference) {
         const pending =
             this.pendingCard();
@@ -329,6 +491,22 @@ ASIYE.payments = {
             request.type ===
                 'club'
         ) {
+            if (
+                !ASIYE.club ||
+                typeof ASIYE.club
+                    .finalizePaidPassenger !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Club payment was confirmed, but the pickup PIN could not be finalized. Reopen Asiye and try again.'
+                );
+            }
+
+            await ASIYE.club
+                .finalizePaidPassenger(
+                    pending.requestId
+                );
+
             localStorage.removeItem(
                 'pendingTripCardPayment'
             );
@@ -340,10 +518,6 @@ ASIYE.payments = {
                 ?.start?.(
                     pending.requestId
                 );
-
-            ASIYE.ui?.toast?.(
-                'Card payment confirmed. Your Club payment is secured.'
-            );
 
             return true;
         }
