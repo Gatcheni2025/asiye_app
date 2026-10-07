@@ -45,6 +45,7 @@ let pickupMarker;
 let destinationMarker;
 let hasRendered=false;
 let pollTimer=null;
+let trackingEnded=false;
 
 const loader=document.getElementById("loader");
 const card=document.getElementById("card");
@@ -170,6 +171,7 @@ function setAvatar(url,name){
 
 function render(trip,taxi){
     const ended=Boolean(trip?.ended);
+    trackingEnded=ended;
 
     statusEl.textContent=ended?"TRIP ENDED":"LIVE";
     statusEl.style.background=ended?"#ececec":"#e9fff0";
@@ -308,7 +310,7 @@ async function refresh(){
         }
     }
 
-    if(!pollTimer){
+    if(!trackingEnded&&!pollTimer){
         pollTimer=setTimeout(()=>{
             pollTimer=null;
             refresh();
