@@ -495,15 +495,20 @@ ASIYE.club = {
                 .requirePassengerPin();
 
 
+        const liveTrackingUrl =
+            await ASIYE.booking
+                .createLiveShareUrl(
+                    poolId
+                );
+
+
         await ASIYE.booking.requireTripShare({
 
             requestId:
                 poolId,
 
             liveTrackingUrl:
-                ASIYE.booking.liveTrackingUrl(
-                    poolId
-                ),
+                liveTrackingUrl,
 
             pickupPin:
                 pin,
@@ -720,24 +725,6 @@ ASIYE.club = {
             ASIYE.profile.getUrl(user);
 
 
-        await ASIYE.booking.requireTripShare({
-            requestId:
-                requestId,
-            liveTrackingUrl:
-                ASIYE.booking.liveTrackingUrl(requestId),
-            pickupPin:
-                pin,
-            pickupAddress:
-                pickup.address ||
-                'Current location',
-            destination:
-                destination.address ||
-                destination.name,
-            service:
-                'Asiye Club'
-        });
-
-
         const passenger = {
 
             commuterId:
@@ -823,7 +810,7 @@ ASIYE.club = {
                 type,
 
             status:
-                'pooling',
+                'share_required',
 
             poolReady:
                 false,
@@ -889,16 +876,10 @@ ASIYE.club = {
                 true,
 
             safetyShareCompleted:
-                true,
-
-            safetyShareAt:
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP,
+                false,
 
             liveTrackingUrl:
-                ASIYE.booking.liveTrackingUrl(requestId),
+                '',
 
             commuterLocation: {
 
@@ -965,6 +946,75 @@ ASIYE.club = {
         await requestRef.set(
             requestData
         );
+
+
+        let liveTrackingUrl;
+
+        try {
+
+            liveTrackingUrl =
+                await ASIYE.booking
+                    .createLiveShareUrl(
+                        requestId
+                    );
+
+
+            await ASIYE.booking.requireTripShare({
+                requestId:
+                    requestId,
+                liveTrackingUrl:
+                    liveTrackingUrl,
+                pickupPin:
+                    pin,
+                pickupAddress:
+                    pickup.address ||
+                    'Current location',
+                destination:
+                    destination.address ||
+                    destination.name,
+                service:
+                    'Asiye Club'
+            });
+
+
+            await requestRef.update({
+
+                status:
+                    'pooling',
+
+                safetyShareCompleted:
+                    true,
+
+                safetyShareAt:
+                    firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP,
+
+                liveTrackingUrl:
+                    liveTrackingUrl
+            });
+
+
+            requestData.status =
+                'pooling';
+
+            requestData.safetyShareCompleted =
+                true;
+
+            requestData.liveTrackingUrl =
+                liveTrackingUrl;
+
+        } catch (error) {
+
+            await requestRef
+                .remove()
+                .catch(
+                    () => {}
+                );
+
+            throw error;
+        }
 
 
         await firebase
