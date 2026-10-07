@@ -4476,6 +4476,972 @@ exports.submitAccountDeletionRequest = onRequest(
 
 
 // =================================================================
+// --- PAYSTACK WALLET TOP-UPS ---
+// =================================================================
+// Paystack becomes the primary online wallet top-up provider. Card, South
+// African EFT and Capitec Pay are handled on Paystack's hosted checkout.
+// Wallet value is only credited after a signed webhook or a server-side
+// Verify Transaction call confirms a successful ZAR payment.
+const paystackSecretKey =
+  defineSecret("PAYSTACK_SECRET_KEY");
+
+const paystackCrypto =
+  require("node:crypto");
+
+const {
+  amountToSubunit,
+  applyWalletCredit,
+  sanitizeReference,
+  transactionMatchesPayment
+} = require("./paystack-wallet");
+
+const PAYSTACK_API =
+  "https://api.paystack.co";
+
+const PAYSTACK_CALLBACK_URL =
+  "https://asiye-80386.web.app/payment-status.html";
+
+function paystackReference() {
+  return (
+    "ASIYE-" +
+    Date.now().toString(36).toUpperCase() +
+    "-" +
+    paystackCrypto
+      .randomBytes(8)
+      .toString("hex")
+      .toUpperCase()
+  );
+}
+
+function paystackFallbackEmail(uid) {
+  const digest =
+    paystackCrypto
+      .createHash("sha256")
+      .update(String(uid || "wallet"))
+      .digest("hex")
+      .slice(0, 18);
+
+  return (
+    "wallet+" +
+    digest +
+    "@asiye.cloud"
+  );
+}
+
+async function paystackRequest(
+  path,
+  {
+    method = "GET",
+    body
+  } = {}
+) {
+  const secret =
+    String(
+      paystackSecretKey.value() ||
+      ""
+    ).trim();
+
+  if (!secret) {
+    throw new Error(
+      "Paystack is not configured."
+    );
+  }
+
+  const response =
+    await fetch(
+      PAYSTACK_API + path,
+      {
+        method,
+        headers: {
+          Authorization:
+            "Bearer " + secret,
+          "Content-Type":
+            "application/json",
+          Accept:
+            "application/json"
+        },
+        body:
+          body === undefined
+            ? undefined
+            : JSON.stringify(body)
+      }
+    );
+
+  const payload =
+    await response
+      .json()
+      .catch(
+        () => ({})
+      );
+
+  if (
+    !response.ok ||
+    payload.status === false
+  ) {
+    const error =
+      new Error(
+        payload.message ||
+        "Paystack request failed."
+      );
+
+    error.status =
+      response.status;
+
+    throw error;
+  }
+
+  return payload;
+}
+
+async function verifyPaystackReference(
+  reference
+) {
+  const safeReference =
+    sanitizeReference(
+      reference
+    );
+
+  const payload =
+    await paystackRequest(
+      "/transaction/verify/" +
+      encodeURIComponent(
+        safeReference
+      )
+    );
+
+  return payload.data || null;
+}
+
+async function adminDatabaseAccessToken() {
+  const credential =
+    admin.app().options.credential;
+
+  if (
+    !credential ||
+    typeof credential.getAccessToken !==
+      "function"
+  ) {
+    throw new Error(
+      "Firebase Admin credential is unavailable."
+    );
+  }
+
+  const access =
+    await credential
+      .getAccessToken();
+
+  if (!access?.access_token) {
+    throw new Error(
+      "Firebase Admin access token is unavailable."
+    );
+  }
+
+  return access.access_token;
+}
+
+function firebaseDatabaseBaseUrl() {
+  let configured = {};
+
+  try {
+    configured =
+      JSON.parse(
+        process.env.FIREBASE_CONFIG ||
+        "{}"
+      );
+  } catch (_) {
+    configured = {};
+  }
+
+  return String(
+    configured.databaseURL ||
+    "https://asiye-80386-default-rtdb.firebaseio.com"
+  ).replace(/\/$/, "");
+}
+
+async function creditPaystackWallet(
+  payment,
+  transaction
+) {
+  if (
+    !payment ||
+    payment.provider !== "paystack"
+  ) {
+    throw new Error(
+      "Paystack wallet payment was not found."
+    );
+  }
+
+  if (
+    !transactionMatchesPayment(
+      transaction,
+      payment
+    )
+  ) {
+    throw new Error(
+      "Paystack transaction does not match the wallet top-up."
+    );
+  }
+
+  const passengerId =
+    String(
+      payment.passengerId ||
+      payment.uid ||
+      ""
+    ).trim();
+
+  if (!passengerId) {
+    throw new Error(
+      "Wallet passenger identity is missing."
+    );
+  }
+
+  const accessToken =
+    await adminDatabaseAccessToken();
+
+  const profileUrl =
+    firebaseDatabaseBaseUrl() +
+    "/commuters/" +
+    encodeURIComponent(
+      passengerId
+    ) +
+    ".json";
+
+  let creditedBalance =
+    null;
+
+  let credited =
+    false;
+
+  for (
+    let attempt = 0;
+    attempt < 6;
+    attempt += 1
+  ) {
+    const readResponse =
+      await fetch(
+        profileUrl,
+        {
+          method:
+            "GET",
+          headers: {
+            Authorization:
+              "Bearer " +
+              accessToken,
+            "X-Firebase-ETag":
+              "true",
+            "Cache-Control":
+              "no-cache"
+          }
+        }
+      );
+
+    if (!readResponse.ok) {
+      throw new Error(
+        "Unable to load wallet profile."
+      );
+    }
+
+    const profile =
+      await readResponse.json();
+
+    const etag =
+      readResponse.headers.get(
+        "etag"
+      );
+
+    if (
+      !profile ||
+      !etag
+    ) {
+      throw new Error(
+        "Wallet profile is unavailable."
+      );
+    }
+
+    const applied =
+      applyWalletCredit(
+        profile,
+        payment,
+        Date.now()
+      );
+
+    creditedBalance =
+      applied.balance;
+
+    if (!applied.credited) {
+      credited =
+        false;
+      break;
+    }
+
+    const writeResponse =
+      await fetch(
+        profileUrl,
+        {
+          method:
+            "PUT",
+          headers: {
+            Authorization:
+              "Bearer " +
+              accessToken,
+            "Content-Type":
+              "application/json",
+            "If-Match":
+              etag
+          },
+          body:
+            JSON.stringify(
+              applied.profile
+            )
+        }
+      );
+
+    if (
+      writeResponse.status ===
+      412
+    ) {
+      continue;
+    }
+
+    if (!writeResponse.ok) {
+      throw new Error(
+        "Unable to credit Asiye wallet."
+      );
+    }
+
+    credited =
+      true;
+    break;
+  }
+
+  if (creditedBalance === null) {
+    throw new Error(
+      "Wallet credit could not be confirmed."
+    );
+  }
+
+  await admin.database()
+    .ref(
+      "walletPayments/" +
+      payment.reference
+    )
+    .update({
+      status:
+        "complete",
+      provider:
+        "paystack",
+      channel:
+        String(
+          transaction.channel ||
+          ""
+        ),
+      paystackTransactionId:
+        String(
+          transaction.id ||
+          ""
+        ),
+      paidAt:
+        transaction.paid_at ||
+        transaction.paidAt ||
+        admin.database
+          .ServerValue
+          .TIMESTAMP,
+      creditedBalance,
+      creditedAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP
+    });
+
+  return {
+    credited,
+    balance:
+      creditedBalance
+  };
+}
+
+exports.initializePaystackWalletTopup =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      secrets: [
+        paystackSecretKey
+      ]
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before adding funds."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const amountSubunit =
+          amountToSubunit(
+            request.body?.amount
+          );
+
+        const amount =
+          amountSubunit /
+          100;
+
+        const passenger =
+          await resolvePassengerForWallet(
+            decoded
+          );
+
+        if (!passenger) {
+          return response
+            .status(404)
+            .json({
+              error:
+                "Passenger profile was not found."
+            });
+        }
+
+        const passengerId =
+          String(
+            passenger.id ||
+            decoded.uid
+          );
+
+        const email =
+          String(
+            passenger.data?.email ||
+            decoded.email ||
+            paystackFallbackEmail(
+              decoded.uid
+            )
+          )
+            .trim()
+            .toLowerCase();
+
+        const reference =
+          paystackReference();
+
+        const initialize =
+          await paystackRequest(
+            "/transaction/initialize",
+            {
+              method:
+                "POST",
+              body: {
+                email,
+                amount:
+                  String(
+                    amountSubunit
+                  ),
+                currency:
+                  "ZAR",
+                reference,
+                callback_url:
+                  PAYSTACK_CALLBACK_URL,
+                channels: [
+                  "card",
+                  "eft",
+                  "capitec_pay"
+                ],
+                metadata: {
+                  purpose:
+                    "asiye_wallet_topup",
+                  uid:
+                    decoded.uid,
+                  passengerId
+                }
+              }
+            }
+          );
+
+        const data =
+          initialize.data ||
+          {};
+
+        if (
+          !data.authorization_url ||
+          !data.reference
+        ) {
+          throw new Error(
+            "Paystack did not return a checkout link."
+          );
+        }
+
+        await admin.database()
+          .ref(
+            "walletPayments/" +
+            reference
+          )
+          .set({
+            uid:
+              decoded.uid,
+            passengerId,
+            email,
+            amount,
+            amountSubunit,
+            currency:
+              "ZAR",
+            reference,
+            provider:
+              "paystack",
+            status:
+              "initialized",
+            authorizationUrl:
+              data.authorization_url,
+            accessCode:
+              data.access_code ||
+              "",
+            createdAt:
+              admin.database
+                .ServerValue
+                .TIMESTAMP
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            provider:
+              "paystack",
+            amount,
+            currency:
+              "ZAR",
+            reference,
+            authorizationUrl:
+              data.authorization_url
+          });
+
+      } catch (error) {
+        console.error(
+          "Paystack wallet initialization failed",
+          {
+            message:
+              error?.message ||
+              String(error),
+            status:
+              error?.status
+          }
+        );
+
+        return response
+          .status(
+            error?.code ===
+              "payment/invalid-amount"
+              ? 400
+              : 502
+          )
+          .json({
+            error:
+              error?.message ||
+              "Unable to start Paystack payment."
+          });
+      }
+    }
+  );
+
+exports.verifyPaystackWalletTopup =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      secrets: [
+        paystackSecretKey
+      ]
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before checking payment."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const reference =
+          sanitizeReference(
+            request.body?.reference
+          );
+
+        const paymentRef =
+          admin.database()
+            .ref(
+              "walletPayments/" +
+              reference
+            );
+
+        const payment =
+          (
+            await paymentRef
+              .once("value")
+          ).val();
+
+        if (
+          !payment ||
+          payment.provider !==
+            "paystack"
+        ) {
+          return response
+            .status(404)
+            .json({
+              error:
+                "Payment was not found."
+            });
+        }
+
+        if (
+          payment.uid !==
+          decoded.uid
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "You cannot check this payment."
+            });
+        }
+
+        if (
+          payment.status ===
+          "complete"
+        ) {
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              status:
+                "complete",
+              balance:
+                Number(
+                  payment.creditedBalance ||
+                  0
+                ),
+              reference
+            });
+        }
+
+        const transaction =
+          await verifyPaystackReference(
+            reference
+          );
+
+        if (
+          !transaction ||
+          transaction.status !==
+            "success"
+        ) {
+          await paymentRef
+            .update({
+              status:
+                String(
+                  transaction?.status ||
+                  "pending"
+                ),
+              lastVerifiedAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              status:
+                String(
+                  transaction?.status ||
+                  "pending"
+                ),
+              reference
+            });
+        }
+
+        const credit =
+          await creditPaystackWallet(
+            payment,
+            transaction
+          );
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            status:
+              "complete",
+            balance:
+              credit.balance,
+            reference
+          });
+
+      } catch (error) {
+        console.error(
+          "Paystack wallet verification failed",
+          error
+        );
+
+        return response
+          .status(
+            error?.code ===
+              "payment/invalid-reference"
+              ? 400
+              : 502
+          )
+          .json({
+            error:
+              error?.message ||
+              "Unable to verify Paystack payment."
+          });
+      }
+    }
+  );
+
+exports.paystackWebhook =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      secrets: [
+        paystackSecretKey
+      ]
+    },
+    async (
+      request,
+      response
+    ) => {
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .send("POST required");
+      }
+
+      try {
+        const secret =
+          String(
+            paystackSecretKey.value() ||
+            ""
+          );
+
+        const raw =
+          Buffer.isBuffer(
+            request.rawBody
+          )
+            ? request.rawBody
+            : Buffer.from(
+                JSON.stringify(
+                  request.body ||
+                  {}
+                )
+              );
+
+        const expected =
+          paystackCrypto
+            .createHmac(
+              "sha512",
+              secret
+            )
+            .update(raw)
+            .digest("hex");
+
+        const supplied =
+          String(
+            request.get(
+              "x-paystack-signature"
+            ) ||
+            ""
+          );
+
+        const valid =
+          supplied.length ===
+            expected.length &&
+          paystackCrypto
+            .timingSafeEqual(
+              Buffer.from(
+                supplied,
+                "utf8"
+              ),
+              Buffer.from(
+                expected,
+                "utf8"
+              )
+            );
+
+        if (!valid) {
+          return response
+            .status(401)
+            .send("Invalid signature");
+        }
+
+        const event =
+          request.body ||
+          {};
+
+        if (
+          event.event !==
+          "charge.success"
+        ) {
+          return response
+            .status(200)
+            .send("ok");
+        }
+
+        const transaction =
+          event.data ||
+          {};
+
+        const reference =
+          sanitizeReference(
+            transaction.reference
+          );
+
+        const paymentRef =
+          admin.database()
+            .ref(
+              "walletPayments/" +
+              reference
+            );
+
+        const payment =
+          (
+            await paymentRef
+              .once("value")
+          ).val();
+
+        if (
+          !payment ||
+          payment.provider !==
+            "paystack"
+        ) {
+          // A valid Paystack event may belong to another future payment
+          // product. Acknowledge it without changing any wallet balance.
+          return response
+            .status(200)
+            .send("ok");
+        }
+
+        await creditPaystackWallet(
+          payment,
+          transaction
+        );
+
+        return response
+          .status(200)
+          .send("ok");
+
+      } catch (error) {
+        console.error(
+          "Paystack webhook processing failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .send("retry");
+      }
+    }
+  );
+
+
+// =================================================================
 // --- SECURE ASIYE CLUB JOIN ---
 // =================================================================
 // Client users may request to join a Club pool, but all pool-wide mutations
