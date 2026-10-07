@@ -1031,10 +1031,32 @@ ASIYE.ui = {
                         }
 
 
-                        const requestId =
+                        const result =
 
                             await ASIYE.booking
                                 .createGoRide();
+
+
+                        if (
+                            result &&
+                            typeof result ===
+                                'object' &&
+                            result.paymentPending ===
+                                true
+                        ) {
+                            ASIYE.ui.toast(
+                                'Complete the card payment to send your ride request.'
+                            );
+
+                            return;
+                        }
+
+
+                        const requestId =
+                            typeof result ===
+                                'string'
+                                ? result
+                                : result?.requestId;
 
 
                         await ASIYE.ride.start(
