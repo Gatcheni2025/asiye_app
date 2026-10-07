@@ -6,6 +6,30 @@
 
     const nativeChannel = () => window.Asiye || window.Android || null;
 
+    const blobToDataUrl = blob =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onerror = () =>
+                reject(
+                    new Error(
+                        'Could not prepare the profile picture.'
+                    )
+                );
+
+            reader.onload = () =>
+                resolve(
+                    String(
+                        reader.result ||
+                        ''
+                    )
+                );
+
+            reader.readAsDataURL(
+                blob
+            );
+        });
+
     const dataUrlToBlob = dataUrl => {
         const [head, body] = String(dataUrl || '').split(',');
         if (!head || !body) throw new Error('Camera image is unavailable.');
@@ -85,26 +109,110 @@
         },
 
         async upload(value, options = {}) {
-            const source = this.toBlob(value);
-            const compressed = await compressImage(source);
-            const form = new FormData();
-            form.append('file', compressed, options.filename || 'profile.jpg');
-            form.append('api_key', 'asiye_secure_upload_2025');
-            form.append('userId', String(options.userId || 'asiye-user'));
-            if (options.purpose) form.append('purpose', String(options.purpose));
+            const authUser =
+                firebase?.auth?.()
+                    ?.currentUser;
 
-            const response = await fetch('https://app.asiye.cloud/upload_handler.php', {
-                method: 'POST',
-                body: form
-            });
-
-            const payload = await response.json().catch(() => ({}));
-            const rawUrl = payload.url || payload.fileUrl || payload.file_url || '';
-            if (!response.ok || !rawUrl || /error/i.test(String(rawUrl))) {
-                throw new Error(payload.message || payload.error || 'Profile image upload failed.');
+            if (!authUser) {
+                throw new Error(
+                    'Please sign in again before saving your profile picture.'
+                );
             }
-            const url = this.normalizeUrl(rawUrl);
-            return { ...payload, url };
+
+            const source =
+                this.toBlob(
+                    value
+                );
+
+            const compressed =
+                await compressImage(
+                    source
+                );
+
+            const dataUrl =
+                await blobToDataUrl(
+                    compressed
+                );
+
+            const token =
+                await authUser
+                    .getIdToken(
+                        true
+                    );
+
+            const response =
+                await fetch(
+                    'https://us-central1-asiye-80386.cloudfunctions.net/uploadProfileImageProxy',
+                    {
+                        method:
+                            'POST',
+
+                        headers: {
+                            'Authorization':
+                                `Bearer ${token}`,
+
+                            'Content-Type':
+                                'application/json'
+                        },
+
+                        body:
+                            JSON.stringify({
+                                dataUrl,
+                                userId:
+                                    String(
+                                        options.userId ||
+                                        ''
+                                    ),
+                                purpose:
+                                    String(
+                                        options.purpose ||
+                                        'profile'
+                                    ),
+                                filename:
+                                    String(
+                                        options.filename ||
+                                        'profile.jpg'
+                                    )
+                            })
+                    }
+                );
+
+            const payload =
+                await response
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            const rawUrl =
+                payload.url ||
+                payload.fileUrl ||
+                payload.file_url ||
+                '';
+
+            if (
+                !response.ok ||
+                !rawUrl ||
+                /error/i.test(
+                    String(rawUrl)
+                )
+            ) {
+                throw new Error(
+                    payload.message ||
+                    payload.error ||
+                    'Profile image upload failed.'
+                );
+            }
+
+            const url =
+                this.normalizeUrl(
+                    rawUrl
+                );
+
+            return {
+                ...payload,
+                url
+            };
         }
     };
 
