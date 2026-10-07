@@ -116,6 +116,58 @@ test('passenger can update own profile but attacker cannot', async () => {
   await assertFails(update(ref(dbFor('attacker-auth'), 'commuters/p1'), { name: 'Hijacked' }));
 });
 
+test('passenger may stage a share-required request and activate it after sharing', async () => {
+  const db = dbFor('passenger-auth');
+
+  await assertSucceeds(set(ref(db, 'requests/share-stage'), {
+    commuterId: 'p1',
+    status: 'share_required',
+    safetyShareRequired: true,
+    safetyShareCompleted: false,
+    createdAt: 2
+  }));
+
+  await assertSucceeds(update(ref(db, 'requests/share-stage'), {
+    status: 'pending',
+    safetyShareCompleted: true,
+    liveTrackingUrl:
+      'https://app.asiye.cloud/track.html?share=secure-token-placeholder'
+  }));
+});
+
+test('trip share capability records are never readable or writable by clients', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'tripShareTokens/private-token'), {
+      requestId: 'trip1',
+      expiresAt: Date.now() + 60_000
+    });
+
+    await set(ref(context.database(), 'tripShareIssuers/trip1/passenger-auth'), {
+      token: 'private-token'
+    });
+  });
+
+  await assertFails(
+    get(ref(dbFor('passenger-auth'), 'tripShareTokens/private-token'))
+  );
+
+  await assertFails(
+    set(ref(dbFor('passenger-auth'), 'tripShareTokens/forged-token'), {
+      requestId: 'trip1'
+    })
+  );
+
+  await assertFails(
+    get(ref(dbFor('passenger-auth'), 'tripShareIssuers/trip1/passenger-auth'))
+  );
+
+  await assertFails(
+    set(ref(dbFor('passenger-auth'), 'tripShareIssuers/trip1/passenger-auth'), {
+      token: 'forged-token'
+    })
+  );
+});
+
 test('passenger can create own request but attacker cannot create it for another passenger', async () => {
   await assertSucceeds(set(ref(dbFor('passenger-auth'), 'requests/new-own-trip'), {
     commuterId: 'p1',
