@@ -1,4 +1,4 @@
-name: Deploy Profile Upload Proxy
+name: Deploy Ride Readiness Backend
 
 on:
   push:
@@ -11,9 +11,11 @@ on:
 permissions:
   contents: read
 
+# Deploy latest device-readiness fixes.
+
 jobs:
   deploy:
-    name: Deploy authenticated profile upload proxy
+    name: Deploy profile upload and wallet readiness functions
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -50,9 +52,9 @@ jobs:
       - name: Validate function syntax
         run: node --check functions/index.js
 
-      - name: Deploy upload proxy only
+      - name: Deploy readiness functions only
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:uploadProfileImageProxy"
+          --only "functions:uploadProfileImageProxy,functions:confirmTripWalletReady"
           --non-interactive
