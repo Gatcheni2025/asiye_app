@@ -1,0 +1,48 @@
+name: Controlled Production Trip Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate one Go and one Club trip
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout compatibility branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Validate production test syntax
+        run: node --check functions/production-trip-validation.js
+
+      - name: Verify Firebase deployment secret
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Firebase service-account secret is not available."
+            exit 1
+          fi
+
+      - name: Authenticate to Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Run controlled production E2E
+        working-directory: functions
+        run: node production-trip-validation.js
