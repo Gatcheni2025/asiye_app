@@ -6101,7 +6101,7 @@ exports.submitDriverVehicleForReview =
         }
 
         const now =
-          admin.database()
+          admin.database
             .ServerValue
             .TIMESTAMP;
 
