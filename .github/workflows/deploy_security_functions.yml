@@ -15,6 +15,8 @@ jobs:
   deploy:
     name: Deploy secure trip functions
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
     timeout-minutes: 20
 
     steps:
@@ -36,10 +38,18 @@ jobs:
           node --check functions/club-pool-security.js
           node --check functions/trip-share-security.js
 
+      - name: Verify Firebase deployment secret
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Firebase service-account secret is not available to this workflow. Add it as a repository Actions secret named FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 (preferred) or FIREBASE_SERVICE_ACCOUNT."
+            exit 1
+          fi
+
       - name: Authenticate to Firebase project
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 }}
+          credentials_json: ${{ env.FIREBASE_CREDS }}
 
       - name: Deploy compatibility functions only
         run: >
