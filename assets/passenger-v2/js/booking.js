@@ -448,420 +448,112 @@ ASIYE.booking = {
         request
     ) {
 
-        const taxisSnapshot =
-
-            await firebase
-                .database()
-                .ref(
-                    'taxis'
-                )
-                .once(
-                    'value'
-                );
+        const authUser =
+            firebase.auth()
+                .currentUser;
 
 
-        if (
-            !taxisSnapshot.exists()
-        ) {
+        if (!authUser) {
 
-            console.warn(
-                'No drivers found.'
+            throw new Error(
+                'Please sign in again before requesting a driver.'
             );
-
-            return {
-                mode:
-                    'none'
-            };
         }
 
 
-        const pickupLat =
-
-            Number(
-                request
-                    .commuterLocation
-                    ?.latitude
-            );
-
-
-        const pickupLng =
-
-            Number(
-                request
-                    .commuterLocation
-                    ?.longitude
-            );
-
-
-        const idleDrivers =
-            [];
-
-
-        const busyDrivers =
-            [];
-
-
-        taxisSnapshot.forEach(
-            child => {
-
-                const taxi =
-                    child.val() ||
-                    {};
-
-
-                const driverId =
-                    child.key;
-
-
-                if (
-                    taxi.isOnline !== true
-                ) {
-
-                    return;
-                }
-
-
-                const lat =
-                    Number(
-                        taxi.latitude
-                    );
-
-
-                const lng =
-                    Number(
-                        taxi.longitude
-                    );
-
-
-                if (
-                    !Number.isFinite(lat) ||
-                    !Number.isFinite(lng)
-                ) {
-
-                    return;
-                }
-
-
-                /*
-                 * Only normal e-hailing-compatible
-                 * drivers for Asiye Go.
-                 */
-
-                const vehicleType =
-
-                    String(
-                        taxi.vehicleType ||
-                        ''
-                    )
-                    .toLowerCase();
-
-
-                if (
-                    vehicleType &&
-                    ![
-                        'ehailing',
-                        'e-hailing',
-                        'go',
-                        'car'
-                    ].includes(
-                        vehicleType
-                    )
-                ) {
-
-                    return;
-                }
-
-
-                const distanceKm =
-
-                    this.distanceKm(
-
-                        pickupLat,
-                        pickupLng,
-
-                        lat,
-                        lng
-                    );
-
-
-                /*
-                 * Keep our local search radius.
-                 */
-
-                if (
-                    distanceKm > 10
-                ) {
-
-                    return;
-                }
-
-
-                const item = {
-
-                    driverId,
-                    taxi,
-                    distanceKm
-                };
-
-
-                if (
-                    taxi.currentRequest
-                ) {
-
-                    busyDrivers.push(
-                        item
-                    );
-
-                } else if (
-                    taxi.isFull !== true
-                ) {
-
-                    idleDrivers.push(
-                        item
-                    );
-                }
-            }
-        );
-
-
-        /* ========================================================
-           NEAREST FIRST
-           ======================================================== */
-
-        idleDrivers.sort(
-            (a, b) =>
-                a.distanceKm -
-                b.distanceKm
-        );
-
-
-        busyDrivers.sort(
-            (a, b) =>
-                a.distanceKm -
-                b.distanceKm
-        );
-
-
-        /* ========================================================
-           IDLE DRIVER AVAILABLE
-           ======================================================== */
-
-        if (
-            idleDrivers.length
-        ) {
-
-            const candidates =
-
-                idleDrivers.slice(
-                    0,
-                    8
+        const token =
+            await authUser
+                .getIdToken(
+                    true
                 );
 
 
-            await Promise.all(
+        let response;
 
-                candidates.map(
-                    async candidate => {
+        try {
 
-                        await firebase
-                            .database()
-                            .ref(
-                                `notifications/taxis/${candidate.driverId}/${requestId}`
-                            )
-                            .set({
+            response =
+                await fetch(
+                    'https://us-central1-asiye-80386.cloudfunctions.net/dispatchGoRideRequest',
+                    {
+                        method:
+                            'POST',
 
-                                type:
-                                    'ride_request',
+                        headers: {
+                            'Authorization':
+                                `Bearer ${token}`,
 
+                            'Content-Type':
+                                'application/json'
+                        },
+
+                        body:
+                            JSON.stringify({
                                 requestId:
-                                    requestId,
-
-                                rideType:
-                                    'go',
-
-                                commuterId:
-                                    request.commuterId,
-
-                                commuterName:
-                                    request.commuterName ||
-                                    'Passenger',
-
-                                pickupAddress:
-                                    request.pickupAddress ||
-                                    'Pickup',
-
-                                destination:
-                                    request.destination ||
-                                    request.destinationName ||
-                                    'Destination',
-
-                                fare:
-                                    request.finalAmount ||
-                                    request.calculatedPrice ||
-                                    0,
-
-                                distanceKm:
-                                    request.routeDistanceKm ||
-                                    0,
-
-                                timestamp:
-
-                                    firebase
-                                        .database
-                                        .ServerValue
-                                        .TIMESTAMP
-                            });
+                                    requestId
+                            })
                     }
-                )
+                );
+
+        } catch (error) {
+
+            console.error(
+                'Go dispatch network failure:',
+                error
             );
 
 
-            console.log(
-                `✅ Go request sent to ${candidates.length} available driver(s)`
+            throw new Error(
+                'Could not reach nearby drivers. Check your connection and try again.'
             );
-
-
-            return {
-
-                mode:
-                    'broadcast',
-
-                drivers:
-                    candidates.length
-            };
         }
 
 
-        /* ========================================================
-           NO IDLE DRIVER — RESERVE BUSY DRIVER
-           ======================================================== */
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                payload.error ||
+                'Could not send this ride request to nearby drivers.'
+            );
+        }
+
 
         if (
-            busyDrivers.length
+            payload.mode ===
+            'broadcast'
         ) {
 
-            const selected =
-                busyDrivers[0];
-
-
             console.log(
-                '⏳ No free driver. Queuing booking behind:',
-                selected.driverId
+                `✅ Go request sent to ${payload.drivers || 0} nearby driver(s)`
             );
 
+        } else if (
+            payload.mode ===
+            'queued'
+        ) {
 
-            /*
-             * IMPORTANT:
-             *
-             * DO NOT set taxiId here.
-             *
-             * taxiId means the driver has ACCEPTED.
-             */
+            console.log(
+                '⏳ Go request queued behind driver:',
+                payload.driverId
+            );
 
-            await firebase
-                .database()
-                .ref(
-                    `requests/${requestId}`
-                )
-                .update({
+        } else {
 
-                    status:
-                        'driver_busy',
-
-                    queuedTaxiId:
-                        selected.driverId,
-
-                    driverBusy:
-                        true,
-
-                    queuedAt:
-
-                        firebase
-                            .database
-                            .ServerValue
-                            .TIMESTAMP
-                });
-
-
-            /*
-             * Driver's queue.
-             */
-
-            await firebase
-                .database()
-                .ref(
-                    `taxis/${selected.driverId}/bookingQueue/${requestId}`
-                )
-                .set({
-
-                    requestId:
-                        requestId,
-
-                    commuterId:
-                        request.commuterId,
-
-                    commuterName:
-                        request.commuterName ||
-                        'Passenger',
-
-                    pickupAddress:
-                        request.pickupAddress ||
-                        'Pickup',
-
-                    destination:
-                        request.destination ||
-                        request.destinationName ||
-                        'Destination',
-
-                    fare:
-                        request.finalAmount ||
-                        request.calculatedPrice ||
-                        0,
-
-                    queuedAt:
-
-                        firebase
-                            .database
-                            .ServerValue
-                            .TIMESTAMP
-                });
-
-
-            return {
-
-                mode:
-                    'queued',
-
-                driverId:
-                    selected.driverId
-            };
+            console.log(
+                '🔎 Go request is searching for an online driver.'
+            );
         }
 
 
-        /* ========================================================
-           NO ONLINE DRIVER
-           ======================================================== */
-
-        await firebase
-            .database()
-            .ref(
-                `requests/${requestId}`
-            )
-            .update({
-
-                status:
-                    'searching',
-
-                driverBusy:
-                    false
-            });
-
-
-        return {
-
-            mode:
-                'none'
-        };
+        return payload;
     },
 
 
