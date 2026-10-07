@@ -109,7 +109,7 @@ class AsiyeMainShell extends StatefulWidget {
   State<AsiyeMainShell> createState() => _AsiyeMainShellState();
 }
 
-class _AsiyeMainShellState extends State<AsiyeMainShell> {
+class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObserver {
   WebViewController? _controller;
   Map<String, dynamic>? _pendingNotification;
   final FlutterTts _navigationTts = FlutterTts();
@@ -363,6 +363,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _loadingTimeoutTimer?.cancel();
     _positionSubscription?.cancel();
     _tokenSubscription?.cancel();
@@ -371,6 +372,41 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _navigationTts.stop();
     _nativeOtpController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_resumePendingCardPayment());
+    }
+  }
+
+  Future<void> _resumePendingCardPayment() async {
+    try {
+      await _controller?.runJavaScript("""
+        (() => {
+          if (
+            window.ASIYE &&
+            ASIYE.payments &&
+            typeof ASIYE.payments.resumePendingCard === 'function'
+          ) {
+            ASIYE.payments.resumePendingCard()
+              .catch((error) => {
+                console.warn(
+                  'Pending card payment not ready yet',
+                  error
+                );
+              });
+          }
+        })();
+      """);
+    } catch (error) {
+      debugPrint(
+        'Unable to resume pending card payment: $error'
+      );
+    }
   }
 
   Future<void> _savePushToken(String token) async {
@@ -453,6 +489,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeApp();
     unawaited(_restoreNativePhoneAuthState());
   }
@@ -567,6 +604,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               _restorePendingPhoneAuthToWeb();
             });
             if (_pendingNotification != null) await _openNotification(_pendingNotification!);
+
+            if (
+              url.contains('/passenger-v2/') &&
+              !url.contains('login.html')
+            ) {
+              unawaited(_resumePendingCardPayment());
+            }
           },
           onNavigationRequest: (request) async {
             if (request.url.contains('success.html') || request.url.contains('cancel.html')) {
