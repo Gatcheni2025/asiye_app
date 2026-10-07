@@ -4499,7 +4499,7 @@ const PAYSTACK_API =
   "https://api.paystack.co";
 
 const PAYSTACK_CALLBACK_URL =
-  "https://asiye-80386.web.app/payment-status.html";
+  "https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn";
 
 function paystackReference() {
   return (
@@ -4874,6 +4874,70 @@ async function creditPaystackWallet(
       creditedBalance
   };
 }
+
+exports.paystackPaymentReturn =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      const reference =
+        String(
+          request.query?.reference ||
+          request.query?.trxref ||
+          ""
+        )
+          .replace(
+            /[^A-Za-z0-9.=\-]/g,
+            ""
+          )
+          .slice(
+            0,
+            100
+          );
+
+      response
+        .status(200)
+        .set(
+          "Content-Type",
+          "text/html; charset=utf-8"
+        )
+        .set(
+          "Cache-Control",
+          "no-store"
+        )
+        .send(
+          `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asiye Payment</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fb;margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;color:#111}
+main{max-width:520px;background:#fff;border-radius:24px;padding:30px;box-shadow:0 18px 60px rgba(0,0,0,.1);text-align:center}
+strong{display:block;font-size:26px;margin-bottom:12px}
+p{color:#596170;line-height:1.55}
+.ref{background:#f2f4f7;border-radius:14px;padding:12px;margin:18px 0;word-break:break-all;font-family:ui-monospace,monospace}
+</style>
+</head>
+<body>
+<main>
+<strong>Payment submitted</strong>
+<p>Return to the Asiye app and tap <b>Check payment</b>. Your wallet is credited only after Asiye verifies the payment with Paystack.</p>
+<div class="ref">${reference ? "Reference: " + reference : "Payment reference received"}</div>
+</main>
+</body>
+</html>`
+        );
+    }
+  );
 
 exports.initializePaystackWalletTopup =
   onRequest(
