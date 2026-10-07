@@ -466,41 +466,342 @@ window.AsiyePages = {
             };
     },
 
-    async startEftTopup(amount, phone, passengerId, user) {
+    async startPaystackTopup(amount) {
         const authUser = firebase.auth().currentUser;
-        if (!authUser) throw new Error('Please sign in again before adding funds.');
+        if (!authUser) {
+            throw new Error(
+                'Please sign in again before adding funds.'
+            );
+        }
 
-        const cleanPhone = String(phone || user?.phone || user?.phoneNumber || '').trim();
-        if (!cleanPhone) throw new Error('Enter the mobile number that should receive your EFT banking details.');
+        const token =
+            await authUser.getIdToken(true);
 
-        // Google/Apple users may not have a Firebase Auth phone number. Store the
-        // supplied wallet/SMS number on their commuter profile before requesting
-        // the protected Twilio instruction endpoint.
-        if (passengerId) {
-            await firebase.database().ref(`commuters/${passengerId}`).update({
-                phone: cleanPhone,
-                phoneNumber: cleanPhone,
-                walletSmsPhoneUpdatedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-            if (user) {
-                user.phone = cleanPhone;
-                user.phoneNumber = cleanPhone;
+        const response =
+            await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/initializePaystackWalletTopup',
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${token}`,
+
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            amount:
+                                Number(amount)
+                        })
+                }
+            );
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+        if (!response.ok) {
+            throw new Error(
+                payload.error ||
+                'Unable to start the Paystack payment.'
+            );
+        }
+
+        return payload;
+    },
+
+    async checkPaystackTopup(reference) {
+        const authUser =
+            firebase.auth().currentUser;
+
+        if (!authUser) {
+            throw new Error(
+                'Please sign in again before checking payment.'
+            );
+        }
+
+        const token =
+            await authUser.getIdToken(true);
+
+        const response =
+            await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/verifyPaystackWalletTopup',
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${token}`,
+
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            reference:
+                                reference
+                        })
+                }
+            );
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+        if (!response.ok) {
+            throw new Error(
+                payload.error ||
+                'Unable to verify the Paystack payment.'
+            );
+        }
+
+        return payload;
+    },
+
+    openExternalPayment(url) {
+        const target =
+            String(url || '').trim();
+
+        if (!/^https:\/\//i.test(target)) {
+            throw new Error(
+                'The payment link is invalid.'
+            );
+        }
+
+        try {
+            if (
+                window.AndroidNav &&
+                typeof window.AndroidNav.postMessage ===
+                    'function'
+            ) {
+                window.AndroidNav.postMessage(
+                    JSON.stringify({
+                        action:
+                            'external_nav',
+                        url:
+                            target
+                    })
+                );
+
+                return;
+            }
+        } catch (_) {
+            // Fall through to the normal browser path.
+        }
+
+        const opened =
+            window.open(
+                target,
+                '_blank',
+                'noopener,noreferrer'
+            );
+
+        if (!opened) {
+            window.location.href =
+                target;
+        }
+    },
+
+    async refreshPassengerWallet(fallbackBalance = null) {
+        const app =
+            window.ASIYE;
+
+        const passengerId =
+            app?.state?.userId ||
+            localStorage.getItem('userId');
+
+        if (!passengerId) {
+            return Number(
+                fallbackBalance ||
+                0
+            );
+        }
+
+        let balance =
+            Number(
+                fallbackBalance ||
+                0
+            );
+
+        try {
+            const snapshot =
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${passengerId}`
+                    )
+                    .once('value');
+
+            const fresh =
+                snapshot.val() ||
+                {};
+
+            app.state.user =
+                app.state.user ||
+                {};
+
+            Object.assign(
+                app.state.user,
+                fresh
+            );
+
+            balance =
+                window.ASIYE?.wallet
+                    ?.applyProfile
+                ? ASIYE.wallet.applyProfile(
+                    fresh
+                )
+                : Number(
+                    fresh.walletBalance ??
+                    fresh.credits ??
+                    balance ??
+                    0
+                );
+        } catch (error) {
+            console.warn(
+                'Wallet profile refresh failed:',
+                error
+            );
+
+            if (app?.state?.user) {
+                app.state.user.walletBalance =
+                    balance;
+
+                app.state.user.credits =
+                    balance;
+
+                window.ASIYE?.wallet
+                    ?.paint?.(
+                        balance
+                    );
             }
         }
 
-        const token = await authUser.getIdToken(true);
-        const endpoint = 'https://us-central1-asiye-80386.cloudfunctions.net/createEftSmsTopup';
-        const response = await fetch(endpoint, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ amount: Number(amount) })
-        });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(payload.error || 'Unable to prepare the EFT top-up.');
-        return payload;
+        const visibleBalance =
+            document.querySelector(
+                '.member-page-wallet .member-balance strong'
+            );
+
+        if (visibleBalance) {
+            visibleBalance.textContent =
+                this.money(
+                    balance
+                );
+        }
+
+        return balance;
+    },
+
+    async handlePaystackReturn(reference) {
+        const safeReference =
+            String(
+                reference ||
+                localStorage.getItem(
+                    'pendingPaystackReference'
+                ) ||
+                ''
+            ).trim();
+
+        if (!safeReference) {
+            return;
+        }
+
+        localStorage.setItem(
+            'pendingPaystackReference',
+            safeReference
+        );
+
+        let lastError =
+            null;
+
+        for (
+            let attempt = 0;
+            attempt < 6;
+            attempt += 1
+        ) {
+            try {
+                const authUser =
+                    firebase?.auth?.()
+                        ?.currentUser;
+
+                if (!authUser) {
+                    throw new Error(
+                        'Waiting for your Asiye session…'
+                    );
+                }
+
+                const verified =
+                    await this.checkPaystackTopup(
+                        safeReference
+                    );
+
+                if (
+                    verified.status ===
+                    'complete'
+                ) {
+                    const balance =
+                        await this.refreshPassengerWallet(
+                            Number(
+                                verified.balance ||
+                                0
+                            )
+                        );
+
+                    localStorage.removeItem(
+                        'pendingPaystackReference'
+                    );
+
+                    window.ASIYE?.ui?.toast?.(
+                        `Payment confirmed. Wallet balance: ${this.money(balance)}`
+                    );
+
+                    await this.open(
+                        'wallet'
+                    );
+
+                    return;
+                }
+
+                lastError =
+                    new Error(
+                        `Payment status: ${verified.status || 'pending'}`
+                    );
+
+            } catch (error) {
+                lastError =
+                    error;
+            }
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        1000 +
+                        attempt * 500
+                    )
+            );
+        }
+
+        await this.open(
+            'wallet'
+        );
+
+        window.ASIYE?.ui?.toast?.(
+            lastError?.message ||
+            'Payment is still being confirmed.'
+        );
     },
 
     async open(page) {
@@ -618,27 +919,12 @@ window.AsiyePages = {
             }
         } else if (page === 'wallet') {
             body.innerHTML =
-                `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
+                `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.walletBalance ?? user.credits)}</strong></div>` +
                 note(
-                    'Choose an amount to add. Your FNB EFT details will appear here and Asiye will also send them by SMS. After payment, you will receive an SMS update when the EFT is confirmed and your wallet is credited.'
+                    'Add money securely with Paystack. You can pay by card, South African Instant EFT or Capitec Pay. Asiye credits the wallet only after Paystack confirms the payment.'
                 ) +
                 `
                 <form class="wallet-topup" data-wallet-topup>
-                    <label>Mobile number for EFT SMS</label>
-                    <div class="wallet-phone">
-                        <span>+27</span>
-                        <input
-                            name="phone"
-                            type="tel"
-                            inputmode="tel"
-                            autocomplete="tel"
-                            value="${esc(user.phone || user.phoneNumber || '')}"
-                            placeholder="e.g. 082 123 4567"
-                            required
-                        >
-                    </div>
-                    <p class="member-note">If you signed in with Google or Apple, add your mobile number here. Asiye will save it to your account and send the FNB banking details to this number via SMS.</p>
-
                     <label>Amount to add</label>
 
                     <div class="wallet-amounts">
@@ -663,13 +949,13 @@ window.AsiyePages = {
                     </div>
 
                     <button class="member-primary" type="submit">
-                        Add funds with EFT
+                        Pay securely with Paystack
                     </button>
 
-                    <div class="member-info" data-eft-result hidden></div>
+                    <div class="member-info" data-payment-result hidden></div>
 
                     <p class="member-note">
-                        Use the payment reference exactly. Asiye will notify you by SMS when your EFT is matched and the wallet credit is complete.
+                        Payment details are handled on Paystack's secure checkout. Asiye does not collect or store your card or online-banking password.
                     </p>
                 </form>` +
                 this.row(
@@ -689,7 +975,12 @@ window.AsiyePages = {
 
             const resultBox =
                 form.querySelector(
-                    '[data-eft-result]'
+                    '[data-payment-result]'
+                );
+
+            const balanceElement =
+                body.querySelector(
+                    '.member-balance strong'
                 );
 
             (form.querySelectorAll?.(
@@ -721,6 +1012,160 @@ window.AsiyePages = {
                     }
                 );
 
+            const renderPaymentState =
+                payment => {
+                    if (!resultBox) {
+                        return;
+                    }
+
+                    resultBox.hidden =
+                        false;
+
+                    const reference =
+                        esc(
+                            payment.reference ||
+                            ''
+                        );
+
+                    resultBox.innerHTML =
+                        `
+                        <strong>Paystack checkout ready</strong>
+
+                        <p>
+                            <b>Amount:</b> ${esc(this.money(payment.amount))}<br>
+                            <b>Reference:</b> ${reference}
+                        </p>
+
+                        <div class="member-payment-actions">
+                            <button
+                                class="member-primary"
+                                type="button"
+                                data-open-paystack
+                            >
+                                Open Paystack
+                            </button>
+
+                            <button
+                                class="member-primary member-secondary-support"
+                                type="button"
+                                data-check-paystack
+                            >
+                                Check payment
+                            </button>
+                        </div>
+
+                        <p class="member-note" data-paystack-status>
+                            Complete the payment on Paystack, return to Asiye, then tap Check payment. Successful payments are also confirmed automatically.
+                        </p>
+                        `;
+
+                    const status =
+                        resultBox.querySelector(
+                            '[data-paystack-status]'
+                        );
+
+                    resultBox
+                        .querySelector(
+                            '[data-open-paystack]'
+                        )
+                        .onclick =
+                            () => {
+                                this.openExternalPayment(
+                                    payment.authorizationUrl
+                                );
+                            };
+
+                    resultBox
+                        .querySelector(
+                            '[data-check-paystack]'
+                        )
+                        .onclick =
+                            async event => {
+                                const button =
+                                    event.currentTarget;
+
+                                button.disabled =
+                                    true;
+
+                                button.textContent =
+                                    'Checking…';
+
+                                if (status) {
+                                    status.textContent =
+                                        'Checking Paystack now…';
+                                }
+
+                                try {
+                                    const verified =
+                                        await this.checkPaystackTopup(
+                                            payment.reference
+                                        );
+
+                                    if (
+                                        verified.status ===
+                                        'complete'
+                                    ) {
+                                        const balance =
+                                            Number(
+                                                verified.balance ||
+                                                0
+                                            );
+
+                                        user.walletBalance =
+                                            balance;
+
+                                        user.credits =
+                                            balance;
+
+                                        if (balanceElement) {
+                                            balanceElement.textContent =
+                                                this.money(
+                                                    balance
+                                                );
+                                        }
+
+                                        if (status) {
+                                            status.textContent =
+                                                'Payment confirmed. Your Asiye wallet has been credited.';
+                                        }
+
+                                        button.textContent =
+                                            'Payment confirmed';
+
+                                        app.ui?.toast?.(
+                                            'Payment confirmed. Wallet updated.'
+                                        );
+
+                                        return;
+                                    }
+
+                                    if (status) {
+                                        status.textContent =
+                                            `Paystack status: ${esc(verified.status || 'pending')}. If you have just paid, wait a few seconds and check again.`;
+                                    }
+
+                                } catch (error) {
+                                    if (status) {
+                                        status.textContent =
+                                            error.message ||
+                                            'Unable to check the payment.';
+                                    }
+
+                                } finally {
+                                    if (
+                                        button.textContent !==
+                                        'Payment confirmed'
+                                    ) {
+                                        button.disabled =
+                                            false;
+
+                                        button.textContent =
+                                            'Check payment';
+                                    }
+                                }
+                            };
+                };
+
             form.onsubmit =
                 async event => {
                     event.preventDefault();
@@ -734,7 +1179,7 @@ window.AsiyePages = {
                         true;
 
                     submit.textContent =
-                        'Sending banking details…';
+                        'Opening Paystack…';
 
                     if (resultBox) {
                         resultBox.hidden =
@@ -742,62 +1187,37 @@ window.AsiyePages = {
 
                         resultBox.innerHTML =
                             `
-                            <strong>Preparing your EFT payment</strong>
+                            <strong>Preparing secure checkout</strong>
                             <p class="member-note">
-                                We are generating your banking details and requesting the SMS now…
+                                Asiye is creating your Paystack payment…
                             </p>
                             `;
                     }
 
                     try {
-                        const phoneInput = form.querySelector('input[name="phone"]');
                         const payment =
-                            await this.startEftTopup(
-                                Number(input.value),
-                                phoneInput?.value || '',
-                                id,
-                                user
+                            await this.startPaystackTopup(
+                                Number(
+                                    input.value
+                                )
                             );
 
-                        if (resultBox) {
-                            const smsQueued =
-                                payment.smsStatus ===
-                                    'sent';
+                        renderPaymentState(
+                            payment
+                        );
 
-                            resultBox.hidden =
-                                false;
+                        localStorage.setItem(
+                            'pendingPaystackReference',
+                            payment.reference ||
+                            ''
+                        );
 
-                            resultBox.innerHTML =
-                                `
-                                <strong>
-                                    ${smsQueued
-                                        ? 'EFT details ready · SMS requested'
-                                        : 'EFT details ready'}
-                                </strong>
-
-                                <p>
-                                    <b>Bank:</b> ${esc(payment.bank || 'FNB')}<br>
-                                    <b>Account:</b> ${esc(payment.accountNumber || '')}<br>
-                                    <b>Amount:</b> ${esc(this.money(payment.amount))}<br>
-                                    <b>Reference:</b> ${esc(payment.reference || '')}
-                                </p>
-
-                                <p class="member-note">
-                                    ${smsQueued
-                                        ? `Banking details have been accepted for SMS delivery to ${esc(payment.smsTo || 'your registered mobile number')}.`
-                                        : 'The instruction SMS could not be sent right now. You can still use the banking details shown above.'}
-                                </p>
-
-                                <p class="member-note">
-                                    After making the EFT, keep this reference exactly as shown. Asiye will send you an SMS update when the payment is confirmed and your wallet has been credited.
-                                </p>
-                                `;
-                        }
+                        this.openExternalPayment(
+                            payment.authorizationUrl
+                        );
 
                         app.ui?.toast?.(
-                            payment.smsStatus === 'sent'
-                                ? 'EFT details ready. SMS delivery requested.'
-                                : 'EFT details ready. Use the details shown on screen.'
+                            'Paystack checkout opened.'
                         );
 
                     } catch (error) {
@@ -807,7 +1227,7 @@ window.AsiyePages = {
 
                             resultBox.innerHTML =
                                 `
-                                <strong>Unable to prepare EFT payment</strong>
+                                <strong>Unable to start payment</strong>
                                 <p class="member-note">
                                     ${esc(
                                         error.message ||
@@ -819,7 +1239,7 @@ window.AsiyePages = {
 
                         app.ui?.toast?.(
                             error.message ||
-                            'Unable to prepare the EFT banking details.'
+                            'Unable to start Paystack.'
                         );
 
                     } finally {
@@ -827,9 +1247,71 @@ window.AsiyePages = {
                             false;
 
                         submit.textContent =
-                            'Add funds with EFT';
+                            'Pay securely with Paystack';
                     }
                 };
+
+            const pendingReference =
+                localStorage.getItem(
+                    'pendingPaystackReference'
+                );
+
+            if (pendingReference) {
+                const restoreStatus =
+                    async () => {
+                        try {
+                            const verified =
+                                await this.checkPaystackTopup(
+                                    pendingReference
+                                );
+
+                            if (
+                                verified.status ===
+                                'complete'
+                            ) {
+                                const balance =
+                                    Number(
+                                        verified.balance ||
+                                        0
+                                    );
+
+                                user.walletBalance =
+                                    balance;
+
+                                user.credits =
+                                    balance;
+
+                                if (balanceElement) {
+                                    balanceElement.textContent =
+                                        this.money(
+                                            balance
+                                        );
+                                }
+
+                                localStorage.removeItem(
+                                    'pendingPaystackReference'
+                                );
+
+                                if (resultBox) {
+                                    resultBox.hidden =
+                                        false;
+
+                                    resultBox.innerHTML =
+                                        `
+                                        <strong>Payment confirmed</strong>
+                                        <p class="member-note">
+                                            Your Paystack payment was verified and your Asiye wallet is now ${esc(this.money(balance))}.
+                                        </p>
+                                        `;
+                                }
+                            }
+                        } catch (_) {
+                            // Leave the pending payment available for manual checking.
+                        }
+                    };
+
+                restoreStatus();
+            }
         } else if (page === 'vehicle') {
             if (!driver || !id) {
                 body.innerHTML =
@@ -2111,6 +2593,43 @@ window.AsiyePages = {
                 body.querySelector('button').onclick = () => this.open(page);
             }
         }
+    }
+};
+
+
+window.onAsiyePaymentReturn = async payload => {
+    const reference =
+        typeof payload === 'string'
+            ? payload
+            : payload?.reference;
+
+    try {
+        const handledRide =
+            await window.ASIYE
+                ?.payments
+                ?.handleCardReturn?.(
+                    reference
+                );
+
+        if (handledRide) {
+            return;
+        }
+
+        await window.AsiyePages
+            ?.handlePaystackReturn(
+                reference
+            );
+
+    } catch (error) {
+        console.error(
+            'Paystack return handling failed:',
+            error
+        );
+
+        window.ASIYE?.ui?.toast?.(
+            error?.message ||
+            'Payment is still being confirmed.'
+        );
     }
 };
 
