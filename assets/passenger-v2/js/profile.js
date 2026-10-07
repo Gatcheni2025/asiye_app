@@ -37,6 +37,89 @@ ASIYE.profile = {
         }
     },
 
+    refreshUI(user = ASIYE.state?.user || {}) {
+        const url =
+            this.getUrl(
+                user
+            );
+
+        const name =
+            String(
+                user.name ||
+                user.firstName ||
+                user.fullName ||
+                'Asiye'
+            )
+            .trim();
+
+        const initial =
+            (
+                name.charAt(0) ||
+                'A'
+            )
+            .toUpperCase();
+
+        const render =
+            target => {
+                if (!target) {
+                    return;
+                }
+
+                if (url) {
+                    target.replaceChildren();
+
+                    const image =
+                        document.createElement(
+                            'img'
+                        );
+
+                    image.src =
+                        url;
+
+                    image.alt =
+                        'Passenger profile picture';
+
+                    image.style.cssText =
+                        'width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;';
+
+                    target.appendChild(
+                        image
+                    );
+                } else {
+                    target.textContent =
+                        initial;
+                }
+            };
+
+        render(
+            document.getElementById(
+                'profileInitial'
+            )
+        );
+
+        render(
+            document.getElementById(
+                'menuProfileAvatar'
+            )
+        );
+
+        document
+            .querySelectorAll(
+                '[data-passenger-profile-preview]'
+            )
+            .forEach(
+                image => {
+                    if (url) {
+                        image.src =
+                            url;
+                    }
+                }
+            );
+
+        return url;
+    },
+
+
     async saveFace(blob, userId = ASIYE.state?.userId) {
         if (!userId) {
             throw new Error('Passenger account is not loaded.');
@@ -96,11 +179,9 @@ ASIYE.profile = {
             }
         }
 
-        const avatar = document.getElementById('menuProfileAvatar');
-        if (avatar) {
-            avatar.innerHTML =
-                `<img src="${ASIYE.ui?.escape ? ASIYE.ui.escape(url) : url}" alt="Profile picture" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;">`;
-        }
+        this.refreshUI(
+            ASIYE.state.user
+        );
 
         return url;
     },
