@@ -2073,6 +2073,16 @@ document.addEventListener(
             commuter
         );
 
+        ASIYE.profile
+            ?.refreshUI?.(
+                commuter
+            );
+
+        ASIYE.wallet
+            ?.start?.(
+                commuterId
+            );
+
 
         localStorage.setItem(
             'userId',
