@@ -81,3 +81,34 @@ test('server Club join rejects over-capacity pools and is idempotent for existin
   assert.equal(same.joined, false);
   assert.equal(Object.keys(same.pool.passengers).length, 1);
 });
+
+
+test('Card passenger joins without a PIN until payment is confirmed', () => {
+  const pool = {
+    type: 'club',
+    capacity: 3,
+    calculatedPrice: 300,
+    status: 'pooling',
+    passengers: {
+      p1: { commuterId: 'p1', status: 'waiting_pool', price: 115 }
+    }
+  };
+
+  const result = applyClubJoin(
+    structuredClone(pool),
+    'p2',
+    {
+      name: 'Card Passenger',
+      pickupPin: '',
+      paymentMethod: 'card'
+    },
+    777
+  );
+
+  assert.equal(result.pool.passengers.p2.paymentMethod, 'card');
+  assert.equal(result.pool.passengers.p2.paymentStatus, 'waiting_pool');
+  assert.equal(result.pool.passengers.p2.pickupPin, '');
+  assert.equal(result.pool.passengers.p2.safetyShareRequired, true);
+  assert.equal(result.pool.passengers.p2.safetyShareCompleted, false);
+  assert.equal(result.pool.passengers.p2.status, 'waiting_pool');
+});
