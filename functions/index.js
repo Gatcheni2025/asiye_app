@@ -27,6 +27,8 @@ function nativeAuthCors(request, response) {
       "https://asiye.cloud",
       "https://www.asiye.cloud",
       "https://app.asiye.cloud",
+      "https://asiye-80386.web.app",
+      "https://asiye-80386.firebaseapp.com",
       "https://appassets.androidplatform.net"
     ]);
 
@@ -197,7 +199,9 @@ function walletSmsCors(request, response) {
     new Set([
       "https://asiye.cloud",
       "https://www.asiye.cloud",
-      "https://app.asiye.cloud"
+      "https://app.asiye.cloud",
+      "https://asiye-80386.web.app",
+      "https://asiye-80386.firebaseapp.com"
     ]);
 
   if (
@@ -4877,7 +4881,7 @@ exports.createTripShareToken = onRequest(
                 previous.expiresAt
               ),
             liveTrackingUrl:
-              `https://app.asiye.cloud/track.html?share=${encodeURIComponent(reusableToken)}`
+              `https://asiye-80386.web.app/track.html?share=${encodeURIComponent(reusableToken)}`
           });
       }
 
@@ -4938,7 +4942,7 @@ exports.createTripShareToken = onRequest(
           shareToken,
           expiresAt,
           liveTrackingUrl:
-            `https://app.asiye.cloud/track.html?share=${encodeURIComponent(shareToken)}`
+            `https://asiye-80386.web.app/track.html?share=${encodeURIComponent(shareToken)}`
         });
 
     } catch (error) {
