@@ -55,7 +55,7 @@ function nativeAuthCors(request, response) {
 
   response.set(
     "Access-Control-Allow-Headers",
-    "Authorization, Content-Type"
+    "Authorization, X-Firebase-Auth, Content-Type"
   );
 
   response.set(
@@ -10031,11 +10031,14 @@ function publicTripShareCors(request, response) {
 }
 
 async function verifiedRequestUser(request) {
+  const rawAuth =
+    request.get("x-firebase-auth") ||
+    request.get("authorization") ||
+    "";
+
   const match =
-    (
-      request.get("authorization") ||
-      ""
-    ).match(/^Bearer (.+)$/);
+    String(rawAuth)
+      .match(/^Bearer (.+)$/);
 
   if (!match) {
     return null;
