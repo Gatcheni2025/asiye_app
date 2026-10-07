@@ -32,18 +32,35 @@
       }
     },
     "requests": {
-      ".read": true,
-      ".write": true,
+      ".read": "auth != null",
+      ".write": "auth != null",
       ".indexOn": [
         "taxiId",
+        "driverAuthUid",
+        "queuedTaxiId",
         "status",
         "commuterId",
-        "timestamp"
+        "timestamp",
+        "createdAt"
       ]
     },
     "notifications": {
-      ".read": true,
-      ".write": true
+      "commuters": {
+        "$commuter": {
+          ".read": "auth != null && (auth.uid === $commuter || root.child('commuters').child($commuter).child('authUid').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
+          ".write": "auth != null"
+        }
+      },
+      "taxis": {
+        "$taxi": {
+          ".read": "auth != null && (auth.uid === $taxi || root.child('taxis').child($taxi).child('authUid').val() === auth.uid || root.child('taxis').child($taxi).child('userUid').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
+          ".write": "auth != null"
+        }
+      },
+      "$other": {
+        ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+        ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+      }
     },
     "chats": {
       ".read": true,
