@@ -1552,6 +1552,8 @@ ASIYE_DRIVER.trip = {
                         headers: {
                             'Authorization':
                                 `Bearer ${token}`,
+                            'X-Firebase-Auth':
+                                `Bearer ${token}`,
                             'Content-Type':
                                 'application/json'
                         },
