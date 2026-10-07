@@ -57,7 +57,7 @@ jobs:
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:initializePaystackWalletTopup,functions:verifyPaystackWalletTopup,functions:paystackWebhook"
+          --only "functions:initializePaystackWalletTopup,functions:verifyPaystackWalletTopup,functions:paystackWebhook,functions:paystackPaymentReturn"
           --non-interactive
 
       - name: Run isolated Paystack test-mode smoke
