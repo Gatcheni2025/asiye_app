@@ -1,0 +1,65 @@
+name: Deploy Paystack Test Backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy_paystack_test_from_main.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-and-smoke:
+    name: Deploy Paystack test backend and validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout validated Paystack branch
+        uses: actions/checkout@v4
+        with:
+          ref: security-payments-phase5
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify Firebase deployment secret
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Firebase service-account secret is unavailable."
+            exit 1
+          fi
+
+      - name: Authenticate to Firebase project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Validate Paystack function syntax
+        run: |
+          node --check functions/index.js
+          node --check functions/paystack-wallet.js
+          node --check functions/paystack-test-validation.js
+
+      - name: Deploy Paystack functions only
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --project asiye-80386
+          --only "functions:initializePaystackWalletTopup,functions:verifyPaystackWalletTopup,functions:paystackWebhook"
+          --non-interactive
+
+      - name: Run isolated Paystack test-mode smoke
+        working-directory: functions
+        run: node paystack-test-validation.js
