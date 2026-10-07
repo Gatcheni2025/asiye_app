@@ -2,6 +2,11 @@ name: Deploy Paystack Test Functions
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - security-payments-phase5
+    paths:
+      - '.github/workflows/deploy_paystack_test_functions.yml'
 
 permissions:
   contents: read
