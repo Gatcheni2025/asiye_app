@@ -1299,7 +1299,12 @@ window.AsiyePages = {
             );
 
             balance =
-                Number(
+                window.ASIYE?.wallet
+                    ?.applyProfile
+                ? ASIYE.wallet.applyProfile(
+                    fresh
+                )
+                : Number(
                     fresh.walletBalance ??
                     fresh.credits ??
                     balance ??
@@ -1317,6 +1322,11 @@ window.AsiyePages = {
 
                 app.state.user.credits =
                     balance;
+
+                window.ASIYE?.wallet
+                    ?.paint?.(
+                        balance
+                    );
             }
         }
 
