@@ -614,6 +614,186 @@ window.AsiyePages = {
         }
     },
 
+    async refreshPassengerWallet(fallbackBalance = null) {
+        const app =
+            window.ASIYE;
+
+        const passengerId =
+            app?.state?.userId ||
+            localStorage.getItem('userId');
+
+        if (!passengerId) {
+            return Number(
+                fallbackBalance ||
+                0
+            );
+        }
+
+        let balance =
+            Number(
+                fallbackBalance ||
+                0
+            );
+
+        try {
+            const snapshot =
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${passengerId}`
+                    )
+                    .once('value');
+
+            const fresh =
+                snapshot.val() ||
+                {};
+
+            app.state.user =
+                app.state.user ||
+                {};
+
+            Object.assign(
+                app.state.user,
+                fresh
+            );
+
+            balance =
+                Number(
+                    fresh.walletBalance ??
+                    fresh.credits ??
+                    balance ??
+                    0
+                );
+        } catch (error) {
+            console.warn(
+                'Wallet profile refresh failed:',
+                error
+            );
+
+            if (app?.state?.user) {
+                app.state.user.walletBalance =
+                    balance;
+
+                app.state.user.credits =
+                    balance;
+            }
+        }
+
+        const visibleBalance =
+            document.querySelector(
+                '.member-page-wallet .member-balance strong'
+            );
+
+        if (visibleBalance) {
+            visibleBalance.textContent =
+                this.money(
+                    balance
+                );
+        }
+
+        return balance;
+    },
+
+    async handlePaystackReturn(reference) {
+        const safeReference =
+            String(
+                reference ||
+                localStorage.getItem(
+                    'pendingPaystackReference'
+                ) ||
+                ''
+            ).trim();
+
+        if (!safeReference) {
+            return;
+        }
+
+        localStorage.setItem(
+            'pendingPaystackReference',
+            safeReference
+        );
+
+        let lastError =
+            null;
+
+        for (
+            let attempt = 0;
+            attempt < 6;
+            attempt += 1
+        ) {
+            try {
+                const authUser =
+                    firebase?.auth?.()
+                        ?.currentUser;
+
+                if (!authUser) {
+                    throw new Error(
+                        'Waiting for your Asiye session…'
+                    );
+                }
+
+                const verified =
+                    await this.checkPaystackTopup(
+                        safeReference
+                    );
+
+                if (
+                    verified.status ===
+                    'complete'
+                ) {
+                    const balance =
+                        await this.refreshPassengerWallet(
+                            Number(
+                                verified.balance ||
+                                0
+                            )
+                        );
+
+                    localStorage.removeItem(
+                        'pendingPaystackReference'
+                    );
+
+                    window.ASIYE?.ui?.toast?.(
+                        `Payment confirmed. Wallet balance: ${this.money(balance)}`
+                    );
+
+                    await this.open(
+                        'wallet'
+                    );
+
+                    return;
+                }
+
+                lastError =
+                    new Error(
+                        `Payment status: ${verified.status || 'pending'}`
+                    );
+
+            } catch (error) {
+                lastError =
+                    error;
+            }
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        1000 +
+                        attempt * 500
+                    )
+            );
+        }
+
+        await this.open(
+            'wallet'
+        );
+
+        window.ASIYE?.ui?.toast?.(
+            lastError?.message ||
+            'Payment is still being confirmed.'
+        );
+    },
+
     async startEftTopup(amount, phone, passengerId, user) {
         const authUser = firebase.auth().currentUser;
         if (!authUser) throw new Error('Please sign in again before adding funds.');
@@ -766,7 +946,7 @@ window.AsiyePages = {
             }
         } else if (page === 'wallet') {
             body.innerHTML =
-                `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.credits ?? user.walletBalance)}</strong></div>` +
+                `<div class="member-balance"><small>Available wallet balance</small><strong>${this.money(user.walletBalance ?? user.credits)}</strong></div>` +
                 note(
                     'Add money securely with Paystack. You can pay by card, South African Instant EFT or Capitec Pay. Asiye credits the wallet only after Paystack confirms the payment.'
                 ) +
@@ -2441,6 +2621,26 @@ window.AsiyePages = {
             }
         }
     }
+};
+
+
+window.onAsiyePaymentReturn = payload => {
+    const reference =
+        typeof payload === 'string'
+            ? payload
+            : payload?.reference;
+
+    window.AsiyePages
+        ?.handlePaystackReturn(
+            reference
+        )
+        .catch(
+            error =>
+                console.error(
+                    'Paystack return handling failed:',
+                    error
+                )
+        );
 };
 
 
