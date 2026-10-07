@@ -265,9 +265,6 @@ ASIYE.booking = {
             safetyShareCompleted:
                 false,
 
-            liveTrackingUrl:
-                '',
-
 
             /* Driver */
 
@@ -336,10 +333,7 @@ ASIYE.booking = {
                     firebase
                         .database
                         .ServerValue
-                        .TIMESTAMP,
-
-                liveTrackingUrl:
-                    liveTrackingUrl
+                        .TIMESTAMP
             });
 
 
@@ -348,9 +342,6 @@ ASIYE.booking = {
 
             requestData.safetyShareCompleted =
                 true;
-
-            requestData.liveTrackingUrl =
-                liveTrackingUrl;
 
         } catch (error) {
 
