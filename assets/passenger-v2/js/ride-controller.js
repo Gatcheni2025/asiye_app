@@ -153,6 +153,20 @@ ASIYE.ride = {
                     window.AsiyeTripChat?.watchTrip?.(request, requestId);
 
 
+                    ASIYE.payments
+                        ?.handleTripState?.(
+                            request
+                        )
+                        ?.catch?.(
+                            error => {
+                                console.warn(
+                                    'Club payment state handling failed:',
+                                    error
+                                );
+                            }
+                        );
+
+
                     this.handleRequest(
                         request
                     );
@@ -303,6 +317,25 @@ ASIYE.ride = {
                     .renderClubWaiting(
                         request
                     );
+
+                break;
+
+
+            case 'payment_required':
+
+                if (
+                    request.type ===
+                        'club'
+                ) {
+                    ASIYE.ui
+                        .renderClubWaiting(
+                            request
+                        );
+                } else {
+                    this.renderSearching(
+                        request
+                    );
+                }
 
                 break;
 
