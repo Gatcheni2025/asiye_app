@@ -1,0 +1,81 @@
+name: Deploy Hardened Database Rules
+
+on:
+  push:
+    branches:
+      - security-compatibility-phase4
+    paths:
+      - '.github/workflows/deploy_hardened_database_rules.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy-and-validate:
+    name: Deploy hardened RTDB rules and validate production trips
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout validated security branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install security test dependencies
+        working-directory: test/security
+        run: npm install --no-audit --no-fund
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Validate JSON and JavaScript
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8')); console.log('database.rules.json JSON valid')"
+          node --check functions/index.js
+          node --check functions/club-pool-security.js
+          node --check functions/trip-share-security.js
+          node --check functions/production-trip-validation.js
+          node --check assets/passenger-v2/js/booking.js
+          node --check assets/passenger-v2/js/club.js
+
+      - name: Run Firebase security emulator tests
+        working-directory: test/security
+        run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json "npm test"
+
+      - name: Verify Firebase deployment secret
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Firebase service-account secret is not available."
+            exit 1
+          fi
+
+      - name: Authenticate to Firebase production
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Deploy Realtime Database rules only
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --project asiye-80386
+          --only database
+          --non-interactive
+
+      - name: Re-run controlled production Go and Club validation
+        working-directory: functions
+        run: node production-trip-validation.js
