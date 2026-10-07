@@ -98,6 +98,16 @@
 				<string>com.googleusercontent.apps.531902350858-a0nbhpf7udkj1m67umfm5905q9vs5e46</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.asiyeapp.asiye.payment</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>asiye</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>
