@@ -4551,61 +4551,193 @@ exports.joinClubPoolSecure = onRequest(
         paymentMethod: request.body?.paymentMethod
       };
 
-      const poolRef = admin.database().ref(`requests/${poolId}`);
-
       /*
-       * IMPORTANT:
-       * Admin RTDB transactions can invoke the first local update callback
-       * with an empty cache even when the record exists on the server.
-       * Prime this exact reference with a server read before starting the
-       * transaction so a valid Club pool is not mistaken for a missing pool.
+       * Use an RTDB ETag conditional write instead of the Admin SDK
+       * transaction helper here. In Cloud Functions the Admin transaction
+       * callback can begin with a local null cache value even when this pool
+       * already exists, which caused valid Club joins to abort as
+       * "Club pool was not found."
        *
-       * If the pool changes after this read, the RTDB transaction still
-       * performs its normal server-side retry/conflict handling.
+       * ETag + If-Match keeps the join atomic without ever treating an empty
+       * local cache as the authoritative server state. If another passenger
+       * joins at the same time, the 412 response causes us to reload and
+       * recompute capacity/pricing before retrying.
        */
-      const initialPoolSnapshot =
-        await poolRef.once("value");
+      const firebaseConfig =
+        (() => {
+          try {
+            return JSON.parse(
+              process.env.FIREBASE_CONFIG ||
+              "{}"
+            );
+          } catch (_) {
+            return {};
+          }
+        })();
 
-      const initialPool =
-        initialPoolSnapshot.val();
+      const databaseURL =
+        String(
+          firebaseConfig.databaseURL ||
+          "https://asiye-80386-default-rtdb.firebaseio.com"
+        )
+        .replace(/\\\/$/, "");
+
+      const credential =
+        admin.app().options.credential;
 
       if (
-        !initialPool ||
-        initialPool.type !== "club"
+        !credential ||
+        typeof credential.getAccessToken !==
+          "function"
       ) {
-        return response.status(404).json({
-          error: "Club pool was not found."
-        });
+        throw new Error(
+          "Firebase Admin credential is unavailable."
+        );
       }
 
-      let transactionError = null;
+      const access =
+        await credential.getAccessToken();
 
-      const result = await poolRef.transaction(current => {
-        transactionError = null;
+      const accessToken =
+        access?.access_token;
+
+      if (!accessToken) {
+        throw new Error(
+          "Firebase Admin access token is unavailable."
+        );
+      }
+
+      const poolUrl =
+        `${databaseURL}/requests/${encodeURIComponent(poolId)}.json`;
+
+      let saved = null;
+      let joinError = null;
+
+      for (
+        let attempt = 0;
+        attempt < 5;
+        attempt += 1
+      ) {
+        const readResponse =
+          await fetch(
+            poolUrl,
+            {
+              method:
+                "GET",
+              headers: {
+                Authorization:
+                  `Bearer ${accessToken}`,
+                "X-Firebase-ETag":
+                  "true",
+                "Cache-Control":
+                  "no-cache"
+              }
+            }
+          );
+
+        if (!readResponse.ok) {
+          throw new Error(
+            `Unable to load Club pool (${readResponse.status}).`
+          );
+        }
+
+        const current =
+          await readResponse.json();
+
+        const etag =
+          readResponse.headers.get(
+            "etag"
+          );
+
+        if (
+          !current ||
+          current.type !== "club"
+        ) {
+          joinError =
+            new Error(
+              "Club pool was not found."
+            );
+          joinError.code =
+            "club/not-found";
+          break;
+        }
+
+        let next;
 
         try {
-          return applyClubJoin(
-            current,
-            passengerId,
-            details,
-            admin.database.ServerValue.TIMESTAMP
-          ).pool;
+          next =
+            applyClubJoin(
+              current,
+              passengerId,
+              details,
+              Date.now()
+            ).pool;
         } catch (error) {
-          transactionError = error;
-          return;
+          joinError =
+            error;
+          break;
         }
-      });
 
-      if (!result.committed) {
+        if (!etag) {
+          throw new Error(
+            "Club pool version token is unavailable."
+          );
+        }
+
+        const writeResponse =
+          await fetch(
+            poolUrl,
+            {
+              method:
+                "PUT",
+              headers: {
+                Authorization:
+                  `Bearer ${accessToken}`,
+                "Content-Type":
+                  "application/json",
+                "If-Match":
+                  etag
+              },
+              body:
+                JSON.stringify(
+                  next
+                )
+            }
+          );
+
+        if (
+          writeResponse.status ===
+          412
+        ) {
+          continue;
+        }
+
+        if (!writeResponse.ok) {
+          throw new Error(
+            `Unable to save Club join (${writeResponse.status}).`
+          );
+        }
+
+        saved =
+          await writeResponse.json();
+
+        break;
+      }
+
+      if (!saved) {
         const status =
-          transactionError?.code === "club/full"
+          joinError?.code ===
+            "club/full"
             ? 409
-            : 400;
+            : joinError?.code ===
+                "club/not-found"
+              ? 404
+              : 409;
 
         return response.status(status).json({
           error:
-            transactionError?.message ||
-            "Unable to join this Club ride."
+            joinError?.message ||
+            "The Club ride changed while you were joining. Please try again."
         });
       }
 
@@ -4653,8 +4785,6 @@ exports.joinClubPoolSecure = onRequest(
           });
         }
       }
-
-      const saved = result.snapshot.val() || {};
 
       return response.status(200).json({
         ok: true,
