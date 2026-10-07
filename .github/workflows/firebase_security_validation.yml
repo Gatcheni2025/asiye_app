@@ -9,6 +9,8 @@ on:
       - 'functions/index.js'
       - 'functions/club-pool-security.js'
       - 'functions/trip-share-security.js'
+      - 'functions/paystack-wallet.js'
+      - 'assets/member-pages.js'
       - 'assets/passenger-v2/js/booking.js'
       - 'assets/passenger-v2/js/club.js'
       - 'assets/track.html'
@@ -17,6 +19,7 @@ on:
     branches:
       - security-validation-phase3
       - security-compatibility-phase4
+      - security-payments-phase5
     paths:
       - 'database.rules.json'
       - 'firebase.json'
@@ -24,6 +27,8 @@ on:
       - 'functions/index.js'
       - 'functions/club-pool-security.js'
       - 'functions/trip-share-security.js'
+      - 'functions/paystack-wallet.js'
+      - 'assets/member-pages.js'
       - 'assets/passenger-v2/js/booking.js'
       - 'assets/passenger-v2/js/club.js'
       - 'assets/track.html'
@@ -60,6 +65,8 @@ jobs:
           node --check functions/index.js
           node --check functions/club-pool-security.js
           node --check functions/trip-share-security.js
+          node --check functions/paystack-wallet.js
+          node --check assets/member-pages.js
           node --check assets/passenger-v2/js/booking.js
           node --check assets/passenger-v2/js/club.js
 
