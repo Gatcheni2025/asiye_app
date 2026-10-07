@@ -4618,6 +4618,8 @@ exports.joinClubPoolSecure = onRequest(
 const crypto = require("node:crypto");
 const {
   canIssueTripShare,
+  isJoinableClubRequest,
+  isTripShareParticipant,
   legacyShareAllowed,
   sanitizeRequest,
   sanitizeTaxi
@@ -4764,6 +4766,19 @@ exports.createTripShareToken = onRequest(
           decoded.uid
         );
 
+      const participant =
+        isTripShareParticipant(
+          trip,
+          passengerId,
+          decoded.uid
+        );
+
+      const prospectiveClubJoin =
+        !participant &&
+        isJoinableClubRequest(
+          trip
+        );
+
       if (
         !canIssueTripShare(
           trip,
@@ -4857,7 +4872,11 @@ exports.createTripShareToken = onRequest(
                   .TIMESTAMP,
               expiresAt,
               revoked:
-                false
+                false,
+              active:
+                participant,
+              requiresJoin:
+                prospectiveClubJoin
             },
           [`tripShareIssuers/${requestId}/${decoded.uid}`]:
             {
@@ -4977,6 +4996,15 @@ exports.getTripShare = onRequest(
             .json({
               error:
                 "This live tracking link has expired."
+            });
+        }
+
+        if (token.active === false) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "Waiting for the passenger to join this Club ride."
             });
         }
 
