@@ -5399,13 +5399,13 @@ exports.paystackWebhook =
             .send("ok");
         }
 
-        const transaction =
+        const eventTransaction =
           event.data ||
           {};
 
         const reference =
           sanitizeReference(
-            transaction.reference
+            eventTransaction.reference
           );
 
         const paymentRef =
@@ -5433,9 +5433,20 @@ exports.paystackWebhook =
             .send("ok");
         }
 
+        /*
+         * Never deliver wallet value from the webhook payload alone.
+         * Re-verify the transaction directly with Paystack so amount,
+         * currency, reference and final success state are all confirmed
+         * server-to-server before crediting the wallet.
+         */
+        const verifiedTransaction =
+          await verifyPaystackReference(
+            reference
+          );
+
         await creditPaystackWallet(
           payment,
-          transaction
+          verifiedTransaction
         );
 
         return response
