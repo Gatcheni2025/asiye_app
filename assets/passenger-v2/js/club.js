@@ -667,6 +667,24 @@ ASIYE.club = {
         );
 
 
+        if (
+            payload.passengerPaymentStatus ===
+                'payment_required' &&
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+                .toLowerCase() ===
+                'card'
+        ) {
+            await ASIYE.payments
+                ?.prepare?.(
+                    poolId
+                );
+        }
+
+
         return poolId;
     },
 
@@ -804,6 +822,9 @@ ASIYE.club = {
                 )
                 .toLowerCase(),
 
+            paymentStatus:
+                'waiting_pool',
+
             status:
                 'waiting_pool',
 
@@ -834,6 +855,12 @@ ASIYE.club = {
 
             poolReady:
                 false,
+
+            paymentsReady:
+                false,
+
+            paymentStatus:
+                'waiting_pool',
 
             capacity:
                 config.capacity,
