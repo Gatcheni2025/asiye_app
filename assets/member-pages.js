@@ -3300,23 +3300,40 @@ window.AsiyePages = {
 };
 
 
-window.onAsiyePaymentReturn = payload => {
+window.onAsiyePaymentReturn = async payload => {
     const reference =
         typeof payload === 'string'
             ? payload
             : payload?.reference;
 
-    window.AsiyePages
-        ?.handlePaystackReturn(
-            reference
-        )
-        .catch(
-            error =>
-                console.error(
-                    'Paystack return handling failed:',
-                    error
-                )
+    try {
+        const handledRide =
+            await window.ASIYE
+                ?.payments
+                ?.handleCardReturn?.(
+                    reference
+                );
+
+        if (handledRide) {
+            return;
+        }
+
+        await window.AsiyePages
+            ?.handlePaystackReturn(
+                reference
+            );
+
+    } catch (error) {
+        console.error(
+            'Paystack return handling failed:',
+            error
         );
+
+        window.ASIYE?.ui?.toast?.(
+            error?.message ||
+            'Payment is still being confirmed.'
+        );
+    }
 };
 
 
