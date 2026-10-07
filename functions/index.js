@@ -1499,12 +1499,36 @@ exports.notifyPassengerOnGoBookingCreated = functions.database
       0
     );
 
+    const cardPaymentRequired =
+      String(
+        request.paymentMethod ||
+        ""
+      ).toLowerCase() === "card" &&
+      ![
+        "held",
+        "captured"
+      ].includes(
+        String(
+          request.paymentStatus ||
+          ""
+        )
+      );
+
     return admin.database()
       .ref(`/notifications/commuters/${request.commuterId}`)
       .push({
-        type: "booking_received",
-        title: "Booking received",
-        message: `We received your booking and are finding you a car. Amount to pay: R${money(amount)}.`,
+        type:
+          cardPaymentRequired
+            ? "payment_required"
+            : "booking_received",
+        title:
+          cardPaymentRequired
+            ? "Complete your Paystack payment"
+            : "Booking received",
+        message:
+          cardPaymentRequired
+            ? `Pay R${money(amount)} securely with Paystack. Your booking will only be sent to drivers and your pickup PIN created after payment is confirmed.`
+            : `We received your booking and are finding you a car. Amount to pay: R${money(amount)}.`,
         requestId: context.params.requestId,
         amount,
         timestamp: admin.database.ServerValue.TIMESTAMP
