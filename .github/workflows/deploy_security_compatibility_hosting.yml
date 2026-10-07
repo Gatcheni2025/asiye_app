@@ -1,0 +1,66 @@
+name: Deploy Security Compatibility Hosting
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/deploy_security_compatibility_hosting.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy passenger compatibility hosting
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout validated compatibility branch
+        uses: actions/checkout@v4
+        with:
+          ref: security-compatibility-phase4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate passenger compatibility JavaScript
+        run: |
+          node --check assets/passenger-v2/js/booking.js
+          node --check assets/passenger-v2/js/club.js
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.readFileSync('assets/track.html','utf8');
+          const blocks=[...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+          if(!blocks.length) throw new Error('No inline tracking script found');
+          for(const [,code] of blocks) new Function(code);
+          if(/firebase-database\.js/.test(html)) throw new Error('track.html still loads Firebase Database directly');
+          if(/db\.ref\(["'](?:requests|taxis)\//.test(html)) throw new Error('track.html still reads protected RTDB nodes');
+          if(!/getTripShare/.test(html)) throw new Error('track.html is not using getTripShare');
+          NODE
+
+      - name: Verify Firebase deployment secret
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Firebase service-account secret is not available."
+            exit 1
+          fi
+
+      - name: Authenticate to Firebase project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Deploy hosting compatibility code only
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --project asiye-80386
+          --only hosting
+          --non-interactive
