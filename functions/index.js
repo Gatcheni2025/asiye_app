@@ -4880,6 +4880,8 @@ exports.initializePaystackWalletTopup =
     {
       region:
         "us-central1",
+      invoker:
+        "public",
       secrets: [
         paystackSecretKey
       ]
@@ -5107,6 +5109,8 @@ exports.verifyPaystackWalletTopup =
     {
       region:
         "us-central1",
+      invoker:
+        "public",
       secrets: [
         paystackSecretKey
       ]
@@ -5312,6 +5316,8 @@ exports.paystackWebhook =
     {
       region:
         "us-central1",
+      invoker:
+        "public",
       secrets: [
         paystackSecretKey
       ]
