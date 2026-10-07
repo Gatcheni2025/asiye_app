@@ -1504,6 +1504,41 @@ ASIYE.ui = {
                 );
 
 
+        const currentPassenger =
+            request.passengers?.[
+                ASIYE.state.userId
+            ] ||
+            {};
+
+
+        const currentPaymentMethod =
+            String(
+                currentPassenger.paymentMethod ||
+                request.paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+
+        const currentPaymentStatus =
+            String(
+                currentPassenger.paymentStatus ||
+                ''
+            );
+
+
+        const cardPaymentRequired =
+            progress.ready &&
+            currentPaymentMethod ===
+                'card' &&
+            ![
+                'held',
+                'captured'
+            ].includes(
+                currentPaymentStatus
+            );
+
+
         container.innerHTML = `
 
             <div class="club-waiting-header">
@@ -1526,6 +1561,10 @@ ASIYE.ui = {
                     <h2 class="home-title">
 
                         ${
+                            cardPaymentRequired
+                            ?
+                            'Complete your payment'
+                            :
                             progress.ready
                             ?
                             'Your Club is ready'
@@ -1616,6 +1655,14 @@ ASIYE.ui = {
                     <strong>
 
                         ${
+                            cardPaymentRequired
+
+                            ?
+
+                            'Card payment required'
+
+                            :
+
                             progress.ready
 
                             ?
@@ -1632,6 +1679,14 @@ ASIYE.ui = {
                     <p>
 
                         ${
+                            cardPaymentRequired
+
+                            ?
+
+                            'All seats are filled. Pay securely with Paystack before your pickup PIN is created and collection can start.'
+
+                            :
+
                             progress.ready
 
                             ?
@@ -1648,6 +1703,29 @@ ASIYE.ui = {
                 </div>
 
             </div>
+
+
+            ${ 
+                cardPaymentRequired
+
+                ?
+
+                `
+
+                <button
+                    class="primary-button"
+                    id="openClubCardPayment"
+                    style="margin-top:12px;"
+                >
+                    Open Paystack
+                </button>
+
+                `
+
+                :
+
+                ''
+            }
 
 
             ${
@@ -1673,6 +1751,30 @@ ASIYE.ui = {
             }
 
         `;
+
+
+        document
+            .getElementById(
+                'openClubCardPayment'
+            )
+            ?.addEventListener(
+                'click',
+                async () => {
+                    try {
+                        await ASIYE.payments
+                            ?.prepare?.(
+                                request.requestId ||
+                                ASIYE.state.booking
+                                    .requestId
+                            );
+                    } catch (error) {
+                        this.toast(
+                            error?.message ||
+                            'Unable to open Paystack.'
+                        );
+                    }
+                }
+            );
 
 
         document
