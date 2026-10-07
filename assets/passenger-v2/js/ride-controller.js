@@ -203,6 +203,11 @@ ASIYE.ride = {
 
     handleRequest(request) {
 
+        ASIYE.payments
+            ?.handleTripState?.(
+                request
+            );
+
         let status =
             request.status ||
             'pending';
@@ -303,6 +308,25 @@ ASIYE.ride = {
                     .renderClubWaiting(
                         request
                     );
+
+                break;
+
+
+            case 'payment_required':
+
+                if (
+                    request.type ===
+                        'club'
+                ) {
+                    ASIYE.ui
+                        .renderClubWaiting(
+                            request
+                        );
+                } else {
+                    this.renderPaymentRequired(
+                        request
+                    );
+                }
 
                 break;
 
@@ -452,6 +476,58 @@ ASIYE.ride = {
                     .renderHome();
 
                 break;
+        }
+    },
+
+
+    renderPaymentRequired(request) {
+
+        const container =
+            document.getElementById(
+                'sheetContent'
+            );
+
+        if (!container) return;
+
+        const method =
+            String(
+                request.paymentMethod ||
+                'card'
+            )
+                .toLowerCase();
+
+        container.innerHTML = `
+            <div class="asiye-row">
+                <div class="asiye-status-icon asiye-search-icon">
+                    <i class="fas fa-credit-card"></i>
+                </div>
+
+                <div>
+                    <strong>Complete payment</strong>
+                    <p style="margin:6px 0 0;color:#777;font-size:12px;line-height:1.45;">
+                        ${method === 'card'
+                            ? 'Complete the Paystack card payment before Asiye sends this request to a driver.'
+                            : 'Your selected payment method must be ready before the ride can continue.'}
+                    </p>
+                </div>
+            </div>
+        `;
+
+        if (
+            method ===
+                'card'
+        ) {
+            ASIYE.payments
+                ?.prepare?.(
+                    request.requestId
+                )
+                .catch(
+                    error =>
+                        ASIYE.ui?.toast?.(
+                            error.message ||
+                            'Unable to reopen card payment.'
+                        )
+                );
         }
     },
 
