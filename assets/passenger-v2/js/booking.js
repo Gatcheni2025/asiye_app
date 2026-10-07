@@ -94,22 +94,36 @@ ASIYE.booking = {
             );
 
 
+        const paymentMethod =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+
         if (
-            !ASIYE.wallet ||
-            typeof ASIYE.wallet.requireFare !==
-                'function'
+            paymentMethod ===
+            'wallet'
         ) {
-            throw new Error(
-                'Asiye Wallet is unavailable. Reopen the app and try again.'
-            );
+            if (
+                !ASIYE.wallet ||
+                typeof ASIYE.wallet.requireFare !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Asiye Wallet is unavailable. Reopen the app and try again.'
+                );
+            }
+
+
+            await ASIYE.wallet
+                .requireFare(
+                    fare,
+                    'Asiye Go'
+                );
         }
-
-
-        await ASIYE.wallet
-            .requireFare(
-                fare,
-                'Asiye Go'
-            );
 
 
         const profileImageUrl =
@@ -264,7 +278,7 @@ ASIYE.booking = {
                 0.20,
 
             paymentMethod:
-                'wallet',
+                paymentMethod,
 
 
             /* Safety */
