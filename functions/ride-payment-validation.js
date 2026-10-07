@@ -60,6 +60,7 @@ async function post(endpoint, token, body) {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
+      'X-Firebase-Auth': `Bearer ${token}`,
       'Content-Type': 'application/json',
       Origin: 'https://appassets.androidplatform.net'
     },
