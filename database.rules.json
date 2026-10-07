@@ -33,7 +33,6 @@
     },
     "requests": {
       ".read": "auth != null",
-      ".write": "auth != null",
       ".indexOn": [
         "taxiId",
         "driverAuthUid",
@@ -42,7 +41,19 @@
         "commuterId",
         "timestamp",
         "createdAt"
-      ]
+      ],
+      "$request": {
+        ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || (!data.exists() && (newData.child('commuterId').val() === auth.uid || root.child('commuters').child(newData.child('commuterId').val()).child('authUid').val() === auth.uid)) || (data.exists() && (data.child('commuterId').val() === auth.uid || root.child('commuters').child(data.child('commuterId').val()).child('authUid').val() === auth.uid || data.child('driverAuthUid').val() === auth.uid || (data.child('taxiId').exists() && (data.child('taxiId').val() === auth.uid || root.child('taxis').child(data.child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(data.child('taxiId').val()).child('userUid').val() === auth.uid)) || (!data.child('taxiId').exists() && newData.child('taxiId').exists() && (newData.child('taxiId').val() === auth.uid || root.child('taxis').child(newData.child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(newData.child('taxiId').val()).child('userUid').val() === auth.uid)) || data.child('passengers').child(auth.uid).exists())))",
+        "commuterId": {
+          ".validate": "!data.exists() || newData.val() === data.val()"
+        },
+        "driverAuthUid": {
+          ".validate": "!newData.exists() || newData.val() === auth.uid || newData.val() === data.val() || root.child('admins').child(auth.uid).exists()"
+        },
+        "taxiId": {
+          ".validate": "!newData.exists() || newData.val() === data.val() || newData.val() === auth.uid || root.child('taxis').child(newData.val()).child('authUid').val() === auth.uid || root.child('taxis').child(newData.val()).child('userUid').val() === auth.uid || root.child('admins').child(auth.uid).exists()"
+        }
+      }
     },
     "notifications": {
       "commuters": {
