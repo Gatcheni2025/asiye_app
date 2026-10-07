@@ -66,7 +66,7 @@ ASIYE.state = {
             null,
 
         paymentMethod:
-            'cash',
+            'wallet',
 
         fare:
             0,
