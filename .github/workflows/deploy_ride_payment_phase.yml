@@ -90,7 +90,7 @@ jobs:
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:prepareTripPayment,functions:verifyTripCardPayment,functions:settleTripPayment,functions:releaseTripPayment,functions:initializePaystackWalletTopup,functions:verifyPaystackWalletTopup,functions:paystackPaymentReturn,functions:paystackWebhook,functions:joinClubPoolSecure,functions:notifyDriversWhenClubReady,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:releaseCancelledGoTripPayment,functions:releaseCancelledClubPassengerPayment"
+          --only "functions:prepareTripPayment,functions:verifyTripCardPayment,functions:settleTripPayment,functions:releaseTripPayment,functions:initializePaystackWalletTopup,functions:verifyPaystackWalletTopup,functions:paystackPaymentReturn,functions:paystackWebhook,functions:joinClubPoolSecure,functions:notifyDriversWhenClubReady,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:releaseCancelledGoTripPayment,functions:releaseCancelledClubPassengerPayment,functions:notifyPassengerOnGoBookingCreated"
           --non-interactive
 
       - name: Run production cash-card-wallet smoke
