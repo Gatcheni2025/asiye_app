@@ -878,9 +878,6 @@ ASIYE.club = {
             safetyShareCompleted:
                 false,
 
-            liveTrackingUrl:
-                '',
-
             commuterLocation: {
 
                 latitude:
@@ -991,9 +988,6 @@ ASIYE.club = {
                         .ServerValue
                         .TIMESTAMP,
 
-                liveTrackingUrl:
-                    liveTrackingUrl,
-
                 [`passengers/${uid}/safetyShareCompleted`]:
                     true,
 
@@ -1010,9 +1004,6 @@ ASIYE.club = {
 
             requestData.safetyShareCompleted =
                 true;
-
-            requestData.liveTrackingUrl =
-                liveTrackingUrl;
 
         } catch (error) {
 
