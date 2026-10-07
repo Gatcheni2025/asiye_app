@@ -40,12 +40,13 @@ ASIYE.ui = {
 
 
         const credits =
-
-            Number(
-                user.credits ||
-                user.walletBalance ||
-                0
-            );
+            ASIYE.wallet?.balance
+                ? ASIYE.wallet.balance(user)
+                : Number(
+                    user.walletBalance ??
+                    user.credits ??
+                    0
+                );
 
 
         container.innerHTML = `
@@ -1811,6 +1812,11 @@ document.addEventListener(
             commuterId,
             commuter
         );
+
+        ASIYE.wallet
+            ?.start?.(
+                commuterId
+            );
 
 
         localStorage.setItem(
