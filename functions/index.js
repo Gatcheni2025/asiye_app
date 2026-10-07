@@ -4469,3 +4469,140 @@ exports.submitAccountDeletionRequest = onRequest(
     }
   }
 );
+
+
+// =================================================================
+// --- SECURE ASIYE CLUB JOIN ---
+// =================================================================
+// Client users may request to join a Club pool, but all pool-wide mutations
+// (capacity, pricing, ready state, passenger count) are performed here with
+// the Admin SDK so a passenger cannot rewrite another passenger or trip state.
+const { applyClubJoin } = require("./club-pool-security");
+
+exports.joinClubPoolSecure = onRequest(
+  {
+    region: "us-central1"
+  },
+  async (request, response) => {
+    walletSmsCors(request, response);
+
+    if (request.method === "OPTIONS") {
+      return response.status(204).send("");
+    }
+
+    if (request.method !== "POST") {
+      return response.status(405).json({ error: "POST required." });
+    }
+
+    try {
+      const match = (request.get("authorization") || "").match(/^Bearer (.+)$/);
+      if (!match) {
+        return response.status(401).json({
+          error: "Sign in again before joining this Club ride."
+        });
+      }
+
+      const decoded = await admin.auth().verifyIdToken(match[1]);
+      const poolId = String(request.body?.poolId || "").trim();
+
+      if (!/^[A-Za-z0-9_-]{1,128}$/.test(poolId)) {
+        return response.status(400).json({ error: "Invalid Club pool." });
+      }
+
+      const passenger = await resolvePassengerForWallet(decoded);
+      const passengerId = String(passenger?.id || decoded.uid);
+      const profile = passenger?.data || {};
+      const pin = String(request.body?.pickupPin || "").trim();
+
+      if (!/^\d{4}$/.test(pin)) {
+        return response.status(400).json({
+          error: "A valid 4-digit trip PIN is required."
+        });
+      }
+
+      const details = {
+        name:
+          profile.name ||
+          profile.firstName ||
+          decoded.name ||
+          "Passenger",
+        phone:
+          profile.phone ||
+          profile.phoneNumber ||
+          decoded.phone_number ||
+          "",
+        profileImageUrl:
+          profile.profile_picture_url ||
+          profile.profileImageUrl ||
+          profile.photoURL ||
+          "",
+        pickupPin: pin,
+        pickupAddress: request.body?.pickupAddress,
+        pickupLat: request.body?.pickupLat,
+        pickupLng: request.body?.pickupLng,
+        destination: request.body?.destination,
+        destinationLat: request.body?.destinationLat,
+        destinationLng: request.body?.destinationLng,
+        departureTime: request.body?.departureTime,
+        paymentMethod: request.body?.paymentMethod
+      };
+
+      const poolRef = admin.database().ref(`requests/${poolId}`);
+      let transactionError = null;
+
+      const result = await poolRef.transaction(current => {
+        transactionError = null;
+
+        try {
+          return applyClubJoin(
+            current,
+            passengerId,
+            details,
+            admin.database.ServerValue.TIMESTAMP
+          ).pool;
+        } catch (error) {
+          transactionError = error;
+          return;
+        }
+      });
+
+      if (!result.committed) {
+        const status =
+          transactionError?.code === "club/full"
+            ? 409
+            : 400;
+
+        return response.status(status).json({
+          error:
+            transactionError?.message ||
+            "Unable to join this Club ride."
+        });
+      }
+
+      await admin.database()
+        .ref(`commuters/${passengerId}`)
+        .update({
+          currentRequest: poolId
+        });
+
+      const saved = result.snapshot.val() || {};
+
+      return response.status(200).json({
+        ok: true,
+        poolId,
+        passengerId,
+        passengerCount: Number(saved.passengerCount || 0),
+        status: saved.status || "pooling"
+      });
+    } catch (error) {
+      console.error("Secure Club join failed", {
+        code: error?.code || "unknown",
+        message: error?.message || String(error)
+      });
+
+      return response.status(401).json({
+        error: "Unable to verify or join this Club ride."
+      });
+    }
+  }
+);
