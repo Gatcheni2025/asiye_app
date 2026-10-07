@@ -26,6 +26,7 @@ jobs:
           endpoints=(
             createTripShareToken
             joinClubPoolSecure
+            dispatchGoRideRequest
             uploadProfileImageProxy
             confirmTripWalletReady
           )
@@ -52,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          for endpoint in createTripShareToken joinClubPoolSecure uploadProfileImageProxy confirmTripWalletReady; do
+          for endpoint in createTripShareToken joinClubPoolSecure dispatchGoRideRequest uploadProfileImageProxy confirmTripWalletReady; do
             code=$(curl -sS -o "/tmp/${endpoint}.json" -w '%{http_code}'               -X POST               -H 'Origin: https://appassets.androidplatform.net'               -H 'Content-Type: application/json'               --data '{}'               "https://us-central1-asiye-80386.cloudfunctions.net/${endpoint}")
 
             if [ "$code" != "401" ]; then
