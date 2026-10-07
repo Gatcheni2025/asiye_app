@@ -145,24 +145,6 @@ ASIYE.booking = {
             await this.requirePassengerPin();
 
 
-        const liveTrackingUrl =
-            this.liveTrackingUrl(requestId);
-
-        await this.requireTripShare({
-            requestId,
-            liveTrackingUrl,
-            pickupPin,
-            pickupAddress:
-                pickup.address ||
-                'Current location',
-            destination:
-                destination.address ||
-                destination.name,
-            service:
-                'Asiye Go'
-        });
-
-
         const requestData = {
 
             requestId:
@@ -178,7 +160,7 @@ ASIYE.booking = {
                 'go',
 
             status:
-                'pending',
+                'share_required',
 
 
             /* Passenger */
@@ -281,16 +263,10 @@ ASIYE.booking = {
                 true,
 
             safetyShareCompleted:
-                true,
-
-            safetyShareAt:
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP,
+                false,
 
             liveTrackingUrl:
-                liveTrackingUrl,
+                '',
 
 
             /* Driver */
@@ -321,6 +297,71 @@ ASIYE.booking = {
         await requestRef.set(
             requestData
         );
+
+
+        let liveTrackingUrl;
+
+        try {
+
+            liveTrackingUrl =
+                await this.createLiveShareUrl(
+                    requestId
+                );
+
+
+            await this.requireTripShare({
+                requestId,
+                liveTrackingUrl,
+                pickupPin,
+                pickupAddress:
+                    pickup.address ||
+                    'Current location',
+                destination:
+                    destination.address ||
+                    destination.name,
+                service:
+                    'Asiye Go'
+            });
+
+
+            await requestRef.update({
+
+                status:
+                    'pending',
+
+                safetyShareCompleted:
+                    true,
+
+                safetyShareAt:
+                    firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP,
+
+                liveTrackingUrl:
+                    liveTrackingUrl
+            });
+
+
+            requestData.status =
+                'pending';
+
+            requestData.safetyShareCompleted =
+                true;
+
+            requestData.liveTrackingUrl =
+                liveTrackingUrl;
+
+        } catch (error) {
+
+            await requestRef
+                .remove()
+                .catch(
+                    () => {}
+                );
+
+            throw error;
+        }
 
 
         await firebase
@@ -1265,6 +1306,72 @@ ASIYE.booking = {
         );
 
         return true;
+    },
+
+
+    async createLiveShareUrl(requestId) {
+
+        const authUser =
+            firebase.auth().currentUser;
+
+
+        if (!authUser) {
+
+            throw new Error(
+                'Please sign in again before sharing this trip.'
+            );
+        }
+
+
+        const token =
+            await authUser.getIdToken(true);
+
+
+        const response =
+            await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/createTripShareToken',
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${token}`,
+
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            requestId:
+                                requestId
+                        })
+                }
+            );
+
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+
+        if (
+            !response.ok ||
+            !payload.liveTrackingUrl
+        ) {
+
+            throw new Error(
+                payload.error ||
+                'Unable to create a secure live tracking link.'
+            );
+        }
+
+
+        return payload.liveTrackingUrl;
     },
 
 
