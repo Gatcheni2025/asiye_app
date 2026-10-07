@@ -1,9 +1,268 @@
+/* ============================================================
+   ASIYE PASSENGER V2
+   WALLET SYNCHRONIZATION + RIDE BALANCE GUARD
+   ============================================================ */
+
+window.ASIYE = window.ASIYE || {};
+
+ASIYE.wallet = {
+    ref: null,
+    listener: null,
+    passengerId: null,
+
+    balance(user = ASIYE.state?.user || {}) {
+        const value =
+            user.walletBalance ??
+            user.credits ??
+            0;
+
+        const amount =
+            Number(value);
+
+        return Number.isFinite(amount)
+            ? Math.round(amount * 100) / 100
+            : 0;
+    },
+
+    paint(balance = this.balance()) {
+        const amount =
+            Number.isFinite(Number(balance))
+                ? Number(balance)
+                : 0;
+
+        document
+            .querySelectorAll(
+                '.wallet-amount, .member-page-wallet .member-balance strong'
+            )
+            .forEach(element => {
+                element.textContent =
+                    `R${amount.toFixed(2)}`;
+            });
+    },
+
+    applyProfile(profile = {}) {
+        ASIYE.state.user =
+            ASIYE.state.user ||
+            {};
+
+        Object.assign(
+            ASIYE.state.user,
+            profile
+        );
+
+        const balance =
+            this.balance(
+                ASIYE.state.user
+            );
+
+        /*
+         * Keep the legacy credits mirror aligned while older UI surfaces
+         * still reference it. walletBalance remains the canonical value.
+         */
+        ASIYE.state.user.walletBalance =
+            balance;
+
+        ASIYE.state.user.credits =
+            balance;
+
+        this.paint(
+            balance
+        );
+
+        ASIYE.profile
+            ?.refreshUI?.(
+                ASIYE.state.user
+            );
+
+        return balance;
+    },
+
+    stop() {
+        if (
+            this.ref &&
+            this.listener
+        ) {
+            this.ref.off(
+                'value',
+                this.listener
+            );
+        }
+
+        this.ref =
+            null;
+
+        this.listener =
+            null;
+
+        this.passengerId =
+            null;
+    },
+
+    start(passengerId = ASIYE.state?.userId) {
+        const id =
+            String(
+                passengerId ||
+                ''
+            ).trim();
+
+        if (!id) {
+            return;
+        }
+
+        if (
+            this.passengerId === id &&
+            this.ref &&
+            this.listener
+        ) {
+            return;
+        }
+
+        this.stop();
+
+        this.passengerId =
+            id;
+
+        this.ref =
+            firebase
+                .database()
+                .ref(
+                    `commuters/${id}`
+                );
+
+        this.listener =
+            snapshot => {
+                const profile =
+                    snapshot.val();
+
+                if (!profile) {
+                    return;
+                }
+
+                this.applyProfile(
+                    profile
+                );
+            };
+
+        this.ref.on(
+            'value',
+            this.listener
+        );
+    },
+
+    async refresh() {
+        const id =
+            String(
+                ASIYE.state?.userId ||
+                this.passengerId ||
+                localStorage.getItem(
+                    'commuterId'
+                ) ||
+                localStorage.getItem(
+                    'userId'
+                ) ||
+                ''
+            ).trim();
+
+        if (!id) {
+            throw new Error(
+                'Passenger account is not loaded.'
+            );
+        }
+
+        const snapshot =
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${id}`
+                )
+                .once(
+                    'value'
+                );
+
+        const profile =
+            snapshot.val();
+
+        if (!profile) {
+            throw new Error(
+                'Passenger wallet could not be loaded.'
+            );
+        }
+
+        return this.applyProfile(
+            profile
+        );
+    },
+
+    async requireFare(
+        fare,
+        service = 'this ride'
+    ) {
+        const required =
+            Math.max(
+                0,
+                Math.round(
+                    Number(fare || 0) *
+                    100
+                ) / 100
+            );
+
+        if (
+            !Number.isFinite(required) ||
+            required <= 0
+        ) {
+            throw new Error(
+                'The ride fare is unavailable. Please calculate the trip again.'
+            );
+        }
+
+        const available =
+            await this.refresh();
+
+        if (
+            available + 0.00001 <
+            required
+        ) {
+            const shortfall =
+                Math.max(
+                    0,
+                    Math.round(
+                        (
+                            required -
+                            available
+                        ) *
+                        100
+                    ) / 100
+                );
+
+            throw new Error(
+                `Your Asiye Wallet has R${available.toFixed(2)}. ${service} requires R${required.toFixed(2)}. Add at least R${shortfall.toFixed(2)} before requesting the ride.`
+            );
+        }
+
+        ASIYE.state.booking.paymentMethod =
+            'wallet';
+
+        return {
+            available,
+            required,
+            remaining:
+                Math.round(
+                    (
+                        available -
+                        required
+                    ) *
+                    100
+                ) / 100
+        };
+    }
+};
 
 
 /* ============================================================
-   TRIP / PARCEL CARD PAYMENT ORCHESTRATION
-   Card checkout uses Paystack. No driver dispatch and no PIN is
-   created until Paystack has been verified server-side.
+   RIDE PAYMENT ORCHESTRATION
+   Cash: no pre-charge.
+   Wallet: reserve immediately for Go; Club reserves when full.
+   Card: Paystack checkout; funds are held internally until completion.
    ============================================================ */
 
 ASIYE.payments = {
@@ -53,7 +312,7 @@ ASIYE.payments = {
                             )
                     }
                 );
-        } catch (_) {
+        } catch (error) {
             throw new Error(
                 'Unable to reach Asiye payments. Check your connection and try again.'
             );
@@ -74,53 +333,6 @@ ASIYE.payments = {
         }
 
         return payload;
-    },
-
-    openCheckout(url) {
-        const target =
-            String(
-                url ||
-                ''
-            ).trim();
-
-        if (!/^https:\/\//i.test(target)) {
-            throw new Error(
-                'Paystack did not return a valid payment link.'
-            );
-        }
-
-        try {
-            if (
-                window.AndroidNav &&
-                typeof window.AndroidNav.postMessage ===
-                    'function'
-            ) {
-                window.AndroidNav.postMessage(
-                    JSON.stringify({
-                        action:
-                            'external_nav',
-                        url:
-                            target
-                    })
-                );
-
-                return;
-            }
-        } catch (_) {
-            // Fall through to browser checkout.
-        }
-
-        const opened =
-            window.open(
-                target,
-                '_blank',
-                'noopener,noreferrer'
-            );
-
-        if (!opened) {
-            window.location.href =
-                target;
-        }
     },
 
     async prepare(requestId) {
@@ -151,27 +363,22 @@ ASIYE.payments = {
             result.authorizationUrl &&
             result.reference
         ) {
-            const pending = {
-                requestId,
-                reference:
-                    result.reference,
-                createdAt:
-                    Date.now()
-            };
-
             localStorage.setItem(
                 'pendingTripCardPayment',
-                JSON.stringify(
-                    pending
-                )
+                JSON.stringify({
+                    requestId,
+                    reference:
+                        result.reference
+                })
             );
 
             this.openingReference =
                 result.reference;
 
-            this.openCheckout(
-                result.authorizationUrl
-            );
+            window.AsiyePages
+                ?.openExternalPayment?.(
+                    result.authorizationUrl
+                );
 
             return {
                 ...result,
@@ -195,185 +402,6 @@ ASIYE.payments = {
             return null;
         }
     },
-
-    async resumePendingCard() {
-        const pending =
-            this.pendingCard();
-
-        if (
-            !pending?.requestId ||
-            !pending?.reference
-        ) {
-            return false;
-        }
-
-        return await this
-            .handleCardReturn(
-                pending.reference
-            );
-    },
-
-    clubPrepareInFlight:
-        new Set(),
-
-    async handleTripState(
-        request
-    ) {
-        if (
-            !request ||
-            request.type !==
-                'club' ||
-            request.poolReady !==
-                true
-        ) {
-            return false;
-        }
-
-        const passengerId =
-            String(
-                ASIYE.state.userId ||
-                ''
-            );
-
-        const passenger =
-            request.passengers?.[
-                passengerId
-            ];
-
-        if (!passenger) {
-            return false;
-        }
-
-        const method =
-            String(
-                passenger.paymentMethod ||
-                request.paymentMethod ||
-                'cash'
-            )
-            .toLowerCase();
-
-        const status =
-            String(
-                passenger.paymentStatus ||
-                ''
-            );
-
-        if (
-            method !==
-                'card'
-        ) {
-            if (
-                status ===
-                    'wallet_insufficient'
-            ) {
-                ASIYE.ui?.toast?.(
-                    'Your Club is full, but your Asiye Wallet needs more funds before collection can start.'
-                );
-            }
-
-            return false;
-        }
-
-        if (
-            [
-                'held',
-                'captured'
-            ].includes(
-                status
-            )
-        ) {
-            const hasPin =
-                /^\d{4}$/.test(
-                    String(
-                        passenger.pickupPin ||
-                        ''
-                    )
-                );
-
-            if (
-                !hasPin ||
-                passenger.safetyShareCompleted !==
-                    true
-            ) {
-                await ASIYE.club
-                    ?.finalizePaidPassenger?.(
-                        request.requestId ||
-                        ASIYE.state.booking
-                            .requestId
-                    );
-            }
-
-            return true;
-        }
-
-        if (
-            status !==
-                'payment_required'
-        ) {
-            return false;
-        }
-
-        const requestId =
-            String(
-                request.requestId ||
-                ASIYE.state.booking
-                    .requestId ||
-                ''
-            );
-
-        if (!requestId) {
-            return false;
-        }
-
-        const pending =
-            this.pendingCard();
-
-        if (
-            pending?.requestId ===
-                requestId
-        ) {
-            return true;
-        }
-
-        if (
-            this.clubPrepareInFlight
-                .has(
-                    requestId
-                )
-        ) {
-            return true;
-        }
-
-        this.clubPrepareInFlight
-            .add(
-                requestId
-            );
-
-        try {
-            const result =
-                await this.prepare(
-                    requestId
-                );
-
-            if (
-                result?.paymentPending ===
-                    true
-            ) {
-                ASIYE.ui?.toast?.(
-                    'Your Club is full. Complete your Paystack card payment to create your pickup PIN.'
-                );
-            }
-
-            return true;
-
-        } finally {
-            this.clubPrepareInFlight
-                .delete(
-                    requestId
-                );
-        }
-    },
-
 
     async handleCardReturn(reference) {
         const pending =
@@ -430,10 +458,7 @@ ASIYE.payments = {
                         'held',
                         'captured'
                     ].includes(
-                        String(
-                            verified.status ||
-                            ''
-                        )
+                        verified.status
                     )
                 ) {
                     break;
@@ -448,9 +473,9 @@ ASIYE.payments = {
                 resolve =>
                     setTimeout(
                         resolve,
-                        700 +
+                        900 +
                         attempt *
-                        350
+                        450
                     )
             );
         }
@@ -463,10 +488,17 @@ ASIYE.payments = {
             throw (
                 lastError ||
                 new Error(
-                    'Card payment is still being confirmed by Paystack.'
+                    'Card payment is still being confirmed.'
                 )
             );
         }
+
+        localStorage.removeItem(
+            'pendingTripCardPayment'
+        );
+
+        this.openingReference =
+            null;
 
         const requestSnapshot =
             await firebase
@@ -483,7 +515,7 @@ ASIYE.payments = {
 
         if (!request) {
             throw new Error(
-                'Paid booking could not be restored.'
+                'Paid ride could not be restored.'
             );
         }
 
@@ -491,111 +523,174 @@ ASIYE.payments = {
             request.type ===
                 'club'
         ) {
-            if (
-                !ASIYE.club ||
-                typeof ASIYE.club
-                    .finalizePaidPassenger !==
-                    'function'
-            ) {
-                throw new Error(
-                    'Club payment was confirmed, but the pickup PIN could not be finalized. Reopen Asiye and try again.'
-                );
-            }
-
-            await ASIYE.club
-                .finalizePaidPassenger(
+            await ASIYE.ride
+                ?.start?.(
                     pending.requestId
                 );
 
-            localStorage.removeItem(
-                'pendingTripCardPayment'
+            ASIYE.ui?.toast?.(
+                'Card payment held. Your Club will move once all passenger payments are ready.'
             );
 
-            this.openingReference =
-                null;
+            return true;
+        }
+
+        if (
+            request.status ===
+                'pending' ||
+            request.paymentStatus ===
+                'held'
+        ) {
+            await ASIYE.booking
+                ?.notifyGoDrivers?.(
+                    pending.requestId,
+                    request
+                );
 
             await ASIYE.ride
                 ?.start?.(
                     pending.requestId
                 );
 
+            ASIYE.ui?.toast?.(
+                'Card payment confirmed. Looking for your driver.'
+            );
+
             return true;
         }
 
-        const isParcel =
-            request.type ===
-                'delivery' ||
-            request.rideType ===
-                'delivery';
-
-        if (isParcel) {
-            if (
-                !ASIYE.parcels ||
-                typeof ASIYE.parcels
-                    .finalizePaidRequest !==
-                    'function'
-            ) {
-                throw new Error(
-                    'Parcel payment was confirmed, but the delivery could not be finalized. Reopen Asiye and try again.'
-                );
-            }
-
-            await ASIYE.parcels
-                .finalizePaidRequest(
-                    pending.requestId
-                );
-        } else {
-            if (
-                !ASIYE.booking ||
-                typeof ASIYE.booking
-                    .finalizePaidRequest !==
-                    'function'
-            ) {
-                throw new Error(
-                    'Card payment was confirmed, but the ride could not be finalized. Reopen Asiye and try again.'
-                );
-            }
-
-            await ASIYE.booking
-                .finalizePaidRequest(
-                    pending.requestId
-                );
-        }
-
-        localStorage.removeItem(
-            'pendingTripCardPayment'
-        );
-
-        this.openingReference =
-            null;
+        await ASIYE.ride
+            ?.start?.(
+                pending.requestId
+            );
 
         return true;
-    }
-};
+    },
 
+    async handleTripState(request) {
+        if (
+            !request ||
+            !ASIYE.state?.userId
+        ) {
+            return;
+        }
 
-window.onAsiyePaymentReturn =
-    async payload => {
-        const reference =
-            typeof payload ===
-                'string'
-                ? payload
-                : payload?.reference;
+        let method =
+            String(
+                request.paymentMethod ||
+                'cash'
+            )
+                .toLowerCase();
+
+        let status =
+            String(
+                request.paymentStatus ||
+                ''
+            );
+
+        if (
+            request.type ===
+                'club'
+        ) {
+            const passenger =
+                request.passengers?.[
+                    ASIYE.state.userId
+                ];
+
+            if (!passenger) {
+                return;
+            }
+
+            method =
+                String(
+                    passenger.paymentMethod ||
+                    request.paymentMethod ||
+                    'cash'
+                )
+                    .toLowerCase();
+
+            status =
+                String(
+                    passenger.paymentStatus ||
+                    ''
+                );
+
+            if (
+                method ===
+                    'wallet' &&
+                status ===
+                    'wallet_insufficient'
+            ) {
+                ASIYE.ui?.toast?.(
+                    'Your Club is full, but your Asiye Wallet needs more funds before a driver can be released.'
+                );
+
+                return;
+            }
+
+            if (
+                request.poolReady !==
+                    true
+            ) {
+                return;
+            }
+        }
+
+        if (
+            method !==
+                'card' ||
+            status !==
+                'payment_required'
+        ) {
+            return;
+        }
+
+        const existing =
+            this.pendingCard();
+
+        if (
+            existing?.requestId ===
+                request.requestId
+        ) {
+            return;
+        }
 
         try {
-            await ASIYE.payments
-                .handleCardReturn(
-                    reference
-                );
+            await this.prepare(
+                request.requestId
+            );
         } catch (error) {
             console.error(
-                'Paystack return handling failed:',
+                'Ride card payment preparation failed:',
                 error
             );
 
             ASIYE.ui?.toast?.(
-                error?.message ||
-                'Payment is still being confirmed.'
+                error.message ||
+                'Unable to open card payment.'
             );
         }
-    };
+    },
+
+    async release(requestId) {
+        if (!requestId) {
+            return null;
+        }
+
+        const result =
+            await this.post(
+                'releaseTripPayment',
+                {
+                    requestId
+                }
+            );
+
+        await ASIYE.wallet
+            ?.refresh?.()
+            .catch(
+                () => {}
+            );
+
+        return result;
+    }
+};
