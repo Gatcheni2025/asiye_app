@@ -620,9 +620,7 @@ ASIYE.club = {
                                 departureTime,
 
                             paymentMethod:
-                                ASIYE.state.booking
-                                    .paymentMethod ||
-                                'cash',
+                                'wallet',
 
                             profileImageUrl:
                                 profileImageUrl
@@ -794,9 +792,7 @@ ASIYE.club = {
                 pricing.pricePerPassenger,
 
             paymentMethod:
-                ASIYE.state.booking
-                    .paymentMethod ||
-                'cash',
+                'wallet',
 
             status:
                 'waiting_pool',
@@ -933,9 +929,7 @@ ASIYE.club = {
                     .durationMinutes,
 
             paymentMethod:
-                ASIYE.state.booking
-                    .paymentMethod ||
-                'cash',
+                'wallet',
 
             requirePin:
                 true,
@@ -1074,10 +1068,34 @@ ASIYE.club = {
 
         this.ensureFirebase();
 
+        this.select(type);
+
+        const requiredFare =
+            Number(
+                ASIYE.state.booking
+                    .club
+                    ?.pricePerPassenger ||
+                0
+            );
+
+        if (
+            !ASIYE.wallet ||
+            typeof ASIYE.wallet.requireFare !==
+                'function'
+        ) {
+            throw new Error(
+                'Asiye Wallet is unavailable. Reopen the app and try again.'
+            );
+        }
+
+        await ASIYE.wallet
+            .requireFare(
+                requiredFare,
+                this.getConfig(type).name
+            );
+
         await ASIYE.profile
             .ensureRequired();
-
-        this.select(type);
 
 
         const existingPool =
