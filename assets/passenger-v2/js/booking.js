@@ -328,6 +328,7 @@ ASIYE.booking = {
 
         let liveTrackingUrl;
 
+
         try {
 
             liveTrackingUrl =
@@ -352,10 +353,6 @@ ASIYE.booking = {
 
 
             await requestRef.update({
-
-                status:
-                    'pending',
-
                 safetyShareCompleted:
                     true,
 
@@ -366,9 +363,6 @@ ASIYE.booking = {
                         .TIMESTAMP
             });
 
-
-            requestData.status =
-                'pending';
 
             requestData.safetyShareCompleted =
                 true;
@@ -391,7 +385,6 @@ ASIYE.booking = {
                 `commuters/${uid}`
             )
             .update({
-
                 currentRequest:
                     requestId
             });
@@ -413,14 +406,116 @@ ASIYE.booking = {
         );
 
 
+        let paymentResult;
+
+        try {
+            if (
+                !ASIYE.payments ||
+                typeof ASIYE.payments.prepare !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Asiye payments are unavailable. Reopen the app and try again.'
+                );
+            }
+
+            paymentResult =
+                await ASIYE.payments
+                    .prepare(
+                        requestId
+                    );
+
+        } catch (error) {
+            await requestRef
+                .remove()
+                .catch(
+                    () => {}
+                );
+
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${uid}`
+                )
+                .update({
+                    currentRequest:
+                        null
+                })
+                .catch(
+                    () => {}
+                );
+
+            this.clearLocalRide();
+
+            throw error;
+        }
+
+
+        if (
+            paymentResult
+                ?.paymentPending ===
+                true
+        ) {
+            requestData.status =
+                'payment_required';
+
+            requestData.paymentStatus =
+                'payment_required';
+
+            ASIYE.state.booking
+                .request =
+                requestData;
+
+            return {
+                requestId,
+                paymentPending:
+                    true
+            };
+        }
+
+
+        await requestRef.update({
+            status:
+                'pending',
+
+            paymentStatus:
+                paymentResult?.status ||
+                (
+                    paymentMethod ===
+                        'cash'
+                        ? 'cash_due'
+                        : 'held'
+                ),
+
+            paymentsReady:
+                true
+        });
+
+
+        requestData.status =
+            'pending';
+
+        requestData.paymentStatus =
+            paymentResult?.status ||
+            (
+                paymentMethod ===
+                    'cash'
+                    ? 'cash_due'
+                    : 'held'
+            );
+
+        requestData.paymentsReady =
+            true;
+
+
         /*
-         * Notify eligible drivers.
+         * Notify eligible drivers only after the selected payment
+         * method is ready. Card payments return here only after
+         * verification; Wallet funds are already reserved.
          */
 
         await this.notifyGoDrivers(
-
             requestId,
-
             requestData
         );
 
