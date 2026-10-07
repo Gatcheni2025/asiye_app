@@ -2343,23 +2343,11 @@ window.AsiyePages = {
                                         }
                                     );
 
-                            await firebase
-                                .database()
-                                .ref(
-                                    `taxis/${id}`
-                                )
-                                .update({
-                                    vehiclePhoto:
-                                        uploaded.url,
-                                    vehiclePhotoUpdatedAt:
-                                        firebase
-                                            .database
-                                            .ServerValue
-                                            .TIMESTAMP
-                                });
-
                             user.vehiclePhoto =
                                 uploaded.url;
+
+                            user.vehiclePhotoUpdatedAt =
+                                Date.now();
 
                             if (carPreview) {
                                 carPreview.src =
@@ -2521,38 +2509,75 @@ window.AsiyePages = {
                         'Submitting…';
 
                     try {
-                        vehiclePending.submittedAt =
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP;
+                        const authUser =
+                            firebase.auth()
+                                .currentUser;
 
-                        await firebase
-                            .database()
-                            .ref(
-                                `taxis/${id}`
-                            )
-                            .update({
-                                vehiclePending,
-                                vehicleApproved:
-                                    false,
-                                vehicleApprovalStatus:
-                                    'pending',
-                                vehicleSubmittedAt:
-                                    firebase
-                                        .database
-                                        .ServerValue
-                                        .TIMESTAMP,
-                                isOnline:
-                                    false,
-                                isBroadcasting:
-                                    false
-                            });
+                        if (!authUser) {
+                            throw new Error(
+                                'Driver session expired. Sign in again before submitting your vehicle.'
+                            );
+                        }
+
+                        const token =
+                            await authUser
+                                .getIdToken(
+                                    true
+                                );
+
+                        let response;
+
+                        try {
+                            response =
+                                await fetch(
+                                    'https://us-central1-asiye-80386.cloudfunctions.net/submitDriverVehicleForReview',
+                                    {
+                                        method:
+                                            'POST',
+                                        headers: {
+                                            'Authorization':
+                                                `Bearer ${token}`,
+                                            'Content-Type':
+                                                'application/json'
+                                        },
+                                        body:
+                                            JSON.stringify({
+                                                driverId:
+                                                    id,
+                                                vehicle:
+                                                    vehiclePending
+                                            })
+                                    }
+                                );
+                        } catch (_) {
+                            throw new Error(
+                                'Unable to reach Asiye vehicle verification. Check your connection and try again.'
+                            );
+                        }
+
+                        const payload =
+                            await response
+                                .json()
+                                .catch(
+                                    () => ({})
+                                );
+
+                        if (!response.ok) {
+                            throw new Error(
+                                payload.error ||
+                                'Could not submit vehicle details.'
+                            );
+                        }
+
+                        const savedVehicle =
+                            payload.vehiclePending ||
+                            vehiclePending;
 
                         Object.assign(
                             user,
                             {
-                                vehiclePending,
+                                vehiclePending:
+                                    savedVehicle,
                                 vehicleApproved:
                                     false,
                                 vehicleApprovalStatus:
