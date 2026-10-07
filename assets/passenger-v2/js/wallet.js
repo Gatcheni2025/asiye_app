@@ -69,6 +69,11 @@ ASIYE.wallet = {
             balance
         );
 
+        ASIYE.profile
+            ?.refreshUI?.(
+                ASIYE.state.user
+            );
+
         return balance;
     },
 
