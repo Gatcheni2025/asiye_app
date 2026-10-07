@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
 
+# Fresh runs read repository secrets when queued.
+
 jobs:
   deploy:
     name: Deploy secure trip functions
