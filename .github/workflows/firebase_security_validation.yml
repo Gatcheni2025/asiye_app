@@ -6,6 +6,9 @@ on:
       - 'database.rules.json'
       - 'firebase.json'
       - 'test/security/**'
+      - 'functions/index.js'
+      - 'functions/club-pool-security.js'
+      - 'assets/passenger-v2/js/club.js'
       - '.github/workflows/firebase_security_validation.yml'
   push:
     branches:
@@ -14,6 +17,9 @@ on:
       - 'database.rules.json'
       - 'firebase.json'
       - 'test/security/**'
+      - 'functions/index.js'
+      - 'functions/club-pool-security.js'
+      - 'assets/passenger-v2/js/club.js'
       - '.github/workflows/firebase_security_validation.yml'
   workflow_dispatch:
 
