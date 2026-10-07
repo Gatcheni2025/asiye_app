@@ -510,127 +510,105 @@ ASIYE.club = {
         });
 
 
-        const poolRef =
+        /*
+         * SECURITY:
+         * Club membership is created through a verified backend transaction.
+         * The passenger can no longer rewrite the complete request object from
+         * the browser while joining a pool.
+         */
 
-            firebase
-                .database()
-                .ref(
-                    `requests/${poolId}`
+        const authUser =
+            firebase.auth().currentUser;
+
+        if (!authUser) {
+            throw new Error(
+                'Please sign in again before joining this Club ride.'
+            );
+        }
+
+        const token =
+            await authUser.getIdToken(true);
+
+        const response =
+            await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/joinClubPoolSecure',
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${token}`,
+
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            poolId:
+                                poolId,
+
+                            pickupPin:
+                                pin,
+
+                            pickupAddress:
+                                ASIYE.state.location
+                                    .address ||
+                                'Current location',
+
+                            pickupLat:
+                                ASIYE.state.location
+                                    .latitude,
+
+                            pickupLng:
+                                ASIYE.state.location
+                                    .longitude,
+
+                            destination:
+                                ASIYE.state.destination
+                                    .address ||
+                                ASIYE.state.destination
+                                    .name,
+
+                            destinationLat:
+                                ASIYE.state.destination
+                                    .latitude,
+
+                            destinationLng:
+                                ASIYE.state.destination
+                                    .longitude,
+
+                            departureTime:
+                                departureTime,
+
+                            paymentMethod:
+                                ASIYE.state.booking
+                                    .paymentMethod ||
+                                'cash',
+
+                            profileImageUrl:
+                                profileImageUrl
+                        })
+                }
+            );
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
                 );
 
-
-        const result =
-
-            await poolRef.transaction(
-                pool => {
-
-                    if (!pool) {
-
-                        return;
-                    }
+        if (!response.ok) {
+            throw new Error(
+                payload.error ||
+                'Unable to join this Club ride.'
+            );
+        }
 
 
-                    const config =
-                        this.getConfig(
-                            pool.clubMode
-                        );
-
-
-                    pool.passengers =
-                        pool.passengers || {};
-
-
-                    /*
-                     * Already joined.
-                     */
-
-                    if (
-                        pool.passengers[uid]
-                    ) {
-
-                        return pool;
-                    }
-
-
-                    const currentCount =
-
-                        Object.keys(
-                            pool.passengers
-                        ).length;
-
-
-                    if (
-                        currentCount >=
-                        config.capacity
-                    ) {
-
-                        return;
-                    }
-
-
-                    pool.passengers[uid] = {
-
-                        commuterId:
-                            uid,
-
-                        name:
-                            user.name ||
-                            user.firstName ||
-                            'Passenger',
-
-                        phone:
-                            user.phone || '',
-
-                        profileImageUrl:
-                            profileImageUrl,
-
-                        profile_picture_url:
-                            profileImageUrl,
-
-                        pickupPin:
-                            pin,
-
-                        requirePin:
-                            true,
-
-                        safetyShareRequired:
-                            true,
-
-                        safetyShareCompleted:
-                            true,
-
-                        pickupAddress:
-                            ASIYE.state.location
-                                .address ||
-                            'Current location',
-
-                        pickupLat:
-                            ASIYE.state.location
-                                .latitude,
-
-                        pickupLng:
-                            ASIYE.state.location
-                                .longitude,
-
-                        destination:
-                            ASIYE.state.destination
-                                .address ||
-                            ASIYE.state.destination
-                                .name,
-
-                        destinationLat:
-                            ASIYE.state.destination
-                                .latitude,
-
-                        destinationLng:
-                            ASIYE.state.destination
-                                .longitude,
-
-                        departureTime:
-                            departureTime,
-
-                        paymentMethod:
-                            ASIYE.state.booking
+        ASIYE.state.booking
                                 .paymentMethod ||
                             'cash',
 
