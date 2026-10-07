@@ -3,6 +3,7 @@
 (() => {
     let pendingFaceCapture = null;
     let pendingTripShare = null;
+    let pendingContactPick = null;
 
     const nativeChannel = () => window.Asiye || window.Android || null;
 
@@ -292,6 +293,538 @@
         if (result?.shared) pendingTripShare.resolve(true);
         else pendingTripShare.reject(new Error('Share your trip with a loved one to continue.'));
     };
+
+    const normaliseContactPhone = value => {
+        const raw =
+            String(
+                value ||
+                ''
+            ).trim();
+
+        if (!raw) return '';
+
+        const plus =
+            raw.startsWith('+');
+
+        const digits =
+            raw.replace(
+                /\D/g,
+                ''
+            );
+
+        if (!digits) return '';
+
+        if (
+            digits.startsWith('27') &&
+            digits.length === 11
+        ) {
+            return '+' + digits;
+        }
+
+        if (
+            digits.startsWith('0') &&
+            digits.length === 10
+        ) {
+            return '+27' + digits.slice(1);
+        }
+
+        if (
+            digits.length === 9
+        ) {
+            return '+27' + digits;
+        }
+
+        return plus
+            ? '+' + digits
+            : digits;
+    };
+
+    window.AsiyeNativeContacts =
+        window.AsiyeNativeContacts || {
+            async pick() {
+                const channel =
+                    nativeChannel();
+
+                if (
+                    !channel ||
+                    typeof channel.postMessage !==
+                        'function'
+                ) {
+                    throw new Error(
+                        'Phone contacts are available in the installed Asiye app.'
+                    );
+                }
+
+                if (pendingContactPick) {
+                    throw new Error(
+                        'The contact picker is already open.'
+                    );
+                }
+
+                return await new Promise(
+                    (resolve, reject) => {
+                        const timeout =
+                            setTimeout(
+                                () => {
+                                    pendingContactPick =
+                                        null;
+
+                                    reject(
+                                        new Error(
+                                            'Contact selection timed out.'
+                                        )
+                                    );
+                                },
+                                120000
+                            );
+
+                        pendingContactPick = {
+                            resolve:
+                                value => {
+                                    clearTimeout(
+                                        timeout
+                                    );
+
+                                    pendingContactPick =
+                                        null;
+
+                                    resolve(
+                                        value
+                                    );
+                                },
+
+                            reject:
+                                error => {
+                                    clearTimeout(
+                                        timeout
+                                    );
+
+                                    pendingContactPick =
+                                        null;
+
+                                    reject(
+                                        error
+                                    );
+                                }
+                        };
+
+                        channel.postMessage(
+                            JSON.stringify({
+                                action:
+                                    'pickContact'
+                            })
+                        );
+                    }
+                );
+            }
+        };
+
+    window.onNativeContactPicked =
+        payload => {
+            if (!pendingContactPick) {
+                return;
+            }
+
+            const name =
+                String(
+                    payload?.name ||
+                    ''
+                ).trim();
+
+            const phone =
+                normaliseContactPhone(
+                    payload?.phone
+                );
+
+            if (!name && !phone) {
+                pendingContactPick.reject(
+                    new Error(
+                        'No contact was selected.'
+                    )
+                );
+
+                return;
+            }
+
+            pendingContactPick.resolve({
+                name:
+                    name ||
+                    'Trusted contact',
+                phone
+            });
+        };
+
+    window.onNativeContactPickError =
+        message => {
+            if (!pendingContactPick) {
+                return;
+            }
+
+            const text =
+                String(
+                    message ||
+                    'Unable to open phone contacts.'
+                );
+
+            pendingContactPick.reject(
+                new Error(
+                    text.toLowerCase() ===
+                        'cancelled'
+                        ? 'Contact selection cancelled.'
+                        : text
+                )
+            );
+        };
+
+    const safety =
+        window.AsiyeSafetyContact ||
+        {};
+
+    safety.pickIntoForm =
+        async form => {
+            if (!form) {
+                throw new Error(
+                    'Trusted contact form is unavailable.'
+                );
+            }
+
+            const contact =
+                await window
+                    .AsiyeNativeContacts
+                    .pick();
+
+            if (
+                form.elements?.name
+            ) {
+                form.elements.name.value =
+                    contact.name ||
+                    '';
+            }
+
+            if (
+                form.elements?.phone
+            ) {
+                form.elements.phone.value =
+                    contact.phone ||
+                    '';
+            }
+
+            form.elements?.relationship
+                ?.focus?.();
+
+            return contact;
+        };
+
+    if (
+        typeof safety.getMembers !==
+        'function'
+    ) {
+        safety.getMembers =
+            async context => {
+                const root =
+                    String(
+                        context?.root ||
+                        ''
+                    );
+
+                const id =
+                    String(
+                        context?.id ||
+                        ''
+                    );
+
+                if (!root || !id) {
+                    return [];
+                }
+
+                const snapshot =
+                    await firebase
+                        .database()
+                        .ref(
+                            `${root}/${id}`
+                        )
+                        .once(
+                            'value'
+                        );
+
+                const profile =
+                    snapshot.val() ||
+                    {};
+
+                const stored =
+                    profile.trustedPeople ||
+                    profile.trustedFamily ||
+                    profile.safetyContacts ||
+                    {};
+
+                if (
+                    Array.isArray(
+                        stored
+                    )
+                ) {
+                    return stored
+                        .filter(
+                            Boolean
+                        );
+                }
+
+                return Object.entries(
+                    stored
+                )
+                    .map(
+                        ([key, value]) => ({
+                            id:
+                                key,
+                            ...(value || {})
+                        })
+                    )
+                    .filter(
+                        member =>
+                            member.name ||
+                            member.phone
+                    );
+            };
+    }
+
+    if (
+        typeof safety.saveMember !==
+        'function'
+    ) {
+        safety.saveMember =
+            async ({
+                context,
+                name,
+                relationship,
+                phone
+            }) => {
+                const root =
+                    String(
+                        context?.root ||
+                        ''
+                    );
+
+                const id =
+                    String(
+                        context?.id ||
+                        ''
+                    );
+
+                const cleanName =
+                    String(
+                        name ||
+                        ''
+                    ).trim();
+
+                const cleanRelationship =
+                    String(
+                        relationship ||
+                        ''
+                    ).trim();
+
+                const cleanPhone =
+                    normaliseContactPhone(
+                        phone
+                    );
+
+                if (
+                    !root ||
+                    !id
+                ) {
+                    throw new Error(
+                        'Your Asiye profile is not loaded.'
+                    );
+                }
+
+                if (
+                    cleanName.length < 2
+                ) {
+                    throw new Error(
+                        'Enter the trusted person\'s full name.'
+                    );
+                }
+
+                if (
+                    cleanPhone.length < 10
+                ) {
+                    throw new Error(
+                        'Enter a valid mobile number.'
+                    );
+                }
+
+                const existing =
+                    await safety
+                        .getMembers(
+                            context
+                        );
+
+                const memberRef =
+                    firebase
+                        .database()
+                        .ref(
+                            `${root}/${id}/trustedPeople`
+                        )
+                        .push();
+
+                const member = {
+                    id:
+                        memberRef.key,
+                    name:
+                        cleanName,
+                    relationship:
+                        cleanRelationship ||
+                        'Trusted person',
+                    phone:
+                        cleanPhone,
+                    isPrimary:
+                        existing.length ===
+                        0,
+                    createdAt:
+                        firebase
+                            .database
+                            .ServerValue
+                            .TIMESTAMP
+                };
+
+                await memberRef
+                    .set(
+                        member
+                    );
+
+                return member;
+            };
+    }
+
+    if (
+        typeof safety.ensure !==
+        'function'
+    ) {
+        safety.ensure =
+            async ({
+                role =
+                    'passenger'
+            } = {}) => {
+                const driver =
+                    role ===
+                    'driver';
+
+                const app =
+                    driver
+                        ? window.ASIYE_DRIVER
+                        : window.ASIYE;
+
+                const id =
+                    driver
+                        ? app?.state
+                            ?.driverId
+                        : app?.state
+                            ?.userId;
+
+                const context = {
+                    app,
+                    id,
+                    role,
+                    root:
+                        driver
+                            ? 'taxis'
+                            : 'commuters'
+                };
+
+                const members =
+                    await safety
+                        .getMembers(
+                            context
+                        );
+
+                if (
+                    members.length
+                ) {
+                    return true;
+                }
+
+                app?.ui?.toast?.(
+                    'Add one trusted person before continuing.'
+                );
+
+                window.AsiyePages
+                    ?.open?.(
+                        'safety'
+                    );
+
+                return false;
+            };
+    }
+
+    if (
+        typeof safety.offerTripShare !==
+        'function'
+    ) {
+        safety.offerTripShare =
+            async requestId => {
+                const authUser =
+                    firebase.auth()
+                        .currentUser;
+
+                if (!authUser) {
+                    throw new Error(
+                        'Sign in again before sharing the trip.'
+                    );
+                }
+
+                const token =
+                    await authUser
+                        .getIdToken(
+                            true
+                        );
+
+                const response =
+                    await fetch(
+                        'https://us-central1-asiye-80386.cloudfunctions.net/createTripShareToken',
+                        {
+                            method:
+                                'POST',
+                            headers: {
+                                'Authorization':
+                                    `Bearer ${token}`,
+                                'Content-Type':
+                                    'application/json'
+                            },
+                            body:
+                                JSON.stringify({
+                                    requestId
+                                })
+                        }
+                    );
+
+                const payload =
+                    await response
+                        .json()
+                        .catch(
+                            () => ({})
+                        );
+
+                if (
+                    !response.ok ||
+                    !payload.liveTrackingUrl
+                ) {
+                    throw new Error(
+                        payload.error ||
+                        'Unable to create a live trip link.'
+                    );
+                }
+
+                await window
+                    .AsiyeTripShare
+                    .require(
+                        `Follow my Asiye trip live: ${payload.liveTrackingUrl}`
+                    );
+
+                return payload
+                    .liveTrackingUrl;
+            };
+    }
+
+    window.AsiyeSafetyContact =
+        safety;
 })();
 
 /* Shared account pages. Opening a page does not replace the active trip UI. */
