@@ -6,6 +6,9 @@ on:
     branches:
       - security-compatibility-phase4
     paths:
+      - 'functions/index.js'
+      - 'functions/club-pool-security.js'
+      - 'functions/trip-share-security.js'
       - '.github/workflows/deploy_security_functions.yml'
 
 permissions:
