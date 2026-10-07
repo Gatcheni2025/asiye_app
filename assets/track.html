@@ -8,8 +8,6 @@
     <script src="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.js"></script>
     <link href="https://api.mapbox.com/mapbox-gl-js/v2.14.1/mapbox-gl.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=swap" rel="stylesheet">
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <style>
         *{box-sizing:border-box} body{margin:0;font-family:Manrope,sans-serif;background:#f5f6f8;color:#101114}
         #map{position:fixed;inset:0}.loader{position:fixed;inset:0;z-index:20;display:grid;place-items:center;background:#fff}
@@ -34,23 +32,314 @@
     <div class="destination"><strong>Destination</strong><div id="destination" class="muted">Not available yet</div></div>
 </section>
 <script>
-const firebaseConfig={apiKey:"AIzaSyCX_euO2EEPhfhuG5DTsSi5vCpZ9MFZczY",authDomain:"asiye-80386.firebaseapp.com",databaseURL:"https://asiye-80386-default-rtdb.firebaseio.com",projectId:"asiye-80386",storageBucket:"asiye-80386.firebasestorage.app",appId:"1:531902350858:web:f8a4a246bf350d50e3c1f3"};
-firebase.initializeApp(firebaseConfig);
-const db=firebase.database();
 mapboxgl.accessToken="pk.eyJ1IjoiYXNpeWUxIiwiYSI6ImNtcWR2dHBydDEyMjIycXF5eThzcWUzcXUifQ.KgsJuS9O1OLDvAN2CMmrKw";
+
 const params=new URLSearchParams(location.search);
-const tripId=params.get("trip")||params.get("id")||params.get("requestId")||"";
-let map,taxiMarker,pickupMarker,destinationMarker,taxiRef,taxiListener,lastTrip=null;
-const loader=document.getElementById("loader"),card=document.getElementById("card"),statusEl=document.getElementById("status");
-function fail(msg){loader.innerHTML='<div class="loader-card"><strong>'+msg+'</strong><span class="muted">Ask the passenger to share a new Asiye live-trip link.</span></div>'}
-function valid(n){return Number.isFinite(Number(n))}
-function coords(obj, latKeys, lngKeys){let lat,lng;for(const k of latKeys){if(valid(obj?.[k])){lat=Number(obj[k]);break}}for(const k of lngKeys){if(valid(obj?.[k])){lng=Number(obj[k]);break}}return valid(lat)&&valid(lng)?[lng,lat]:null}
-function ensurePoint(marker, position, kind){if(!position)return marker; if(!marker){const el=document.createElement("div");el.className=kind;marker=new mapboxgl.Marker({element:el}).setLngLat(position).addTo(map)}else marker.setLngLat(position);return marker}
-function fit(trip,taxi){const points=[];const taxiPos=coords(taxi,["latitude"],["longitude"]);if(taxiPos)points.push(taxiPos);const pickup=trip?.commuterLocation&&valid(trip.commuterLocation.latitude)&&valid(trip.commuterLocation.longitude)?[Number(trip.commuterLocation.longitude),Number(trip.commuterLocation.latitude)]:null;const dest=trip?.destinationCoords&&valid(trip.destinationCoords.latitude)&&valid(trip.destinationCoords.longitude)?[Number(trip.destinationCoords.longitude),Number(trip.destinationCoords.latitude)]:null;if(pickup)points.push(pickup);if(dest)points.push(dest);if(points.length>1){const b=points.slice(1).reduce((x,p)=>x.extend(p),new mapboxgl.LngLatBounds(points[0],points[0]));map.fitBounds(b,{padding:{top:80,bottom:210,left:55,right:55},maxZoom:15,duration:700})}else if(points[0])map.easeTo({center:points[0],zoom:15,duration:700})}
-function render(trip,taxi){lastTrip=trip;const ended=["completed","cancelled_by_driver","cancelled_by_commuter","cancelled_by_admin","rejected"].includes(String(trip.status||"").toLowerCase());statusEl.textContent=ended?"TRIP ENDED":"LIVE";statusEl.style.background=ended?"#ececec":"#e9fff0";statusEl.style.color=ended?"#555":"#137a39";document.getElementById("destination").textContent=trip.destination||trip.destinationName||"Not available yet";if(taxi){const name=[taxi.name,taxi.surname].filter(Boolean).join(" ")||trip.driverName||"Asiye driver";document.getElementById("driverName").textContent=name;document.getElementById("vehicle").textContent=[taxi.vehicleColor,taxi.vehicleMake,taxi.vehicleModel,taxi.taxiRegistrationNumber||taxi.registration].filter(Boolean).join(" · ")||"Driver assigned";const url=taxi.profile_picture_url||taxi.profileImageUrl||trip.driverProfileImageUrl||"";const avatar=document.getElementById("avatar");avatar.innerHTML=url?'<img alt="Driver profile picture" src="'+String(url).replace(/"/g,"&quot;")+'">':name.charAt(0).toUpperCase();const p=coords(taxi,["latitude"],["longitude"]);taxiMarker=ensurePoint(taxiMarker,p,"taxi-marker");}const pickup=trip.commuterLocation&&valid(trip.commuterLocation.latitude)&&valid(trip.commuterLocation.longitude)?[Number(trip.commuterLocation.longitude),Number(trip.commuterLocation.latitude)]:null;const dest=trip.destinationCoords&&valid(trip.destinationCoords.latitude)&&valid(trip.destinationCoords.longitude)?[Number(trip.destinationCoords.longitude),Number(trip.destinationCoords.latitude)]:null;pickupMarker=ensurePoint(pickupMarker,pickup,"person-marker");if(dest&&!destinationMarker)destinationMarker=new mapboxgl.Marker({color:"#111"}).setLngLat(dest).addTo(map);loader.style.display="none";card.style.display="block";fit(trip,taxi)}
-function followTaxi(id,trip){if(!id){render(trip,null);return}if(taxiRef)taxiRef.off("value",taxiListener);taxiRef=db.ref("taxis/"+id);taxiListener=taxiRef.on("value",s=>render(lastTrip||trip,s.val()||null))}
-function start(){if(!tripId){fail("Invalid tracking link");return}db.ref("requests/"+tripId).on("value",snap=>{const trip=snap.val();if(!trip){fail("Trip not found");return}lastTrip=trip;followTaxi(trip.taxiId,trip)})}
-if(!tripId){fail("Invalid tracking link")}else{map=new mapboxgl.Map({container:"map",style:"mapbox://styles/mapbox/streets-v12",center:[28.0473,-26.2041],zoom:11});map.addControl(new mapboxgl.NavigationControl({showCompass:false}),"top-right");map.on("load",start)}
+const shareToken=params.get("share")||"";
+const legacyTripId=params.get("trip")||params.get("id")||params.get("requestId")||"";
+const apiUrl="https://us-central1-asiye-80386.cloudfunctions.net/getTripShare";
+
+let map;
+let taxiMarker;
+let pickupMarker;
+let destinationMarker;
+let hasRendered=false;
+let pollTimer=null;
+
+const loader=document.getElementById("loader");
+const card=document.getElementById("card");
+const statusEl=document.getElementById("status");
+
+function fail(message){
+    loader.style.display="grid";
+    loader.innerHTML="";
+    const wrapper=document.createElement("div");
+    wrapper.className="loader-card";
+    const title=document.createElement("strong");
+    title.textContent=message;
+    const detail=document.createElement("span");
+    detail.className="muted";
+    detail.textContent="Ask the passenger to share a new Asiye live-trip link.";
+    wrapper.append(title,detail);
+    loader.appendChild(wrapper);
+}
+
+function validNumber(value){
+    return Number.isFinite(Number(value));
+}
+
+function coords(source,latKeys,lngKeys){
+    let lat;
+    let lng;
+    for(const key of latKeys){
+        if(validNumber(source?.[key])){
+            lat=Number(source[key]);
+            break;
+        }
+    }
+    for(const key of lngKeys){
+        if(validNumber(source?.[key])){
+            lng=Number(source[key]);
+            break;
+        }
+    }
+    return validNumber(lat)&&validNumber(lng)?[lng,lat]:null;
+}
+
+function ensurePoint(marker,position,kind){
+    if(!position)return marker;
+    if(!marker){
+        const el=document.createElement("div");
+        el.className=kind;
+        marker=new mapboxgl.Marker({element:el})
+            .setLngLat(position)
+            .addTo(map);
+    }else{
+        marker.setLngLat(position);
+    }
+    return marker;
+}
+
+function fit(trip,taxi){
+    const points=[];
+    const taxiPos=coords(taxi,["latitude"],["longitude"]);
+    if(taxiPos)points.push(taxiPos);
+
+    const pickup=trip?.commuterLocation&&
+        validNumber(trip.commuterLocation.latitude)&&
+        validNumber(trip.commuterLocation.longitude)
+        ?[
+            Number(trip.commuterLocation.longitude),
+            Number(trip.commuterLocation.latitude)
+        ]
+        :null;
+
+    const destination=trip?.destinationCoords&&
+        validNumber(trip.destinationCoords.latitude)&&
+        validNumber(trip.destinationCoords.longitude)
+        ?[
+            Number(trip.destinationCoords.longitude),
+            Number(trip.destinationCoords.latitude)
+        ]
+        :null;
+
+    if(pickup)points.push(pickup);
+    if(destination)points.push(destination);
+
+    if(points.length>1){
+        const bounds=points
+            .slice(1)
+            .reduce(
+                (current,point)=>current.extend(point),
+                new mapboxgl.LngLatBounds(points[0],points[0])
+            );
+
+        map.fitBounds(bounds,{
+            padding:{top:80,bottom:210,left:55,right:55},
+            maxZoom:15,
+            duration:500
+        });
+    }else if(points[0]){
+        map.easeTo({
+            center:points[0],
+            zoom:15,
+            duration:500
+        });
+    }
+}
+
+function setAvatar(url,name){
+    const avatar=document.getElementById("avatar");
+    avatar.replaceChildren();
+
+    if(url){
+        const img=document.createElement("img");
+        img.alt="Driver profile picture";
+        img.referrerPolicy="no-referrer";
+        img.src=String(url);
+        img.onerror=()=>{
+            avatar.replaceChildren();
+            avatar.textContent=(name||"A").charAt(0).toUpperCase();
+        };
+        avatar.appendChild(img);
+        return;
+    }
+
+    avatar.textContent=(name||"A").charAt(0).toUpperCase();
+}
+
+function render(trip,taxi){
+    const ended=Boolean(trip?.ended);
+
+    statusEl.textContent=ended?"TRIP ENDED":"LIVE";
+    statusEl.style.background=ended?"#ececec":"#e9fff0";
+    statusEl.style.color=ended?"#555":"#137a39";
+
+    document.getElementById("destination").textContent=
+        trip?.destination||
+        trip?.destinationName||
+        "Not available yet";
+
+    const name=[
+        taxi?.name,
+        taxi?.surname
+    ].filter(Boolean).join(" ")||
+        trip?.driverName||
+        "Waiting for driver";
+
+    document.getElementById("driverName").textContent=name;
+
+    const vehicle=[
+        taxi?.vehicleColor||trip?.vehicleColor,
+        taxi?.vehicleMake||trip?.vehicleMake,
+        taxi?.vehicleModel||trip?.vehicleModel,
+        taxi?.taxiRegistrationNumber||trip?.vehicleReg
+    ].filter(Boolean).join(" · ");
+
+    document.getElementById("vehicle").textContent=
+        vehicle||
+        (trip?.taxiId?"Driver assigned":"Live location will update automatically");
+
+    setAvatar(
+        taxi?.profileImageUrl||trip?.driverProfileImageUrl||"",
+        name
+    );
+
+    const taxiPos=coords(taxi,["latitude"],["longitude"]);
+    taxiMarker=ensurePoint(taxiMarker,taxiPos,"taxi-marker");
+
+    const pickup=trip?.commuterLocation&&
+        validNumber(trip.commuterLocation.latitude)&&
+        validNumber(trip.commuterLocation.longitude)
+        ?[
+            Number(trip.commuterLocation.longitude),
+            Number(trip.commuterLocation.latitude)
+        ]
+        :null;
+
+    const destination=trip?.destinationCoords&&
+        validNumber(trip.destinationCoords.latitude)&&
+        validNumber(trip.destinationCoords.longitude)
+        ?[
+            Number(trip.destinationCoords.longitude),
+            Number(trip.destinationCoords.latitude)
+        ]
+        :null;
+
+    pickupMarker=ensurePoint(
+        pickupMarker,
+        pickup,
+        "person-marker"
+    );
+
+    if(destination&&!destinationMarker){
+        destinationMarker=
+            new mapboxgl.Marker({color:"#111"})
+                .setLngLat(destination)
+                .addTo(map);
+    }
+
+    loader.style.display="none";
+    card.style.display="block";
+
+    if(!hasRendered){
+        fit(trip,taxi);
+        hasRendered=true;
+    }
+
+    if(ended&&pollTimer){
+        clearTimeout(pollTimer);
+        pollTimer=null;
+    }
+}
+
+function buildApiRequest(){
+    const url=new URL(apiUrl);
+
+    if(shareToken){
+        url.searchParams.set("share",shareToken);
+    }else if(legacyTripId){
+        url.searchParams.set("trip",legacyTripId);
+    }
+
+    return url.toString();
+}
+
+async function refresh(){
+    try{
+        const response=await fetch(buildApiRequest(),{
+            method:"GET",
+            cache:"no-store",
+            headers:{
+                "Accept":"application/json"
+            }
+        });
+
+        const payload=await response
+            .json()
+            .catch(()=>({}));
+
+        if(!response.ok||!payload.trip){
+            const message=
+                payload.error||
+                "Live tracking is unavailable.";
+
+            if(!hasRendered){
+                fail(message);
+            }else{
+                statusEl.textContent="RECONNECTING";
+            }
+
+            if(response.status===404||response.status===410){
+                return;
+            }
+
+        }else{
+            render(
+                payload.trip,
+                payload.taxi||null
+            );
+        }
+    }catch(error){
+        if(!hasRendered){
+            fail("Unable to connect to this live trip.");
+        }else{
+            statusEl.textContent="RECONNECTING";
+        }
+    }
+
+    if(!pollTimer){
+        pollTimer=setTimeout(()=>{
+            pollTimer=null;
+            refresh();
+        },4000);
+    }
+}
+
+function start(){
+    if(!shareToken&&!legacyTripId){
+        fail("Invalid tracking link");
+        return;
+    }
+
+    map=new mapboxgl.Map({
+        container:"map",
+        style:"mapbox://styles/mapbox/streets-v12",
+        center:[28.0473,-26.2041],
+        zoom:11
+    });
+
+    map.addControl(
+        new mapboxgl.NavigationControl({
+            showCompass:false
+        }),
+        "top-right"
+    );
+
+    map.on("load",refresh);
+}
+
+start();
 </script>
 </body>
 </html>
