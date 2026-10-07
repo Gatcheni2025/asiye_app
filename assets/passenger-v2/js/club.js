@@ -502,6 +502,17 @@ ASIYE.club = {
                 );
 
 
+        const shareToken =
+            new URL(
+                liveTrackingUrl
+            )
+                .searchParams
+                .get(
+                    'share'
+                ) ||
+            '';
+
+
         await ASIYE.booking.requireTripShare({
 
             requestId:
@@ -571,6 +582,9 @@ ASIYE.club = {
 
                             poolId:
                                 poolId,
+
+                            shareToken:
+                                shareToken,
 
                             pickupPin:
                                 pin,
