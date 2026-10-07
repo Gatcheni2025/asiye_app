@@ -1,0 +1,58 @@
+name: Production Compatibility Smoke
+
+on:
+  push:
+    branches:
+      - security-compatibility-phase4
+    paths:
+      - '.github/workflows/production_compatibility_smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify deployed compatibility layer
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Verify Firebase Hosting tracking page
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-delay 2 https://asiye-80386.web.app/track.html -o /tmp/track.html
+          grep -q 'getTripShare' /tmp/track.html
+          if grep -q 'firebase-database.js' /tmp/track.html; then
+            echo "::error::Production track.html still loads Firebase Database directly."
+            exit 1
+          fi
+
+      - name: Verify custom domain tracking page
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 --retry-delay 2 https://app.asiye.cloud/track.html -o /tmp/track-custom.html
+          grep -q 'getTripShare' /tmp/track-custom.html
+          if grep -q 'firebase-database.js' /tmp/track-custom.html; then
+            echo "::error::Custom-domain track.html still loads Firebase Database directly."
+            exit 1
+          fi
+
+      - name: Verify public tracking API rejects invalid requests safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/share.json -w '%{http_code}'             https://us-central1-asiye-80386.cloudfunctions.net/getTripShare)
+          test "$code" = "400"
+          grep -q 'Invalid live tracking link' /tmp/share.json
+
+      - name: Verify authenticated endpoints reject GET
+        shell: bash
+        run: |
+          set -euo pipefail
+          for endpoint in createTripShareToken joinClubPoolSecure; do
+            code=$(curl -sS -o /tmp/${endpoint}.json -w '%{http_code}'               "https://us-central1-asiye-80386.cloudfunctions.net/${endpoint}")
+            test "$code" = "405"
+          done
