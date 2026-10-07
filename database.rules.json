@@ -195,19 +195,19 @@
     },
     "vouchers": {
       ".read": "auth != null",
-      ".write": "auth != null",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
       ".indexOn": "code"
     },
     "voucher_requests": {
-      ".read": "auth != null",
-      ".write": "auth != null",
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
       ".indexOn": [
         "ambassadorPhone"
       ]
     },
     "businesses": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
     },
     "settings": {
       ".read": "auth != null",
@@ -215,33 +215,39 @@
     },
     "delivery_requests": {
       ".read": "auth != null",
-      ".write": "auth != null",
       ".indexOn": [
         "commuterId",
         "handlerId",
         "status",
-        "assignedTaxiId"
-      ]
+        "assignedTaxiId",
+        "taxiId"
+      ],
+      "$request": {
+        ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || (!data.exists() && root.child('requests').child($request).exists() && (root.child('requests').child($request).child('commuterId').val() === auth.uid || root.child('commuters').child(root.child('requests').child($request).child('commuterId').val()).child('authUid').val() === auth.uid)) || (data.exists() && (root.child('requests').child($request).child('commuterId').val() === auth.uid || root.child('commuters').child(root.child('requests').child($request).child('commuterId').val()).child('authUid').val() === auth.uid || root.child('requests').child($request).child('driverAuthUid').val() === auth.uid || (root.child('requests').child($request).child('taxiId').exists() && (root.child('requests').child($request).child('taxiId').val() === auth.uid || root.child('taxis').child(root.child('requests').child($request).child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(root.child('requests').child($request).child('taxiId').val()).child('userUid').val() === auth.uid)))))",
+        "commuterId": {
+          ".validate": "!data.exists() || newData.val() === data.val()"
+        }
+      }
     },
     "pending_deliveries": {
-      ".read": "auth != null",
-      ".write": "auth != null",
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
       ".indexOn": [
         "orderId",
         "createdAt"
       ]
     },
     "payout_requests": {
-      ".read": "auth != null",
-      ".write": "auth != null",
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
       ".indexOn": [
         "status",
         "requestedAt"
       ]
     },
     "earnings": {
-      ".read": "auth != null",
-      ".write": "auth != null",
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
       ".indexOn": [
         "handlerId",
         "timestamp"
@@ -249,7 +255,7 @@
     },
     "campuses": {
       ".read": "auth != null",
-      ".write": "auth != null"
+      ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
     },
     "users": {
       ".indexOn": [
@@ -279,7 +285,7 @@
       "waiting_list": {
         ".read": "auth != null",
         "$uid": {
-          ".write": "auth != null"
+          ".write": "auth != null && auth.uid === $uid"
         }
       }
     },
@@ -296,9 +302,11 @@
     "handlers": {
       ".indexOn": [
         "phone",
-        "email"
+        "email",
+        "authUid",
+        "userUid"
       ],
-      ".read": true,
+      ".read": "auth != null",
       ".write": "auth != null"
     },
     "admin_queue": {
@@ -311,9 +319,9 @@
       }
     },
     "handler_applications": {
-      ".read": "auth != null",
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
       "$application_id": {
-        ".write": "!data.exists()"
+        ".write": "auth != null && !data.exists()"
       }
     },
     "drivers": {
