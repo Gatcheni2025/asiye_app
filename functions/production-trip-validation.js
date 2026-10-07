@@ -705,6 +705,13 @@ async function main() {
   } finally {
     await cleanup();
     console.log('Temporary E2E data and Auth users cleaned up.');
+
+    // Close the Admin SDK's Realtime Database connection so the
+    // GitHub Actions process exits immediately instead of waiting
+    // for the workflow timeout after validation has finished.
+    await admin.app().delete().catch(error => {
+      console.error('Firebase Admin shutdown error:', error.message);
+    });
   }
 }
 
