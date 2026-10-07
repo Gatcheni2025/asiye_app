@@ -42,6 +42,12 @@ jobs:
         working-directory: test/security
         run: npm install --no-audit --no-fund
 
+      - name: Validate changed JavaScript syntax
+        run: |
+          node --check functions/index.js
+          node --check functions/club-pool-security.js
+          node --check assets/passenger-v2/js/club.js
+
       - name: Run Firebase Realtime Database security tests
         working-directory: test/security
         run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json "npm test"
