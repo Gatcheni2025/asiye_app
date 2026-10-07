@@ -392,7 +392,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
     try {
       await _controller?.runJavaScript("""
         (() => {
+          const pendingTrip =
+            localStorage.getItem('pendingTripCardPayment');
+
           if (
+            pendingTrip &&
             window.ASIYE &&
             ASIYE.payments &&
             typeof ASIYE.payments.resumePendingCard === 'function'
@@ -405,11 +409,28 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
                 );
               });
           }
+
+          const walletReference =
+            localStorage.getItem('pendingPaystackReference');
+
+          if (
+            walletReference &&
+            window.AsiyePages &&
+            typeof AsiyePages.handlePaystackReturn === 'function'
+          ) {
+            AsiyePages.handlePaystackReturn(walletReference)
+              .catch((error) => {
+                console.warn(
+                  'Pending wallet payment not ready yet',
+                  error
+                );
+              });
+          }
         })();
       """);
     } catch (error) {
       debugPrint(
-        'Unable to resume pending card payment: $error'
+        'Unable to resume pending Paystack payment: $error'
       );
     }
   }
