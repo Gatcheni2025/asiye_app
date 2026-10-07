@@ -3,7 +3,7 @@ name: Android Release
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, security-payments-phase5]
     paths:
       - "lib/**"
       - "assets/**"
@@ -12,7 +12,7 @@ on:
       - "test/**"
       - ".github/workflows/android_release.yml"
   pull_request:
-    branches: [main]
+    branches: [main, security-payments-phase5]
     paths:
       - "lib/**"
       - "assets/**"
