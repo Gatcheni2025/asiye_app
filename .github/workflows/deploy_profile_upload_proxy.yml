@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# Deploy latest device-readiness fixes.
+# Deploy latest device-readiness fixes, including secure Go ride dispatch.
 
 jobs:
   deploy:
@@ -56,5 +56,5 @@ jobs:
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:uploadProfileImageProxy,functions:confirmTripWalletReady"
+          --only "functions:uploadProfileImageProxy,functions:confirmTripWalletReady,functions:dispatchGoRideRequest"
           --non-interactive
