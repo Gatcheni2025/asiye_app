@@ -631,3 +631,106 @@ test('driver cannot self-verify or approve vehicle and cannot delete profile', a
     isOnline: false
   }));
 });
+
+
+test('delivery request mirror follows trip ownership and assigned driver', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'requests/delivery1'), {
+      commuterId: 'p1',
+      type: 'delivery',
+      status: 'pending',
+      createdAt: 1
+    });
+  });
+
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), 'delivery_requests/delivery1'),
+    {
+      commuterId: 'p1',
+      type: 'delivery',
+      status: 'pending'
+    }
+  ));
+
+  await assertFails(update(
+    ref(dbFor('attacker-auth'), 'delivery_requests/delivery1'),
+    {
+      status: 'completed'
+    }
+  ));
+
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'requests/delivery1'), {
+      taxiId: 'driver-record',
+      driverAuthUid: 'driver-auth',
+      status: 'accepted'
+    });
+  });
+
+  await assertSucceeds(update(
+    ref(dbFor('driver-auth'), 'delivery_requests/delivery1'),
+    {
+      status: 'accepted',
+      taxiId: 'driver-record'
+    }
+  ));
+
+  await assertFails(update(
+    ref(dbFor('passenger-auth'), 'delivery_requests/delivery1'),
+    {
+      commuterId: 'p2'
+    }
+  ));
+});
+
+test('legacy finance and voucher trees reject ordinary client writes', async () => {
+  const db = dbFor('passenger-auth');
+
+  for (const [pathName, value] of [
+    ['pending_deliveries/fake', { orderId: 'fake' }],
+    ['payout_requests/fake', { amount: 999 }],
+    ['earnings/fake', { amount: 999 }],
+    ['vouchers/FAKE', { code: 'FAKE', amount: 999 }],
+    ['voucher_requests/fake', { ambassadorPhone: '000' }],
+    ['businesses/fake', { name: 'Forged' }],
+    ['campuses/fake', { name: 'Forged' }]
+  ]) {
+    await assertFails(set(ref(db, pathName), value));
+  }
+});
+
+test('handler data is no longer anonymous and handler applications require auth', async () => {
+  const anonymous = env.unauthenticatedContext().database();
+
+  await assertFails(get(ref(anonymous, 'handlers/sample')));
+  await assertFails(set(ref(anonymous, 'handlers/sample'), {
+    name: 'Anonymous Handler'
+  }));
+
+  await assertFails(set(ref(anonymous, 'handler_applications/application1'), {
+    name: 'Anonymous Applicant'
+  }));
+
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), 'handler_applications/application2'),
+    {
+      name: 'Authenticated Applicant'
+    }
+  ));
+});
+
+test('Club waiting list can only be written at the authenticated user key', async () => {
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), 'club_pools/waiting_list/passenger-auth'),
+    {
+      createdAt: 1
+    }
+  ));
+
+  await assertFails(set(
+    ref(dbFor('passenger-auth'), 'club_pools/waiting_list/attacker-auth'),
+    {
+      createdAt: 1
+    }
+  ));
+});
