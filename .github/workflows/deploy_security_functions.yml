@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
 
+# Redeploy after tracking-host compatibility fix.
+
 # Fresh runs read repository secrets when queued.
 
 jobs:
