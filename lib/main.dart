@@ -112,6 +112,9 @@ class AsiyeMainShell extends StatefulWidget {
 class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObserver {
   WebViewController? _controller;
   Map<String, dynamic>? _pendingNotification;
+  static const MethodChannel _deepLinkChannel =
+      MethodChannel('com.asiyeapp.asiye/deeplink');
+  String? _pendingPaymentReference;
   final FlutterTts _navigationTts = FlutterTts();
   bool _navigationTtsReady = false;
   int? _phoneResendToken;
@@ -379,6 +382,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
+      unawaited(_deliverPendingPaymentReturn());
       unawaited(_resumePendingCardPayment());
     }
   }
@@ -486,10 +490,91 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
     );
   }
 
+  Future<void> _configurePaymentDeepLinks() async {
+    _deepLinkChannel.setMethodCallHandler((call) async {
+      if (call.method == 'onDeepLink') {
+        await _handlePaymentDeepLink(
+          call.arguments?.toString(),
+        );
+      }
+    });
+
+    try {
+      final initialLink =
+          await _deepLinkChannel.invokeMethod<String>('getInitialLink');
+      await _handlePaymentDeepLink(initialLink);
+    } catch (error) {
+      debugPrint('Payment deep-link startup check skipped: $error');
+    }
+  }
+
+  Future<void> _handlePaymentDeepLink(String? rawLink) async {
+    final link = (rawLink ?? '').trim();
+    if (link.isEmpty) return;
+
+    final uri = Uri.tryParse(link);
+    if (
+      uri == null ||
+      uri.scheme.toLowerCase() != 'asiye' ||
+      uri.host.toLowerCase() != 'payment-complete'
+    ) {
+      return;
+    }
+
+    final reference = (uri.queryParameters['reference'] ?? '').trim();
+    if (reference.isEmpty) return;
+
+    _pendingPaymentReference = reference;
+    await _deliverPendingPaymentReturn();
+  }
+
+  Future<void> _deliverPendingPaymentReturn() async {
+    final reference = _pendingPaymentReference;
+    final controller = _controller;
+
+    if (reference == null || reference.isEmpty || controller == null) {
+      return;
+    }
+
+    try {
+      final payload = jsonEncode({
+        'reference': reference,
+      });
+      final encodedReference = jsonEncode(reference);
+
+      final delivered =
+          await controller.runJavaScriptReturningResult("""
+            (() => {
+              localStorage.setItem(
+                'pendingPaystackReference',
+                $encodedReference
+              );
+
+              if (typeof window.onAsiyePaymentReturn !== 'function') {
+                return false;
+              }
+
+              window.onAsiyePaymentReturn($payload);
+              return true;
+            })()
+          """);
+
+      if (
+        delivered == true ||
+        delivered.toString() == 'true'
+      ) {
+        _pendingPaymentReference = null;
+      }
+    } catch (error) {
+      debugPrint('Payment return deferred until the wallet page is ready: $error');
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_configurePaymentDeepLinks());
     _initializeApp();
     unawaited(_restoreNativePhoneAuthState());
   }
@@ -604,6 +689,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
               _restorePendingPhoneAuthToWeb();
             });
             if (_pendingNotification != null) await _openNotification(_pendingNotification!);
+            await _deliverPendingPaymentReturn();
+            Future.delayed(const Duration(milliseconds: 500), () {
+              _deliverPendingPaymentReturn();
+            });
 
             if (
               url.contains('/passenger-v2/') &&
