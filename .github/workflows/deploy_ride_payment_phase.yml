@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# Redeploy after card selection fix.
+# Redeploy after dedicated Firebase payment-auth fix.
 
 jobs:
   deploy:
