@@ -4476,6 +4476,368 @@ exports.submitAccountDeletionRequest = onRequest(
 
 
 // =================================================================
+// --- AUTHENTICATED PROFILE IMAGE UPLOAD PROXY ---
+// =================================================================
+// The installed WebView cannot reliably POST multipart data directly to the
+// legacy PHP host because browser CORS rules can block the request. Keep the
+// existing PHP storage service, but send the image through an authenticated
+// Firebase Function so the mobile app never depends on cross-origin PHP CORS.
+const PROFILE_UPLOAD_ENDPOINT =
+  "https://app.asiye.cloud/upload_handler.php";
+
+const PROFILE_UPLOAD_API_KEY =
+  "asiye_secure_upload_2025";
+
+function safeProfileId(value) {
+  const id =
+    String(value || "")
+      .trim();
+
+  return /^[A-Za-z0-9_-]{1,160}$/.test(id)
+    ? id
+    : "";
+}
+
+async function profileOwnedByAuth(
+  rootName,
+  profileId,
+  authUid
+) {
+  if (
+    !rootName ||
+    !profileId ||
+    !authUid
+  ) {
+    return false;
+  }
+
+  if (profileId === authUid) {
+    return true;
+  }
+
+  const snapshot =
+    await admin.database()
+      .ref(
+        `${rootName}/${profileId}`
+      )
+      .once(
+        "value"
+      );
+
+  const profile =
+    snapshot.val() || {};
+
+  return (
+    profile.authUid === authUid ||
+    profile.userUid === authUid
+  );
+}
+
+exports.uploadProfileImageProxy =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before uploading a profile picture."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const userId =
+          safeProfileId(
+            request.body?.userId
+          );
+
+        const purpose =
+          String(
+            request.body?.purpose ||
+            "profile"
+          )
+            .trim()
+            .slice(
+              0,
+              80
+            );
+
+        const role =
+          purpose.startsWith(
+            "driver"
+          )
+            ? "driver"
+            : "passenger";
+
+        const rootName =
+          role === "driver"
+            ? "taxis"
+            : "commuters";
+
+        if (!userId) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Profile identity is invalid."
+            });
+        }
+
+        if (
+          !await profileOwnedByAuth(
+            rootName,
+            userId,
+            decoded.uid
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "You cannot update this profile picture."
+            });
+        }
+
+        const dataUrl =
+          String(
+            request.body?.dataUrl ||
+            ""
+          );
+
+        const dataMatch =
+          dataUrl.match(
+            /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/
+          );
+
+        if (!dataMatch) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Profile image data is invalid."
+            });
+        }
+
+        const mimeType =
+          dataMatch[1] ===
+            "image/jpg"
+            ? "image/jpeg"
+            : dataMatch[1];
+
+        const bytes =
+          Buffer.from(
+            dataMatch[2],
+            "base64"
+          );
+
+        if (
+          bytes.length < 100 ||
+          bytes.length >
+            3 * 1024 * 1024
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Profile image must be smaller than 3 MB."
+            });
+        }
+
+        const requestedName =
+          String(
+            request.body?.filename ||
+            "profile.jpg"
+          )
+            .replace(
+              /[^A-Za-z0-9._-]/g,
+              "-"
+            )
+            .slice(
+              0,
+              100
+            ) ||
+          "profile.jpg";
+
+        const form =
+          new FormData();
+
+        form.append(
+          "file",
+          new Blob(
+            [bytes],
+            {
+              type:
+                mimeType
+            }
+          ),
+          requestedName
+        );
+
+        form.append(
+          "api_key",
+          PROFILE_UPLOAD_API_KEY
+        );
+
+        form.append(
+          "userId",
+          userId
+        );
+
+        form.append(
+          "purpose",
+          purpose
+        );
+
+        const uploadResponse =
+          await fetch(
+            PROFILE_UPLOAD_ENDPOINT,
+            {
+              method:
+                "POST",
+              body:
+                form
+            }
+          );
+
+        const rawText =
+          await uploadResponse
+            .text();
+
+        let payload =
+          {};
+
+        try {
+          payload =
+            JSON.parse(
+              rawText ||
+              "{}"
+            );
+        } catch (_) {
+          payload = {
+            error:
+              rawText
+          };
+        }
+
+        const rawUrl =
+          String(
+            payload.url ||
+            payload.fileUrl ||
+            payload.file_url ||
+            ""
+          )
+            .trim();
+
+        if (
+          !uploadResponse.ok ||
+          !rawUrl ||
+          /error/i.test(
+            rawUrl
+          )
+        ) {
+          console.error(
+            "Profile image PHP upload failed",
+            {
+              status:
+                uploadResponse.status,
+              message:
+                payload.message ||
+                payload.error ||
+                rawText
+            }
+          );
+
+          return response
+            .status(502)
+            .json({
+              error:
+                payload.message ||
+                payload.error ||
+                "Profile image storage failed."
+            });
+        }
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            url:
+              rawUrl,
+            fileUrl:
+              rawUrl
+          });
+
+      } catch (error) {
+        console.error(
+          "Profile image proxy failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to save profile picture."
+          });
+      }
+    }
+  );
+
+
+// =================================================================
 // --- PAYSTACK WALLET TOP-UPS ---
 // =================================================================
 // Paystack becomes the primary online wallet top-up provider. Card, South
