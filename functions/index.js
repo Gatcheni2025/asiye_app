@@ -8332,6 +8332,160 @@ exports.settleTripPayment =
     }
   );
 
+async function releaseTripPaymentForPassenger(
+  requestId,
+  passengerId
+) {
+  const paymentRef =
+    admin.database()
+      .ref(
+        tripPaymentPath(
+          requestId,
+          passengerId
+        )
+      );
+
+  const payment =
+    (
+      await paymentRef
+        .once(
+          "value"
+        )
+    ).val();
+
+  if (!payment) {
+    return {
+      status:
+        "nothing_to_release"
+    };
+  }
+
+  if (
+    [
+      "released",
+      "refund_pending",
+      "refunded"
+    ].includes(
+      String(
+        payment.status ||
+        ""
+      )
+    )
+  ) {
+    return {
+      status:
+        payment.status
+    };
+  }
+
+  if (
+    payment.method ===
+      "wallet"
+  ) {
+    const released =
+      await releaseWalletTripPayment(
+        requestId,
+        passengerId
+      );
+
+    return {
+      status:
+        "released",
+      balance:
+        Number(
+          released.balance ||
+          0
+        )
+    };
+  }
+
+  if (
+    payment.method ===
+      "card" &&
+    payment.status ===
+      "held"
+  ) {
+    const refund =
+      await paystackRequest(
+        "/refund",
+        {
+          method:
+            "POST",
+          body: {
+            transaction:
+              payment.paystackTransactionId ||
+              payment.reference,
+            amount:
+              Math.round(
+                Number(
+                  payment.amount ||
+                  0
+                ) *
+                100
+              ),
+            currency:
+              "ZAR",
+            customer_note:
+              "Asiye ride cancelled before completion",
+            merchant_note:
+              `Asiye trip ${requestId} cancelled`
+          }
+        }
+      );
+
+    await paymentRef
+      .update({
+        status:
+          "refund_pending",
+        refundId:
+          String(
+            refund.data?.id ||
+            ""
+          ),
+        refundStatus:
+          String(
+            refund.data?.status ||
+            "pending"
+          ),
+        refundRequestedAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP
+      });
+
+    return {
+      status:
+        "refund_pending"
+    };
+  }
+
+  if (
+    payment.status ===
+      "captured"
+  ) {
+    return {
+      status:
+        "captured"
+    };
+  }
+
+  await paymentRef
+    .update({
+      status:
+        "released",
+      releasedAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP
+    });
+
+  return {
+    status:
+      "released"
+  };
+}
+
+
 exports.releaseTripPayment =
   onRequest(
     {
@@ -9289,6 +9443,182 @@ exports.paystackWebhook =
       }
     }
   );
+
+
+// =================================================================
+// --- AUTOMATIC PAYMENT RELEASE ON CANCELLATION ---
+// =================================================================
+exports.releaseCancelledGoTripPayment =
+  functions
+    .runWith({
+      secrets: [
+        paystackSecretKey
+      ]
+    })
+    .database
+    .ref(
+      "/requests/{requestId}/status"
+    )
+    .onUpdate(
+      async (
+        change,
+        context
+      ) => {
+        const before =
+          String(
+            change.before.val() ||
+            ""
+          );
+
+        const after =
+          String(
+            change.after.val() ||
+            ""
+          );
+
+        if (
+          before === after ||
+          ![
+            "cancelled_by_commuter",
+            "cancelled_by_driver",
+            "cancelled_by_admin",
+            "rejected"
+          ].includes(
+            after
+          )
+        ) {
+          return null;
+        }
+
+        const requestId =
+          context.params
+            .requestId;
+
+        const trip =
+          (
+            await change.after
+              .ref
+              .parent
+              .once(
+                "value"
+              )
+          ).val();
+
+        if (
+          !trip ||
+          trip.type ===
+            "club"
+        ) {
+          return null;
+        }
+
+        const passengerId =
+          String(
+            trip.commuterId ||
+            ""
+          );
+
+        if (!passengerId) {
+          return null;
+        }
+
+        try {
+          await releaseTripPaymentForPassenger(
+            requestId,
+            passengerId
+          );
+        } catch (error) {
+          console.error(
+            "Automatic Go payment release failed",
+            {
+              requestId,
+              passengerId,
+              message:
+                error?.message ||
+                String(error)
+            }
+          );
+        }
+
+        return null;
+      }
+    );
+
+exports.releaseCancelledClubPassengerPayment =
+  functions
+    .runWith({
+      secrets: [
+        paystackSecretKey
+      ]
+    })
+    .database
+    .ref(
+      "/requests/{requestId}/passengers/{passengerId}/status"
+    )
+    .onUpdate(
+      async (
+        change,
+        context
+      ) => {
+        const before =
+          String(
+            change.before.val() ||
+            ""
+          );
+
+        const after =
+          String(
+            change.after.val() ||
+            ""
+          );
+
+        if (
+          before === after ||
+          ![
+            "cancelled_by_commuter",
+            "cancelled_by_driver",
+            "cancelled_by_admin",
+            "rejected"
+          ].includes(
+            after
+          )
+        ) {
+          return null;
+        }
+
+        try {
+          await releaseTripPaymentForPassenger(
+            context.params
+              .requestId,
+            context.params
+              .passengerId
+          );
+
+          await refreshClubPaymentsReady(
+            context.params
+              .requestId
+          );
+
+        } catch (error) {
+          console.error(
+            "Automatic Club payment release failed",
+            {
+              requestId:
+                context.params
+                  .requestId,
+              passengerId:
+                context.params
+                  .passengerId,
+              message:
+                error?.message ||
+                String(error)
+            }
+          );
+        }
+
+        return null;
+      }
+    );
 
 
 // =================================================================
