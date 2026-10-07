@@ -568,49 +568,70 @@ ASIYE.payments = {
     async handleTripState(request) {
         if (
             !request ||
-            request.type !==
-                'club' ||
-            request.poolReady !==
-                true ||
             !ASIYE.state?.userId
         ) {
             return;
         }
 
-        const passenger =
-            request.passengers?.[
-                ASIYE.state.userId
-            ];
-
-        if (!passenger) {
-            return;
-        }
-
-        const method =
+        let method =
             String(
-                passenger.paymentMethod ||
                 request.paymentMethod ||
                 'cash'
             )
                 .toLowerCase();
 
-        const status =
+        let status =
             String(
-                passenger.paymentStatus ||
+                request.paymentStatus ||
                 ''
             );
 
         if (
-            method ===
-                'wallet' &&
-            status ===
-                'wallet_insufficient'
+            request.type ===
+                'club'
         ) {
-            ASIYE.ui?.toast?.(
-                'Your Club is full, but your Asiye Wallet needs more funds before a driver can be released.'
-            );
+            const passenger =
+                request.passengers?.[
+                    ASIYE.state.userId
+                ];
 
-            return;
+            if (!passenger) {
+                return;
+            }
+
+            method =
+                String(
+                    passenger.paymentMethod ||
+                    request.paymentMethod ||
+                    'cash'
+                )
+                    .toLowerCase();
+
+            status =
+                String(
+                    passenger.paymentStatus ||
+                    ''
+                );
+
+            if (
+                method ===
+                    'wallet' &&
+                status ===
+                    'wallet_insufficient'
+            ) {
+                ASIYE.ui?.toast?.(
+                    'Your Club is full, but your Asiye Wallet needs more funds before a driver can be released.'
+                );
+
+                return;
+            }
+
+            if (
+                request.poolReady !==
+                    true
+            ) {
+                return;
+            }
         }
 
         if (
@@ -638,7 +659,7 @@ ASIYE.payments = {
             );
         } catch (error) {
             console.error(
-                'Club card payment preparation failed:',
+                'Ride card payment preparation failed:',
                 error
             );
 
