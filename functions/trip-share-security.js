@@ -242,8 +242,7 @@ function legacyShareAllowed(request, requestId, now = Date.now()) {
     ) ||
     legacyUrl.includes(
       'requestId=' + encodeURIComponent(String(requestId || ''))
-    ) ||
-    legacyUrl === ''
+    )
   );
 }
 
