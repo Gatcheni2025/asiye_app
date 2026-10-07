@@ -45,6 +45,13 @@ function applyClubJoin(pool, passengerId, details = {}, joinedAt = Date.now()) {
   const pickupLng = finiteNumber(details.pickupLng);
   const destinationLat = finiteNumber(details.destinationLat);
   const destinationLng = finiteNumber(details.destinationLng);
+  const paymentMethod = String(details.paymentMethod || 'cash')
+    .trim()
+    .toLowerCase();
+  const isCard = paymentMethod === 'card';
+  const pickupPin = isCard
+    ? ''
+    : String(details.pickupPin || '').slice(0, 10);
 
   pool.passengers[id] = {
     commuterId: id,
@@ -52,10 +59,10 @@ function applyClubJoin(pool, passengerId, details = {}, joinedAt = Date.now()) {
     phone: String(details.phone || '').slice(0, 40),
     profileImageUrl: String(details.profileImageUrl || '').slice(0, 2048),
     profile_picture_url: String(details.profileImageUrl || '').slice(0, 2048),
-    pickupPin: String(details.pickupPin || '').slice(0, 10),
+    pickupPin,
     requirePin: true,
     safetyShareRequired: true,
-    safetyShareCompleted: true,
+    safetyShareCompleted: !isCard,
     pickupAddress: String(details.pickupAddress || 'Current location').slice(0, 300),
     pickupLat,
     pickupLng,
@@ -63,7 +70,8 @@ function applyClubJoin(pool, passengerId, details = {}, joinedAt = Date.now()) {
     destinationLat,
     destinationLng,
     departureTime: String(details.departureTime || '').slice(0, 80),
-    paymentMethod: String(details.paymentMethod || 'cash').slice(0, 40),
+    paymentMethod,
+    paymentStatus: 'waiting_pool',
     status: 'waiting_pool',
     joinedAt
   };
