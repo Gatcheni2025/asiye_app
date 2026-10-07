@@ -66,7 +66,17 @@ ASIYE.state = {
             null,
 
         paymentMethod:
-            'wallet',
+            (
+                ['cash', 'card', 'wallet'].includes(
+                    localStorage.getItem(
+                        'asiyePaymentMethod'
+                    )
+                )
+                    ? localStorage.getItem(
+                        'asiyePaymentMethod'
+                    )
+                    : 'cash'
+            ),
 
         fare:
             0,
