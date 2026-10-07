@@ -1,0 +1,61 @@
+name: Driver Vehicle Readiness Smoke
+
+on:
+  push:
+    branches:
+      - security-payments-phase5
+    paths:
+      - '.github/workflows/driver_vehicle_readiness_smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify driver vehicle photo and year
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate to Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Wait for vehicle review endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 24); do
+            code=$(curl -sS -o /tmp/vehicle-ready.json -w '%{http_code}'               -X POST               -H 'Origin: https://appassets.androidplatform.net'               -H 'Content-Type: application/json'               --data '{}'               https://us-central1-asiye-80386.cloudfunctions.net/submitDriverVehicleForReview || true)
+
+            if [ "$code" = "401" ]; then
+              echo "Vehicle review endpoint is ready."
+              exit 0
+            fi
+
+            echo "Waiting for endpoint (HTTP $code)..."
+            sleep 5
+          done
+
+          echo "::error::Vehicle review endpoint did not become ready."
+          exit 1
+
+      - name: Run production driver vehicle smoke
+        working-directory: functions
+        run: node driver-vehicle-readiness-validation.js
