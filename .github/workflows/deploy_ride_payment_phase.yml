@@ -11,6 +11,8 @@ on:
 permissions:
   contents: read
 
+# Redeploy after card selection fix.
+
 jobs:
   deploy:
     name: Validate, deploy and smoke-test ride payments
