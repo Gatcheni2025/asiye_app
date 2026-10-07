@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# Redeploy after passenger Card-before-PIN + Club/Parcel payment-flow fix.
+# Redeploy after restoring Paystack wallet/card flow and payment CORS.
 
 jobs:
   deploy:
@@ -90,7 +90,7 @@ jobs:
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:prepareTripPayment,functions:verifyTripCardPayment,functions:settleTripPayment,functions:releaseTripPayment,functions:paystackWebhook,functions:joinClubPoolSecure,functions:notifyDriversWhenClubReady,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:releaseCancelledGoTripPayment,functions:releaseCancelledClubPassengerPayment"
+          --only "functions:prepareTripPayment,functions:verifyTripCardPayment,functions:settleTripPayment,functions:releaseTripPayment,functions:initializePaystackWalletTopup,functions:verifyPaystackWalletTopup,functions:paystackPaymentReturn,functions:paystackWebhook,functions:joinClubPoolSecure,functions:notifyDriversWhenClubReady,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:releaseCancelledGoTripPayment,functions:releaseCancelledClubPassengerPayment"
           --non-interactive
 
       - name: Run production cash-card-wallet smoke
