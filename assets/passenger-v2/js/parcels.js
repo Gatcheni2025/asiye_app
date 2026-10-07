@@ -746,6 +746,12 @@ ASIYE.parcels = {
                     timestamp,
                 [`delivery_requests/${requestId}/paymentsReady`]:
                     true,
+                [`delivery_requests/${requestId}/paymentStatus`]:
+                    request.paymentStatus ||
+                    'held',
+                [`delivery_requests/${requestId}/paymentReference`]:
+                    request.paymentReference ||
+                    '',
                 [`delivery_requests/${requestId}/status`]:
                     'pending'
             });
