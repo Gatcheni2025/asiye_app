@@ -206,7 +206,7 @@ ASIYE.booking = {
             status:
                 paymentMethod ===
                     'card'
-                    ? 'payment_required'
+                    ? 'share_required'
                     : 'pending',
 
             commuterId:
