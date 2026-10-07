@@ -4672,6 +4672,21 @@ async function creditPaystackWallet(
   }
 
   if (
+    payment.status ===
+      "complete"
+  ) {
+    return {
+      credited:
+        false,
+      balance:
+        Number(
+          payment.creditedBalance ||
+          0
+        )
+    };
+  }
+
+  if (
     !transactionMatchesPayment(
       transaction,
       payment
