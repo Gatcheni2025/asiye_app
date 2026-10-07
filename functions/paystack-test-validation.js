@@ -90,14 +90,14 @@ async function main() {
   try {
     await admin.auth().createUser({
       uid,
-      email: `${uid}@example.test`,
+      email: `paystack.${stamp}@example.com`,
       displayName: 'Asiye Paystack Test'
     });
 
     await admin.database().ref(`commuters/${commuterId}`).set({
       authUid: uid,
       name: 'Asiye Paystack Test',
-      email: `${uid}@example.test`,
+      email: `paystack.${stamp}@example.com`,
       walletBalance: 0,
       credits: 0,
       createdAt: admin.database.ServerValue.TIMESTAMP
