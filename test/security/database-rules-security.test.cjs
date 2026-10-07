@@ -734,3 +734,63 @@ test('Club waiting list can only be written at the authenticated user key', asyn
     }
   ));
 });
+
+
+test('passenger cannot alter server-owned ride payment holds', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'commuters/p1'), {
+      walletBalance: 80,
+      credits: 80,
+      walletRideHolds: {
+        trip1: {
+          amount: 20,
+          status: 'held'
+        }
+      }
+    });
+  });
+
+  const db = dbFor('passenger-auth');
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    walletRideHolds: null
+  }));
+
+  await assertFails(update(ref(db, 'commuters/p1/walletRideHolds/trip1'), {
+    status: 'released'
+  }));
+
+  await assertSucceeds(update(ref(db, 'commuters/p1'), {
+    name: 'Passenger One Payment Safe'
+  }));
+});
+
+test('trip payment ledgers and card reference maps are server-only', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'tripPayments/trip1/p1'), {
+      method: 'wallet',
+      amount: 50,
+      status: 'held'
+    });
+
+    await set(ref(context.database(), 'tripPaymentReferences/ASIYE-TEST-CARD-1'), {
+      requestId: 'trip1',
+      passengerId: 'p1'
+    });
+  });
+
+  const db = dbFor('passenger-auth');
+
+  await assertFails(get(ref(db, 'tripPayments/trip1/p1')));
+  await assertFails(set(ref(db, 'tripPayments/trip1/p1'), {
+    method: 'wallet',
+    amount: 0,
+    status: 'released'
+  }));
+
+  await assertFails(get(ref(db, 'tripPaymentReferences/ASIYE-TEST-CARD-1')));
+  await assertFails(set(ref(db, 'tripPaymentReferences/FORGED'), {
+    requestId: 'trip1',
+    passengerId: 'p1'
+  }));
+});
