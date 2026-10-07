@@ -4552,6 +4552,32 @@ exports.joinClubPoolSecure = onRequest(
       };
 
       const poolRef = admin.database().ref(`requests/${poolId}`);
+
+      /*
+       * IMPORTANT:
+       * Admin RTDB transactions can invoke the first local update callback
+       * with an empty cache even when the record exists on the server.
+       * Prime this exact reference with a server read before starting the
+       * transaction so a valid Club pool is not mistaken for a missing pool.
+       *
+       * If the pool changes after this read, the RTDB transaction still
+       * performs its normal server-side retry/conflict handling.
+       */
+      const initialPoolSnapshot =
+        await poolRef.once("value");
+
+      const initialPool =
+        initialPoolSnapshot.val();
+
+      if (
+        !initialPool ||
+        initialPool.type !== "club"
+      ) {
+        return response.status(404).json({
+          error: "Club pool was not found."
+        });
+      }
+
       let transactionError = null;
 
       const result = await poolRef.transaction(current => {
