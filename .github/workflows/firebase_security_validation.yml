@@ -16,6 +16,7 @@ on:
   push:
     branches:
       - security-validation-phase3
+      - security-compatibility-phase4
     paths:
       - 'database.rules.json'
       - 'firebase.json'
