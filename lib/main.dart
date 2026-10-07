@@ -115,6 +115,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Map<String, dynamic>? _pendingNotification;
   static const MethodChannel _deepLinkChannel =
       MethodChannel('com.asiyeapp.asiye/deeplink');
+  static const MethodChannel _contactsChannel =
+      MethodChannel('com.asiyeapp.asiye/contacts');
   String? _pendingPaymentReference;
   final FlutterTts _navigationTts = FlutterTts();
   bool _navigationTtsReady = false;
@@ -1002,6 +1004,60 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
+  Future<void> _pickTrustedContact() async {
+    try {
+      var permission =
+          await Permission.contacts.status;
+
+      if (!permission.isGranted) {
+        permission =
+            await Permission.contacts.request();
+      }
+
+      if (!permission.isGranted) {
+        final message =
+            permission.isPermanentlyDenied
+                ? 'Contacts permission is disabled. Enable Contacts for Asiye in Settings and try again.'
+                : 'Contacts permission is required to choose a trusted person.';
+
+        await _controller?.runJavaScript(
+          "window.onNativeContactPickError?.(${jsonEncode(message)});",
+        );
+        return;
+      }
+
+      final result =
+          await _contactsChannel.invokeMethod<dynamic>('pickContact');
+
+      if (result == null) {
+        await _controller?.runJavaScript(
+          "window.onNativeContactPickError?.('cancelled');",
+        );
+        return;
+      }
+
+      final contact =
+          Map<String, dynamic>.from(
+        (result as Map).map(
+          (key, value) => MapEntry(
+            key.toString(),
+            value,
+          ),
+        ),
+      );
+
+      await _controller?.runJavaScript(
+        "window.onNativeContactPicked?.(${jsonEncode(contact)});",
+      );
+    } catch (error) {
+      debugPrint('Native contact picker failed: $error');
+
+      await _controller?.runJavaScript(
+        "window.onNativeContactPickError?.(${jsonEncode(error.toString())});",
+      );
+    }
+  }
+
   void _handleJsCalls(String message) async {
     try {
       if (message == "triggerGoogleSignIn" || message == "startGoogleSignIn") {
@@ -1054,6 +1110,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             await _captureFacePhoto(
               data['purpose']?.toString() ?? 'profile',
             );
+          }
+          else if (action == 'pickContact') {
+            await _pickTrustedContact();
           }
           else if (action == 'shareTrip') {
             await _shareTripRequired(
