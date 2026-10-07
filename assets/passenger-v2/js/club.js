@@ -485,26 +485,37 @@ ASIYE.club = {
         const user =
             ASIYE.state.user || {};
 
+
         const profileImageUrl =
             ASIYE.profile.getUrl(user);
+
 
         const pin =
             await ASIYE.booking
                 .requirePassengerPin();
 
+
         await ASIYE.booking.requireTripShare({
+
             requestId:
                 poolId,
+
             liveTrackingUrl:
-                ASIYE.booking.liveTrackingUrl(poolId),
+                ASIYE.booking.liveTrackingUrl(
+                    poolId
+                ),
+
             pickupPin:
                 pin,
+
             pickupAddress:
                 ASIYE.state.location.address ||
                 'Current location',
+
             destination:
                 ASIYE.state.destination.address ||
                 ASIYE.state.destination.name,
+
             service:
                 'Asiye Club'
         });
@@ -512,31 +523,37 @@ ASIYE.club = {
 
         /*
          * SECURITY:
-         * Club membership is created through a verified backend transaction.
-         * The passenger can no longer rewrite the complete request object from
-         * the browser while joining a pool.
+         * Pool-wide membership, capacity, pricing and ready-state
+         * changes are performed by the verified backend.
          */
 
         const authUser =
             firebase.auth().currentUser;
 
+
         if (!authUser) {
+
             throw new Error(
                 'Please sign in again before joining this Club ride.'
             );
         }
 
+
         const token =
             await authUser.getIdToken(true);
 
+
         const response =
             await fetch(
+
                 'https://us-central1-asiye-80386.cloudfunctions.net/joinClubPoolSecure',
+
                 {
                     method:
                         'POST',
 
                     headers: {
+
                         'Authorization':
                             `Bearer ${token}`,
 
@@ -546,6 +563,7 @@ ASIYE.club = {
 
                     body:
                         JSON.stringify({
+
                             poolId:
                                 poolId,
 
@@ -593,6 +611,7 @@ ASIYE.club = {
                 }
             );
 
+
         const payload =
             await response
                 .json()
@@ -600,137 +619,11 @@ ASIYE.club = {
                     () => ({})
                 );
 
+
         if (!response.ok) {
+
             throw new Error(
                 payload.error ||
-                'Unable to join this Club ride.'
-            );
-        }
-
-
-        ASIYE.state.booking
-                                .paymentMethod ||
-                            'cash',
-
-                        status:
-                            'waiting_pool',
-
-                        joinedAt:
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP
-                    };
-
-
-                    const newCount =
-
-                        Object.keys(
-                            pool.passengers
-                        ).length;
-
-
-                    pool.passengerCount =
-                        newCount;
-
-
-                    /*
-                     * Recalculate equal split.
-                     */
-
-                    const totalFare =
-
-                        Number(
-                            pool.totalPoolFare ||
-                            pool.calculatedPrice ||
-                            0
-                        );
-
-
-                    const marketReference =
-                        Number(
-                            pool.marketReferenceFare ||
-                            pool.totalPoolFare ||
-                            pool.calculatedPrice ||
-                            0
-                        );
-
-                    const seatPrice =
-                        Math.ceil(
-                            (marketReference / config.capacity) * 1.15
-                        );
-
-
-                    pool.pricePerPassenger =
-                        seatPrice;
-
-
-                    Object.keys(
-                        pool.passengers
-                    )
-                    .forEach(
-                        passengerId => {
-
-                            pool.passengers[
-                                passengerId
-                            ].price =
-                                seatPrice;
-                        }
-                    );
-
-
-                    /*
-                     * Pool becomes ready only
-                     * when completely filled.
-                     *
-                     * If a driver already accepted
-                     * early (taxiId present), we
-                     * keep the pool in the
-                     * driver_waiting state until
-                     * the last seat is taken.
-                     */
-
-                    if (
-                        newCount >=
-                        config.capacity
-                    ) {
-
-                        pool.status =
-                            'pool_ready';
-
-                        pool.poolReady =
-                            true;
-
-                        pool.poolReadyAt =
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP;
-
-                    } else {
-
-                        /*
-                         * Keep assigned driver's waiting state.
-                         */
-
-                        pool.status =
-
-                            pool.taxiId
-
-                            ? 'driver_waiting'
-
-                            : 'pooling';
-                    }
-
-
-                    return pool;
-                }
-            );
-
-
-        if (!result.committed) {
-
-            throw new Error(
                 'Unable to join this Club ride.'
             );
         }
@@ -750,18 +643,6 @@ ASIYE.club = {
             'currentRequestId',
             poolId
         );
-
-
-        await firebase
-            .database()
-            .ref(
-                `commuters/${uid}`
-            )
-            .update({
-
-                currentRequest:
-                    poolId
-            });
 
 
         return poolId;
