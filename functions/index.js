@@ -4606,3 +4606,498 @@ exports.joinClubPoolSecure = onRequest(
     }
   }
 );
+
+
+// =================================================================
+// --- SECURE FAMILY LIVE TRIP SHARING ---
+// =================================================================
+// New app builds use a high-entropy capability token. Existing released
+// builds that already shared a Firebase request ID remain compatible through
+// a time-limited legacy capability path. The public tracking page never reads
+// protected Realtime Database nodes directly.
+const crypto = require("node:crypto");
+const {
+  canIssueTripShare,
+  legacyShareAllowed,
+  sanitizeRequest,
+  sanitizeTaxi
+} = require("./trip-share-security");
+
+const TRIP_SHARE_TTL_MS =
+  72 * 60 * 60 * 1000;
+
+function publicTripShareCors(request, response) {
+  response.set(
+    "Access-Control-Allow-Origin",
+    "*"
+  );
+  response.set(
+    "Access-Control-Allow-Headers",
+    "Authorization, Content-Type"
+  );
+  response.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, OPTIONS"
+  );
+  response.set(
+    "Cache-Control",
+    "no-store, max-age=0"
+  );
+}
+
+async function verifiedRequestUser(request) {
+  const match =
+    (
+      request.get("authorization") ||
+      ""
+    ).match(/^Bearer (.+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  return admin.auth()
+    .verifyIdToken(match[1]);
+}
+
+function validRequestId(value) {
+  const id =
+    String(value || "")
+      .trim();
+
+  return /^[A-Za-z0-9_-]{16,128}$/.test(id)
+    ? id
+    : "";
+}
+
+function validTripShareToken(value) {
+  const token =
+    String(value || "")
+      .trim();
+
+  return /^[A-Za-z0-9_-]{32,96}$/.test(token)
+    ? token
+    : "";
+}
+
+exports.createTripShareToken = onRequest(
+  {
+    region: "us-central1"
+  },
+  async (request, response) => {
+    walletSmsCors(
+      request,
+      response
+    );
+
+    if (request.method === "OPTIONS") {
+      return response
+        .status(204)
+        .send("");
+    }
+
+    if (request.method !== "POST") {
+      return response
+        .status(405)
+        .json({
+          error:
+            "POST required."
+        });
+    }
+
+    try {
+      const decoded =
+        await verifiedRequestUser(
+          request
+        );
+
+      if (!decoded) {
+        return response
+          .status(401)
+          .json({
+            error:
+              "Sign in again before sharing this trip."
+          });
+      }
+
+      const requestId =
+        validRequestId(
+          request.body?.requestId
+        );
+
+      if (!requestId) {
+        return response
+          .status(400)
+          .json({
+            error:
+              "Invalid trip."
+          });
+      }
+
+      const requestSnapshot =
+        await admin.database()
+          .ref(
+            `requests/${requestId}`
+          )
+          .once("value");
+
+      const trip =
+        requestSnapshot.val();
+
+      if (!trip) {
+        return response
+          .status(404)
+          .json({
+            error:
+              "Trip was not found."
+          });
+      }
+
+      const passenger =
+        await resolvePassengerForWallet(
+          decoded
+        );
+
+      const passengerId =
+        String(
+          passenger?.id ||
+          decoded.uid
+        );
+
+      if (
+        !canIssueTripShare(
+          trip,
+          passengerId,
+          decoded.uid
+        )
+      ) {
+        return response
+          .status(403)
+          .json({
+            error:
+              "This account cannot share that trip."
+          });
+      }
+
+      const issuerRef =
+        admin.database()
+          .ref(
+            `tripShareIssuers/${requestId}/${decoded.uid}`
+          );
+
+      const issuerSnapshot =
+        await issuerRef
+          .once("value");
+
+      const previous =
+        issuerSnapshot.val() ||
+        {};
+
+      const now =
+        Date.now();
+
+      const reusableToken =
+        validTripShareToken(
+          previous.token
+        );
+
+      if (
+        reusableToken &&
+        Number(
+          previous.expiresAt ||
+          0
+        ) >
+          now +
+          5 * 60 * 1000
+      ) {
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId,
+            shareToken:
+              reusableToken,
+            expiresAt:
+              Number(
+                previous.expiresAt
+              ),
+            liveTrackingUrl:
+              `https://app.asiye.cloud/track.html?share=${encodeURIComponent(reusableToken)}`
+          });
+      }
+
+      const shareToken =
+        crypto
+          .randomBytes(32)
+          .toString("base64url");
+
+      const expiresAt =
+        now +
+        TRIP_SHARE_TTL_MS;
+
+      const tokenRef =
+        admin.database()
+          .ref(
+            `tripShareTokens/${shareToken}`
+          );
+
+      await admin.database()
+        .ref()
+        .update({
+          [`tripShareTokens/${shareToken}`]:
+            {
+              requestId,
+              issuedToUid:
+                decoded.uid,
+              passengerId,
+              createdAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP,
+              expiresAt,
+              revoked:
+                false
+            },
+          [`tripShareIssuers/${requestId}/${decoded.uid}`]:
+            {
+              token:
+                shareToken,
+              expiresAt,
+              updatedAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            }
+        });
+
+      return response
+        .status(200)
+        .json({
+          ok:
+            true,
+          requestId,
+          shareToken,
+          expiresAt,
+          liveTrackingUrl:
+            `https://app.asiye.cloud/track.html?share=${encodeURIComponent(shareToken)}`
+        });
+
+    } catch (error) {
+      console.error(
+        "Create trip share token failed",
+        {
+          code:
+            error?.code ||
+            "unknown",
+          message:
+            error?.message ||
+            String(error)
+        }
+      );
+
+      return response
+        .status(401)
+        .json({
+          error:
+            "Unable to create the live tracking link."
+        });
+    }
+  }
+);
+
+exports.getTripShare = onRequest(
+  {
+    region: "us-central1"
+  },
+  async (request, response) => {
+    publicTripShareCors(
+      request,
+      response
+    );
+
+    if (request.method === "OPTIONS") {
+      return response
+        .status(204)
+        .send("");
+    }
+
+    if (request.method !== "GET") {
+      return response
+        .status(405)
+        .json({
+          error:
+            "GET required."
+        });
+    }
+
+    try {
+      const shareToken =
+        validTripShareToken(
+          request.query?.share
+        );
+
+      const legacyTripId =
+        validRequestId(
+          request.query?.trip ||
+          request.query?.id ||
+          request.query?.requestId
+        );
+
+      let requestId =
+        "";
+
+      let expiresAt =
+        null;
+
+      let legacy =
+        false;
+
+      if (shareToken) {
+        const tokenSnapshot =
+          await admin.database()
+            .ref(
+              `tripShareTokens/${shareToken}`
+            )
+            .once("value");
+
+        const token =
+          tokenSnapshot.val();
+
+        if (
+          !token ||
+          token.revoked === true ||
+          Number(
+            token.expiresAt ||
+            0
+          ) <= Date.now()
+        ) {
+          return response
+            .status(410)
+            .json({
+              error:
+                "This live tracking link has expired."
+            });
+        }
+
+        requestId =
+          validRequestId(
+            token.requestId
+          );
+
+        expiresAt =
+          Number(
+            token.expiresAt
+          ) ||
+          null;
+
+      } else if (legacyTripId) {
+        requestId =
+          legacyTripId;
+
+        legacy =
+          true;
+
+      } else {
+        return response
+          .status(400)
+          .json({
+            error:
+              "Invalid live tracking link."
+          });
+      }
+
+      const tripSnapshot =
+        await admin.database()
+          .ref(
+            `requests/${requestId}`
+          )
+          .once("value");
+
+      const trip =
+        tripSnapshot.val();
+
+      if (!trip) {
+        return response
+          .status(404)
+          .json({
+            error:
+              "Trip was not found."
+          });
+      }
+
+      if (
+        legacy &&
+        !legacyShareAllowed(
+          trip,
+          requestId
+        )
+      ) {
+        return response
+          .status(410)
+          .json({
+            error:
+              "This older live tracking link is no longer available. Ask the passenger to share a new link."
+          });
+      }
+
+      const taxiId =
+        String(
+          trip.taxiId ||
+          ""
+        );
+
+      let taxi =
+        null;
+
+      if (taxiId) {
+        taxi =
+          (
+            await admin.database()
+              .ref(
+                `taxis/${taxiId}`
+              )
+              .once("value")
+          ).val();
+      }
+
+      return response
+        .status(200)
+        .json({
+          ok:
+            true,
+          legacy,
+          expiresAt,
+          updatedAt:
+            Date.now(),
+          trip:
+            sanitizeRequest(
+              trip,
+              requestId
+            ),
+          taxi:
+            sanitizeTaxi(
+              taxi,
+              trip
+            )
+        });
+
+    } catch (error) {
+      console.error(
+        "Get trip share failed",
+        {
+          message:
+            error?.message ||
+            String(error)
+        }
+      );
+
+      return response
+        .status(500)
+        .json({
+          error:
+            "Live tracking is temporarily unavailable."
+        });
+    }
+  }
+);
