@@ -69,9 +69,20 @@ ASIYE.profile = {
                 firebase.database.ServerValue.TIMESTAMP
         };
 
+        /*
+         * uploadProfileImageProxy already writes these canonical fields to
+         * commuters/{userId} with Admin SDK. Mirror them from the WebView when
+         * permitted, but never report a failed scan after the server saved it.
+         */
         await firebase.database()
             .ref(`commuters/${userId}`)
-            .update(patch);
+            .update(patch)
+            .catch(error => {
+                console.warn(
+                    'Passenger profile image was saved server-side; client mirror update was skipped:',
+                    error
+                );
+            });
 
         ASIYE.state.user = ASIYE.state.user || {};
         Object.assign(ASIYE.state.user, patch);
