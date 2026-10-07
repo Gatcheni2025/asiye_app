@@ -555,3 +555,79 @@ test('voucher usage, settings writes, admin queue and market ad writes are prote
     status: 'active'
   }));
 });
+
+
+test('passenger cannot delete and recreate profile to bypass wallet idempotency', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'commuters/p1'), {
+      walletBalance: 120,
+      credits: 120,
+      walletAppliedPayments: {
+        paystack_ASIYE_TEST: {
+          provider: 'paystack',
+          amount: 120
+        }
+      }
+    });
+  });
+
+  const db = dbFor('passenger-auth');
+
+  await assertFails(
+    set(ref(db, 'commuters/p1'), null)
+  );
+
+  await assertFails(
+    update(ref(db, 'commuters/p1'), {
+      walletAppliedPayments: null
+    })
+  );
+
+  await assertFails(
+    update(ref(db, 'commuters/p1'), {
+      authUid: 'attacker-auth'
+    })
+  );
+});
+
+test('passenger cannot self-promote account or ambassador privileges', async () => {
+  const db = dbFor('passenger-auth');
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    isAdmin: true
+  }));
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    isAmbassador: true
+  }));
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    accountType: 'premium'
+  }));
+
+  await assertFails(update(ref(db, 'commuters/p1'), {
+    trialActive: true
+  }));
+});
+
+test('driver cannot self-verify or approve vehicle and cannot delete profile', async () => {
+  const db = dbFor('driver-auth');
+
+  await assertFails(update(ref(db, 'taxis/driver-record'), {
+    verificationStatus: 'verified'
+  }));
+
+  await assertFails(update(ref(db, 'taxis/driver-record'), {
+    vehicleApproved: true
+  }));
+
+  await assertFails(update(ref(db, 'taxis/driver-record'), {
+    provisionalActivation: true
+  }));
+
+  await assertFails(set(ref(db, 'taxis/driver-record'), null));
+
+  await assertSucceeds(update(ref(db, 'taxis/driver-record'), {
+    isOnline: false
+  }));
+});
