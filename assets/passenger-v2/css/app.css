@@ -2656,3 +2656,94 @@ button:disabled {
 #completeRideDone{width:100%;min-height:49px;border-radius:13px;background:#193e2e;color:white;font-weight:700;border:0}
 
 .passenger-transit-card{padding:5px 2px;color:#193d2c}.passenger-transit-card .asiye-between{display:flex;justify-content:space-between;gap:18px;align-items:flex-start;padding-bottom:23px;border-bottom:1px solid #e1e9dd}.passenger-transit-card .home-kicker{color:#51805a;font-size:10px;letter-spacing:1.5px}.passenger-transit-card .home-title{font-size:29px;letter-spacing:-1px;margin:10px 0}.passenger-transit-card .home-greeting{font-size:12px;line-height:1.7;color:#778570;overflow-wrap:anywhere}.passenger-transit-card .asiye-status-icon{display:grid;place-items:center;flex-shrink:0;width:49px;height:49px;border-radius:16px;background:#e8f2e5;color:#3b8050;font-size:20px}.transit-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:19px}.transit-actions button{min-height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;border:1px solid #dfe8db;border-radius:14px;background:#f7faf5;color:#234d32;font-size:11px;font-weight:700}.transit-actions button:hover{background:#edf5e9}.transit-actions button:focus-visible{outline:2px solid #358251;outline-offset:3px}
+
+
+/* ASIYE_PAYMENT_PICKER_V1 */
+.asiye-payment-picker{
+    margin:14px 0 4px;
+}
+.asiye-payment-title{
+    margin:0 0 9px;
+    font-size:11px;
+    font-weight:900;
+    letter-spacing:.06em;
+    text-transform:uppercase;
+    color:#747b86;
+}
+.asiye-payment-options{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+}
+.asiye-payment-option{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:8px;
+    min-width:0;
+    padding:12px 11px;
+    border:1px solid #e2e5e9;
+    border-radius:16px;
+    background:#fff;
+    color:#111;
+    text-align:left;
+    box-shadow:0 5px 16px rgba(17,24,39,.04);
+}
+.asiye-payment-option.selected{
+    border-color:#111;
+    box-shadow:0 0 0 2px rgba(17,17,17,.08);
+}
+.asiye-payment-icon{
+    width:34px;
+    height:34px;
+    display:grid;
+    place-items:center;
+    border-radius:11px;
+    background:#f1f3f5;
+    font-size:15px;
+}
+.asiye-payment-option.selected .asiye-payment-icon{
+    background:#111;
+    color:#fff;
+}
+.asiye-payment-copy{
+    min-width:0;
+}
+.asiye-payment-copy strong{
+    display:block;
+    font-size:13px;
+}
+.asiye-payment-copy small{
+    display:block;
+    margin-top:2px;
+    font-size:9px;
+    line-height:1.25;
+    color:#777f8a;
+    white-space:normal;
+}
+.asiye-payment-check{
+    position:absolute;
+    top:9px;
+    right:9px;
+    width:18px;
+    height:18px;
+    display:none;
+    place-items:center;
+    border-radius:50%;
+    background:#111;
+    color:#fff;
+    font-size:8px;
+}
+.asiye-payment-option.selected .asiye-payment-check{
+    display:grid;
+}
+@media (max-width:360px){
+    .asiye-payment-options{
+        grid-template-columns:1fr;
+    }
+    .asiye-payment-option{
+        flex-direction:row;
+        align-items:center;
+    }
+}
