@@ -222,6 +222,46 @@ test('passenger can notify assigned driver and unrelated user cannot forge that 
   ));
 });
 
+test('trip status changes are role-specific while legitimate lifecycle actions still work', async () => {
+  await assertSucceeds(update(ref(dbFor('passenger-auth'), 'requests/unassigned'), {
+    status: 'searching'
+  }));
+
+  await assertSucceeds(update(ref(dbFor('passenger-auth'), 'requests/trip1'), {
+    status: 'cancelled_by_commuter'
+  }));
+
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'requests/trip1'), {
+      status: 'accepted'
+    });
+  });
+
+  await assertSucceeds(update(ref(dbFor('driver-auth'), 'requests/trip1'), {
+    status: 'completed'
+  }));
+
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'requests/trip1'), {
+      status: 'accepted'
+    });
+  });
+
+  await assertFails(update(ref(dbFor('passenger-auth'), 'requests/trip1'), {
+    status: 'cancelled_by_driver'
+  }));
+
+  await assertFails(update(ref(dbFor('driver-auth'), 'requests/trip1'), {
+    status: 'cancelled_by_commuter'
+  }));
+
+  await assertFails(set(ref(dbFor('passenger-auth'), 'requests/invalid-initial-state'), {
+    commuterId: 'p1',
+    status: 'completed',
+    createdAt: 3
+  }));
+});
+
 test('passenger cannot clear an assigned taxi or mark a trip completed', async () => {
   await assertFails(update(ref(dbFor('passenger-auth'), 'requests/trip1'), {
     taxiId: null
