@@ -11,6 +11,8 @@ on:
       - 'functions/trip-share-security.js'
       - 'functions/paystack-wallet.js'
       - 'functions/paystack-test-validation.js'
+      - 'functions/ride-payment-validation.js'
+      - 'functions/ride-payment-validation.js'
       - 'assets/member-pages.js'
       - 'android/app/src/main/kotlin/com/asiyeapp/asiye/MainActivity.kt'
       - 'lib/main.dart'
@@ -34,6 +36,7 @@ on:
       - 'functions/trip-share-security.js'
       - 'functions/paystack-wallet.js'
       - 'functions/paystack-test-validation.js'
+      - 'functions/ride-payment-validation.js'
       - 'assets/member-pages.js'
       - 'assets/passenger-v2/js/booking.js'
       - 'assets/passenger-v2/js/club.js'
@@ -73,6 +76,7 @@ jobs:
           node --check functions/trip-share-security.js
           node --check functions/paystack-wallet.js
           node --check functions/paystack-test-validation.js
+          node --check functions/ride-payment-validation.js
           node --check assets/member-pages.js
           node --check assets/passenger-v2/js/wallet.js
           node --check assets/passenger-v2/js/booking.js
