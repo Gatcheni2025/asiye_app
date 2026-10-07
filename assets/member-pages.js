@@ -198,10 +198,23 @@
                     String(rawUrl)
                 )
             ) {
+                const serviceMessage =
+                    String(
+                        payload.message ||
+                        payload.error ||
+                        ''
+                    ).trim();
+
+                const safeMessage =
+                    /<\/?(?:html|head|body|div|h1|h2|p|!doctype)/i.test(
+                        serviceMessage
+                    )
+                        ? ''
+                        : serviceMessage;
+
                 throw new Error(
-                    payload.message ||
-                    payload.error ||
-                    'Profile image upload failed.'
+                    safeMessage ||
+                    'Profile picture could not be saved. Please try again.'
                 );
             }
 
@@ -900,6 +913,12 @@ window.AsiyePages = {
                     .TIMESTAMP
         };
 
+        /*
+         * The authenticated upload function already allocates this image to
+         * taxis/{driverId} and documents/FACE. Keep the client mirror for
+         * immediate UI compatibility, but do not fail the scan if rules reject
+         * a duplicate browser-side write.
+         */
         await firebase
             .database()
             .ref(
@@ -908,6 +927,12 @@ window.AsiyePages = {
             .update({
                 ...updates,
                 'documents/FACE': url
+            })
+            .catch(error => {
+                console.warn(
+                    'Driver profile image was saved server-side; client mirror update was skipped:',
+                    error
+                );
             });
 
         if (
