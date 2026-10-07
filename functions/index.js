@@ -4476,6 +4476,552 @@ exports.submitAccountDeletionRequest = onRequest(
 
 
 // =================================================================
+// --- SERVER-SIDE ASIYE GO DRIVER DISPATCH ---
+// =================================================================
+// The passenger client must not write into another driver's taxi profile.
+// Dispatching via Admin SDK keeps Phase 2 profile rules intact and guarantees
+// the request notification/queue write can reach eligible drivers.
+exports.dispatchGoRideRequest =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Passenger authentication is required."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const requestId =
+          String(
+            request.body?.requestId ||
+            ""
+          ).trim();
+
+        if (
+          !/^[A-Za-z0-9_-]{1,160}$/.test(
+            requestId
+          )
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Ride reference is invalid."
+            });
+        }
+
+        const passenger =
+          await resolvePassengerForWallet(
+            decoded
+          );
+
+        if (!passenger) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "Passenger profile could not be verified."
+            });
+        }
+
+        const requestRef =
+          admin.database()
+            .ref(
+              `requests/${requestId}`
+            );
+
+        const snapshot =
+          await requestRef.once(
+            "value"
+          );
+
+        if (!snapshot.exists()) {
+          return response
+            .status(404)
+            .json({
+              error:
+                "Ride request was not found."
+            });
+        }
+
+        const trip =
+          snapshot.val() || {};
+
+        const ownsTrip =
+          trip.commuterId ===
+            passenger.id ||
+          trip.commuterId ===
+            decoded.uid ||
+          Boolean(
+            trip.passengers?.[
+              passenger.id
+            ]
+          ) ||
+          Boolean(
+            trip.passengers?.[
+              decoded.uid
+            ]
+          );
+
+        if (!ownsTrip) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "This ride does not belong to the signed-in passenger."
+            });
+        }
+
+        if (
+          trip.type === "club"
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Club rides use the Club dispatch flow."
+            });
+        }
+
+        if (
+          ![
+            "pending",
+            "searching",
+            "driver_busy"
+          ].includes(
+            String(
+              trip.status ||
+              ""
+            )
+          )
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "This ride is not ready for driver dispatch."
+            });
+        }
+
+        const pickupLat =
+          Number(
+            trip.commuterLocation
+              ?.latitude
+          );
+
+        const pickupLng =
+          Number(
+            trip.commuterLocation
+              ?.longitude
+          );
+
+        if (
+          !Number.isFinite(
+            pickupLat
+          ) ||
+          !Number.isFinite(
+            pickupLng
+          )
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Pickup location is unavailable."
+            });
+        }
+
+        const taxisSnapshot =
+          await admin.database()
+            .ref(
+              "taxis"
+            )
+            .once(
+              "value"
+            );
+
+        const idleDrivers =
+          [];
+
+        const busyDrivers =
+          [];
+
+        taxisSnapshot.forEach(
+          child => {
+            const taxi =
+              child.val() ||
+              {};
+
+            if (
+              taxi.isOnline !==
+              true
+            ) {
+              return;
+            }
+
+            const lat =
+              Number(
+                taxi.latitude
+              );
+
+            const lng =
+              Number(
+                taxi.longitude
+              );
+
+            if (
+              !Number.isFinite(lat) ||
+              !Number.isFinite(lng)
+            ) {
+              return;
+            }
+
+            const vehicleType =
+              String(
+                taxi.vehicleType ||
+                ""
+              )
+                .toLowerCase();
+
+            if (
+              vehicleType &&
+              ![
+                "ehailing",
+                "e-hailing",
+                "go",
+                "car"
+              ].includes(
+                vehicleType
+              )
+            ) {
+              return;
+            }
+
+            const distanceKm =
+              haversineKm(
+                pickupLat,
+                pickupLng,
+                lat,
+                lng
+              );
+
+            if (
+              !Number.isFinite(
+                distanceKm
+              ) ||
+              distanceKm >
+                10
+            ) {
+              return;
+            }
+
+            const item = {
+              driverId:
+                child.key,
+              taxi,
+              distanceKm
+            };
+
+            if (
+              taxi.currentRequest
+            ) {
+              busyDrivers.push(
+                item
+              );
+            } else if (
+              taxi.isFull !==
+              true
+            ) {
+              idleDrivers.push(
+                item
+              );
+            }
+          }
+        );
+
+        idleDrivers.sort(
+          (
+            left,
+            right
+          ) =>
+            left.distanceKm -
+            right.distanceKm
+        );
+
+        busyDrivers.sort(
+          (
+            left,
+            right
+          ) =>
+            left.distanceKm -
+            right.distanceKm
+        );
+
+        if (
+          idleDrivers.length
+        ) {
+          const candidates =
+            idleDrivers.slice(
+              0,
+              8
+            );
+
+          const updates = {};
+
+          for (
+            const candidate
+            of candidates
+          ) {
+            updates[
+              `notifications/taxis/${candidate.driverId}/${requestId}`
+            ] = {
+              type:
+                "ride_request",
+              requestId,
+              rideType:
+                "go",
+              commuterId:
+                trip.commuterId ||
+                passenger.id,
+              commuterName:
+                trip.commuterName ||
+                "Passenger",
+              pickupAddress:
+                trip.pickupAddress ||
+                "Pickup",
+              destination:
+                trip.destination ||
+                trip.destinationName ||
+                "Destination",
+              fare:
+                Number(
+                  trip.finalAmount ||
+                  trip.calculatedPrice ||
+                  0
+                ),
+              distanceKm:
+                candidate.distanceKm,
+              paymentMethod:
+                String(
+                  trip.paymentMethod ||
+                  "cash"
+                ),
+              timestamp:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            };
+          }
+
+          updates[
+            `requests/${requestId}/status`
+          ] =
+            "searching";
+
+          updates[
+            `requests/${requestId}/driverDispatchCount`
+          ] =
+            candidates.length;
+
+          updates[
+            `requests/${requestId}/driverDispatchAt`
+          ] =
+            admin.database
+              .ServerValue
+              .TIMESTAMP;
+
+          updates[
+            `requests/${requestId}/driverBusy`
+          ] =
+            false;
+
+          await admin.database()
+            .ref()
+            .update(
+              updates
+            );
+
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              mode:
+                "broadcast",
+              drivers:
+                candidates.length
+            });
+        }
+
+        if (
+          busyDrivers.length
+        ) {
+          const selected =
+            busyDrivers[0];
+
+          const now =
+            admin.database
+              .ServerValue
+              .TIMESTAMP;
+
+          await admin.database()
+            .ref()
+            .update({
+              [`requests/${requestId}/status`]:
+                "driver_busy",
+              [`requests/${requestId}/queuedTaxiId`]:
+                selected.driverId,
+              [`requests/${requestId}/driverBusy`]:
+                true,
+              [`requests/${requestId}/queuedAt`]:
+                now,
+              [`taxis/${selected.driverId}/bookingQueue/${requestId}`]:
+                {
+                  requestId,
+                  commuterId:
+                    trip.commuterId ||
+                    passenger.id,
+                  commuterName:
+                    trip.commuterName ||
+                    "Passenger",
+                  pickupAddress:
+                    trip.pickupAddress ||
+                    "Pickup",
+                  destination:
+                    trip.destination ||
+                    trip.destinationName ||
+                    "Destination",
+                  fare:
+                    Number(
+                      trip.finalAmount ||
+                      trip.calculatedPrice ||
+                      0
+                    ),
+                  paymentMethod:
+                    String(
+                      trip.paymentMethod ||
+                      "cash"
+                    ),
+                  queuedAt:
+                    now
+                }
+            });
+
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              mode:
+                "queued",
+              driverId:
+                selected.driverId
+            });
+        }
+
+        await requestRef.update({
+          status:
+            "searching",
+          driverBusy:
+            false,
+          driverDispatchCount:
+            0,
+          driverDispatchAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            mode:
+              "none",
+            drivers:
+              0
+          });
+
+      } catch (error) {
+        console.error(
+          "Go ride dispatch failed",
+          {
+            code:
+              error?.code ||
+              "unknown",
+            message:
+              error?.message ||
+              String(error)
+          }
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              "Unable to send this ride request to nearby drivers."
+          });
+      }
+    }
+  );
+
+
+// =================================================================
 // --- SERVER-SIDE ASIYE WALLET RIDE READINESS CHECK ---
 // =================================================================
 // Before a driver completes a wallet-funded trip, verify the passenger(s)
