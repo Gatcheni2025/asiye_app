@@ -1,27 +1,35 @@
 {
   "rules": {
     "commuters": {
-      ".read": true,
-      ".write": true,
+      ".read": "auth != null",
       ".indexOn": [
         "phone",
+        "email",
+        "authUid",
         "isAmbassador",
         "verificationStatus"
-      ]
+      ],
+      "$commuter": {
+        ".write": "auth != null && (auth.uid === $commuter || data.child('authUid').val() === auth.uid || (!data.exists() && newData.child('authUid').val() === auth.uid) || root.child('admins').child(auth.uid).exists())"
+      }
     },
     "ambassador_team_chat": {
       ".read": true,
       ".write": true
     },
     "taxis": {
-      ".read": true,
-      ".write": true,
+      ".read": "auth != null",
       ".indexOn": [
         "phone",
+        "email",
+        "authUid",
+        "userUid",
         "isOnline",
-        "destination",
-        "authUid"
-      ]
+        "destination"
+      ],
+      "$taxi": {
+        ".write": "auth != null && (auth.uid === $taxi || data.child('authUid').val() === auth.uid || data.child('userUid').val() === auth.uid || (!data.exists() && (newData.child('authUid').val() === auth.uid || newData.child('userUid').val() === auth.uid)) || root.child('admins').child(auth.uid).exists())"
+      }
     },
     "requests": {
       ".read": true,
