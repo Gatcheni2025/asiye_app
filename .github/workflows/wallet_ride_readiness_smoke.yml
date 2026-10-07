@@ -1,0 +1,45 @@
+name: Wallet Ride Readiness Smoke
+
+on:
+  push:
+    branches:
+      - security-payments-phase5
+    paths:
+      - '.github/workflows/wallet_ride_readiness_smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify wallet completion gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Authenticate to Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Validate test syntax
+        run: node --check functions/wallet-ride-readiness-validation.js
+
+      - name: Run production wallet readiness smoke
+        working-directory: functions
+        run: node wallet-ride-readiness-validation.js
