@@ -5684,8 +5684,14 @@ exports.uploadProfileImageProxy =
             ? "drivers"
             : "passengers";
 
+        const isDriverVehicle =
+          role === "driver" &&
+          purpose === "driver-vehicle";
+
         const objectPath =
-          `profile-images/${roleFolder}/${userId}/profile.${extension}`;
+          isDriverVehicle
+            ? `vehicle-images/drivers/${userId}/vehicle.${extension}`
+            : `profile-images/${roleFolder}/${userId}/profile.${extension}`;
 
         const downloadToken =
           require("node:crypto")
@@ -5741,53 +5747,64 @@ exports.uploadProfileImageProxy =
             .TIMESTAMP;
 
         const patch =
-          role === "driver"
+          isDriverVehicle
             ? {
-                profile_picture_url:
+                vehiclePhoto:
                   url,
-                profileImageUrl:
-                  url,
-                driverProfileImageUrl:
-                  url,
-                profilePhotoUrl:
-                  url,
-                photoURL:
-                  url,
-                faceScanCompleted:
-                  true,
-                faceScanVerified:
-                  true,
-                faceScanVerifiedAt:
+                vehiclePhotoUpdatedAt:
                   now,
-                profilePhotoUpdatedAt:
-                  now,
-                profileImageStoragePath:
+                vehicleImageStoragePath:
                   objectPath,
-                "documents/FACE":
+                "documents/CAR_FRONT":
                   url
               }
-            : {
-                profileImageUrl:
-                  url,
-                profile_picture_url:
-                  url,
-                profilePhotoUrl:
-                  url,
-                photoURL:
-                  url,
-                passengerProfileImageUrl:
-                  url,
-                faceScanCompleted:
-                  true,
-                faceScanVerified:
-                  true,
-                faceScanVerifiedAt:
-                  now,
-                profilePhotoUpdatedAt:
-                  now,
-                profileImageStoragePath:
-                  objectPath
-              };
+            : role === "driver"
+              ? {
+                  profile_picture_url:
+                    url,
+                  profileImageUrl:
+                    url,
+                  driverProfileImageUrl:
+                    url,
+                  profilePhotoUrl:
+                    url,
+                  photoURL:
+                    url,
+                  faceScanCompleted:
+                    true,
+                  faceScanVerified:
+                    true,
+                  faceScanVerifiedAt:
+                    now,
+                  profilePhotoUpdatedAt:
+                    now,
+                  profileImageStoragePath:
+                    objectPath,
+                  "documents/FACE":
+                    url
+                }
+              : {
+                  profileImageUrl:
+                    url,
+                  profile_picture_url:
+                    url,
+                  profilePhotoUrl:
+                    url,
+                  photoURL:
+                    url,
+                  passengerProfileImageUrl:
+                    url,
+                  faceScanCompleted:
+                    true,
+                  faceScanVerified:
+                    true,
+                  faceScanVerifiedAt:
+                    now,
+                  profilePhotoUpdatedAt:
+                    now,
+                  profileImageStoragePath:
+                    objectPath
+                };
 
         await admin.database()
           .ref(
@@ -5810,7 +5827,12 @@ exports.uploadProfileImageProxy =
             profileRoot:
               rootName,
             profileId:
-              userId
+              userId,
+            purpose,
+            savedAs:
+              isDriverVehicle
+                ? "vehiclePhoto"
+                : "profileImage"
           });
 
       } catch (error) {
@@ -5831,6 +5853,300 @@ exports.uploadProfileImageProxy =
           .json({
             error:
               "Unable to save the profile picture. Please try again."
+          });
+      }
+    }
+  );
+
+
+// =================================================================
+// --- DRIVER VEHICLE REVIEW SUBMISSION ---
+// =================================================================
+// Driver vehicle approval state is protected by Realtime Database rules.
+// Drivers submit changes here; the server verifies ownership and moves the
+// vehicle back to pending review while keeping the driver offline.
+exports.submitDriverVehicleForReview =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Driver authentication is required."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const driverId =
+          safeProfileId(
+            request.body?.driverId
+          );
+
+        if (!driverId) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Driver profile is invalid."
+            });
+        }
+
+        if (
+          !await profileOwnedByAuth(
+            "taxis",
+            driverId,
+            decoded.uid
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "You cannot update this driver profile."
+            });
+        }
+
+        const profileRef =
+          admin.database()
+            .ref(
+              `taxis/${driverId}`
+            );
+
+        const profile =
+          (
+            await profileRef
+              .once(
+                "value"
+              )
+          ).val() || {};
+
+        if (
+          !String(
+            profile.vehiclePhoto ||
+            ""
+          ).trim()
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "Take and save a clear vehicle photo before submitting."
+            });
+        }
+
+        const source =
+          request.body?.vehicle ||
+          {};
+
+        const cleanText =
+          (
+            value,
+            max
+          ) =>
+            String(
+              value ||
+              ""
+            )
+              .trim()
+              .slice(
+                0,
+                max
+              );
+
+        const year =
+          Number(
+            source.year
+          );
+
+        const seats =
+          Number(
+            source.seats
+          );
+
+        const vehiclePending = {
+          type:
+            cleanText(
+              source.type,
+              40
+            ),
+          make:
+            cleanText(
+              source.make,
+              40
+            ),
+          model:
+            cleanText(
+              source.model,
+              50
+            ),
+          colour:
+            cleanText(
+              source.colour,
+              30
+            ),
+          registration:
+            cleanText(
+              source.registration,
+              20
+            ),
+          year,
+          seats
+        };
+
+        if (
+          [
+            vehiclePending.type,
+            vehiclePending.make,
+            vehiclePending.model,
+            vehiclePending.colour,
+            vehiclePending.registration
+          ].some(
+            value =>
+              value.length < 2
+          )
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Complete type, make, model, colour and registration."
+            });
+        }
+
+        const currentYear =
+          new Date()
+            .getFullYear();
+
+        if (
+          !Number.isInteger(
+            year
+          ) ||
+          year < 1990 ||
+          year >
+            currentYear + 1
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Enter a valid four-digit vehicle year."
+            });
+        }
+
+        if (
+          !Number.isInteger(
+            seats
+          ) ||
+          seats < 1 ||
+          seats > 15
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Passenger seats must be a whole number between 1 and 15."
+            });
+        }
+
+        const now =
+          admin.database()
+            .ServerValue
+            .TIMESTAMP;
+
+        vehiclePending.submittedAt =
+          now;
+
+        await profileRef
+          .update({
+            vehiclePending,
+            vehicleApproved:
+              false,
+            vehicleApprovalStatus:
+              "pending",
+            vehicleSubmittedAt:
+              now,
+            isOnline:
+              false,
+            isBroadcasting:
+              false,
+            updatedAt:
+              now
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            status:
+              "pending",
+            vehiclePending
+          });
+
+      } catch (error) {
+        console.error(
+          "Driver vehicle submission failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to submit vehicle details."
           });
       }
     }
