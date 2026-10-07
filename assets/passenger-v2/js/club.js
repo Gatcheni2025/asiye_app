@@ -751,7 +751,7 @@ ASIYE.club = {
                 true,
 
             safetyShareCompleted:
-                true,
+                false,
 
             pickupAddress:
                 pickup.address ||
@@ -992,7 +992,16 @@ ASIYE.club = {
                         .TIMESTAMP,
 
                 liveTrackingUrl:
-                    liveTrackingUrl
+                    liveTrackingUrl,
+
+                [`passengers/${uid}/safetyShareCompleted`]:
+                    true,
+
+                [`passengers/${uid}/safetyShareAt`]:
+                    firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP
             });
 
 
