@@ -1369,8 +1369,8 @@ ASIYE.booking = {
     liveTrackingUrl(requestId) {
         const id = String(requestId || '').trim();
         return id
-            ? `https://app.asiye.cloud/track.html?trip=${encodeURIComponent(id)}`
-            : 'https://app.asiye.cloud/track.html';
+            ? `https://asiye-80386.web.app/track.html?trip=${encodeURIComponent(id)}`
+            : 'https://asiye-80386.web.app/track.html';
     },
 
 
