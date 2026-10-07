@@ -566,6 +566,175 @@ ASIYE.ui = {
 
 
     /* ========================================================
+       PAYMENT METHOD
+       ======================================================== */
+
+    renderPaymentMethodChooser() {
+
+        const selected =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+        const walletBalance =
+            ASIYE.wallet?.balance
+                ? ASIYE.wallet.balance()
+                : Number(
+                    ASIYE.state.user
+                        ?.walletBalance ??
+                    ASIYE.state.user
+                        ?.credits ??
+                    0
+                );
+
+        const methods = [
+            {
+                id:
+                    'cash',
+                icon:
+                    'fa-money-bill-wave',
+                label:
+                    'Cash',
+                detail:
+                    'Pay the driver'
+            },
+            {
+                id:
+                    'card',
+                icon:
+                    'fa-credit-card',
+                label:
+                    'Card',
+                detail:
+                    'Card payment'
+            },
+            {
+                id:
+                    'wallet',
+                icon:
+                    'fa-wallet',
+                label:
+                    'Wallet',
+                detail:
+                    `R${Number(walletBalance || 0).toFixed(2)} available`
+            }
+        ];
+
+        return `
+            <section class="asiye-payment-picker">
+                <div class="asiye-payment-title">
+                    Payment method
+                </div>
+
+                <div class="asiye-payment-options">
+                    ${methods.map(method => `
+                        <button
+                            type="button"
+                            class="asiye-payment-option ${selected === method.id ? 'selected' : ''}"
+                            data-payment-method="${method.id}"
+                        >
+                            <span class="asiye-payment-icon">
+                                <i class="fas ${method.icon}"></i>
+                            </span>
+
+                            <span class="asiye-payment-copy">
+                                <strong>${method.label}</strong>
+                                <small>${method.detail}</small>
+                            </span>
+
+                            <span class="asiye-payment-check">
+                                <i class="fas fa-check"></i>
+                            </span>
+                        </button>
+                    `).join('')}
+                </div>
+            </section>
+        `;
+    },
+
+
+    bindPaymentMethodChooser(container) {
+
+        if (!container) {
+            return;
+        }
+
+        const apply =
+            method => {
+                const normalised =
+                    String(
+                        method ||
+                        ''
+                    )
+                    .toLowerCase();
+
+                if (
+                    ![
+                        'cash',
+                        'card',
+                        'wallet'
+                    ].includes(
+                        normalised
+                    )
+                ) {
+                    return;
+                }
+
+                ASIYE.state.booking
+                    .paymentMethod =
+                    normalised;
+
+                localStorage.setItem(
+                    'asiyePaymentMethod',
+                    normalised
+                );
+
+                container
+                    .querySelectorAll(
+                        '[data-payment-method]'
+                    )
+                    .forEach(
+                        button => {
+                            button.classList.toggle(
+                                'selected',
+                                button.dataset
+                                    .paymentMethod ===
+                                    normalised
+                            );
+                        }
+                    );
+            };
+
+        container
+            .querySelectorAll(
+                '[data-payment-method]'
+            )
+            .forEach(
+                button => {
+                    button.addEventListener(
+                        'click',
+                        () => {
+                            apply(
+                                button.dataset
+                                    .paymentMethod
+                            );
+                        }
+                    );
+                }
+            );
+
+        apply(
+            ASIYE.state.booking
+                .paymentMethod ||
+            'cash'
+        );
+    },
+
+
+    /* ========================================================
        RIDE SELECTION
        ======================================================== */
 
@@ -711,6 +880,9 @@ ASIYE.ui = {
             )}
 
 
+            ${this.renderPaymentMethodChooser()}
+
+
             <button
                 id="confirmRideSelection"
                 class="primary-button"
@@ -736,6 +908,10 @@ ASIYE.ui = {
 
 
         this.updateRideSelection();
+
+        this.bindPaymentMethodChooser(
+            container
+        );
 
 
         /*
@@ -1189,6 +1365,9 @@ ASIYE.ui = {
             </div>
 
 
+            ${this.renderPaymentMethodChooser()}
+
+
             <button
                 id="bookClubNow"
                 class="primary-button"
@@ -1198,6 +1377,11 @@ ASIYE.ui = {
             </button>
 
         `;
+
+
+        this.bindPaymentMethodChooser(
+            container
+        );
 
 
         document
