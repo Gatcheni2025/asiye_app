@@ -463,328 +463,164 @@ ASIYE.club = {
         poolId,
         departureTime
     ) {
-
         this.ensureFirebase();
-
 
         const uid =
             ASIYE.state.userId;
-
 
         if (
             !uid ||
             !poolId
         ) {
-
             throw new Error(
                 'Missing passenger or Club pool.'
             );
         }
 
+        const paymentMethod =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
 
-        const user =
-            ASIYE.state.user || {};
+        let pin =
+            '';
 
-        const profileImageUrl =
-            ASIYE.profile.getUrl(user);
+        if (
+            paymentMethod !==
+                'card'
+        ) {
+            pin =
+                await ASIYE.booking
+                    .requirePassengerPin();
 
-        const pin =
             await ASIYE.booking
-                .requirePassengerPin();
-
-        await ASIYE.booking.requireTripShare({
-            requestId:
-                poolId,
-            liveTrackingUrl:
-                ASIYE.booking.liveTrackingUrl(poolId),
-            pickupPin:
-                pin,
-            pickupAddress:
-                ASIYE.state.location.address ||
-                'Current location',
-            destination:
-                ASIYE.state.destination.address ||
-                ASIYE.state.destination.name,
-            service:
-                'Asiye Club'
-        });
-
-
-        const poolRef =
-
-            firebase
-                .database()
-                .ref(
-                    `requests/${poolId}`
-                );
-
-
-        const result =
-
-            await poolRef.transaction(
-                pool => {
-
-                    if (!pool) {
-
-                        return;
-                    }
-
-
-                    const config =
-                        this.getConfig(
-                            pool.clubMode
-                        );
-
-
-                    pool.passengers =
-                        pool.passengers || {};
-
-
-                    /*
-                     * Already joined.
-                     */
-
-                    if (
-                        pool.passengers[uid]
-                    ) {
-
-                        return pool;
-                    }
-
-
-                    const currentCount =
-
-                        Object.keys(
-                            pool.passengers
-                        ).length;
-
-
-                    if (
-                        currentCount >=
-                        config.capacity
-                    ) {
-
-                        return;
-                    }
-
-
-                    pool.passengers[uid] = {
-
-                        commuterId:
-                            uid,
-
-                        name:
-                            user.name ||
-                            user.firstName ||
-                            'Passenger',
-
-                        phone:
-                            user.phone || '',
-
-                        profileImageUrl:
-                            profileImageUrl,
-
-                        profile_picture_url:
-                            profileImageUrl,
-
-                        pickupPin:
-                            pin,
-
-                        requirePin:
-                            true,
-
-                        safetyShareRequired:
-                            true,
-
-                        safetyShareCompleted:
-                            true,
-
-                        pickupAddress:
-                            ASIYE.state.location
-                                .address ||
-                            'Current location',
-
-                        pickupLat:
-                            ASIYE.state.location
-                                .latitude,
-
-                        pickupLng:
-                            ASIYE.state.location
-                                .longitude,
-
-                        destination:
-                            ASIYE.state.destination
-                                .address ||
-                            ASIYE.state.destination
-                                .name,
-
-                        destinationLat:
-                            ASIYE.state.destination
-                                .latitude,
-
-                        destinationLng:
-                            ASIYE.state.destination
-                                .longitude,
-
-                        departureTime:
-                            departureTime,
-
-                        paymentMethod:
-                            ASIYE.state.booking
-                                .paymentMethod ||
-                            'cash',
-
-                        status:
-                            'waiting_pool',
-
-                        joinedAt:
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP
-                    };
-
-
-                    const newCount =
-
-                        Object.keys(
-                            pool.passengers
-                        ).length;
-
-
-                    pool.passengerCount =
-                        newCount;
-
-
-                    /*
-                     * Recalculate equal split.
-                     */
-
-                    const totalFare =
-
-                        Number(
-                            pool.totalPoolFare ||
-                            pool.calculatedPrice ||
-                            0
-                        );
-
-
-                    const marketReference =
-                        Number(
-                            pool.marketReferenceFare ||
-                            pool.totalPoolFare ||
-                            pool.calculatedPrice ||
-                            0
-                        );
-
-                    const seatPrice =
-                        Math.ceil(
-                            (marketReference / config.capacity) * 1.15
-                        );
-
-
-                    pool.pricePerPassenger =
-                        seatPrice;
-
-
-                    Object.keys(
-                        pool.passengers
-                    )
-                    .forEach(
-                        passengerId => {
-
-                            pool.passengers[
-                                passengerId
-                            ].price =
-                                seatPrice;
-                        }
-                    );
-
-
-                    /*
-                     * Pool becomes ready only
-                     * when completely filled.
-                     *
-                     * If a driver already accepted
-                     * early (taxiId present), we
-                     * keep the pool in the
-                     * driver_waiting state until
-                     * the last seat is taken.
-                     */
-
-                    if (
-                        newCount >=
-                        config.capacity
-                    ) {
-
-                        pool.status =
-                            'pool_ready';
-
-                        pool.poolReady =
-                            true;
-
-                        pool.poolReadyAt =
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP;
-
-                    } else {
-
-                        /*
-                         * Keep assigned driver's waiting state.
-                         */
-
-                        pool.status =
-
-                            pool.taxiId
-
-                            ? 'driver_waiting'
-
-                            : 'pooling';
-                    }
-
-
-                    return pool;
-                }
-            );
-
-
-        if (!result.committed) {
-
+                .requireTripShare({
+                    requestId:
+                        poolId,
+                    liveTrackingUrl:
+                        ASIYE.booking
+                            .liveTrackingUrl(
+                                poolId
+                            ),
+                    pickupPin:
+                        pin,
+                    pickupAddress:
+                        ASIYE.state.location
+                            .address ||
+                        'Current location',
+                    destination:
+                        ASIYE.state.destination
+                            .address ||
+                        ASIYE.state.destination
+                            .name,
+                    service:
+                        'Asiye Club'
+                });
+        }
+
+        const authUser =
+            firebase.auth()
+                .currentUser;
+
+        if (!authUser) {
             throw new Error(
-                'Unable to join this Club ride.'
+                'Please sign in again before joining this Club ride.'
             );
         }
 
+        const token =
+            await authUser
+                .getIdToken(
+                    true
+                );
+
+        const response =
+            await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/joinClubPoolSecure',
+                {
+                    method:
+                        'POST',
+                    headers: {
+                        'Authorization':
+                            `Bearer ${token}`,
+                        'X-Firebase-Auth':
+                            `Bearer ${token}`,
+                        'Content-Type':
+                            'application/json'
+                    },
+                    body:
+                        JSON.stringify({
+                            poolId,
+                            pickupPin:
+                                pin,
+                            pickupAddress:
+                                ASIYE.state.location
+                                    .address ||
+                                'Current location',
+                            pickupLat:
+                                ASIYE.state.location
+                                    .latitude,
+                            pickupLng:
+                                ASIYE.state.location
+                                    .longitude,
+                            destination:
+                                ASIYE.state.destination
+                                    .address ||
+                                ASIYE.state.destination
+                                    .name,
+                            destinationLat:
+                                ASIYE.state.destination
+                                    .latitude,
+                            destinationLng:
+                                ASIYE.state.destination
+                                    .longitude,
+                            departureTime,
+                            paymentMethod
+                        })
+                }
+            );
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+        if (!response.ok) {
+            throw new Error(
+                payload.error ||
+                'Unable to join this Club ride.'
+            );
+        }
 
         ASIYE.state.booking
             .requestId =
             poolId;
 
-
         ASIYE.state.booking
             .club.poolId =
             poolId;
-
 
         localStorage.setItem(
             'currentRequestId',
             poolId
         );
 
-
-        await firebase
-            .database()
-            .ref(
-                `commuters/${uid}`
-            )
-            .update({
-
-                currentRequest:
+        if (
+            payload.passengerPaymentStatus ===
+                'payment_required' &&
+            paymentMethod ===
+                'card'
+        ) {
+            await ASIYE.payments
+                ?.prepare?.(
                     poolId
-            });
-
+                );
+        }
 
         return poolId;
     },
@@ -852,31 +688,53 @@ ASIYE.club = {
             ASIYE.state.destination;
 
 
-        const pin =
-            await ASIYE.booking
-                .requirePassengerPin();
+        const paymentMethod =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+
+        let pin =
+            '';
 
 
         const profileImageUrl =
             ASIYE.profile.getUrl(user);
 
 
-        await ASIYE.booking.requireTripShare({
-            requestId:
-                requestId,
-            liveTrackingUrl:
-                ASIYE.booking.liveTrackingUrl(requestId),
-            pickupPin:
-                pin,
-            pickupAddress:
-                pickup.address ||
-                'Current location',
-            destination:
-                destination.address ||
-                destination.name,
-            service:
-                'Asiye Club'
-        });
+        if (
+            paymentMethod !==
+                'card'
+        ) {
+            pin =
+                await ASIYE.booking
+                    .requirePassengerPin();
+
+
+            await ASIYE.booking
+                .requireTripShare({
+                    requestId:
+                        requestId,
+                    liveTrackingUrl:
+                        ASIYE.booking
+                            .liveTrackingUrl(
+                                requestId
+                            ),
+                    pickupPin:
+                        pin,
+                    pickupAddress:
+                        pickup.address ||
+                        'Current location',
+                    destination:
+                        destination.address ||
+                        destination.name,
+                    service:
+                        'Asiye Club'
+                });
+        }
 
 
         const passenger = {
@@ -905,7 +763,8 @@ ASIYE.club = {
                 true,
 
             safetyShareCompleted:
-                true,
+                paymentMethod !==
+                    'card',
 
             pickupAddress:
                 pickup.address ||
@@ -934,9 +793,10 @@ ASIYE.club = {
                 pricing.pricePerPassenger,
 
             paymentMethod:
-                ASIYE.state.booking
-                    .paymentMethod ||
-                'cash',
+                paymentMethod,
+
+            paymentStatus:
+                'waiting_pool',
 
             status:
                 'waiting_pool',
@@ -1030,13 +890,17 @@ ASIYE.club = {
                 true,
 
             safetyShareCompleted:
-                true,
+                paymentMethod !==
+                    'card',
 
             safetyShareAt:
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP,
+                paymentMethod !==
+                    'card'
+                    ? firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP
+                    : null,
 
             liveTrackingUrl:
                 ASIYE.booking.liveTrackingUrl(requestId),
@@ -1082,9 +946,13 @@ ASIYE.club = {
                     .durationMinutes,
 
             paymentMethod:
-                ASIYE.state.booking
-                    .paymentMethod ||
-                'cash',
+                paymentMethod,
+
+            paymentStatus:
+                'waiting_pool',
+
+            paymentsReady:
+                false,
 
             requirePin:
                 true,
@@ -1196,6 +1064,182 @@ ASIYE.club = {
 
 
         return requestId;
+    },
+
+
+    async finalizePaidPassenger(
+        requestId
+    ) {
+        const uid =
+            ASIYE.state.userId;
+
+        if (
+            !uid ||
+            !requestId
+        ) {
+            throw new Error(
+                'Club passenger session is unavailable.'
+            );
+        }
+
+        const requestRef =
+            firebase.database()
+                .ref(
+                    `requests/${requestId}`
+                );
+
+        const snapshot =
+            await requestRef
+                .once(
+                    'value'
+                );
+
+        const request =
+            snapshot.val();
+
+        const passenger =
+            request?.passengers?.[
+                uid
+            ];
+
+        if (
+            !request ||
+            request.type !==
+                'club' ||
+            !passenger
+        ) {
+            throw new Error(
+                'Paid Club booking could not be restored.'
+            );
+        }
+
+        if (
+            String(
+                passenger.paymentMethod ||
+                request.paymentMethod ||
+                ''
+            )
+            .toLowerCase() !==
+                'card'
+        ) {
+            return {
+                requestId,
+                pickupPin:
+                    passenger.pickupPin ||
+                    ''
+            };
+        }
+
+        if (
+            ![
+                'held',
+                'captured'
+            ].includes(
+                String(
+                    passenger.paymentStatus ||
+                    ''
+                )
+            )
+        ) {
+            throw new Error(
+                'Paystack payment has not been confirmed yet.'
+            );
+        }
+
+        let pickupPin =
+            String(
+                passenger.pickupPin ||
+                ''
+            );
+
+        if (
+            !/^\d{4}$/.test(
+                pickupPin
+            )
+        ) {
+            pickupPin =
+                ASIYE.booking
+                    .generatePin();
+        }
+
+        if (
+            passenger.safetyShareCompleted !==
+                true
+        ) {
+            await ASIYE.booking
+                .requireTripShare({
+                    requestId,
+                    liveTrackingUrl:
+                        request.liveTrackingUrl ||
+                        ASIYE.booking
+                            .liveTrackingUrl(
+                                requestId
+                            ),
+                    pickupPin,
+                    pickupAddress:
+                        passenger.pickupAddress ||
+                        request.pickupAddress ||
+                        'Current location',
+                    destination:
+                        passenger.destination ||
+                        request.destination ||
+                        request.destinationName,
+                    service:
+                        'Asiye Club'
+                });
+        }
+
+        const timestamp =
+            firebase.database
+                .ServerValue
+                .TIMESTAMP;
+
+        const updates = {
+            [`passengers/${uid}/pickupPin`]:
+                pickupPin,
+            [`passengers/${uid}/requirePin`]:
+                true,
+            [`passengers/${uid}/safetyShareCompleted`]:
+                true,
+            [`passengers/${uid}/safetyShareAt`]:
+                timestamp,
+            [`passengers/${uid}/pinAutoGenerated`]:
+                true,
+            [`passengers/${uid}/pinGeneratedAfterPayment`]:
+                true,
+            [`passengers/${uid}/pinGeneratedAt`]:
+                timestamp
+        };
+
+        if (
+            String(
+                request.commuterId ||
+                ''
+            ) ===
+                uid
+        ) {
+            updates.pickupPin =
+                pickupPin;
+
+            updates.safetyShareCompleted =
+                true;
+
+            updates.safetyShareAt =
+                timestamp;
+        }
+
+        await requestRef.update(
+            updates
+        );
+
+        ASIYE.ui?.toast?.(
+            'Card payment confirmed. Your Club pickup PIN is ready.'
+        );
+
+        return {
+            requestId,
+            pickupPin
+        };
     },
 
 
