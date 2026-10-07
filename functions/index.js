@@ -7356,12 +7356,37 @@ async function refreshClubPaymentsReady(
           return false;
         }
 
-        return ![
-          "held",
-          "captured"
-        ].includes(
-          status
-        );
+        if (
+          ![
+            "held",
+            "captured"
+          ].includes(
+            status
+          )
+        ) {
+          return true;
+        }
+
+        if (
+          method ===
+            "card"
+        ) {
+          const pickupPin =
+            String(
+              passenger?.pickupPin ||
+              ""
+            );
+
+          return (
+            passenger?.safetyShareCompleted !==
+              true ||
+            !/^\d{4}$/.test(
+              pickupPin
+            )
+          );
+        }
+
+        return false;
       }
     );
 
@@ -9938,6 +9963,56 @@ exports.releaseCancelledClubPassengerPayment =
 
 
 // =================================================================
+// --- CLUB PAYMENT + SAFETY READINESS ---
+// =================================================================
+// Card payment can be held before the passenger finishes the mandatory
+// post-payment trip share. Keep paymentsReady false until that passenger has
+// a real 4-digit PIN and the safety share is complete, then re-evaluate the
+// whole pool before any driver is notified.
+exports.refreshClubPaymentReadinessAfterSafetyShare =
+  functions.database
+    .ref(
+      "/requests/{requestId}/passengers/{passengerId}/safetyShareCompleted"
+    )
+    .onUpdate(
+      async (
+        change,
+        context
+      ) => {
+        if (
+          change.before.val() ===
+            true ||
+          change.after.val() !==
+            true
+        ) {
+          return null;
+        }
+
+        try {
+          await refreshClubPaymentsReady(
+            context.params.requestId
+          );
+        } catch (error) {
+          console.error(
+            "Club readiness refresh after safety share failed",
+            {
+              requestId:
+                context.params.requestId,
+              passengerId:
+                context.params.passengerId,
+              message:
+                error?.message ||
+                String(error)
+            }
+          );
+        }
+
+        return null;
+      }
+    );
+
+
+// =================================================================
 // --- SECURE ASIYE CLUB JOIN ---
 // =================================================================
 // Client users may request to join a Club pool, but all pool-wide mutations
@@ -9978,9 +10053,16 @@ exports.joinClubPoolSecure = onRequest(
       const passenger = await resolvePassengerForWallet(decoded);
       const passengerId = String(passenger?.id || decoded.uid);
       const profile = passenger?.data || {};
+      const paymentMethod =
+        normaliseRidePaymentMethod(
+          request.body?.paymentMethod
+        );
       const pin = String(request.body?.pickupPin || "").trim();
 
-      if (!/^\d{4}$/.test(pin)) {
+      if (
+        paymentMethod !== "card" &&
+        !/^\d{4}$/.test(pin)
+      ) {
         return response.status(400).json({
           error: "A valid 4-digit trip PIN is required."
         });
@@ -10010,7 +10092,7 @@ exports.joinClubPoolSecure = onRequest(
         destinationLat: request.body?.destinationLat,
         destinationLng: request.body?.destinationLng,
         departureTime: request.body?.departureTime,
-        paymentMethod: request.body?.paymentMethod
+        paymentMethod
       };
 
       /*
