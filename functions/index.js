@@ -1622,7 +1622,7 @@ exports.notifyDriversWhenClubReady = functions
     ]
   })
   .database
-  .ref("/requests/{requestId}/poolReady")
+  .ref("/requests/{requestId}/paymentsReady")
   .onUpdate(async (change, context) => {
     if (change.before.val() === true || change.after.val() !== true) {
       return null;
@@ -1635,6 +1635,8 @@ exports.notifyDriversWhenClubReady = functions
       !request ||
       request.type !== "club" ||
       request.taxiId ||
+      request.poolReady !== true ||
+      request.paymentsReady !== true ||
       request.status !== "pool_ready"
     ) {
       return null;
@@ -9204,33 +9206,72 @@ exports.paystackWebhook =
               .once("value")
           ).val();
 
-        if (
-          !payment ||
-          payment.provider !==
-            "paystack"
-        ) {
-          // A valid Paystack event may belong to another future payment
-          // product. Acknowledge it without changing any wallet balance.
-          return response
-            .status(200)
-            .send("ok");
-        }
-
         /*
-         * Never deliver wallet value from the webhook payload alone.
-         * Re-verify the transaction directly with Paystack so amount,
-         * currency, reference and final success state are all confirmed
-         * server-to-server before crediting the wallet.
+         * Never deliver wallet value or ride value from the webhook payload
+         * alone. Re-verify server-to-server with Paystack before fulfilling.
          */
         const verifiedTransaction =
           await verifyPaystackReference(
             reference
           );
 
-        await creditPaystackWallet(
-          payment,
-          verifiedTransaction
-        );
+        if (
+          payment &&
+          payment.provider ===
+            "paystack"
+        ) {
+          await creditPaystackWallet(
+            payment,
+            verifiedTransaction
+          );
+
+          return response
+            .status(200)
+            .send("ok");
+        }
+
+        const mapping =
+          (
+            await admin.database()
+              .ref(
+                `tripPaymentReferences/${reference}`
+              )
+              .once(
+                "value"
+              )
+          ).val();
+
+        if (
+          mapping?.requestId &&
+          mapping?.passengerId
+        ) {
+          const tripPayment =
+            (
+              await admin.database()
+                .ref(
+                  tripPaymentPath(
+                    mapping.requestId,
+                    mapping.passengerId
+                  )
+                )
+                .once(
+                  "value"
+                )
+            ).val();
+
+          if (
+            tripPayment &&
+            tripPayment.method ===
+              "card" &&
+            tripPayment.reference ===
+              reference
+          ) {
+            await recordCardTripPaymentHeld(
+              tripPayment,
+              verifiedTransaction
+            );
+          }
+        }
 
         return response
           .status(200)
@@ -9561,12 +9602,50 @@ exports.joinClubPoolSecure = onRequest(
         }
       }
 
+      let paymentSummary = {
+        ready:
+          false
+      };
+
+      if (
+        saved.poolReady ===
+          true
+      ) {
+        paymentSummary =
+          await prepareClubPoolPayments(
+            poolId,
+            saved
+          );
+      }
+
+      const latestPassenger =
+        (
+          await admin.database()
+            .ref(
+              `requests/${poolId}/passengers/${passengerId}`
+            )
+            .once(
+              "value"
+            )
+        ).val() || {};
+
       return response.status(200).json({
         ok: true,
         poolId,
         passengerId,
         passengerCount: Number(saved.passengerCount || 0),
-        status: saved.status || "pooling"
+        status:
+          paymentSummary.ready
+            ? "pool_ready"
+            : saved.poolReady === true
+              ? "payment_required"
+              : saved.status || "pooling",
+        paymentsReady:
+          paymentSummary.ready ===
+          true,
+        passengerPaymentStatus:
+          latestPassenger.paymentStatus ||
+          "waiting_pool"
       });
     } catch (error) {
       console.error("Secure Club join failed", {
