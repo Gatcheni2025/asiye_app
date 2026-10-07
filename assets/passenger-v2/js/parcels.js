@@ -50,7 +50,8 @@ ASIYE.parcels = {
                 <strong>Asiye Parcel · R${fare.toFixed(0)}</strong>
                 <p style="margin-bottom:0;">
                     Door-to-door delivery with a verified Asiye driver.
-                    A safety PIN is created for every parcel handover.
+                    A 4-digit handover PIN is created after confirmed card payment,
+                    or before dispatch for Cash/Wallet.
                 </p>
             </div>
 
@@ -110,6 +111,8 @@ ASIYE.parcels = {
                     Fragile / handle with care
                 </label>
 
+                ${ASIYE.ui.renderPaymentMethodChooser()}
+
                 <button class="primary-button" type="submit">
                     Book parcel delivery · R${fare.toFixed(0)}
                 </button>
@@ -121,6 +124,11 @@ ASIYE.parcels = {
             ?.addEventListener(
                 'click',
                 () => ASIYE.ui.renderDestinationSearch()
+            );
+
+        ASIYE.ui
+            .bindPaymentMethodChooser(
+                container
             );
 
         const form =
@@ -142,7 +150,7 @@ ASIYE.parcels = {
                     const data =
                         new FormData(form);
 
-                    const requestId =
+                    const result =
                         await this.create({
                             recipientName:
                                 String(data.get('recipientName') || '').trim(),
@@ -156,15 +164,42 @@ ASIYE.parcels = {
                                 data.get('fragile') === 'on'
                         });
 
+                    if (
+                        result &&
+                        typeof result ===
+                            'object' &&
+                        result.paymentPending ===
+                            true
+                    ) {
+                        ASIYE.ui.toast(
+                            'Complete the Paystack card payment. Your parcel PIN will be created automatically after payment.'
+                        );
+
+                        button.disabled = false;
+                        button.textContent =
+                            'Card payment opened';
+
+                        return;
+                    }
+
+                    const requestId =
+                        typeof result ===
+                            'string'
+                            ? result
+                            : result?.requestId;
+
                     await ASIYE.ride.start(
                         requestId
                     );
+
                 } catch (error) {
                     console.error('Parcel booking failed:', error);
+
                     ASIYE.ui.toast(
                         error?.message ||
                         'Could not create the parcel delivery.'
                     );
+
                     button.disabled = false;
                     button.textContent =
                         `Book parcel delivery · R${fare.toFixed(0)}`;
@@ -173,12 +208,15 @@ ASIYE.parcels = {
         );
     },
 
+
     async create(details = {}) {
         const uid =
             ASIYE.state.userId;
 
         if (!uid) {
-            throw new Error('Passenger is not logged in.');
+            throw new Error(
+                'Passenger is not logged in.'
+            );
         }
 
         if (
@@ -186,7 +224,9 @@ ASIYE.parcels = {
             !details.recipientPhone ||
             !details.parcelDescription
         ) {
-            throw new Error('Add the recipient and parcel details.');
+            throw new Error(
+                'Add the recipient and parcel details.'
+            );
         }
 
         const profileImageUrl =
@@ -209,21 +249,33 @@ ASIYE.parcels = {
                 ASIYE.pricing.calculate().go || 0
             );
 
-        const pickupPin =
-            await ASIYE.booking
-                .requirePassengerPin();
+        const paymentMethod =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
 
-        await ASIYE.booking.requireTripShare({
-            pickupPin,
-            pickupAddress:
-                pickup.address ||
-                'Current location',
-            destination:
-                destination.address ||
-                destination.name,
-            service:
+        if (
+            paymentMethod ===
+                'wallet'
+        ) {
+            if (
+                !ASIYE.wallet ||
+                typeof ASIYE.wallet.requireFare !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Asiye Wallet is unavailable. Reopen the app and try again.'
+                );
+            }
+
+            await ASIYE.wallet.requireFare(
+                fare,
                 'Asiye Parcel'
-        });
+            );
+        }
 
         const requestRef =
             firebase.database()
@@ -232,6 +284,44 @@ ASIYE.parcels = {
 
         const requestId =
             requestRef.key;
+
+        const liveTrackingUrl =
+            ASIYE.booking
+                .liveTrackingUrl(
+                    requestId
+                );
+
+        let pickupPin =
+            null;
+
+        let safetyShareCompleted =
+            false;
+
+        if (
+            paymentMethod !==
+                'card'
+        ) {
+            pickupPin =
+                await ASIYE.booking
+                    .requirePassengerPin();
+
+            await ASIYE.booking.requireTripShare({
+                requestId,
+                liveTrackingUrl,
+                pickupPin,
+                pickupAddress:
+                    pickup.address ||
+                    'Current location',
+                destination:
+                    destination.address ||
+                    destination.name,
+                service:
+                    'Asiye Parcel'
+            });
+
+            safetyShareCompleted =
+                true;
+        }
 
         const requestData = {
             requestId,
@@ -242,7 +332,10 @@ ASIYE.parcels = {
             carCategory:
                 'go',
             status:
-                'pending',
+                paymentMethod ===
+                    'card'
+                    ? 'share_required'
+                    : 'pending',
 
             commuterId:
                 uid,
@@ -269,7 +362,8 @@ ASIYE.parcels = {
                 details.parcelSize ||
                 'small',
             fragile:
-                details.fragile === true,
+                details.fragile ===
+                true,
 
             pickupAddress:
                 pickup.address ||
@@ -303,19 +397,31 @@ ASIYE.parcels = {
                 fare,
             finalAmount:
                 fare,
-            paymentMethod:
-                ASIYE.state.booking.paymentMethod ||
-                'cash',
+            paymentMethod,
+            paymentStatus:
+                paymentMethod ===
+                    'card'
+                    ? 'payment_required'
+                    : 'preparing',
+            paymentsReady:
+                false,
 
             requirePin:
                 true,
             pickupPin,
+            pinAutoGenerated:
+                false,
             safetyShareRequired:
                 true,
-            safetyShareCompleted:
-                true,
+            safetyShareCompleted,
             safetyShareAt:
-                firebase.database.ServerValue.TIMESTAMP,
+                safetyShareCompleted
+                    ? firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP
+                    : null,
+            liveTrackingUrl,
 
             commissionRate:
                 0.20,
@@ -330,7 +436,10 @@ ASIYE.parcels = {
                 null,
 
             createdAt:
-                firebase.database.ServerValue.TIMESTAMP
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP
         };
 
         await requestRef.set(
@@ -338,11 +447,17 @@ ASIYE.parcels = {
         );
 
         await firebase.database()
-            .ref(`delivery_requests/${requestId}`)
-            .set(requestData);
+            .ref(
+                `delivery_requests/${requestId}`
+            )
+            .set(
+                requestData
+            );
 
         await firebase.database()
-            .ref(`commuters/${uid}`)
+            .ref(
+                `commuters/${uid}`
+            )
             .update({
                 currentRequest:
                     requestId
@@ -359,11 +474,364 @@ ASIYE.parcels = {
             requestId
         );
 
+        let paymentResult;
+
+        try {
+            if (
+                !ASIYE.payments ||
+                typeof ASIYE.payments.prepare !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Asiye payments are unavailable. Reopen the app and try again.'
+                );
+            }
+
+            paymentResult =
+                await ASIYE.payments
+                    .prepare(
+                        requestId
+                    );
+
+        } catch (error) {
+            await Promise.all([
+                requestRef
+                    .remove()
+                    .catch(
+                        () => {}
+                    ),
+                firebase
+                    .database()
+                    .ref(
+                        `delivery_requests/${requestId}`
+                    )
+                    .remove()
+                    .catch(
+                        () => {}
+                    ),
+                firebase
+                    .database()
+                    .ref(
+                        `commuters/${uid}`
+                    )
+                    .update({
+                        currentRequest:
+                            null
+                    })
+                    .catch(
+                        () => {}
+                    )
+            ]);
+
+            ASIYE.booking
+                .clearLocalRide();
+
+            throw error;
+        }
+
+        if (
+            paymentResult
+                ?.paymentPending ===
+                true
+        ) {
+            return {
+                requestId,
+                paymentPending:
+                    true
+            };
+        }
+
+        const paymentStatus =
+            paymentResult?.status ||
+            (
+                paymentMethod ===
+                    'cash'
+                    ? 'cash_due'
+                    : 'held'
+            );
+
+        const readyPatch = {
+            status:
+                'pending',
+            paymentStatus,
+            paymentsReady:
+                true
+        };
+
+        await firebase.database()
+            .ref()
+            .update({
+                [`requests/${requestId}/status`]:
+                    readyPatch.status,
+                [`requests/${requestId}/paymentStatus`]:
+                    readyPatch.paymentStatus,
+                [`requests/${requestId}/paymentsReady`]:
+                    true,
+                [`delivery_requests/${requestId}/status`]:
+                    readyPatch.status,
+                [`delivery_requests/${requestId}/paymentStatus`]:
+                    readyPatch.paymentStatus,
+                [`delivery_requests/${requestId}/paymentsReady`]:
+                    true
+            });
+
+        Object.assign(
+            requestData,
+            readyPatch
+        );
+
         await ASIYE.booking.notifyGoDrivers(
             requestId,
             requestData
         );
 
         return requestId;
+    },
+
+
+    async finalizePaidRequest(
+        requestId
+    ) {
+        const requestRef =
+            firebase.database()
+                .ref(
+                    `requests/${requestId}`
+                );
+
+        let snapshot =
+            await requestRef.once(
+                'value'
+            );
+
+        let request =
+            snapshot.val();
+
+        if (!request) {
+            throw new Error(
+                'Paid parcel delivery could not be found.'
+            );
+        }
+
+        if (
+            String(
+                request.paymentMethod ||
+                ''
+            )
+            .toLowerCase() !==
+                'card'
+        ) {
+            throw new Error(
+                'This parcel is not awaiting a card payment.'
+            );
+        }
+
+        if (
+            ![
+                'held',
+                'captured'
+            ].includes(
+                String(
+                    request.paymentStatus ||
+                    ''
+                )
+            )
+        ) {
+            throw new Error(
+                'Paystack payment has not been confirmed yet.'
+            );
+        }
+
+        let pickupPin =
+            String(
+                request.pickupPin ||
+                ''
+            );
+
+        if (
+            !/^\d{4}$/.test(
+                pickupPin
+            )
+        ) {
+            pickupPin =
+                ASIYE.booking
+                    .generatePin();
+        }
+
+        if (
+            request.safetyShareCompleted !==
+                true
+        ) {
+            await ASIYE.booking
+                .requireTripShare({
+                    requestId,
+                    liveTrackingUrl:
+                        request.liveTrackingUrl ||
+                        ASIYE.booking
+                            .liveTrackingUrl(
+                                requestId
+                            ),
+                    pickupPin,
+                    pickupAddress:
+                        request.pickupAddress ||
+                        'Current location',
+                    destination:
+                        request.destination ||
+                        request.destinationName,
+                    service:
+                        'Asiye Parcel'
+                });
+        }
+
+        const timestamp =
+            firebase
+                .database
+                .ServerValue
+                .TIMESTAMP;
+
+        const patch = {
+            pickupPin,
+            requirePin:
+                true,
+            pinAutoGenerated:
+                true,
+            pinGeneratedAfterPayment:
+                true,
+            pinGeneratedAt:
+                timestamp,
+            safetyShareCompleted:
+                true,
+            safetyShareAt:
+                timestamp,
+            paymentsReady:
+                true,
+            status:
+                'pending'
+        };
+
+        await firebase.database()
+            .ref()
+            .update({
+                [`requests/${requestId}/pickupPin`]:
+                    pickupPin,
+                [`requests/${requestId}/requirePin`]:
+                    true,
+                [`requests/${requestId}/pinAutoGenerated`]:
+                    true,
+                [`requests/${requestId}/pinGeneratedAfterPayment`]:
+                    true,
+                [`requests/${requestId}/pinGeneratedAt`]:
+                    timestamp,
+                [`requests/${requestId}/safetyShareCompleted`]:
+                    true,
+                [`requests/${requestId}/safetyShareAt`]:
+                    timestamp,
+                [`requests/${requestId}/paymentsReady`]:
+                    true,
+                [`requests/${requestId}/status`]:
+                    'pending',
+
+                [`delivery_requests/${requestId}/pickupPin`]:
+                    pickupPin,
+                [`delivery_requests/${requestId}/requirePin`]:
+                    true,
+                [`delivery_requests/${requestId}/pinAutoGenerated`]:
+                    true,
+                [`delivery_requests/${requestId}/pinGeneratedAfterPayment`]:
+                    true,
+                [`delivery_requests/${requestId}/pinGeneratedAt`]:
+                    timestamp,
+                [`delivery_requests/${requestId}/safetyShareCompleted`]:
+                    true,
+                [`delivery_requests/${requestId}/safetyShareAt`]:
+                    timestamp,
+                [`delivery_requests/${requestId}/paymentsReady`]:
+                    true,
+                [`delivery_requests/${requestId}/paymentStatus`]:
+                    request.paymentStatus ||
+                    'held',
+                [`delivery_requests/${requestId}/paymentReference`]:
+                    request.paymentReference ||
+                    '',
+                [`delivery_requests/${requestId}/status`]:
+                    'pending'
+            });
+
+        snapshot =
+            await requestRef.once(
+                'value'
+            );
+
+        request =
+            snapshot.val() ||
+            {
+                ...request,
+                ...patch
+            };
+
+        const alreadyDispatched =
+            Boolean(
+                request.driverDispatchAt ||
+                request.driverDispatchCount ||
+                request.taxiId ||
+                request.queuedTaxiId
+            ) ||
+            [
+                'searching',
+                'driver_busy',
+                'accepted',
+                'driver_on_way',
+                'arrived',
+                'in_transit',
+                'completed'
+            ].includes(
+                String(
+                    request.status ||
+                    ''
+                )
+            );
+
+        if (!alreadyDispatched) {
+            await ASIYE.booking
+                .notifyGoDrivers(
+                    requestId,
+                    request
+                );
+        }
+
+        await firebase.database()
+            .ref()
+            .update({
+                [`requests/${requestId}/cardFinalizedAt`]:
+                    timestamp,
+                [`delivery_requests/${requestId}/cardFinalizedAt`]:
+                    timestamp
+            });
+
+        ASIYE.state.booking.requestId =
+            requestId;
+
+        ASIYE.state.booking.request = {
+            ...request,
+            pickupPin
+        };
+
+        localStorage.setItem(
+            'currentRequestId',
+            requestId
+        );
+
+        await ASIYE.ride
+            ?.start?.(
+                requestId
+            );
+
+        ASIYE.ui?.toast?.(
+            'Card payment confirmed. Your parcel handover PIN is ready.'
+        );
+
+        return {
+            requestId,
+            pickupPin
+        };
     }
 };

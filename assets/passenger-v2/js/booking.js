@@ -59,45 +59,64 @@ ASIYE.booking = {
         const uid =
             ASIYE.state.userId;
 
-
         if (!uid) {
-
             throw new Error(
                 'Passenger is not logged in.'
             );
         }
 
-
         const user =
             ASIYE.state.user || {};
-
-
-        const profileImageUrl =
-            await ASIYE.profile
-                .ensureRequired();
-
 
         const pickup =
             ASIYE.state.location;
 
-
         const destination =
             ASIYE.state.destination;
-
 
         const route =
             ASIYE.state.route;
 
-
         const quote =
             ASIYE.pricing.calculate();
-
 
         const fare =
             Number(
                 quote.go || 0
             );
 
+        const paymentMethod =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+        if (
+            paymentMethod ===
+                'wallet'
+        ) {
+            if (
+                !ASIYE.wallet ||
+                typeof ASIYE.wallet.requireFare !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Asiye Wallet is unavailable. Reopen the app and try again.'
+                );
+            }
+
+            await ASIYE.wallet
+                .requireFare(
+                    fare,
+                    'Asiye Go'
+                );
+        }
+
+        const profileImageUrl =
+            await ASIYE.profile
+                .ensureRequired();
 
         if (
             !Number.isFinite(
@@ -107,12 +126,10 @@ ASIYE.booking = {
                 pickup.longitude
             )
         ) {
-
             throw new Error(
                 'Pickup location is unavailable.'
             );
         }
-
 
         if (
             !Number.isFinite(
@@ -122,193 +139,166 @@ ASIYE.booking = {
                 destination.longitude
             )
         ) {
-
             throw new Error(
                 'Destination is unavailable.'
             );
         }
 
-
         const requestRef =
-
             firebase
                 .database()
                 .ref('requests')
                 .push();
 
-
         const requestId =
             requestRef.key;
 
-
-        const pickupPin =
-            await this.requirePassengerPin();
-
-
         const liveTrackingUrl =
-            this.liveTrackingUrl(requestId);
+            this.liveTrackingUrl(
+                requestId
+            );
 
-        await this.requireTripShare({
-            requestId,
-            liveTrackingUrl,
-            pickupPin,
-            pickupAddress:
-                pickup.address ||
-                'Current location',
-            destination:
-                destination.address ||
-                destination.name,
-            service:
-                'Asiye Go'
-        });
+        let pickupPin =
+            null;
 
+        let safetyShareCompleted =
+            false;
+
+        /*
+         * Card rule:
+         * Paystack must be completed and verified BEFORE a PIN exists.
+         * Cash/Wallet keep the existing pre-dispatch safety flow.
+         */
+        if (
+            paymentMethod !==
+                'card'
+        ) {
+            pickupPin =
+                await this
+                    .requirePassengerPin();
+
+            await this.requireTripShare({
+                requestId,
+                liveTrackingUrl,
+                pickupPin,
+                pickupAddress:
+                    pickup.address ||
+                    'Current location',
+                destination:
+                    destination.address ||
+                    destination.name,
+                service:
+                    'Asiye Go'
+            });
+
+            safetyShareCompleted =
+                true;
+        }
 
         const requestData = {
-
-            requestId:
-                requestId,
-
+            requestId,
             type:
                 'ehailing',
-
             rideType:
                 'go',
-
             carCategory:
                 'go',
-
             status:
-                'pending',
-
-
-            /* Passenger */
+                paymentMethod ===
+                    'card'
+                    ? 'share_required'
+                    : 'pending',
 
             commuterId:
                 uid,
-
             commuterName:
                 user.name ||
                 user.firstName ||
                 'Passenger',
-
             commuterPhone:
                 user.phone ||
                 user.phoneNumber ||
                 '',
-
             commuterProfileImageUrl:
                 profileImageUrl,
-
             passengerProfileImageUrl:
                 profileImageUrl,
-
-
-            /* Pickup */
 
             pickupAddress:
                 pickup.address ||
                 'Current location',
-
             commuterLocation: {
-
                 latitude:
                     pickup.latitude,
-
                 longitude:
                     pickup.longitude
             },
 
-
-            /* Destination */
-
             destination:
                 destination.address ||
                 destination.name,
-
             destinationName:
                 destination.name ||
                 destination.address,
-
             destinationCoords: {
-
                 latitude:
                     destination.latitude,
-
                 longitude:
                     destination.longitude
             },
-
-
-            /* Route */
 
             routeDistanceKm:
                 Number(
                     route.distanceKm || 0
                 ),
-
             routeDurationMinutes:
                 Number(
                     route.durationMinutes || 0
                 ),
 
-
-            /* Fare */
-
             calculatedPrice:
                 fare,
-
             finalAmount:
                 fare,
-
             commissionRate:
                 0.20,
+            paymentMethod,
 
-            paymentMethod:
-                ASIYE.state.booking
-                    .paymentMethod ||
-                'cash',
-
-
-            /* Safety */
+            paymentStatus:
+                paymentMethod ===
+                    'card'
+                    ? 'payment_required'
+                    : 'preparing',
+            paymentsReady:
+                false,
 
             requirePin:
                 true,
-
             pickupPin:
                 pickupPin,
-
+            pinAutoGenerated:
+                false,
             safetyShareRequired:
                 true,
-
-            safetyShareCompleted:
-                true,
-
+            safetyShareCompleted,
             safetyShareAt:
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP,
+                safetyShareCompleted
+                    ? firebase
+                        .database
+                        .ServerValue
+                        .TIMESTAMP
+                    : null,
 
-            liveTrackingUrl:
-                liveTrackingUrl,
-
-
-            /* Driver */
+            liveTrackingUrl,
 
             taxiId:
                 null,
-
             driverName:
                 null,
-
             driverPhone:
                 null,
-
             driverRating:
                 null,
-
-
-            /* Timestamps */
 
             createdAt:
                 firebase
@@ -317,11 +307,9 @@ ASIYE.booking = {
                     .TIMESTAMP
         };
 
-
         await requestRef.set(
             requestData
         );
-
 
         await firebase
             .database()
@@ -329,41 +317,324 @@ ASIYE.booking = {
                 `commuters/${uid}`
             )
             .update({
-
                 currentRequest:
                     requestId
             });
-
 
         ASIYE.state.booking
             .requestId =
             requestId;
 
-
         ASIYE.state.booking
             .request =
             requestData;
-
 
         localStorage.setItem(
             'currentRequestId',
             requestId
         );
 
+        let paymentResult;
 
-        /*
-         * Notify eligible drivers.
-         */
+        try {
+            if (
+                !ASIYE.payments ||
+                typeof ASIYE.payments.prepare !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Asiye payments are unavailable. Reopen the app and try again.'
+                );
+            }
+
+            paymentResult =
+                await ASIYE.payments
+                    .prepare(
+                        requestId
+                    );
+
+        } catch (error) {
+            await requestRef
+                .remove()
+                .catch(
+                    () => {}
+                );
+
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${uid}`
+                )
+                .update({
+                    currentRequest:
+                        null
+                })
+                .catch(
+                    () => {}
+                );
+
+            this.clearLocalRide();
+
+            throw error;
+        }
+
+        if (
+            paymentResult
+                ?.paymentPending ===
+                true
+        ) {
+            return {
+                requestId,
+                paymentPending:
+                    true
+            };
+        }
+
+        await requestRef.update({
+            status:
+                'pending',
+            paymentStatus:
+                paymentResult?.status ||
+                (
+                    paymentMethod ===
+                        'cash'
+                        ? 'cash_due'
+                        : 'held'
+                ),
+            paymentsReady:
+                true
+        });
+
+        requestData.status =
+            'pending';
+
+        requestData.paymentStatus =
+            paymentResult?.status ||
+            (
+                paymentMethod ===
+                    'cash'
+                    ? 'cash_due'
+                    : 'held'
+            );
+
+        requestData.paymentsReady =
+            true;
 
         await this.notifyGoDrivers(
-
             requestId,
-
             requestData
         );
 
-
         return requestId;
+    },
+
+
+    async finalizePaidRequest(
+        requestId
+    ) {
+        const requestRef =
+            firebase
+                .database()
+                .ref(
+                    `requests/${requestId}`
+                );
+
+        let snapshot =
+            await requestRef
+                .once(
+                    'value'
+                );
+
+        let request =
+            snapshot.val();
+
+        if (!request) {
+            throw new Error(
+                'Paid ride could not be found.'
+            );
+        }
+
+        if (
+            String(
+                request.paymentMethod ||
+                ''
+            )
+            .toLowerCase() !==
+                'card'
+        ) {
+            throw new Error(
+                'This booking is not awaiting a card payment.'
+            );
+        }
+
+        if (
+            ![
+                'held',
+                'captured'
+            ].includes(
+                String(
+                    request.paymentStatus ||
+                    ''
+                )
+            )
+        ) {
+            throw new Error(
+                'Paystack payment has not been confirmed yet.'
+            );
+        }
+
+        let pickupPin =
+            String(
+                request.pickupPin ||
+                ''
+            );
+
+        if (
+            !/^\d{4}$/.test(
+                pickupPin
+            )
+        ) {
+            pickupPin =
+                this.generatePin();
+        }
+
+        if (
+            request.safetyShareCompleted !==
+                true
+        ) {
+            await this.requireTripShare({
+                requestId,
+                liveTrackingUrl:
+                    request.liveTrackingUrl ||
+                    this.liveTrackingUrl(
+                        requestId
+                    ),
+                pickupPin,
+                pickupAddress:
+                    request.pickupAddress ||
+                    'Current location',
+                destination:
+                    request.destination ||
+                    request.destinationName,
+                service:
+                    'Asiye Go'
+            });
+        }
+
+        await requestRef.update({
+            pickupPin,
+            requirePin:
+                true,
+            pinAutoGenerated:
+                true,
+            pinGeneratedAfterPayment:
+                true,
+            pinGeneratedAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP,
+            safetyShareCompleted:
+                true,
+            safetyShareAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP,
+            paymentsReady:
+                true,
+            status:
+                'pending'
+        });
+
+        snapshot =
+            await requestRef
+                .once(
+                    'value'
+                );
+
+        request =
+            snapshot.val() ||
+            {
+                ...request,
+                pickupPin,
+                status:
+                    'pending',
+                paymentsReady:
+                    true,
+                safetyShareCompleted:
+                    true
+            };
+
+        const alreadyDispatched =
+            Boolean(
+                request.driverDispatchAt ||
+                request.driverDispatchCount ||
+                request.taxiId ||
+                request.queuedTaxiId
+            ) ||
+            [
+                'searching',
+                'driver_busy',
+                'accepted',
+                'driver_on_way',
+                'arrived',
+                'in_transit',
+                'completed'
+            ].includes(
+                String(
+                    request.status ||
+                    ''
+                )
+            );
+
+        if (!alreadyDispatched) {
+            await this.notifyGoDrivers(
+                requestId,
+                request
+            );
+        }
+
+        await requestRef.update({
+            cardFinalizedAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP
+        });
+
+        ASIYE.state.booking
+            .requestId =
+            requestId;
+
+        ASIYE.state.booking
+            .request =
+            {
+                ...request,
+                pickupPin,
+                paymentStatus:
+                    request.paymentStatus ||
+                    'held'
+            };
+
+        localStorage.setItem(
+            'currentRequestId',
+            requestId
+        );
+
+        await ASIYE.ride
+            ?.start?.(
+                requestId
+            );
+
+        ASIYE.ui?.toast?.(
+            'Card payment confirmed. Your 4-digit safety PIN is ready.'
+        );
+
+        return {
+            requestId,
+            pickupPin
+        };
     },
 
 
@@ -1278,12 +1549,36 @@ ASIYE.booking = {
 
     generatePin() {
 
+        try {
+            if (
+                window.crypto &&
+                typeof window.crypto
+                    .getRandomValues ===
+                    'function'
+            ) {
+                const value =
+                    new Uint32Array(1);
+
+                window.crypto
+                    .getRandomValues(
+                        value
+                    );
+
+                return String(
+                    1000 +
+                    (
+                        value[0] %
+                        9000
+                    )
+                );
+            }
+        } catch (_) {
+            // Fall back below.
+        }
+
         return String(
-
             Math.floor(
-
                 1000 +
-
                 Math.random() *
                 9000
             )

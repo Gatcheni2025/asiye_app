@@ -565,6 +565,127 @@ ASIYE.ui = {
 
 
     /* ========================================================
+       PAYMENT METHOD
+       ======================================================== */
+
+    renderPaymentMethodChooser() {
+
+        const selected =
+            String(
+                ASIYE.state.booking
+                    .paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+        const walletBalance =
+            Number(
+                ASIYE.state.user
+                    ?.walletBalance ??
+                ASIYE.state.user
+                    ?.credits ??
+                0
+            );
+
+        const methods = [
+            {
+                id: 'cash',
+                icon: 'fa-money-bill-wave',
+                label: 'Cash',
+                detail: 'Pay the driver'
+            },
+            {
+                id: 'card',
+                icon: 'fa-credit-card',
+                label: 'Card',
+                detail: 'Pay securely before booking'
+            },
+            {
+                id: 'wallet',
+                icon: 'fa-wallet',
+                label: 'Wallet',
+                detail: `R${Number(walletBalance || 0).toFixed(2)} available`
+            }
+        ];
+
+        return `
+            <section class="asiye-payment-picker">
+                <div class="asiye-payment-title">
+                    Payment
+                </div>
+
+                <div class="asiye-payment-options">
+                    ${methods.map(method => `
+                        <button
+                            type="button"
+                            class="asiye-payment-option ${selected === method.id ? 'selected' : ''}"
+                            data-payment-method="${method.id}"
+                        >
+                            <span class="asiye-payment-option-icon">
+                                <i class="fas ${method.icon}"></i>
+                            </span>
+
+                            <span class="asiye-payment-option-copy">
+                                <strong>${method.label}</strong>
+                                <small>${method.detail}</small>
+                            </span>
+
+                            <span class="asiye-payment-option-check">
+                                <i class="fas fa-check"></i>
+                            </span>
+                        </button>
+                    `).join('')}
+                </div>
+            </section>
+        `;
+    },
+
+
+    bindPaymentMethodChooser(container) {
+
+        container
+            ?.querySelectorAll(
+                '[data-payment-method]'
+            )
+            .forEach(
+                button => {
+                    button.addEventListener(
+                        'click',
+                        () => {
+                            const method =
+                                String(
+                                    button.dataset
+                                        .paymentMethod ||
+                                    'cash'
+                                )
+                                .toLowerCase();
+
+                            ASIYE.state.booking
+                                .paymentMethod =
+                                method;
+
+                            container
+                                .querySelectorAll(
+                                    '[data-payment-method]'
+                                )
+                                .forEach(
+                                    item =>
+                                        item.classList
+                                            .toggle(
+                                                'selected',
+                                                item.dataset
+                                                    .paymentMethod ===
+                                                    method
+                                            )
+                                );
+                        }
+                    );
+                }
+            );
+    },
+
+
+    /* ========================================================
        RIDE SELECTION
        ======================================================== */
 
@@ -710,6 +831,9 @@ ASIYE.ui = {
             )}
 
 
+            ${this.renderPaymentMethodChooser()}
+
+
             <button
                 id="confirmRideSelection"
                 class="primary-button"
@@ -790,6 +914,11 @@ ASIYE.ui = {
             });
 
 
+        this.bindPaymentMethodChooser(
+            container
+        );
+
+
         document
             .getElementById('confirmRideSelection')
             ?.addEventListener(
@@ -854,10 +983,40 @@ ASIYE.ui = {
                         }
 
 
-                        const requestId =
+                        const result =
 
                             await ASIYE.booking
                                 .createGoRide();
+
+
+                        if (
+                            result &&
+                            typeof result ===
+                                'object' &&
+                            result.paymentPending ===
+                                true
+                        ) {
+                            ASIYE.ui.toast(
+                                'Complete the Paystack card payment to continue. Your safety PIN will be created automatically after payment.'
+                            );
+
+                            if (button) {
+                                button.disabled =
+                                    false;
+
+                                button.textContent =
+                                    'Card payment opened';
+                            }
+
+                            return;
+                        }
+
+
+                        const requestId =
+                            typeof result ===
+                                'string'
+                                ? result
+                                : result?.requestId;
 
 
                         await ASIYE.ride.start(
@@ -1345,6 +1504,41 @@ ASIYE.ui = {
                 );
 
 
+        const currentPassenger =
+            request.passengers?.[
+                ASIYE.state.userId
+            ] ||
+            {};
+
+
+        const currentPaymentMethod =
+            String(
+                currentPassenger.paymentMethod ||
+                request.paymentMethod ||
+                'cash'
+            )
+            .toLowerCase();
+
+
+        const currentPaymentStatus =
+            String(
+                currentPassenger.paymentStatus ||
+                ''
+            );
+
+
+        const cardPaymentRequired =
+            progress.ready &&
+            currentPaymentMethod ===
+                'card' &&
+            ![
+                'held',
+                'captured'
+            ].includes(
+                currentPaymentStatus
+            );
+
+
         container.innerHTML = `
 
             <div class="club-waiting-header">
@@ -1367,6 +1561,10 @@ ASIYE.ui = {
                     <h2 class="home-title">
 
                         ${
+                            cardPaymentRequired
+                            ?
+                            'Complete your payment'
+                            :
                             progress.ready
                             ?
                             'Your Club is ready'
@@ -1457,6 +1655,14 @@ ASIYE.ui = {
                     <strong>
 
                         ${
+                            cardPaymentRequired
+
+                            ?
+
+                            'Card payment required'
+
+                            :
+
                             progress.ready
 
                             ?
@@ -1473,6 +1679,14 @@ ASIYE.ui = {
                     <p>
 
                         ${
+                            cardPaymentRequired
+
+                            ?
+
+                            'All seats are filled. Pay securely with Paystack before your pickup PIN is created and collection can start.'
+
+                            :
+
                             progress.ready
 
                             ?
@@ -1489,6 +1703,29 @@ ASIYE.ui = {
                 </div>
 
             </div>
+
+
+            ${ 
+                cardPaymentRequired
+
+                ?
+
+                `
+
+                <button
+                    class="primary-button"
+                    id="openClubCardPayment"
+                    style="margin-top:12px;"
+                >
+                    Open Paystack
+                </button>
+
+                `
+
+                :
+
+                ''
+            }
 
 
             ${
@@ -1514,6 +1751,30 @@ ASIYE.ui = {
             }
 
         `;
+
+
+        document
+            .getElementById(
+                'openClubCardPayment'
+            )
+            ?.addEventListener(
+                'click',
+                async () => {
+                    try {
+                        await ASIYE.payments
+                            ?.prepare?.(
+                                request.requestId ||
+                                ASIYE.state.booking
+                                    .requestId
+                            );
+                    } catch (error) {
+                        this.toast(
+                            error?.message ||
+                            'Unable to open Paystack.'
+                        );
+                    }
+                }
+            );
 
 
         document
