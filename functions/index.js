@@ -6235,6 +6235,2349 @@ async function creditPaystackWallet(
   };
 }
 
+// =================================================================
+// --- RIDE PAYMENT HOLDS: CASH / CARD / ASIYE WALLET ---
+// =================================================================
+// Go reserves non-cash payment immediately after booking.
+// Club waits until the pool is full, then reserves each passenger's
+// Wallet funds and requires each Card passenger to complete Paystack.
+// Reserved funds remain held by Asiye until trip completion.
+
+function normaliseRidePaymentMethod(value) {
+  const method =
+    String(value || "cash")
+      .trim()
+      .toLowerCase();
+
+  return ["cash", "card", "wallet"].includes(method)
+    ? method
+    : "cash";
+}
+
+function activeClubPassenger(passenger) {
+  return ![
+    "cancelled",
+    "cancelled_by_commuter",
+    "cancelled_by_driver",
+    "cancelled_by_admin",
+    "rejected"
+  ].includes(
+    String(
+      passenger?.status ||
+      ""
+    )
+  );
+}
+
+async function tripPassengerContext(
+  decoded,
+  requestId
+) {
+  const passenger =
+    await resolvePassengerForWallet(
+      decoded
+    );
+
+  const passengerId =
+    String(
+      passenger?.id ||
+      decoded.uid
+    );
+
+  const trip =
+    (
+      await admin.database()
+        .ref(
+          `requests/${requestId}`
+        )
+        .once(
+          "value"
+        )
+    ).val();
+
+  if (!trip) {
+    const error =
+      new Error(
+        "Trip was not found."
+      );
+
+    error.code =
+      "payment/trip-not-found";
+
+    throw error;
+  }
+
+  let passengerEntry =
+    null;
+
+  if (
+    trip.type ===
+      "club"
+  ) {
+    passengerEntry =
+      trip.passengers?.[
+        passengerId
+      ] ||
+      null;
+
+    if (!passengerEntry) {
+      const error =
+        new Error(
+          "You are not part of this Club ride."
+        );
+
+      error.code =
+        "payment/not-passenger";
+
+      throw error;
+    }
+  } else if (
+    String(
+      trip.commuterId ||
+      ""
+    ) !== passengerId
+  ) {
+    const error =
+      new Error(
+        "You cannot pay for this trip."
+      );
+
+    error.code =
+      "payment/not-passenger";
+
+    throw error;
+  }
+
+  const amount =
+    tripPassengerFare(
+      trip,
+      passengerEntry
+    );
+
+  if (
+    !Number.isFinite(amount) ||
+    amount <= 0
+  ) {
+    const error =
+      new Error(
+        "Trip fare is unavailable."
+      );
+
+    error.code =
+      "payment/invalid-fare";
+
+    throw error;
+  }
+
+  const method =
+    normaliseRidePaymentMethod(
+      passengerEntry
+        ?.paymentMethod ||
+      trip.paymentMethod
+    );
+
+  return {
+    decoded,
+    trip,
+    requestId,
+    passenger,
+    passengerId,
+    passengerEntry,
+    method,
+    amount
+  };
+}
+
+function tripPaymentPath(
+  requestId,
+  passengerId
+) {
+  return (
+    "tripPayments/" +
+    requestId +
+    "/" +
+    passengerId
+  );
+}
+
+async function updateWalletProfileWithEtag(
+  passengerId,
+  mutate
+) {
+  const accessToken =
+    await adminDatabaseAccessToken();
+
+  const profileUrl =
+    firebaseDatabaseBaseUrl() +
+    "/commuters/" +
+    encodeURIComponent(
+      passengerId
+    ) +
+    ".json";
+
+  for (
+    let attempt = 0;
+    attempt < 7;
+    attempt += 1
+  ) {
+    const readResponse =
+      await fetch(
+        profileUrl,
+        {
+          method:
+            "GET",
+          headers: {
+            Authorization:
+              "Bearer " +
+              accessToken,
+            "X-Firebase-ETag":
+              "true",
+            "Cache-Control":
+              "no-cache"
+          }
+        }
+      );
+
+    if (!readResponse.ok) {
+      throw new Error(
+        "Unable to load Asiye Wallet."
+      );
+    }
+
+    const profile =
+      await readResponse
+        .json();
+
+    const etag =
+      readResponse.headers.get(
+        "etag"
+      );
+
+    if (
+      !profile ||
+      !etag
+    ) {
+      throw new Error(
+        "Passenger wallet profile is unavailable."
+      );
+    }
+
+    const result =
+      mutate(
+        structuredClone(
+          profile
+        )
+      );
+
+    if (
+      result &&
+      result.write ===
+        false
+    ) {
+      return result;
+    }
+
+    const nextProfile =
+      result?.profile ||
+      profile;
+
+    const writeResponse =
+      await fetch(
+        profileUrl,
+        {
+          method:
+            "PUT",
+          headers: {
+            Authorization:
+              "Bearer " +
+              accessToken,
+            "Content-Type":
+              "application/json",
+            "If-Match":
+              etag
+          },
+          body:
+            JSON.stringify(
+              nextProfile
+            )
+        }
+      );
+
+    if (
+      writeResponse.status ===
+        412
+    ) {
+      continue;
+    }
+
+    if (!writeResponse.ok) {
+      throw new Error(
+        "Unable to update Asiye Wallet."
+      );
+    }
+
+    return result;
+  }
+
+  throw new Error(
+    "Wallet changed while reserving payment. Please try again."
+  );
+}
+
+async function holdWalletTripPayment(
+  requestId,
+  passengerId,
+  amount
+) {
+  const safeAmount =
+    Math.round(
+      Number(amount) *
+      100
+    ) / 100;
+
+  const result =
+    await updateWalletProfileWithEtag(
+      passengerId,
+      profile => {
+        const holds = {
+          ...(
+            profile
+              .walletRideHolds ||
+            {}
+          )
+        };
+
+        const existing =
+          holds[
+            requestId
+          ];
+
+        const available =
+          Number(
+            profile.walletBalance ??
+            profile.credits ??
+            0
+          );
+
+        const safeAvailable =
+          Number.isFinite(
+            available
+          )
+            ? Math.round(
+                available *
+                100
+              ) / 100
+            : 0;
+
+        if (
+          existing &&
+          [
+            "held",
+            "captured"
+          ].includes(
+            String(
+              existing.status ||
+              ""
+            )
+          )
+        ) {
+          return {
+            write:
+              false,
+            balance:
+              safeAvailable,
+            hold:
+              existing
+          };
+        }
+
+        if (
+          safeAvailable +
+            0.00001 <
+          safeAmount
+        ) {
+          const error =
+            new Error(
+              `Your Asiye Wallet has R${safeAvailable.toFixed(2)} but this ride requires R${safeAmount.toFixed(2)}.`
+            );
+
+          error.code =
+            "payment/insufficient-wallet";
+
+          throw error;
+        }
+
+        const nextBalance =
+          Math.round(
+            (
+              safeAvailable -
+              safeAmount
+            ) *
+            100
+          ) / 100;
+
+        holds[
+          requestId
+        ] = {
+          amount:
+            safeAmount,
+          status:
+            "held",
+          heldAt:
+            Date.now()
+        };
+
+        profile.walletRideHolds =
+          holds;
+
+        profile.walletBalance =
+          nextBalance;
+
+        profile.credits =
+          nextBalance;
+
+        profile.walletUpdatedAt =
+          Date.now();
+
+        return {
+          profile,
+          balance:
+            nextBalance,
+          hold:
+            holds[
+              requestId
+            ]
+        };
+      }
+    );
+
+  const payment = {
+    provider:
+      "asiye_wallet",
+    method:
+      "wallet",
+    requestId,
+    passengerId,
+    amount:
+      safeAmount,
+    currency:
+      "ZAR",
+    status:
+      "held",
+    heldAt:
+      admin.database
+        .ServerValue
+        .TIMESTAMP
+  };
+
+  await admin.database()
+    .ref(
+      tripPaymentPath(
+        requestId,
+        passengerId
+      )
+    )
+    .update(
+      payment
+    );
+
+  return {
+    ...payment,
+    balance:
+      Number(
+        result.balance ||
+        0
+      )
+  };
+}
+
+async function settleWalletTripPayment(
+  requestId,
+  passengerId
+) {
+  const result =
+    await updateWalletProfileWithEtag(
+      passengerId,
+      profile => {
+        const holds = {
+          ...(
+            profile
+              .walletRideHolds ||
+            {}
+          )
+        };
+
+        const existing =
+          holds[
+            requestId
+          ];
+
+        if (!existing) {
+          const error =
+            new Error(
+              "Wallet hold was not found."
+            );
+
+          error.code =
+            "payment/hold-missing";
+
+          throw error;
+        }
+
+        if (
+          existing.status ===
+            "captured"
+        ) {
+          return {
+            write:
+              false,
+            hold:
+              existing
+          };
+        }
+
+        if (
+          existing.status !==
+            "held"
+        ) {
+          const error =
+            new Error(
+              "Wallet hold is not ready to settle."
+            );
+
+          error.code =
+            "payment/hold-not-ready";
+
+          throw error;
+        }
+
+        holds[
+          requestId
+        ] = {
+          ...existing,
+          status:
+            "captured",
+          capturedAt:
+            Date.now()
+        };
+
+        profile.walletRideHolds =
+          holds;
+
+        return {
+          profile,
+          hold:
+            holds[
+              requestId
+            ]
+        };
+      }
+    );
+
+  await admin.database()
+    .ref(
+      tripPaymentPath(
+        requestId,
+        passengerId
+      )
+    )
+    .update({
+      status:
+        "captured",
+      capturedAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP
+    });
+
+  return result;
+}
+
+async function releaseWalletTripPayment(
+  requestId,
+  passengerId
+) {
+  const result =
+    await updateWalletProfileWithEtag(
+      passengerId,
+      profile => {
+        const holds = {
+          ...(
+            profile
+              .walletRideHolds ||
+            {}
+          )
+        };
+
+        const existing =
+          holds[
+            requestId
+          ];
+
+        const available =
+          Number(
+            profile.walletBalance ??
+            profile.credits ??
+            0
+          );
+
+        const safeAvailable =
+          Number.isFinite(
+            available
+          )
+            ? Math.round(
+                available *
+                100
+              ) / 100
+            : 0;
+
+        if (
+          !existing ||
+          existing.status ===
+            "released"
+        ) {
+          return {
+            write:
+              false,
+            balance:
+              safeAvailable,
+            hold:
+              existing ||
+              null
+          };
+        }
+
+        if (
+          existing.status ===
+            "captured"
+        ) {
+          const error =
+            new Error(
+              "Completed wallet payment cannot be released automatically."
+            );
+
+          error.code =
+            "payment/already-captured";
+
+          throw error;
+        }
+
+        if (
+          existing.status !==
+            "held"
+        ) {
+          return {
+            write:
+              false,
+            balance:
+              safeAvailable,
+            hold:
+              existing
+          };
+        }
+
+        const amount =
+          Number(
+            existing.amount ||
+            0
+          );
+
+        const nextBalance =
+          Math.round(
+            (
+              safeAvailable +
+              amount
+            ) *
+            100
+          ) / 100;
+
+        holds[
+          requestId
+        ] = {
+          ...existing,
+          status:
+            "released",
+          releasedAt:
+            Date.now()
+        };
+
+        profile.walletRideHolds =
+          holds;
+
+        profile.walletBalance =
+          nextBalance;
+
+        profile.credits =
+          nextBalance;
+
+        profile.walletUpdatedAt =
+          Date.now();
+
+        return {
+          profile,
+          balance:
+            nextBalance,
+          hold:
+            holds[
+              requestId
+            ]
+        };
+      }
+    );
+
+  await admin.database()
+    .ref(
+      tripPaymentPath(
+        requestId,
+        passengerId
+      )
+    )
+    .update({
+      status:
+        "released",
+      releasedAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP
+    });
+
+  return result;
+}
+
+async function markTripPassengerPayment(
+  requestId,
+  passengerId,
+  trip,
+  patch
+) {
+  if (
+    trip.type ===
+      "club"
+  ) {
+    await admin.database()
+      .ref(
+        `requests/${requestId}/passengers/${passengerId}`
+      )
+      .update(
+        patch
+      );
+  } else {
+    await admin.database()
+      .ref(
+        `requests/${requestId}`
+      )
+      .update(
+        patch
+      );
+  }
+}
+
+async function refreshClubPaymentsReady(
+  requestId
+) {
+  const requestRef =
+    admin.database()
+      .ref(
+        `requests/${requestId}`
+      );
+
+  const trip =
+    (
+      await requestRef
+        .once(
+          "value"
+        )
+    ).val();
+
+  if (
+    !trip ||
+    trip.type !==
+      "club" ||
+    trip.poolReady !==
+      true
+  ) {
+    return {
+      ready:
+        false
+    };
+  }
+
+  const active =
+    Object.entries(
+      trip.passengers ||
+      {}
+    )
+      .filter(
+        ([, passenger]) =>
+          activeClubPassenger(
+            passenger
+          )
+      );
+
+  const pending =
+    active.filter(
+      ([, passenger]) => {
+        const method =
+          normaliseRidePaymentMethod(
+            passenger
+              ?.paymentMethod ||
+            trip.paymentMethod
+          );
+
+        const status =
+          String(
+            passenger
+              ?.paymentStatus ||
+            ""
+          );
+
+        if (
+          method ===
+            "cash"
+        ) {
+          return false;
+        }
+
+        return ![
+          "held",
+          "captured"
+        ].includes(
+          status
+        );
+      }
+    );
+
+  const ready =
+    pending.length ===
+      0;
+
+  await requestRef
+    .update({
+      paymentsReady:
+        ready,
+      paymentStatus:
+        ready
+          ? "held"
+          : "payment_required",
+      status:
+        ready
+          ? "pool_ready"
+          : "payment_required"
+    });
+
+  return {
+    ready,
+    pendingPassengerIds:
+      pending.map(
+        ([id]) =>
+          id
+      )
+  };
+}
+
+async function prepareClubPoolPayments(
+  requestId,
+  trip
+) {
+  const passengerPatches =
+    {};
+
+  for (
+    const [
+      passengerId,
+      passenger
+    ]
+    of Object.entries(
+      trip.passengers ||
+      {}
+    )
+  ) {
+    if (
+      !activeClubPassenger(
+        passenger
+      )
+    ) {
+      continue;
+    }
+
+    const method =
+      normaliseRidePaymentMethod(
+        passenger
+          ?.paymentMethod ||
+        trip.paymentMethod
+      );
+
+    const amount =
+      tripPassengerFare(
+        trip,
+        passenger
+      );
+
+    if (
+      method ===
+        "cash"
+    ) {
+      passengerPatches[
+        `passengers/${passengerId}/paymentStatus`
+      ] =
+        "cash_due";
+
+      passengerPatches[
+        `passengers/${passengerId}/paymentHeldAmount`
+      ] =
+        0;
+
+      await admin.database()
+        .ref(
+          tripPaymentPath(
+            requestId,
+            passengerId
+          )
+        )
+        .update({
+          method:
+            "cash",
+          provider:
+            "cash",
+          requestId,
+          passengerId,
+          amount,
+          currency:
+            "ZAR",
+          status:
+            "cash_due",
+          updatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
+      continue;
+    }
+
+    if (
+      method ===
+        "wallet"
+    ) {
+      try {
+        await holdWalletTripPayment(
+          requestId,
+          passengerId,
+          amount
+        );
+
+        passengerPatches[
+          `passengers/${passengerId}/paymentStatus`
+        ] =
+          "held";
+
+        passengerPatches[
+          `passengers/${passengerId}/paymentHeldAmount`
+        ] =
+          amount;
+
+      } catch (error) {
+        if (
+          error?.code ===
+            "payment/insufficient-wallet"
+        ) {
+          passengerPatches[
+            `passengers/${passengerId}/paymentStatus`
+          ] =
+            "wallet_insufficient";
+
+          continue;
+        }
+
+        throw error;
+      }
+
+      continue;
+    }
+
+    const payment =
+      (
+        await admin.database()
+          .ref(
+            tripPaymentPath(
+              requestId,
+              passengerId
+            )
+          )
+          .once(
+            "value"
+          )
+      ).val();
+
+    passengerPatches[
+      `passengers/${passengerId}/paymentStatus`
+    ] =
+      [
+        "held",
+        "captured"
+      ].includes(
+        String(
+          payment?.status ||
+          ""
+        )
+      )
+        ? "held"
+        : "payment_required";
+  }
+
+  if (
+    Object.keys(
+      passengerPatches
+    ).length
+  ) {
+    await admin.database()
+      .ref(
+        `requests/${requestId}`
+      )
+      .update(
+        passengerPatches
+      );
+  }
+
+  return refreshClubPaymentsReady(
+    requestId
+  );
+}
+
+async function initialiseCardTripPayment(
+  context
+) {
+  const {
+    decoded,
+    requestId,
+    passengerId,
+    passenger,
+    trip,
+    amount
+  } =
+    context;
+
+  const paymentRef =
+    admin.database()
+      .ref(
+        tripPaymentPath(
+          requestId,
+          passengerId
+        )
+      );
+
+  const current =
+    (
+      await paymentRef
+        .once(
+          "value"
+        )
+    ).val();
+
+  if (
+    current &&
+    [
+      "held",
+      "captured"
+    ].includes(
+      String(
+        current.status ||
+        ""
+      )
+    )
+  ) {
+    return {
+      ready:
+        true,
+      status:
+        current.status,
+      reference:
+        current.reference ||
+        ""
+    };
+  }
+
+  if (
+    current?.status ===
+      "initialized" &&
+    current.authorizationUrl &&
+    current.reference
+  ) {
+    return {
+      ready:
+        false,
+      status:
+        "payment_required",
+      reference:
+        current.reference,
+      authorizationUrl:
+        current.authorizationUrl
+    };
+  }
+
+  const profile =
+    passenger?.data ||
+    {};
+
+  const email =
+    String(
+      profile.email ||
+      decoded.email ||
+      paystackFallbackEmail(
+        decoded.uid
+      )
+    )
+      .trim()
+      .toLowerCase();
+
+  const reference =
+    paystackReference();
+
+  const initialized =
+    await paystackRequest(
+      "/transaction/initialize",
+      {
+        method:
+          "POST",
+        body: {
+          email,
+          amount:
+            String(
+              Math.round(
+                amount *
+                100
+              )
+            ),
+          currency:
+            "ZAR",
+          reference,
+          callback_url:
+            PAYSTACK_CALLBACK_URL,
+          channels: [
+            "card"
+          ],
+          metadata: {
+            purpose:
+              "asiye_trip_card",
+            uid:
+              decoded.uid,
+            passengerId,
+            requestId,
+            rideType:
+              trip.type ===
+                "club"
+                ? trip.clubMode ||
+                  "club"
+                : trip.rideType ||
+                  "go"
+          }
+        }
+      }
+    );
+
+  const data =
+    initialized.data ||
+    {};
+
+  if (
+    !data.authorization_url ||
+    !data.reference
+  ) {
+    throw new Error(
+      "Paystack did not return a card checkout link."
+    );
+  }
+
+  await admin.database()
+    .ref()
+    .update({
+      [
+        tripPaymentPath(
+          requestId,
+          passengerId
+        )
+      ]:
+        {
+          method:
+            "card",
+          provider:
+            "paystack",
+          requestId,
+          passengerId,
+          uid:
+            decoded.uid,
+          amount,
+          amountSubunit:
+            Math.round(
+              amount *
+              100
+            ),
+          currency:
+            "ZAR",
+          reference,
+          authorizationUrl:
+            data.authorization_url,
+          accessCode:
+            data.access_code ||
+            "",
+          status:
+            "initialized",
+          createdAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        },
+      [
+        `tripPaymentReferences/${reference}`
+      ]:
+        {
+          requestId,
+          passengerId,
+          createdAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        }
+    });
+
+  await markTripPassengerPayment(
+    requestId,
+    passengerId,
+    trip,
+    {
+      paymentStatus:
+        "payment_required",
+      paymentReference:
+        reference
+    }
+  );
+
+  if (
+    trip.type !==
+      "club"
+  ) {
+    await admin.database()
+      .ref(
+        `requests/${requestId}`
+      )
+      .update({
+        status:
+          "payment_required",
+        paymentsReady:
+          false
+      });
+  }
+
+  return {
+    ready:
+      false,
+    status:
+      "payment_required",
+    reference,
+    authorizationUrl:
+      data.authorization_url
+  };
+}
+
+async function prepareTripPaymentServer(
+  context
+) {
+  const {
+    requestId,
+    passengerId,
+    trip,
+    method,
+    amount
+  } =
+    context;
+
+  if (
+    trip.type ===
+      "club" &&
+    trip.poolReady !==
+      true
+  ) {
+    return {
+      ready:
+        false,
+      waitingForPool:
+        true,
+      status:
+        "waiting_pool"
+    };
+  }
+
+  if (
+    method ===
+      "cash"
+  ) {
+    await admin.database()
+      .ref(
+        tripPaymentPath(
+          requestId,
+          passengerId
+        )
+      )
+      .update({
+        method:
+          "cash",
+        provider:
+          "cash",
+        requestId,
+        passengerId,
+        amount,
+        currency:
+          "ZAR",
+        status:
+          "cash_due",
+        updatedAt:
+          admin.database
+            .ServerValue
+            .TIMESTAMP
+      });
+
+    await markTripPassengerPayment(
+      requestId,
+      passengerId,
+      trip,
+      {
+        paymentStatus:
+          "cash_due",
+        paymentHeldAmount:
+          0
+      }
+    );
+
+    return {
+      ready:
+        true,
+      status:
+        "cash_due"
+    };
+  }
+
+  if (
+    method ===
+      "wallet"
+  ) {
+    const hold =
+      await holdWalletTripPayment(
+        requestId,
+        passengerId,
+        amount
+      );
+
+    await markTripPassengerPayment(
+      requestId,
+      passengerId,
+      trip,
+      {
+        paymentStatus:
+          "held",
+        paymentHeldAmount:
+          amount
+      }
+    );
+
+    return {
+      ready:
+        true,
+      status:
+        "held",
+      balance:
+        hold.balance
+    };
+  }
+
+  return initialiseCardTripPayment(
+    context
+  );
+}
+
+async function recordCardTripPaymentHeld(
+  payment,
+  transaction
+) {
+  if (
+    !transactionMatchesPayment(
+      transaction,
+      payment
+    )
+  ) {
+    throw new Error(
+      "Card transaction does not match the trip fare."
+    );
+  }
+
+  const requestId =
+    String(
+      payment.requestId ||
+      ""
+    );
+
+  const passengerId =
+    String(
+      payment.passengerId ||
+      ""
+    );
+
+  const trip =
+    (
+      await admin.database()
+        .ref(
+          `requests/${requestId}`
+        )
+        .once(
+          "value"
+        )
+    ).val();
+
+  if (!trip) {
+    throw new Error(
+      "Trip was not found."
+    );
+  }
+
+  await admin.database()
+    .ref(
+      tripPaymentPath(
+        requestId,
+        passengerId
+      )
+    )
+    .update({
+      status:
+        "held",
+      heldAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP,
+      paystackTransactionId:
+        String(
+          transaction.id ||
+          ""
+        ),
+      channel:
+        String(
+          transaction.channel ||
+          "card"
+        ),
+      paidAt:
+        transaction.paid_at ||
+        transaction.paidAt ||
+        admin.database
+          .ServerValue
+          .TIMESTAMP
+    });
+
+  await markTripPassengerPayment(
+    requestId,
+    passengerId,
+    trip,
+    {
+      paymentStatus:
+        "held",
+      paymentHeldAmount:
+        Number(
+          payment.amount ||
+          0
+        )
+    }
+  );
+
+  if (
+    trip.type ===
+      "club"
+  ) {
+    await refreshClubPaymentsReady(
+      requestId
+    );
+  } else {
+    await admin.database()
+      .ref(
+        `requests/${requestId}`
+      )
+      .update({
+        paymentStatus:
+          "held",
+        paymentsReady:
+          true,
+        status:
+          trip.safetyShareCompleted
+            ? "pending"
+            : trip.status
+      });
+  }
+
+  return {
+    requestId,
+    passengerId,
+    status:
+      "held"
+  };
+}
+
+exports.prepareTripPayment =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public",
+      secrets: [
+        paystackSecretKey
+      ]
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before paying for this ride."
+            });
+        }
+
+        const requestId =
+          String(
+            request.body?.requestId ||
+            ""
+          ).trim();
+
+        if (
+          !/^[A-Za-z0-9_-]{1,128}$/.test(
+            requestId
+          )
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Trip reference is invalid."
+            });
+        }
+
+        const context =
+          await tripPassengerContext(
+            decoded,
+            requestId
+          );
+
+        const result =
+          await prepareTripPaymentServer(
+            context
+          );
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId,
+            passengerId:
+              context.passengerId,
+            method:
+              context.method,
+            amount:
+              context.amount,
+            ...result
+          });
+
+      } catch (error) {
+        const status =
+          error?.code ===
+            "payment/insufficient-wallet"
+            ? 409
+            : error?.code ===
+                "payment/not-passenger"
+              ? 403
+              : error?.code ===
+                  "payment/trip-not-found"
+                ? 404
+                : 500;
+
+        console.error(
+          "Prepare trip payment failed",
+          {
+            code:
+              error?.code ||
+              "unknown",
+            message:
+              error?.message ||
+              String(error)
+          }
+        );
+
+        return response
+          .status(status)
+          .json({
+            error:
+              error?.message ||
+              "Unable to prepare ride payment."
+          });
+      }
+    }
+  );
+
+exports.verifyTripCardPayment =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public",
+      secrets: [
+        paystackSecretKey
+      ]
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before checking this card payment."
+            });
+        }
+
+        const requestId =
+          String(
+            request.body?.requestId ||
+            ""
+          ).trim();
+
+        const reference =
+          sanitizeReference(
+            request.body?.reference
+          );
+
+        const context =
+          await tripPassengerContext(
+            decoded,
+            requestId
+          );
+
+        const paymentRef =
+          admin.database()
+            .ref(
+              tripPaymentPath(
+                requestId,
+                context.passengerId
+              )
+            );
+
+        const payment =
+          (
+            await paymentRef
+              .once(
+                "value"
+              )
+          ).val();
+
+        if (
+          !payment ||
+          payment.method !==
+            "card" ||
+          payment.reference !==
+            reference
+        ) {
+          return response
+            .status(404)
+            .json({
+              error:
+                "Card payment was not found."
+            });
+        }
+
+        if (
+          [
+            "held",
+            "captured"
+          ].includes(
+            String(
+              payment.status ||
+              ""
+            )
+          )
+        ) {
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              status:
+                payment.status,
+              requestId,
+              passengerId:
+                context.passengerId,
+              ready:
+                true
+            });
+        }
+
+        const transaction =
+          await verifyPaystackReference(
+            reference
+          );
+
+        if (
+          !transaction ||
+          transaction.status !==
+            "success"
+        ) {
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              status:
+                String(
+                  transaction?.status ||
+                  "pending"
+                ),
+              requestId,
+              ready:
+                false
+            });
+        }
+
+        await recordCardTripPaymentHeld(
+          payment,
+          transaction
+        );
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            status:
+              "held",
+            requestId,
+            passengerId:
+              context.passengerId,
+            ready:
+              true
+          });
+
+      } catch (error) {
+        console.error(
+          "Verify trip card payment failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to verify card payment."
+          });
+      }
+    }
+  );
+
+exports.settleTripPayment =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Driver authentication is required."
+            });
+        }
+
+        const requestId =
+          String(
+            request.body?.requestId ||
+            ""
+          ).trim();
+
+        const trip =
+          (
+            await admin.database()
+              .ref(
+                `requests/${requestId}`
+              )
+              .once(
+                "value"
+              )
+          ).val();
+
+        if (!trip) {
+          return response
+            .status(404)
+            .json({
+              error:
+                "Trip was not found."
+            });
+        }
+
+        if (
+          !await driverOwnsTrip(
+            decoded.uid,
+            trip
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "Only the assigned driver can settle this trip."
+            });
+        }
+
+        const passengers =
+          trip.type ===
+            "club"
+            ? Object.entries(
+                trip.passengers ||
+                {}
+              )
+                .filter(
+                  ([, passenger]) =>
+                    activeClubPassenger(
+                      passenger
+                    )
+                )
+                .map(
+                  ([
+                    passengerId,
+                    passenger
+                  ]) => ({
+                    passengerId,
+                    passenger
+                  })
+                )
+            : [
+                {
+                  passengerId:
+                    trip.commuterId,
+                  passenger:
+                    null
+                }
+              ];
+
+        const results =
+          [];
+
+        for (
+          const item
+          of passengers
+        ) {
+          const method =
+            normaliseRidePaymentMethod(
+              item.passenger
+                ?.paymentMethod ||
+              trip.paymentMethod
+            );
+
+          const paymentRef =
+            admin.database()
+              .ref(
+                tripPaymentPath(
+                  requestId,
+                  item.passengerId
+                )
+              );
+
+          const payment =
+            (
+              await paymentRef
+                .once(
+                  "value"
+                )
+            ).val();
+
+          if (
+            method ===
+              "cash"
+          ) {
+            results.push({
+              passengerId:
+                item.passengerId,
+              method,
+              status:
+                "cash_due"
+            });
+
+            continue;
+          }
+
+          if (
+            !payment ||
+            ![
+              "held",
+              "captured"
+            ].includes(
+              String(
+                payment.status ||
+                ""
+              )
+            )
+          ) {
+            return response
+              .status(409)
+              .json({
+                error:
+                  "A non-cash passenger payment is not held yet.",
+                passengerId:
+                  item.passengerId,
+                method
+              });
+          }
+
+          if (
+            payment.status ===
+              "held"
+          ) {
+            if (
+              method ===
+                "wallet"
+            ) {
+              await settleWalletTripPayment(
+                requestId,
+                item.passengerId
+              );
+
+            } else {
+              await paymentRef
+                .update({
+                  status:
+                    "captured",
+                  capturedAt:
+                    admin.database
+                      .ServerValue
+                      .TIMESTAMP
+                });
+            }
+
+            await markTripPassengerPayment(
+              requestId,
+              item.passengerId,
+              trip,
+              {
+                paymentStatus:
+                  "captured",
+                paymentCapturedAt:
+                  admin.database
+                    .ServerValue
+                    .TIMESTAMP
+              }
+            );
+          }
+
+          results.push({
+            passengerId:
+              item.passengerId,
+            method,
+            status:
+              "captured"
+          });
+        }
+
+        await admin.database()
+          .ref(
+            `requests/${requestId}`
+          )
+          .update({
+            paymentSettlementStatus:
+              "settled",
+            paymentSettledAt:
+              admin.database
+                .ServerValue
+                .TIMESTAMP
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            settled:
+              true,
+            payments:
+              results
+          });
+
+      } catch (error) {
+        console.error(
+          "Trip payment settlement failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to settle ride payment."
+          });
+      }
+    }
+  );
+
+exports.releaseTripPayment =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public",
+      secrets: [
+        paystackSecretKey
+      ]
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before cancelling this payment."
+            });
+        }
+
+        const requestId =
+          String(
+            request.body?.requestId ||
+            ""
+          ).trim();
+
+        const context =
+          await tripPassengerContext(
+            decoded,
+            requestId
+          );
+
+        const paymentRef =
+          admin.database()
+            .ref(
+              tripPaymentPath(
+                requestId,
+                context.passengerId
+              )
+            );
+
+        const payment =
+          (
+            await paymentRef
+              .once(
+                "value"
+              )
+          ).val();
+
+        if (!payment) {
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              status:
+                "nothing_to_release"
+            });
+        }
+
+        if (
+          payment.method ===
+            "wallet"
+        ) {
+          const released =
+            await releaseWalletTripPayment(
+              requestId,
+              context.passengerId
+            );
+
+          await markTripPassengerPayment(
+            requestId,
+            context.passengerId,
+            context.trip,
+            {
+              paymentStatus:
+                "released"
+            }
+          );
+
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              status:
+                "released",
+              balance:
+                Number(
+                  released.balance ||
+                  0
+                )
+            });
+        }
+
+        if (
+          payment.method ===
+            "card" &&
+          payment.status ===
+            "held"
+        ) {
+          const refund =
+            await paystackRequest(
+              "/refund",
+              {
+                method:
+                  "POST",
+                body: {
+                  transaction:
+                    payment.paystackTransactionId ||
+                    payment.reference,
+                  amount:
+                    Math.round(
+                      Number(
+                        payment.amount ||
+                        0
+                      ) *
+                      100
+                    ),
+                  currency:
+                    "ZAR",
+                  customer_note:
+                    "Asiye ride cancelled before completion",
+                  merchant_note:
+                    `Asiye trip ${requestId} cancelled`
+                }
+              }
+            );
+
+          await paymentRef
+            .update({
+              status:
+                "refund_pending",
+              refundId:
+                String(
+                  refund.data?.id ||
+                  ""
+                ),
+              refundStatus:
+                String(
+                  refund.data?.status ||
+                  "pending"
+                ),
+              refundRequestedAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+
+          await markTripPassengerPayment(
+            requestId,
+            context.passengerId,
+            context.trip,
+            {
+              paymentStatus:
+                "refund_pending"
+            }
+          );
+
+          return response
+            .status(200)
+            .json({
+              ok:
+                true,
+              status:
+                "refund_pending"
+            });
+        }
+
+        await paymentRef
+          .update({
+            status:
+              payment.status ===
+                "captured"
+                ? "captured"
+                : "released",
+            releasedAt:
+              admin.database
+                .ServerValue
+                .TIMESTAMP
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            status:
+              payment.status ===
+                "captured"
+                ? "captured"
+                : "released"
+          });
+
+      } catch (error) {
+        console.error(
+          "Trip payment release failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to release ride payment."
+          });
+      }
+    }
+  );
+
+
 exports.paystackPaymentReturn =
   onRequest(
     {
