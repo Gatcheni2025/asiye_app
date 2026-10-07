@@ -1512,6 +1512,123 @@ ASIYE_DRIVER.trip = {
     },
 
 
+    async confirmWalletReady() {
+        const request =
+            this.request;
+
+        if (
+            !request ||
+            request.type ===
+                'delivery'
+        ) {
+            return true;
+        }
+
+        const usesWallet =
+            request.type ===
+                'club'
+                ? Object.values(
+                    request.passengers ||
+                    {}
+                ).some(
+                    passenger =>
+                        ![
+                            'cancelled',
+                            'cancelled_by_commuter',
+                            'cancelled_by_driver',
+                            'cancelled_by_admin',
+                            'rejected'
+                        ].includes(
+                            String(
+                                passenger?.status ||
+                                ''
+                            )
+                        ) &&
+                        String(
+                            passenger?.paymentMethod ||
+                            request.paymentMethod ||
+                            'wallet'
+                        )
+                            .toLowerCase() ===
+                            'wallet'
+                )
+                : String(
+                    request.paymentMethod ||
+                    'wallet'
+                )
+                    .toLowerCase() ===
+                    'wallet';
+
+        if (!usesWallet) {
+            return true;
+        }
+
+        const authUser =
+            firebase.auth()
+                .currentUser;
+
+        if (!authUser) {
+            throw new Error(
+                'Driver session expired. Sign in again before completing this trip.'
+            );
+        }
+
+        const token =
+            await authUser
+                .getIdToken(
+                    true
+                );
+
+        let response;
+
+        try {
+            response =
+                await fetch(
+                    'https://us-central1-asiye-80386.cloudfunctions.net/confirmTripWalletReady',
+                    {
+                        method:
+                            'POST',
+                        headers: {
+                            'Authorization':
+                                `Bearer ${token}`,
+                            'Content-Type':
+                                'application/json'
+                        },
+                        body:
+                            JSON.stringify({
+                                requestId:
+                                    this.requestId
+                            })
+                    }
+                );
+        } catch (error) {
+            throw new Error(
+                'Unable to check the Asiye Wallet. Check your connection and try again.'
+            );
+        }
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+        if (
+            !response.ok ||
+            payload.ready !==
+                true
+        ) {
+            throw new Error(
+                payload.error ||
+                'The passenger Asiye Wallet must have enough funds before this trip can be completed.'
+            );
+        }
+
+        return true;
+    },
+
+
     /* ========================================================
        COMPLETE TRIP
        ======================================================== */
@@ -1529,6 +1646,21 @@ ASIYE_DRIVER.trip = {
 
         const request =
             this.request;
+
+
+        try {
+            await this
+                .confirmWalletReady();
+        } catch (error) {
+            ASIYE_DRIVER.ui
+                ?.toast?.(
+                    error?.message ||
+                    'Unable to verify the Asiye Wallet.',
+                    'danger'
+                );
+
+            throw error;
+        }
 
 
         const activeClubPassengers =
