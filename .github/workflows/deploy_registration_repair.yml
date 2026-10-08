@@ -1,0 +1,82 @@
+name: Deploy Asiye registration repair
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_hosting:
+        description: "Also publish updated passenger and driver web pages"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asiye-registration-repair
+  cancel-in-progress: false
+
+jobs:
+  upload-functions:
+    name: Install photo and driver upload endpoints
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Checkout reviewed Asiye release
+        uses: actions/checkout@v4
+        with:
+          ref: release/11.0.57-admin-support-327
+          persist-credentials: false
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check scripts and enrollment regression
+        run: |
+          node --check functions/index.js
+          node --check assets/passenger-v2/js/login.js
+          node --check assets/driver-v2/js/enrollment.js
+          node --test test/release328-recovery.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs
+
+      - name: Install Firebase function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Require configured Firebase deploy credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 or FIREBASE_SERVICE_ACCOUNT GitHub secret"
+            exit 1
+          fi
+
+      - name: Authenticate Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Deploy only authenticated media endpoints
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --project asiye-80386
+          --only "functions:uploadProfileImageProxy,functions:uploadDriverEnrollmentDocument"
+          --non-interactive
+
+      - name: Publish hosting only when requested
+        if: ${{ inputs.deploy_hosting }}
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --project asiye-80386
+          --only hosting
+          --non-interactive
+
+      - name: Report verification checklist
+        run: |
+          echo "Photo and driver document functions requested for deployment."
+          echo "Test on a real installed Android app: passenger Save profile & continue;"
+          echo "driver step 4 ID and proof of address rear camera; driver submit;"
+          echo "verify Firebase Storage photo/document URLs with authenticated user."
+          echo "Android native fixes require a new signed APK (not included here)."
