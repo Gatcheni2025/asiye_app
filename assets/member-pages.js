@@ -16,6 +16,30 @@
         return new Blob([buffer], { type: mime });
     };
 
+    const blobToDataUrl = blob =>
+        new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onerror = () =>
+                reject(
+                    new Error(
+                        'Could not prepare the profile picture.'
+                    )
+                );
+
+            reader.onload = () =>
+                resolve(
+                    String(
+                        reader.result ||
+                        ''
+                    )
+                );
+
+            reader.readAsDataURL(
+                blob
+            );
+        });
+
     const compressImage = async blob => {
         const bitmap = await createImageBitmap(blob);
 
@@ -85,26 +109,123 @@
         },
 
         async upload(value, options = {}) {
-            const source = this.toBlob(value);
-            const compressed = await compressImage(source);
-            const form = new FormData();
-            form.append('file', compressed, options.filename || 'profile.jpg');
-            form.append('api_key', 'asiye_secure_upload_2025');
-            form.append('userId', String(options.userId || 'asiye-user'));
-            if (options.purpose) form.append('purpose', String(options.purpose));
+            const authUser =
+                firebase?.auth?.()
+                    ?.currentUser;
 
-            const response = await fetch('https://app.asiye.cloud/upload_handler.php', {
-                method: 'POST',
-                body: form
-            });
-
-            const payload = await response.json().catch(() => ({}));
-            const rawUrl = payload.url || payload.fileUrl || payload.file_url || '';
-            if (!response.ok || !rawUrl || /error/i.test(String(rawUrl))) {
-                throw new Error(payload.message || payload.error || 'Profile image upload failed.');
+            if (!authUser) {
+                throw new Error(
+                    'Please sign in again before saving your profile picture.'
+                );
             }
-            const url = this.normalizeUrl(rawUrl);
-            return { ...payload, url };
+
+            const userId =
+                String(
+                    options.userId ||
+                    ''
+                ).trim();
+
+            if (!userId) {
+                throw new Error(
+                    'Your Asiye profile is not loaded.'
+                );
+            }
+
+            const source =
+                this.toBlob(
+                    value
+                );
+
+            const compressed =
+                await compressImage(
+                    source
+                );
+
+            const dataUrl =
+                await blobToDataUrl(
+                    compressed
+                );
+
+            const token =
+                await authUser
+                    .getIdToken(
+                        true
+                    );
+
+            let response;
+
+            try {
+                response =
+                    await fetch(
+                        'https://us-central1-asiye-80386.cloudfunctions.net/uploadProfileImageProxy',
+                        {
+                            method:
+                                'POST',
+
+                            headers: {
+                                'Authorization':
+                                    `Bearer ${token}`,
+
+                                'Content-Type':
+                                    'application/json'
+                            },
+
+                            body:
+                                JSON.stringify({
+                                    dataUrl,
+                                    userId,
+                                    purpose:
+                                        String(
+                                            options.purpose ||
+                                            'profile'
+                                        ),
+                                    filename:
+                                        String(
+                                            options.filename ||
+                                            'profile.jpg'
+                                        )
+                                })
+                        }
+                    );
+            } catch (error) {
+                throw new Error(
+                    'Unable to reach the Asiye profile image service. Check your connection and try again.'
+                );
+            }
+
+            const payload =
+                await response
+                    .json()
+                    .catch(
+                        () => ({})
+                    );
+
+            const rawUrl =
+                payload.url ||
+                payload.fileUrl ||
+                payload.file_url ||
+                '';
+
+            if (
+                !response.ok ||
+                !rawUrl
+            ) {
+                throw new Error(
+                    payload.message ||
+                    payload.error ||
+                    'Profile image upload failed.'
+                );
+            }
+
+            const url =
+                this.normalizeUrl(
+                    rawUrl
+                );
+
+            return {
+                ...payload,
+                url
+            };
         }
     };
 
@@ -234,52 +355,71 @@ window.AsiyePages = {
         const url =
             uploaded.url;
 
-        const updates = {
-            profile_picture_url:
-                url,
-            profileImageUrl:
-                url,
-            driverProfileImageUrl:
-                url,
-            profilePhotoUrl:
-                url,
-            photoURL:
-                url,
-            faceScanCompleted:
-                true,
-            faceScanVerifiedAt:
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP,
-            profilePhotoUpdatedAt:
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP
-        };
+        /*
+         * uploadProfileImageProxy is the authoritative writer. It stores the
+         * image in Firebase Storage and allocates all driver profile photo
+         * fields under taxis/{driverId}. Avoid a second client RTDB write here,
+         * because hardened rules may reject duplicate privileged fields after
+         * the server has already saved the image.
+         */
+        let freshDriver =
+            null;
 
-        await firebase
-            .database()
-            .ref(
-                `taxis/${driverId}`
-            )
-            .update({
-                ...updates,
-                'documents/FACE': url
-            });
+        try {
+            const snapshot =
+                await firebase
+                    .database()
+                    .ref(
+                        `taxis/${driverId}`
+                    )
+                    .once(
+                        'value'
+                    );
 
-        if (
-            ASIYE_DRIVER.state.driver
-        ) {
+            freshDriver =
+                snapshot.val() ||
+                null;
+        } catch (error) {
+            console.warn(
+                'Driver profile refresh after face scan skipped:',
+                error
+            );
+        }
+
+        ASIYE_DRIVER.state.driver =
+            ASIYE_DRIVER.state.driver ||
+            {};
+
+        if (freshDriver) {
             Object.assign(
                 ASIYE_DRIVER.state.driver,
-                updates
+                freshDriver
+            );
+        } else {
+            Object.assign(
+                ASIYE_DRIVER.state.driver,
+                {
+                    profile_picture_url:
+                        url,
+                    profileImageUrl:
+                        url,
+                    driverProfileImageUrl:
+                        url,
+                    profilePhotoUrl:
+                        url,
+                    photoURL:
+                        url,
+                    faceScanCompleted:
+                        true,
+                    faceScanVerified:
+                        true
+                }
             );
 
             ASIYE_DRIVER.state.driver.documents = {
                 ...(ASIYE_DRIVER.state.driver.documents || {}),
-                FACE: url
+                FACE:
+                    url
             };
         }
 
