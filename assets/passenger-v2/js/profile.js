@@ -56,25 +56,61 @@ ASIYE.profile = {
         );
 
         const url = uploaded.url;
-        const patch = {
-            profileImageUrl: url,
-            profile_picture_url: url,
-            profilePhotoUrl: url,
-            photoURL: url,
-            passengerProfileImageUrl: url,
-            faceScanCompleted: true,
-            faceScanVerifiedAt:
-                firebase.database.ServerValue.TIMESTAMP,
-            profilePhotoUpdatedAt:
-                firebase.database.ServerValue.TIMESTAMP
-        };
 
-        await firebase.database()
-            .ref(`commuters/${userId}`)
-            .update(patch);
+        /*
+         * The authenticated upload proxy is the authoritative writer. It saves
+         * the image in Firebase Storage and assigns the passenger photo fields
+         * under commuters/{userId}. Re-read that record instead of duplicating
+         * the write from the WebView, which can be rejected by hardened rules.
+         */
+        let freshProfile = null;
 
-        ASIYE.state.user = ASIYE.state.user || {};
-        Object.assign(ASIYE.state.user, patch);
+        try {
+            const snapshot =
+                await firebase.database()
+                    .ref(`commuters/${userId}`)
+                    .once('value');
+
+            freshProfile =
+                snapshot.val() ||
+                null;
+        } catch (error) {
+            console.warn(
+                'Passenger profile refresh after face scan skipped:',
+                error
+            );
+        }
+
+        ASIYE.state.user =
+            ASIYE.state.user ||
+            {};
+
+        if (freshProfile) {
+            Object.assign(
+                ASIYE.state.user,
+                freshProfile
+            );
+        } else {
+            Object.assign(
+                ASIYE.state.user,
+                {
+                    profileImageUrl:
+                        url,
+                    profile_picture_url:
+                        url,
+                    profilePhotoUrl:
+                        url,
+                    photoURL:
+                        url,
+                    passengerProfileImageUrl:
+                        url,
+                    faceScanCompleted:
+                        true,
+                    faceScanVerified:
+                        true
+                }
+            );
+        }
 
         const authUser = firebase.auth().currentUser;
         if (authUser?.updateProfile) {
