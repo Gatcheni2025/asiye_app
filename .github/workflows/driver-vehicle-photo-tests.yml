@@ -5,6 +5,10 @@ on:
     paths:
       - 'assets/member-pages.js'
       - 'functions/index.js'
+      - 'lib/main.dart'
+      - 'lib/vehicle_camera_screen.dart'
+      - 'lib/vehicle_camera_screen_native.dart'
+      - 'lib/vehicle_camera_screen_stub.dart'
       - 'test/driver-vehicle-photo.test.cjs'
       - '.github/workflows/driver-vehicle-photo-tests.yml'
   workflow_dispatch:
