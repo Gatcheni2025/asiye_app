@@ -20,6 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'face_scan_screen.dart';
+import 'vehicle_camera_screen.dart';
 import 'dart:io' show ContentType, HttpClient, HttpHeaders, Platform;
 
 bool _isFirebaseInitialized = false;
@@ -1425,6 +1426,22 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           return;
         }
 
+        photo = XFile(path);
+      } else if (normalizedPurpose == 'driver-vehicle') {
+        // A shutter press closes the in-app car camera and resumes the
+        // existing driver Vehicle page without an external camera screen.
+        final path = await Navigator.of(context).push<String>(
+          MaterialPageRoute<String>(
+            fullscreenDialog: true,
+            builder: (_) => const AsiyeVehicleCameraScreen(),
+          ),
+        );
+        if (path == null || path.isEmpty) {
+          await _controller?.runJavaScript(
+            "window.onNativeFaceCaptureError?.('cancelled');",
+          );
+          return;
+        }
         photo = XFile(path);
       } else {
         final picker = ImagePicker();
