@@ -5848,10 +5848,14 @@ exports.uploadProfileImageProxy =
           role === "driver" &&
           purpose === "driver-vehicle";
 
+        // Each new capture uses an immutable object path. Reusing
+        // profile.jpg rotated download tokens and made older avatar URLs 404
+        // before a replacement image was actually committed.
+        const revision = require("node:crypto").randomUUID();
         const objectPath =
           isDriverVehicle
-            ? `vehicle-images/drivers/${userId}/vehicle.${extension}`
-            : `profile-images/${roleFolder}/${userId}/profile.${extension}`;
+            ? `vehicle-images/drivers/${userId}/vehicle-${revision}.${extension}`
+            : `profile-images/${roleFolder}/${userId}/profile-${revision}.${extension}`;
 
         const downloadToken =
           require("node:crypto")
