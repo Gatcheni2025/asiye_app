@@ -1818,6 +1818,9 @@ window.AsiyePages = {
                                         user.credits =
                                             balance;
 
+                                        localStorage.removeItem('pendingPaystackReference');
+                                        await this.refreshPassengerWallet(balance);
+
                                         if (balanceElement) {
                                             balanceElement.textContent =
                                                 this.money(
