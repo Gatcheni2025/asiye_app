@@ -4469,3 +4469,730 @@ exports.submitAccountDeletionRequest = onRequest(
     }
   }
 );
+
+
+// ASIYE 11.0.49 (319) vehicle/photo upload server backport.
+// This code is intentionally scoped to these two authenticated endpoints.
+const PROFILE_STORAGE_BUCKET =
+  "asiye-80386.firebasestorage.app";
+
+function safeProfileId(value) {
+  const id =
+    String(value || "")
+      .trim();
+
+  return /^[A-Za-z0-9_-]{1,160}$/.test(id)
+    ? id
+    : "";
+}
+
+async function profileOwnedByAuth(
+  rootName,
+  profileId,
+  authUid
+) {
+  if (
+    !rootName ||
+    !profileId ||
+    !authUid
+  ) {
+    return false;
+  }
+
+  const snapshot =
+    await admin.database()
+      .ref(
+        `${rootName}/${profileId}`
+      )
+      .once(
+        "value"
+      );
+
+  // Only an existing profile linked to this authenticated user may be changed.
+  // Do not allow arbitrary new driver records to be created by an upload.
+  if (!snapshot.exists()) return false;
+  const profile = snapshot.val() || {};
+  return profileId === authUid ||
+    profile.authUid === authUid ||
+    profile.userUid === authUid;
+}
+
+function profileImageExtension(
+  mimeType
+) {
+  if (
+    mimeType === "image/png"
+  ) {
+    return "png";
+  }
+
+  if (
+    mimeType === "image/webp"
+  ) {
+    return "webp";
+  }
+
+  return "jpg";
+}
+
+function firebaseStorageDownloadUrl({
+  bucketName,
+  objectPath,
+  token
+}) {
+  return (
+    "https://firebasestorage.googleapis.com/v0/b/" +
+    encodeURIComponent(bucketName) +
+    "/o/" +
+    encodeURIComponent(objectPath) +
+    "?alt=media&token=" +
+    encodeURIComponent(token)
+  );
+}
+
+exports.uploadProfileImageProxy =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      nativeAuthCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before uploading a profile picture."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const userId =
+          safeProfileId(
+            request.body?.userId
+          );
+
+        const purpose =
+          String(
+            request.body?.purpose ||
+            "profile"
+          )
+            .trim()
+            .slice(
+              0,
+              80
+            );
+
+        const role =
+          purpose.startsWith(
+            "driver"
+          )
+            ? "driver"
+            : "passenger";
+
+        const rootName =
+          role === "driver"
+            ? "taxis"
+            : "commuters";
+
+        if (!userId) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Profile identity is invalid."
+            });
+        }
+
+        if (
+          !await profileOwnedByAuth(
+            rootName,
+            userId,
+            decoded.uid
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "You cannot update this profile picture."
+            });
+        }
+
+        const dataUrl =
+          String(
+            request.body?.dataUrl ||
+            ""
+          );
+
+        const dataMatch =
+          dataUrl.match(
+            /^data:(image\/(?:jpeg|jpg|png|webp));base64,([A-Za-z0-9+/=]+)$/
+          );
+
+        if (!dataMatch) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Profile image data is invalid."
+            });
+        }
+
+        const mimeType =
+          dataMatch[1] ===
+            "image/jpg"
+            ? "image/jpeg"
+            : dataMatch[1];
+
+        const bytes =
+          Buffer.from(
+            dataMatch[2],
+            "base64"
+          );
+
+        if (
+          bytes.length < 100 ||
+          bytes.length >
+            3 * 1024 * 1024
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Profile image must be smaller than 3 MB."
+            });
+        }
+
+        const extension =
+          profileImageExtension(
+            mimeType
+          );
+
+        const roleFolder =
+          role === "driver"
+            ? "drivers"
+            : "passengers";
+
+        const isDriverVehicle =
+          role === "driver" &&
+          purpose === "driver-vehicle";
+
+        const objectPath =
+          isDriverVehicle
+            ? `vehicle-images/drivers/${userId}/vehicle.${extension}`
+            : `profile-images/${roleFolder}/${userId}/profile.${extension}`;
+
+        const downloadToken =
+          require("node:crypto")
+            .randomUUID();
+
+        const bucket =
+          admin.storage()
+            .bucket(
+              PROFILE_STORAGE_BUCKET
+            );
+
+        const file =
+          bucket.file(
+            objectPath
+          );
+
+        await file.save(
+          bytes,
+          {
+            resumable:
+              false,
+            metadata: {
+              contentType:
+                mimeType,
+              cacheControl:
+                "private,max-age=300",
+              metadata: {
+                firebaseStorageDownloadTokens:
+                  downloadToken,
+                asiyeProfileRole:
+                  role,
+                asiyeProfileId:
+                  userId,
+                asiyeAuthUid:
+                  decoded.uid
+              }
+            }
+          }
+        );
+
+        const url =
+          firebaseStorageDownloadUrl({
+            bucketName:
+              PROFILE_STORAGE_BUCKET,
+            objectPath,
+            token:
+              downloadToken
+          });
+
+        const now =
+          admin.database
+            .ServerValue
+            .TIMESTAMP;
+
+        const patch =
+          isDriverVehicle
+            ? {
+                vehiclePhoto:
+                  url,
+                vehiclePhotoUpdatedAt:
+                  now,
+                vehicleImageStoragePath:
+                  objectPath,
+                "documents/CAR_FRONT":
+                  url,
+                // Changing an approved vehicle photo needs a fresh review.
+                vehicleApproved: false,
+                vehicleApprovalStatus: "not_submitted",
+                isOnline: false,
+                isBroadcasting: false
+              }
+            : role === "driver"
+              ? {
+                  profile_picture_url:
+                    url,
+                  profileImageUrl:
+                    url,
+                  driverProfileImageUrl:
+                    url,
+                  profilePhotoUrl:
+                    url,
+                  photoURL:
+                    url,
+                  faceScanCompleted:
+                    true,
+                  faceScanVerified:
+                    true,
+                  faceScanVerifiedAt:
+                    now,
+                  profilePhotoUpdatedAt:
+                    now,
+                  profileImageStoragePath:
+                    objectPath,
+                  "documents/FACE":
+                    url
+                }
+              : {
+                  profileImageUrl:
+                    url,
+                  profile_picture_url:
+                    url,
+                  profilePhotoUrl:
+                    url,
+                  photoURL:
+                    url,
+                  passengerProfileImageUrl:
+                    url,
+                  faceScanCompleted:
+                    true,
+                  faceScanVerified:
+                    true,
+                  faceScanVerifiedAt:
+                    now,
+                  profilePhotoUpdatedAt:
+                    now,
+                  profileImageStoragePath:
+                    objectPath
+                };
+
+        await admin.database()
+          .ref(
+            `${rootName}/${userId}`
+          )
+          .update(
+            patch
+          );
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            url,
+            fileUrl:
+              url,
+            storagePath:
+              objectPath,
+            profileRoot:
+              rootName,
+            profileId:
+              userId,
+            purpose,
+            savedAs:
+              isDriverVehicle
+                ? "vehiclePhoto"
+                : "profileImage"
+          });
+
+      } catch (error) {
+        console.error(
+          "Profile image storage failed",
+          {
+            code:
+              error?.code ||
+              "unknown",
+            message:
+              error?.message ||
+              String(error)
+          }
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              "Unable to save the profile picture. Please try again."
+          });
+      }
+    }
+  );
+
+
+// =================================================================
+// --- DRIVER VEHICLE REVIEW SUBMISSION ---
+// =================================================================
+// Driver vehicle approval state is protected by Realtime Database rules.
+// Drivers submit changes here; the server verifies ownership and moves the
+// vehicle back to pending review while keeping the driver offline.
+exports.submitDriverVehicleForReview =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      nativeAuthCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const match =
+          (
+            request.get(
+              "authorization"
+            ) ||
+            ""
+          ).match(
+            /^Bearer (.+)$/
+          );
+
+        if (!match) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Driver authentication is required."
+            });
+        }
+
+        const decoded =
+          await admin.auth()
+            .verifyIdToken(
+              match[1]
+            );
+
+        const driverId =
+          safeProfileId(
+            request.body?.driverId
+          );
+
+        if (!driverId) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Driver profile is invalid."
+            });
+        }
+
+        if (
+          !await profileOwnedByAuth(
+            "taxis",
+            driverId,
+            decoded.uid
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "You cannot update this driver profile."
+            });
+        }
+
+        const profileRef =
+          admin.database()
+            .ref(
+              `taxis/${driverId}`
+            );
+
+        const profile =
+          (
+            await profileRef
+              .once(
+                "value"
+              )
+          ).val() || {};
+
+        if (
+          !String(
+            profile.vehiclePhoto ||
+            ""
+          ).trim()
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "Take and save a clear vehicle photo before submitting."
+            });
+        }
+
+        const source =
+          request.body?.vehicle ||
+          {};
+
+        const cleanText =
+          (
+            value,
+            max
+          ) =>
+            String(
+              value ||
+              ""
+            )
+              .trim()
+              .slice(
+                0,
+                max
+              );
+
+        const year =
+          Number(
+            source.year
+          );
+
+        const seats =
+          Number(
+            source.seats
+          );
+
+        const vehiclePending = {
+          type:
+            cleanText(
+              source.type,
+              40
+            ),
+          make:
+            cleanText(
+              source.make,
+              40
+            ),
+          model:
+            cleanText(
+              source.model,
+              50
+            ),
+          colour:
+            cleanText(
+              source.colour,
+              30
+            ),
+          registration:
+            cleanText(
+              source.registration,
+              20
+            ),
+          year,
+          seats
+        };
+
+        if (
+          [
+            vehiclePending.type,
+            vehiclePending.make,
+            vehiclePending.model,
+            vehiclePending.colour,
+            vehiclePending.registration
+          ].some(
+            value =>
+              value.length < 2
+          )
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Complete type, make, model, colour and registration."
+            });
+        }
+
+        const currentYear =
+          new Date()
+            .getFullYear();
+
+        if (
+          !Number.isInteger(
+            year
+          ) ||
+          year < 1990 ||
+          year >
+            currentYear + 1
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Enter a valid four-digit vehicle year."
+            });
+        }
+
+        if (
+          !Number.isInteger(
+            seats
+          ) ||
+          seats < 1 ||
+          seats > 15
+        ) {
+          return response
+            .status(400)
+            .json({
+              error:
+                "Passenger seats must be a whole number between 1 and 15."
+            });
+        }
+
+        const now =
+          admin.database
+            .ServerValue
+            .TIMESTAMP;
+
+        vehiclePending.submittedAt =
+          now;
+
+        await profileRef
+          .update({
+            vehiclePending,
+            vehicleApproved:
+              false,
+            vehicleApprovalStatus:
+              "pending",
+            vehicleSubmittedAt:
+              now,
+            isOnline:
+              false,
+            isBroadcasting:
+              false,
+            updatedAt:
+              now
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            status:
+              "pending",
+            vehiclePending
+          });
+
+      } catch (error) {
+        console.error(
+          "Driver vehicle submission failed",
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to submit vehicle details."
+          });
+      }
+    }
+  );
+
+
+

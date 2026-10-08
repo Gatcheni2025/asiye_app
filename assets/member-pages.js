@@ -40,40 +40,39 @@
             );
         });
 
-    const compressImage = async blob => {
+    const compressImage = async (blob, { preserveAspectRatio = false } = {}) => {
         const bitmap = await createImageBitmap(blob);
-
-        // Profile pictures are intentionally square. The native face scan
-        // uses the front camera and asks the user to centre their face, so a
-        // centred square crop gives a consistent, premium avatar everywhere.
-        const sourceSide = Math.min(bitmap.width, bitmap.height);
-        const sourceX = Math.max(0, (bitmap.width - sourceSide) / 2);
-        const sourceY = Math.max(0, (bitmap.height - sourceSide) / 2);
-        const outputSide = Math.min(900, sourceSide);
-
         const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(outputSide));
-        canvas.height = Math.max(1, Math.round(outputSide));
 
-        canvas.getContext('2d').drawImage(
-            bitmap,
-            sourceX,
-            sourceY,
-            sourceSide,
-            sourceSide,
-            0,
-            0,
-            canvas.width,
-            canvas.height
-        );
+        if (preserveAspectRatio) {
+            // Car photos must show the entire vehicle and number plate.
+            // Never square-crop a landscape or portrait vehicle picture.
+            const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            canvas.getContext('2d').drawImage(
+                bitmap, 0, 0, bitmap.width, bitmap.height,
+                0, 0, canvas.width, canvas.height
+            );
+        } else {
+            // Face scans remain centred square avatars.
+            const sourceSide = Math.min(bitmap.width, bitmap.height);
+            const sourceX = Math.max(0, (bitmap.width - sourceSide) / 2);
+            const sourceY = Math.max(0, (bitmap.height - sourceSide) / 2);
+            const outputSide = Math.min(900, sourceSide);
+            canvas.width = Math.max(1, Math.round(outputSide));
+            canvas.height = Math.max(1, Math.round(outputSide));
+            canvas.getContext('2d').drawImage(
+                bitmap, sourceX, sourceY, sourceSide, sourceSide,
+                0, 0, canvas.width, canvas.height
+            );
+        }
 
         bitmap.close?.();
-
         return await new Promise((resolve, reject) => {
             canvas.toBlob(
-                result => result ? resolve(result) : reject(new Error('Could not prepare profile photo.')),
-                'image/jpeg',
-                0.86
+                result => result ? resolve(result) : reject(new Error('Could not prepare image.')),
+                'image/jpeg', preserveAspectRatio ? 0.82 : 0.86
             );
         });
     };
@@ -138,7 +137,8 @@
 
             const compressed =
                 await compressImage(
-                    source
+                    source,
+                    { preserveAspectRatio: options.purpose === 'driver-vehicle' }
                 );
 
             const dataUrl =
@@ -1660,8 +1660,8 @@ window.AsiyePages = {
                             Capture the actual car showing its colour and registration plate.
                         </p>
                         ${user.vehiclePhoto
-                            ? `<img data-driver-car-preview src="${esc(user.vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`
-                            : `<img data-driver-car-preview alt="Driver vehicle" hidden style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`}
+                            ? `<img data-driver-car-preview src="${esc(user.vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:240px;object-fit:contain;border-radius:14px;margin:10px 0;">`
+                            : `<img data-driver-car-preview alt="Driver vehicle" hidden style="display:block;width:100%;max-height:240px;object-fit:contain;border-radius:14px;margin:10px 0;">`}
                         <button
                             type="button"
                             class="member-primary"
@@ -1754,6 +1754,8 @@ window.AsiyePages = {
                         carButton.textContent =
                             'Opening camera…';
 
+                        const savedPhotoBeforeCapture =
+                            user.vehiclePhoto || '';
                         try {
                             const capture =
                                 await AsiyeFaceCapture
@@ -1761,9 +1763,17 @@ window.AsiyePages = {
                                         'driver-vehicle'
                                     );
 
+                            // The in-app camera has now closed and Asiye's
+                            // Vehicle page is visible again. Show the photo
+                            // immediately while the authenticated upload runs.
+                            if (carPreview && capture?.dataUrl) {
+                                carPreview.src = capture.dataUrl;
+                                carPreview.hidden = false;
+                            }
+                            carButton.textContent = 'Saving car picture…';
                             if (carStatus) {
                                 carStatus.textContent =
-                                    'Uploading vehicle photo…';
+                                    'Saving your car picture in Asiye…';
                             }
 
                             const uploaded =
@@ -1780,30 +1790,26 @@ window.AsiyePages = {
                                         }
                                     );
 
-                            await firebase
-                                .database()
-                                .ref(
-                                    `taxis/${id}`
-                                )
-                                .update({
-                                    vehiclePhoto:
-                                        uploaded.url,
-                                    vehiclePhotoUpdatedAt:
-                                        firebase
-                                            .database
-                                            .ServerValue
-                                            .TIMESTAMP
-                                });
-
+                            // uploadProfileImageProxy already saves the car URL
+                            // under taxis/{driverId} using Admin SDK. A second
+                            // client write is denied by production security rules.
                             user.vehiclePhoto =
                                 uploaded.url;
+                            // Keep the active driver profile in sync with the
+                            // saved Firebase URL, without a forbidden write.
+                            if (app.state.driver) {
+                                app.state.driver.vehiclePhoto = uploaded.url;
+                                app.state.driver.vehicleApproved = false;
+                                app.state.driver.vehicleApprovalStatus =
+                                    'not_submitted';
+                                app.state.driver.isOnline = false;
+                            }
 
                             if (carPreview) {
-                                carPreview.src =
-                                    uploaded.url;
-                                carPreview.hidden =
-                                    false;
+                                carPreview.src = uploaded.url;
+                                carPreview.hidden = false;
                             }
+                            app.ui?.updateDriverProfileUI?.();
 
                             if (carStatus) {
                                 carStatus.textContent =
@@ -1814,10 +1820,16 @@ window.AsiyePages = {
                                 'Retake car photo';
 
                         } catch (error) {
+                            // Do not present a locally captured but unsaved
+                            // image as if it were stored on the driver account.
+                            if (carPreview) {
+                                carPreview.src = savedPhotoBeforeCapture;
+                                carPreview.hidden = !savedPhotoBeforeCapture;
+                            }
                             if (carStatus) {
                                 carStatus.textContent =
                                     error?.message ||
-                                    'Vehicle photo was not saved.';
+                                    'Vehicle photo was not saved. Please try again.';
                             }
 
                             carButton.textContent =
@@ -1958,38 +1970,75 @@ window.AsiyePages = {
                         'Submitting…';
 
                     try {
-                        vehiclePending.submittedAt =
-                            firebase
-                                .database
-                                .ServerValue
-                                .TIMESTAMP;
+                        const authUser =
+                            firebase.auth()
+                                .currentUser;
 
-                        await firebase
-                            .database()
-                            .ref(
-                                `taxis/${id}`
-                            )
-                            .update({
-                                vehiclePending,
-                                vehicleApproved:
-                                    false,
-                                vehicleApprovalStatus:
-                                    'pending',
-                                vehicleSubmittedAt:
-                                    firebase
-                                        .database
-                                        .ServerValue
-                                        .TIMESTAMP,
-                                isOnline:
-                                    false,
-                                isBroadcasting:
-                                    false
-                            });
+                        if (!authUser) {
+                            throw new Error(
+                                'Driver session expired. Sign in again before submitting your vehicle.'
+                            );
+                        }
+
+                        const token =
+                            await authUser
+                                .getIdToken(
+                                    true
+                                );
+
+                        let response;
+
+                        try {
+                            response =
+                                await fetch(
+                                    'https://us-central1-asiye-80386.cloudfunctions.net/submitDriverVehicleForReview',
+                                    {
+                                        method:
+                                            'POST',
+                                        headers: {
+                                            'Authorization':
+                                                `Bearer ${token}`,
+                                            'Content-Type':
+                                                'application/json'
+                                        },
+                                        body:
+                                            JSON.stringify({
+                                                driverId:
+                                                    id,
+                                                vehicle:
+                                                    vehiclePending
+                                            })
+                                    }
+                                );
+                        } catch (_) {
+                            throw new Error(
+                                'Unable to reach Asiye vehicle verification. Check your connection and try again.'
+                            );
+                        }
+
+                        const payload =
+                            await response
+                                .json()
+                                .catch(
+                                    () => ({})
+                                );
+
+                        if (!response.ok) {
+                            throw new Error(
+                                payload.error ||
+                                'Could not submit vehicle details.'
+                            );
+                        }
+
+                        const savedVehicle =
+                            payload.vehiclePending ||
+                            vehiclePending;
 
                         Object.assign(
                             user,
                             {
-                                vehiclePending,
+                                vehiclePending:
+                                    savedVehicle,
                                 vehicleApproved:
                                     false,
                                 vehicleApprovalStatus:

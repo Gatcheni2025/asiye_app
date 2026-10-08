@@ -1,0 +1,32 @@
+name: Driver vehicle photo regression
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'assets/member-pages.js'
+      - 'functions/index.js'
+      - 'lib/main.dart'
+      - 'lib/vehicle_camera_screen.dart'
+      - 'lib/vehicle_camera_screen_native.dart'
+      - 'lib/vehicle_camera_screen_stub.dart'
+      - 'test/driver-vehicle-photo.test.cjs'
+      - '.github/workflows/driver-vehicle-photo-tests.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check client and backend JavaScript syntax
+        run: |
+          node --check assets/member-pages.js
+          node --check functions/index.js
+      - name: Run driver vehicle regression tests
+        run: node --test test/driver-vehicle-photo.test.cjs
