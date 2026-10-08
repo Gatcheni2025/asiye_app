@@ -18,6 +18,11 @@ jobs:
           node-version: '22'
       - name: Validate JavaScript
         run: |
+          node --check assets/driver-v2/js/enrollment-banks.js
+          node --check assets/driver-v2/js/enrollment-address.js
+          node --check assets/passenger-v2/js/profile.js
+          node --check assets/passenger-v2/js/wallet.js
+          node --check assets/passenger-v2/js/app.js
           node --check assets/driver-v2/js/enrollment.js
           node --check assets/driver-v2/js/enrollment-gate.js
           node --check assets/driver-v2/js/login.js
@@ -31,6 +36,6 @@ jobs:
           node --check test/release327-admin-support.test.cjs
       - name: Run release and existing member page tests
         run: |
-          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs test/card-payout-passenger.test.cjs
+          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs test/card-payout-passenger.test.cjs test/release328-recovery.test.cjs
       - name: Validate database rules JSON
         run: node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
