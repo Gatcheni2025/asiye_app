@@ -2013,6 +2013,18 @@ document.addEventListener(
         const commuter =
             commuterSnapshot.val() || {};
 
+        // Phone sign-up is not finished until a full name AND a saved face
+        // image exist. A user navigating directly to index.html must also be
+        // sent back to the profile completion step.
+        if (authUser.phoneNumber && !(
+            String(commuter.name || '').trim().length >= 2 &&
+            (commuter.profileImageUrl || commuter.profile_picture_url ||
+             commuter.passengerProfileImageUrl)
+        )) {
+            window.location.replace('./login.html');
+            return;
+        }
+
 
         ASIYE.setUser(
             commuterId,
