@@ -12,6 +12,7 @@ permissions:
   contents: read
 
 # Redeploy after automatic app-return fix.
+# Redeploy after reliable Android intent return update.
 
 jobs:
   deploy-and-smoke:
