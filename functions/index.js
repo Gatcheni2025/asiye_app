@@ -5901,6 +5901,22 @@ exports.uploadProfileImageProxy =
               downloadToken
           });
 
+        // Avoid declaring a profile-photo upload successful when its
+        // Firebase download URL actually returns HTTP 404.
+        const [savedMetadata] = await file.getMetadata();
+        if (Number(savedMetadata.size || 0) !== bytes.length ||
+            !String(savedMetadata.metadata?.firebaseStorageDownloadTokens || "")
+               .split(",").includes(downloadToken)) {
+          throw new Error("Profile image was not persisted correctly.");
+        }
+        const imageProbe = await fetch(url, {
+          method: "GET", signal: AbortSignal.timeout(15000)
+        });
+        if (!imageProbe.ok) {
+          throw new Error("Saved profile image is unavailable (HTTP " + imageProbe.status + ").");
+        }
+        await imageProbe.arrayBuffer();
+
         const now =
           admin.database
             .ServerValue
@@ -6022,6 +6038,60 @@ exports.uploadProfileImageProxy =
     }
   );
 
+
+// Server-authenticated enrollment media upload. Allows enrollment even
+// when client Storage rules have not been deployed; never trusts a UID
+// provided by the browser or overwrites a submitted application.
+exports.uploadDriverEnrollmentDocument = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(request,response)=>{
+    walletSmsCors(request,response);
+    if(request.method==="OPTIONS") return response.status(204).send("");
+    if(request.method!=="POST") return response.status(405).json({error:"POST required"});
+    response.set("Cache-Control","no-store");
+    try{
+      const match=String(request.get("authorization")||"").match(/^Bearer (.+)$/);
+      if(!match) return response.status(401).json({error:"Sign in first."});
+      const actor=await admin.auth().verifyIdToken(match[1]);
+      if(!actor.phone_number) return response.status(403).json({error:"Phone OTP verification required."});
+      const uid=safeProfileId(actor.uid);
+      const submission=String(request.body?.submissionId||"");
+      const kind=String(request.body?.kind||"");
+      if(!uid||!/^[A-Za-z0-9_-]{10,72}$/.test(submission)||
+        !["selfie","car","identity","licence","address"].includes(kind))
+        return response.status(400).json({error:"Invalid document selection."});
+      const matchData=String(request.body?.dataUrl||"").match(
+        /^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,([a-zA-Z0-9+/=]+)$/);
+      if(!matchData) return response.status(400).json({error:"Only JPG, PNG, WebP or PDF is supported."});
+      const mime=matchData[1],bytes=Buffer.from(matchData[2],"base64");
+      const validMime=mime==="application/pdf"
+        ? bytes.subarray(0,5).toString("ascii")==="%PDF-"
+        : mime==="image/jpeg" ? bytes[0]===255&&bytes[1]===216
+        : mime==="image/png" ? bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+        : bytes.subarray(0,4).toString("ascii")==="RIFF"&&bytes.subarray(8,12).toString("ascii")==="WEBP";
+      if(!validMime||bytes.length<100||bytes.length>7*1024*1024||
+         (["selfie","car","identity"].includes(kind)&&!mime.startsWith("image/")))
+        return response.status(400).json({error:"Unsupported or oversized document (7 MB maximum)."});
+      if((await admin.database().ref(`driverEnrollments/${uid}`).once("value")).exists())
+        return response.status(409).json({error:"Application already submitted. Check pending approval."});
+      const path=`driverEnrollments/${uid}/${submission}/${kind}`;
+      const token=require("node:crypto").randomUUID();
+      const file=admin.storage().bucket(PROFILE_STORAGE_BUCKET).file(path);
+      await file.save(bytes,{resumable:false,preconditionOpts:{ifGenerationMatch:0},
+        metadata:{contentType:mime,cacheControl:"private,max-age=300",
+          metadata:{firebaseStorageDownloadTokens:token,ownerUid:uid,enrollmentKind:kind}}});
+      const [metadata]=await file.getMetadata();
+      if(Number(metadata.size)!==bytes.length) throw Error("Storage confirmation failed.");
+      const url=firebaseStorageDownloadUrl({bucketName:PROFILE_STORAGE_BUCKET,objectPath:path,token});
+      return response.status(200).json({ok:true,storagePath:path,url,kind});
+    }catch(error){
+      console.error("Enrollment document upload",error?.code||"error",error?.message||String(error));
+      return response.status(error?.code===412?409:500).json({
+        error:error?.code===412?"Document already stored. Start a new upload attempt.":"Document upload failed. Retry without re-entering registration."
+      });
+    }
+  }
+);
 
 // =================================================================
 // --- DRIVER VEHICLE REVIEW SUBMISSION ---
