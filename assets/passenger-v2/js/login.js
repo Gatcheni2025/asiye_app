@@ -1389,7 +1389,7 @@ window.ASIYE_PASSENGER_LOGIN = {
         const button = document.getElementById('createPassengerProfile');
         const name = String(document.getElementById('newPassengerName')?.value || '').trim();
         if (name.length < 2) { this.toast('Please add your full name.'); return; }
-        const id = this.pendingProfileId || user.uid;
+        let id = this.pendingProfileId || user.uid;
         if (button) { button.disabled = true; button.textContent = 'Saving face picture…'; }
         try {
             const dataUrl = await window.AsiyePassengerOnboarding?.photoForUpload?.() || '';
@@ -1397,25 +1397,39 @@ window.ASIYE_PASSENGER_LOGIN = {
                 throw Error('Scan your face and take a picture before continuing.');
             }
             const token = await user.getIdToken(true);
-            const response = await fetch(
-                'https://us-central1-asiye-80386.cloudfunctions.net/uploadProfileImageProxy',
-                {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        userId: id,
-                        purpose: 'passenger-profile',
-                        filename: 'passenger-face.jpg',
-                        fullName: name,
-                        completeSignup: true,
-                        dataUrl
-                    })
+            const upload = async profileId => {
+                const response = await fetch(
+                    'https://us-central1-asiye-80386.cloudfunctions.net/uploadProfileImageProxy',
+                    {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            userId: profileId,
+                            purpose: 'passenger-profile',
+                            filename: 'passenger-face.jpg',
+                            fullName: name,
+                            completeSignup: true,
+                            dataUrl
+                        })
+                    }
+                );
+                return { response, uploaded: await response.json().catch(() => ({})) };
+            };
+            let { response, uploaded } = await upload(id);
+            if (response.status === 403 && id !== user.uid) {
+                // A legacy commuter record may be linked by phone while
+                // belonging to a different Firebase UID. Never overwrite it.
+                // Also never abandon stored funds from a legacy wallet.
+                if (Number(this.pendingProfile?.walletBalance ||
+                           this.pendingProfile?.credits || 0) > 0) {
+                    throw Error('This older account has an existing wallet balance. Contact Asiye Support to link it securely before continuing.');
                 }
-            );
-            const uploaded = await response.json().catch(() => ({}));
+                id = user.uid;
+                ({ response, uploaded } = await upload(id));
+            }
             if (!response.ok || !/^https:\/\//.test(String(uploaded.url || ''))) {
                 throw Error(response.status === 404
                     ? 'Profile photo service is not deployed (HTTP 404). Ask Asiye Support to publish the Firebase function.'
