@@ -69,3 +69,33 @@ test('bank dropdown fills six-digit branch code',()=>{
  assert.match(html,/name="branchCode"/);
  assert.match(html,/enrollment-banks.js/);
 });
+
+test('passenger registration does not depend on client commuter write permissions',()=>{
+ const login=read('assets/passenger-v2/js/login.js');
+ const backend=read('functions/index.js');
+ const flow=login.slice(login.indexOf('async createPassengerProfile()'),login.indexOf('/* ========================================================\n       COMPLETE LOGIN'));
+ assert.match(flow,/completeSignup: true/);
+ assert.match(flow,/fullName: name/);
+ assert.doesNotMatch(flow,/root\.update\(/);
+ assert.match(backend,/const signup = role === "passenger"/);
+ assert.match(backend,/onboardingCompleted: true/);
+ assert.match(backend,/phone: decoded\.phone_number/);
+});
+test('ID and residential proof use rear photo capture on old and new Android APKs',()=>{
+ const js=read('assets/driver-v2/js/enrollment.js');
+ const flutter=read('lib/main.dart');
+ assert.match(js,/nativeCapture\('driver-vehicle'\)/);
+ assert.match(js,/driver-identity is a document, never a face scan/);
+ assert.match(flutter,/normalizedPurpose == 'driver-identity'/);
+ assert.match(flutter,/normalizedPurpose == 'driver-address-proof'/);
+ assert.match(flutter,/AsiyeVehicleCameraScreen/);
+});
+test('missing upload endpoint is explained instead of generic failed to fetch',()=>{
+ const js=read('assets/driver-v2/js/enrollment.js');
+ const backend=read('functions/index.js');
+ assert.match(js,/Could not reach the driver document upload service/);
+ assert.match(js,/HTTP 404/);
+ assert.match(js,/uploadDriverEnrollmentDocument/);
+ assert.match(backend,/contentSha256/);
+ assert.match(backend,/fromExisting/);
+});
