@@ -8353,7 +8353,7 @@ exports.configureDriverCardPayout = onRequest(
       if (!driver || driver.verificationStatus !== "verified")
         return response.status(403).json({ error: "Driver must be verified before setting up payouts." });
       if (request.method === "GET" && request.query?.action === "banks") {
-        const banks = await paystackRequest("/bank?currency=ZAR&perPage=100");
+        const banks = await paystackRequest("/bank?currency=ZAR&enabled_for_verification=true&perPage=100");
         return response.status(200).json({ ok: true, banks: (banks.data || [])
           .filter(item => item.active !== false)
           .map(item => ({ name: String(item.name), code: String(item.code) })) });
