@@ -1695,8 +1695,10 @@ ASIYE_DRIVER.trip = {
                     'cancelled_by_admin','rejected'
                 ].includes(passenger?.status) &&
                 String(passenger?.paymentMethod || request.paymentMethod).toLowerCase() === 'card')
-                .reduce((sum, passenger) => sum +
-                    Number(passenger.price || request.pricePerPassenger || 0), 0)
+                .reduce((sum, passenger) => {
+                    const amount = Number(passenger.price || request.pricePerPassenger || 0);
+                    return sum + (Number.isFinite(amount) && amount > 0 ? amount : 0);
+                }, 0)
             : String(request.paymentMethod || '').toLowerCase() === 'card'
                 ? grossFare : 0;
         const alreadyWithheldCommission = Math.min(
