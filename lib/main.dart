@@ -1403,7 +1403,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           normalizedPurpose.contains('car') ||
           normalizedPurpose.contains('licence') ||
           normalizedPurpose.contains('license') ||
-          normalizedPurpose.contains('document');
+          normalizedPurpose.contains('document') ||
+          normalizedPurpose == 'driver-identity' ||
+          normalizedPurpose == 'driver-address-proof';
 
       XFile? photo;
 
@@ -1431,7 +1433,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                  normalizedPurpose == 'driver-licence' ||
                  normalizedPurpose == 'driver-address-proof' ||
                  normalizedPurpose == 'driver-identity') {
-        // A shutter press closes the in-app car camera and resumes the
+        // Driver ID, licence, address proof and vehicle are all photos,
+        // never biometric face scans. Rear shutter returns to enrollment.
+        // A shutter press closes the in-app document camera and resumes the
         // existing driver Vehicle page without an external camera screen.
         final path = await Navigator.of(context).push<String>(
           MaterialPageRoute<String>(
