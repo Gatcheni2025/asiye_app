@@ -3,7 +3,7 @@ const context={window:{}};vm.createContext(context);vm.runInContext(fs.readFileS
 test('phone validation accepts readable local and international numbers',()=>{for(const value of ['082 123 4567','+27 82 123 4567','(082) 123-4567','+44 20 7946 0958'])assert.equal(validation.phone(value),true,value);});
 test('phone validation rejects missing, short, alphabetic and malformed numbers',()=>{for(const value of ['', 'abc1234567','123','++27821234567','082/123/4567','1234567890123456'])assert.equal(validation.phone(value),false,value);});
 test('reference duplicates normalize South African country codes',()=>{assert.equal(validation.phoneKey('082 123 4567'),validation.phoneKey('+27 82 123 4567'));});
-test('HTML patterns compile under modern browsers and wizard contains six sections',()=>{const html=fs.readFileSync('assets/driver-v2/enrollment.html','utf8');for(const [,pattern]of html.matchAll(/pattern="([^"]+)"/g))assert.doesNotThrow(()=>new RegExp(pattern,'v'));assert.equal((html.match(/<fieldset>/g)||[]).length,6);assert.ok(html.includes('novalidate'));assert.ok(!fs.readFileSync('assets/driver-v2/js/enrollment.js','utf8').includes('pattern="[+0-9 ()-]'));});
+test('HTML patterns compile under modern browsers and wizard contains seven sections',()=>{const html=fs.readFileSync('assets/driver-v2/enrollment.html','utf8');for(const [,pattern]of html.matchAll(/pattern="([^"]+)"/g))assert.doesNotThrow(()=>new RegExp(pattern,'v'));assert.equal((html.match(/<fieldset>/g)||[]).length,7);assert.ok(html.includes('novalidate'));assert.ok(!fs.readFileSync('assets/driver-v2/js/enrollment.js','utf8').includes('pattern="[+0-9 ()-]'));});
 
 test('licence accepts PDF and supported image signatures even without a MIME type',async()=>{
  for(const [bytes,type] of [
