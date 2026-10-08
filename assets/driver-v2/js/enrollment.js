@@ -122,22 +122,60 @@
         reader.onerror = () => reject(new Error('Could not read this document. Please recapture.'));
         reader.readAsDataURL(blob);
     });
-    async function uploadDocument(user,submissionId,kind,blob) {
-        const dataUrl = await readDataUrl(blob);
-        const token = await user.getIdToken(true);
-        const response = await fetch(
-            'https://us-central1-asiye-80386.cloudfunctions.net/uploadDriverEnrollmentDocument',
-            {method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-             body:JSON.stringify({submissionId,kind,dataUrl})}
-        );
-        const result = await response.json().catch(()=>({}));
-        if (!response.ok || !result.url || !result.storagePath) {
-            const problem = response.status === 404
-                ? 'Document upload service is not deployed (HTTP 404). Admin must deploy uploadDriverEnrollmentDocument.'
-                : result.error || 'Document could not be uploaded. Retry this step.';
-            throw new Error(problem);
+    async function readyDocumentData(blob) {
+        if (!blob) throw Error('Document is missing. Please capture it again.');
+        if (blob.type === 'application/pdf') {
+            if (blob.size > 7 * 1024 * 1024) throw Error('PDF exceeds 7 MB. Please choose a smaller file.');
+            return readDataUrl(blob);
         }
-        return result;
+        if (!/^image\/(?:jpeg|png|webp)$/.test(blob.type))
+            throw Error('Please take a clear picture or choose a valid PDF.');
+        // Keep document text readable but avoid posting full-resolution
+        // camera images that time out or exceed Cloud Function request sizes.
+        const image = await createImageBitmap(blob);
+        try {
+            const width = Math.max(1, image.width), height = Math.max(1, image.height);
+            const factor = Math.min(1, 1600 / Math.max(width,height));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(width*factor);
+            canvas.height = Math.round(height*factor);
+            canvas.getContext('2d').drawImage(image,0,0,canvas.width,canvas.height);
+            return canvas.toDataURL('image/jpeg',0.84);
+        } finally { image.close?.(); }
+    }
+    async function uploadDocument(user,submissionId,kind,blob) {
+        const dataUrl = await readyDocumentData(blob);
+        const token = await user.getIdToken(true);
+        const url = 'https://us-central1-asiye-80386.cloudfunctions.net/uploadDriverEnrollmentDocument';
+        for (let attempt=0;attempt<2;attempt++) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 60000);
+            let response;
+            try {
+                response = await fetch(url,{
+                    method:'POST',
+                    headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+                    body:JSON.stringify({submissionId,kind,dataUrl}),
+                    signal:controller.signal
+                });
+            } catch(error) {
+                if(attempt===0) continue; // same submission+kind is idempotent
+                throw new Error(
+                    'Could not reach the driver document upload service. Check your connection and ask Asiye Admin to deploy uploadDriverEnrollmentDocument. Your form is preserved.'
+                );
+            } finally { clearTimeout(timer); }
+            const result = await response.json().catch(()=>({}));
+            if (!response.ok || !result.url || !result.storagePath) {
+                const problem = response.status === 404
+                    ? 'Driver document upload service is not deployed (HTTP 404). Asiye Admin must deploy uploadDriverEnrollmentDocument.'
+                    : response.status === 401 || response.status === 403
+                        ? 'Your login session cannot upload documents. Please sign in again using SMS OTP.'
+                        : result.error || 'Document could not be uploaded. Retry.';
+                throw new Error(problem);
+            }
+            return result;
+        }
+        throw Error('Driver upload service is unavailable.');
     }
     for (let i=1;i<=3;i++) document.getElementById('referenceFields').insertAdjacentHTML('beforeend', `<div class="reference"><h3>Reference ${i}</h3><label>Full name<input name="refName${i}" maxlength="120" required></label><label>Phone number<input name="refPhone${i}" type="tel" maxlength="25" aria-describedby="refPhoneHelp${i}" required></label><p id="refPhoneHelp${i}" class="field-help">Example: 082 123 4567 or +27 82 123 4567.</p><label>Relationship<input name="refRelation${i}" maxlength="80" required></label></div>`);
     document.getElementById('cancelCamera').onclick = stopCamera;
