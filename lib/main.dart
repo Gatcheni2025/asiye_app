@@ -20,6 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'face_scan_screen.dart';
+import 'vehicle_camera_screen.dart';
 import 'dart:io' show ContentType, HttpClient, HttpHeaders, Platform;
 
 bool _isFirebaseInitialized = false;
@@ -1432,6 +1433,22 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
         }
 
         photo = XFile(path);
+      } else if (normalizedPurpose == 'driver-vehicle') {
+        // Keep camera inside Asiye. A single shutter press returns directly
+        // to this WebView and continues the vehicle-photo save process.
+        final path = await Navigator.of(context).push<String>(
+          MaterialPageRoute<String>(
+            fullscreenDialog: true,
+            builder: (_) => const AsiyeVehicleCameraScreen(),
+          ),
+        );
+        if (path == null || path.isEmpty) {
+          await _controller?.runJavaScript(
+            "window.onNativeFaceCaptureError?.('cancelled');",
+          );
+          return;
+        }
+        photo = XFile(path);
       } else {
         final picker = ImagePicker();
         photo = await picker.pickImage(
@@ -1469,7 +1486,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
             : <String>[],
       };
 
-      _controller?.runJavaScript(
+      // Navigation has already returned to the Asiye WebView. Await the
+      // callback so the Vehicle page can preview then save the new car photo.
+      await _controller?.runJavaScript(
         "window.onNativeFaceCaptureSuccess?.(${jsonEncode(payload)});",
       );
     } catch (e) {
