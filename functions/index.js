@@ -8072,6 +8072,12 @@ async function initialiseCardTripPayment(
           false
       });
   }
+  if (trip.type === "delivery") {
+    await admin.database().ref(`delivery_requests/${requestId}`).update({
+      status: "payment_required", paymentStatus: "payment_required",
+      paymentsReady: false
+    });
+  }
 
   return {
     ready:
@@ -8312,6 +8318,12 @@ async function recordCardTripPaymentHeld(
             ? "pending"
             : trip.status
       });
+  }
+  if (trip.type === "delivery") {
+    await admin.database().ref(`delivery_requests/${requestId}`).update({
+      paymentStatus: "held", paymentsReady: true,
+      status: trip.safetyShareCompleted ? "pending" : trip.status
+    });
   }
 
   return {
