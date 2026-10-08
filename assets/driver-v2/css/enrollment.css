@@ -1,2 +1,34 @@
 *{box-sizing:border-box}body{margin:0;background:#f0f4ef;color:#1d3e2a;font-family:system-ui,sans-serif}.enrollment{max-width:620px;margin:30px auto;padding:26px;background:white;border-radius:24px}header img{width:110px;height:65px;object-fit:contain}header>p:first-of-type{font-size:10px;letter-spacing:2px}h1{font-size:30px;letter-spacing:-1px}p{font-size:13px;line-height:1.7;color:#697b6b}fieldset{padding:20px;border:1px solid #dbe6d9;border-radius:16px;margin:24px 0}legend{font-weight:700;font-size:16px}label{display:block;font-size:12px;font-weight:600;margin:14px 0}input,select{display:block;width:100%;padding:13px;border:1px solid #d3dfd0;border-radius:9px;margin-top:7px;font:inherit}button{padding:14px;border:0;border-radius:11px;background:#22482f;color:white;font-weight:700;margin:7px 6px 7px 0;cursor:pointer}button:disabled{opacity:.5}button:focus-visible,a:focus-visible{outline:3px solid #80a679;outline-offset:3px}.capture-row{border-bottom:1px solid #e4ebe1;padding:12px 0}.capture-row img{display:block;max-width:180px;max-height:140px;object-fit:contain;border-radius:10px;margin:10px 0}video{width:100%;max-height:330px;background:#111;border-radius:12px}.consent{display:flex;gap:10px;line-height:1.6}.consent input{width:20px;flex-shrink:0}#enrollmentStatus{padding:15px;background:#edf4e9;border-radius:12px}a{display:block;color:#315e3d;font-size:13px;margin:16px 0}.reference{border-top:1px solid #e3eadf;padding-top:5px}[hidden]{display:none!important}@media(max-width:640px){.enrollment{margin:0;border-radius:0;padding:20px}}
 .enrollment-progress{margin:20px 0}.enrollment-progress p{font-size:12px;font-weight:700;color:#285138}progress{width:100%;height:8px;accent-color:#2c6940}.step-actions{display:flex;justify-content:space-between;gap:12px}.step-actions button{min-width:115px}.step-actions #previousStep{background:#eaf0e6;color:#315035}#stepError{background:#fff1e8;color:#893611;border:1px solid #f2d4bc;border-radius:12px;padding:14px;font-size:13px;line-height:1.6}.field-help,.draft-note{font-size:12px;line-height:1.6;color:#687d69}#enrollmentReview p{padding:10px 0;border-bottom:1px solid #e3eadf;overflow-wrap:anywhere}legend:focus{outline:none}
+
+/* 7-step mobile enrollment and permanent pending review */
+body {background:linear-gradient(145deg,#e8f5ec,#f5f8f3 45%,#eaf0f7);min-height:100vh}
+.enrollment {max-width:700px;margin:clamp(0px,4vw,40px) auto;padding:clamp(18px,4vw,36px);box-shadow:0 12px 48px rgba(12,55,28,.12)}
+.enrollment-header{background:linear-gradient(130deg,#123f29,#216748);border-radius:20px;padding:22px;color:white}
+.enrollment-header h1{color:white;margin:4px 0 10px}
+.enrollment-header p{color:#d6efde}
+.enrollment-header img{background:white;border-radius:12px;padding:5px}
+.enrollment-header .eyebrow{font-weight:800;letter-spacing:2px;font-size:10px}
+fieldset {border-color:#d6e5dc;background:#fdfefd;margin:18px 0}
+legend {padding:0 10px;font-size:17px}
+.enrollment-progress{position:sticky;top:0;background:white;z-index:3;padding:12px 0}
+.enrollment-progress p{margin:4px 0 10px;font-weight:800}
+.enrollment-progress progress {height:12px;border-radius:40px;overflow:hidden}
+input[readonly] {background:#edf6ee;border-color:#80b996;color:#12452b;font-weight:700}
+textarea {display:block;width:100%;padding:12px;border:1px solid #c9dbd0;border-radius:10px;margin-top:7px;font:inherit}
+.capture-row{background:#f2f8f3;border:1px solid #dceadf;border-radius:16px;padding:16px;margin:12px 0}
+.capture-row strong{font-size:14px}
+.capture-row img{max-width:100%;max-height:260px}
+.capture-row button{background:#14633a}
+.review-panel{margin:20px 0;background:#eff8f2;border:1px solid #acd6b9;border-radius:18px;padding:24px;text-align:center}
+.review-panel h2{font-size:23px;color:#155232}
+.review-panel p{font-size:14px}
+.review-symbol{display:grid;place-items:center;background:#267848;color:white;border-radius:50%;width:54px;height:54px;font-size:28px;font-weight:800;margin:0 auto 12px}
+.application-ref{font-family:ui-monospace,monospace;color:#30533e;font-weight:700}
+.enrollment-bottom-actions {display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;border-top:1px solid #dce9dc;margin-top:28px;padding-top:14px}
+#logoutEnrollment {background:#f2e8e6;color:#803d33}
+#refreshEnrollment{background:#e4efe8;color:#1d5736}
+#submitEnrollment{width:100%;font-size:15px;padding:16px}
+.step-actions button{flex:1}
+.consent input{accent-color:#207343}
+@media(max-width:640px){.enrollment{border-radius:0;margin:0;box-shadow:none}.enrollment-header{padding:18px}.enrollment-bottom-actions button{flex:1}.review-panel{padding:18px}}
