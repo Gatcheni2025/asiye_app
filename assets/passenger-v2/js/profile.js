@@ -37,6 +37,25 @@ ASIYE.profile = {
         }
     },
 
+    async photoAvailable(user = ASIYE.state?.user || {}) {
+        const url = this.getUrl(user);
+        if (!/^https:\/\//.test(url)) return false;
+        return await new Promise(resolve => {
+            const image = new Image();
+            let completed = false;
+            const done = ok => {
+                if (completed) return;
+                completed = true;
+                clearTimeout(timeout);
+                resolve(ok);
+            };
+            const timeout = setTimeout(() => done(false), 10000);
+            image.onload = () => done(image.naturalWidth > 0);
+            image.onerror = () => done(false);
+            image.src = url;
+        });
+    },
+
     refreshUI(user = ASIYE.state?.user || {}) {
         const url =
             this.getUrl(
