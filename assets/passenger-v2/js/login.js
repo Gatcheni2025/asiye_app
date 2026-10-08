@@ -1389,7 +1389,7 @@ window.ASIYE_PASSENGER_LOGIN = {
         const button = document.getElementById('createPassengerProfile');
         const name = String(document.getElementById('newPassengerName')?.value || '').trim();
         if (name.length < 2) { this.toast('Please add your full name.'); return; }
-        const dataUrl = window.AsiyePassengerOnboarding?.photo?.() || '';
+        const dataUrl = await window.AsiyePassengerOnboarding?.photoForUpload?.() || '';
         if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(dataUrl)) {
             this.toast('Scan your face and take a picture before continuing.');
             return;
