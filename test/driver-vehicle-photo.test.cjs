@@ -112,3 +112,60 @@ test('backend owns vehicle images and verifies driver identity', () => {
     assert.match(functionsSource, /vehicleApproved: false/);
     assert.match(memberPagesSource, /preserveAspectRatio: options\.purpose === 'driver-vehicle'/);
 });
+
+test('camera photo appears on the Vehicle screen while Asiye saves it', async () => {
+    const { context, driver } = driverScreen();
+    await context.AsiyePages.open('vehicle');
+    const main = context.AsiyePages.dialog.querySelector('main');
+    const preview = main.querySelector('[data-driver-car-preview]');
+    const status = main.querySelector('[data-driver-car-status]');
+    const capture = { dataUrl: 'data:image/jpeg;base64,Y2Fy' };
+    context.AsiyeFaceCapture.capture = async () => capture;
+    let finishUpload;
+    context.AsiyePhpImageUpload.upload = () => new Promise(resolve => {
+        finishUpload = resolve;
+    });
+    const saving = main.querySelector('[data-driver-car-camera]').onclick();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(preview.src, capture.dataUrl);
+    assert.equal(preview.hidden, false);
+    assert.match(status.textContent, /Saving your car picture/i);
+    assert.equal(driver.vehiclePhoto, '', 'temporary preview must not be marked saved');
+    finishUpload({ url: 'https://example.org/saved-car.jpg' });
+    await saving;
+    assert.equal(driver.vehiclePhoto, 'https://example.org/saved-car.jpg');
+    assert.equal(preview.src, 'https://example.org/saved-car.jpg');
+});
+
+test('failed car upload restores previously saved picture', async () => {
+    const { context, driver } = driverScreen();
+    driver.vehiclePhoto = 'https://example.org/previous-car.jpg';
+    await context.AsiyePages.open('vehicle');
+    const main = context.AsiyePages.dialog.querySelector('main');
+    const preview = main.querySelector('[data-driver-car-preview]');
+    context.AsiyeFaceCapture.capture = async () => ({
+        dataUrl: 'data:image/jpeg;base64,Y2Fy'
+    });
+    context.AsiyePhpImageUpload.upload = async () => {
+        throw Error('Image server unavailable');
+    };
+    await main.querySelector('[data-driver-car-camera]').onclick();
+    assert.equal(driver.vehiclePhoto, 'https://example.org/previous-car.jpg');
+    assert.equal(preview.src, 'https://example.org/previous-car.jpg');
+    assert.match(main.querySelector('[data-driver-car-status]').textContent, /Image server unavailable/);
+});
+
+test('Flutter car camera closes after shutter and hands the image to the WebView', () => {
+    const mainDart = fs.readFileSync(
+        path.join(__dirname, '../lib/main.dart'), 'utf8'
+    );
+    const vehicleCamera = fs.readFileSync(
+        path.join(__dirname, '../lib/vehicle_camera_screen_native.dart'), 'utf8'
+    );
+    assert.match(mainDart, /normalizedPurpose == 'driver-vehicle'/);
+    assert.match(mainDart, /AsiyeVehicleCameraScreen\(\)/);
+    assert.match(mainDart, /onNativeFaceCaptureSuccess/);
+    assert.match(vehicleCamera, /CameraLensDirection\.back/);
+    assert.match(vehicleCamera, /await camera\.takePicture\(\)/);
+    assert.match(vehicleCamera, /Navigator\.of\(context\)\.pop\(photo\.path\)/);
+});
