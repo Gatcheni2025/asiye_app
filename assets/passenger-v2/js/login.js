@@ -987,6 +987,20 @@ window.ASIYE_PASSENGER_LOGIN = {
        AUTH SUCCESS
        ======================================================== */
 
+    async storedFaceAvailable(url) {
+        const link = String(url || '').trim();
+        if (!/^https:\/\//i.test(link)) return false;
+        return await new Promise(resolve => {
+            const picture = new Image();
+            let finished = false;
+            const complete = value => { if (!finished) { finished = true; clearTimeout(timer); resolve(value); } };
+            const timer = setTimeout(() => complete(false), 12000);
+            picture.onload = () => complete(picture.naturalWidth > 0);
+            picture.onerror = () => complete(false);
+            picture.src = link;
+        });
+    },
+
     async afterAuthentication(
         user
     ) {
@@ -1023,8 +1037,15 @@ window.ASIYE_PASSENGER_LOGIN = {
              profile?.data?.passengerProfileImageUrl)
         );
         if (profile && complete) {
-            await this.completeLogin(profile.id, profile.data, user);
-            return;
+            const savedUrl = profile.data.profileImageUrl ||
+                profile.data.profile_picture_url || profile.data.passengerProfileImageUrl;
+            // Catch genuine HTTP 404 and expired Firebase tokens before
+            // logging in. A corrupt URL is not a completed face scan.
+            if (await this.storedFaceAvailable(savedUrl)) {
+                await this.completeLogin(profile.id, profile.data, user);
+                return;
+            }
+            console.warn('Passenger saved face picture unavailable; prompting rescan.');
         }
 
 
@@ -1403,7 +1424,12 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
             const uploaded = await response.json().catch(() => ({}));
             if (!response.ok || !/^https:\/\//.test(String(uploaded.url || ''))) {
-                throw Error(uploaded.error || 'Could not save your face picture. Please rescan and try again.');
+                throw Error(response.status === 404
+                    ? 'Profile photo service is unavailable (HTTP 404). The new Firebase function must be deployed.'
+                    : uploaded.error || 'Could not save your face picture. Please rescan and try again.');
+            }
+            if (!await this.storedFaceAvailable(uploaded.url)) {
+                throw Error('Image upload returned a broken URL (404). Your profile is not marked complete; retry your face scan.');
             }
             await root.update({
                 name,
