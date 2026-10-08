@@ -3537,6 +3537,115 @@ exports.adminManagePlatform = functions.https.onCall(
       };
     }
 
+
+    // Vehicle edits must be reviewed by an authenticated administrator.
+    // Never let a driver's own client mark their vehicle approved.
+    if (action === "reviewVehicle") {
+      const id = safeAdminString(data?.id, 160);
+      const decision = safeAdminString(data?.decision, 32).toLowerCase();
+      const reason = safeAdminString(data?.reason, 500);
+      if (!id || !["approved", "rejected", "changes_requested"].includes(decision)) {
+        throw new functions.https.HttpsError("invalid-argument", "Driver and review decision are required.");
+      }
+      if (decision !== "approved" && reason.length < 5) {
+        throw new functions.https.HttpsError("invalid-argument", "Explain what the driver needs to change.");
+      }
+      const ref = admin.database().ref(`taxis/${id}`);
+      const snapshot = await ref.once("value");
+      const driver = snapshot.val();
+      if (!driver) {
+        throw new functions.https.HttpsError("not-found", "Driver profile not found.");
+      }
+      if (driver.vehicleApprovalStatus !== "pending" || !driver.vehiclePending) {
+        throw new functions.https.HttpsError("failed-precondition", "Driver must submit vehicle changes before review.");
+      }
+      const source = data?.vehicle || driver.vehiclePending;
+      const clean = (value, max) => safeAdminString(value, max);
+      const vehicle = {
+        type: clean(source.type, 40),
+        make: clean(source.make, 80),
+        model: clean(source.model, 80),
+        colour: clean(source.colour || source.color, 60),
+        registration: clean(source.registration, 30),
+        year: Number(source.year),
+        seats: Number(source.seats)
+      };
+      if (Object.keys(vehicle).some(key => typeof vehicle[key] === "string" && vehicle[key].length < 2) ||
+          !Number.isInteger(vehicle.year) || vehicle.year < 1990 ||
+          vehicle.year > new Date().getFullYear() + 1 ||
+          !Number.isInteger(vehicle.seats) || vehicle.seats < 1 || vehicle.seats > 15) {
+        throw new functions.https.HttpsError("invalid-argument", "Vehicle details are incomplete or invalid.");
+      }
+      if (decision === "approved" && !String(driver.vehiclePhoto || "").trim()) {
+        throw new functions.https.HttpsError("failed-precondition", "A saved car picture is required before approval.");
+      }
+      const now = admin.database.ServerValue.TIMESTAMP;
+      const patch = {
+        vehicleApprovalStatus: decision,
+        vehicleApproved: decision === "approved",
+        vehicleReviewReason: decision === "approved" ? "" : reason,
+        vehicleReviewedAt: now,
+        vehicleReviewedBy: actor.uid,
+        isOnline: false,
+        isBroadcasting: false
+      };
+      if (decision === "approved") {
+        Object.assign(patch, {
+          vehicle,
+          vehicleType: vehicle.type,
+          vehicleMake: vehicle.make,
+          vehicleModel: vehicle.model,
+          vehicleColor: vehicle.colour,
+          vehicleReg: vehicle.registration,
+          taxiRegistrationNumber: vehicle.registration,
+          vehicleYear: vehicle.year,
+          vehicleSeats: vehicle.seats,
+          seats: vehicle.seats,
+          vehiclePending: null
+        });
+      } else {
+        patch.vehiclePending = { ...driver.vehiclePending, ...vehicle };
+      }
+      await ref.update(patch);
+      await admin.database().ref(`notifications/taxis/${id}`).push().set({
+        type: "vehicle_review",
+        title: "Vehicle review update",
+        body: decision === "approved" ? "Your vehicle has been approved. You can go online if other checks are complete." : reason,
+        status: decision,
+        timestamp: now
+      });
+      await writeAdminAudit(actor, "vehicle_reviewed", id, { decision, reason });
+      return { ok: true, decision, vehicle };
+    }
+
+    if (action === "replySupport") {
+      const id = safeAdminString(data?.id, 160);
+      const message = safeAdminString(data?.message, 1500);
+      if (!id || message.length < 2) {
+        throw new functions.https.HttpsError("invalid-argument", "A ticket and reply are required.");
+      }
+      const ref = admin.database().ref(`support_chats/${id}`);
+      const ticket = (await ref.once("value")).val();
+      if (!ticket) {
+        throw new functions.https.HttpsError("not-found", "Support conversation not found.");
+      }
+      const now = admin.database.ServerValue.TIMESTAMP;
+      await ref.child("messages").push().set({
+        text: message,
+        senderUid: actor.uid,
+        senderRole: "admin",
+        createdAt: now
+      });
+      await ref.update({
+        status: "pending",
+        updatedAt: now,
+        lastReplyAt: now,
+        lastReplyBy: "admin"
+      });
+      await writeAdminAudit(actor, "support_replied", id, {});
+      return { ok: true };
+    }
+
     if (action === "updateSupport") {
       const id =
         safeAdminString(
@@ -5780,7 +5889,11 @@ exports.uploadProfileImageProxy =
                 vehicleImageStoragePath:
                   objectPath,
                 "documents/CAR_FRONT":
-                  url
+                  url,
+                vehicleApproved: false,
+                vehicleApprovalStatus: "not_submitted",
+                isOnline: false,
+                isBroadcasting: false
               }
             : role === "driver"
               ? {
