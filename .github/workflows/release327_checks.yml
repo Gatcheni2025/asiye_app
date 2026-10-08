@@ -36,6 +36,6 @@ jobs:
           node --check test/release327-admin-support.test.cjs
       - name: Run release and existing member page tests
         run: |
-          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs test/card-payout-passenger.test.cjs test/release328-recovery.test.cjs
+          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs test/card-payout-passenger.test.cjs test/release328-recovery.test.cjs test/enrollment-validation.test.cjs
       - name: Validate database rules JSON
         run: node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
