@@ -2240,11 +2240,21 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       !approvedVehicle.year ||
       !enrollmentPhone ||
       !enrollmentProfileImage ||
-      !enrollmentVehiclePhoto
+      !enrollmentVehiclePhoto ||
+      Number(enrollment.version || 0) >= 2 && (
+        enrollment.phoneVerified !== true ||
+        !enrollment.residentialAddress ||
+        !enrollment.documents?.identity ||
+        !enrollment.documents?.licence ||
+        !enrollment.documents?.address ||
+        !enrollment.documentUrls?.identity ||
+        !enrollment.documentUrls?.licence ||
+        !enrollment.documentUrls?.address
+      )
     ) {
       throw new functions.https.HttpsError(
         "failed-precondition",
-        "Driver phone, selfie, car photo, vehicle make, model, colour, year and registration are required before approval."
+        "Verification requires an OTP-verified phone, face selfie, ID, driver licence, address proof and complete car photo and details."
       );
     }
 
