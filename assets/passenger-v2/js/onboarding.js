@@ -87,8 +87,26 @@
   const valid = profile => Boolean(String(profile?.name || '').trim().length >= 2 &&
     (profile?.profileImageUrl || profile?.profile_picture_url || profile?.passengerProfileImageUrl));
   const photo = () => capturedDataUrl;
+  // Native face camera JPEGs can exceed Cloud Functions' 3 MB limit.
+  // Resize to an upload-safe square before issuing the authenticated request.
+  const photoForUpload = async () => {
+    if (!capturedDataUrl) return '';
+    const img = new Image();
+    await new Promise((resolve,reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(Error('Captured face image could not be opened.'));
+      img.src = capturedDataUrl;
+    });
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    if (side < 100) throw Error('Face picture is too small. Take another picture.');
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = Math.min(768,side);
+    const x = (img.naturalWidth-side)/2, y = (img.naturalHeight-side)/2;
+    canvas.getContext('2d').drawImage(img,x,y,side,side,0,0,canvas.width,canvas.height);
+    return canvas.toDataURL('image/jpeg',0.78);
+  };
   document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('scanPassengerFace')?.addEventListener('click', capture);
   });
-  window.AsiyePassengerOnboarding = { capture, photo, valid };
+  window.AsiyePassengerOnboarding = { capture, photo, photoForUpload, valid };
 })();
