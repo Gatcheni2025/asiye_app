@@ -1071,8 +1071,7 @@ window.ASIYE_DRIVER_LOGIN = {
             // review must not be sent through registration a second time.
             const enrollment = await AsiyeEnrollment.getStatus(user);
             if (enrollment.state === 'pending' ||
-                enrollment.state === 'rejected' ||
-                enrollment.state === 'new') {
+                enrollment.state === 'rejected') {
                 window.location.replace('./enrollment.html');
                 return;
             }
