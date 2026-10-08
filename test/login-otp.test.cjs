@@ -146,7 +146,7 @@ test('Passenger completeLogin stores session, notifies Flutter and redirects to 
     const { context, storage, postedMessages } = createMockContext('assets/passenger-v2/js/login.js');
     const login = context.window.ASIYE_PASSENGER_LOGIN;
 
-    await login.completeLogin('commuter_42', { name: 'Thabo' }, { uid: 'auth_uid_42', phoneNumber: '+27821234567' });
+    await login.completeLogin('commuter_42', { name: 'Thabo', profileImageUrl: 'https://example.test/face.jpg' }, { uid: 'auth_uid_42', phoneNumber: '+27821234567' });
 
     assert.equal(storage.get('userId'), 'commuter_42');
     assert.equal(storage.get('commuterId'), 'commuter_42');
