@@ -102,12 +102,13 @@
         const legend=steps[step].querySelector('legend');legend.tabIndex=-1;legend.focus();
     };
     const validateStep = async index => {
-        for(const input of steps[index].querySelectorAll('input,select')) {
+        for(const input of steps[index].querySelectorAll('input,select,textarea')) {
             input.setCustomValidity('');
             if (['fullName','vehicleMake','vehicleModel','vehicleColor','vehicleReg','accountHolder','bank'].includes(input.name) && input.value.trim().length < 2) {
                 input.setCustomValidity('Please enter at least two characters for this detail.');
             } else
-            if(input.type==='tel' && !EnrollmentValidation.phone(input.value)) input.setCustomValidity('Enter a valid phone number, for example 082 123 4567 or +27 82 123 4567.');
+            if(input.name==='residentialAddress' && input.value.trim().length < 10) input.setCustomValidity('Enter your full residential address to match its proof.');
+            else if(input.type==='tel' && !EnrollmentValidation.phone(input.value)) input.setCustomValidity('Enter a valid phone number, for example 082 123 4567 or +27 82 123 4567.');
             else if(input.required && input.type==='text' && !input.value.trim()) input.setCustomValidity('Please enter this detail.');
             else if(input.name==='vehicleYear' && (!/^\d{4}$/.test(input.value) || Number(input.value) < 1990 || Number(input.value) > new Date().getFullYear() + 1)) input.setCustomValidity('Enter a valid four-digit vehicle year.');
             else if(input.name==='vehicleSeats' && (!Number.isInteger(Number(input.value)) || Number(input.value)<1 || Number(input.value)>15)) input.setCustomValidity('Enter 1–15 passenger seats.');
