@@ -1,0 +1,30 @@
+name: Asiye 327 Admin and Support Checks
+
+on:
+  pull_request:
+    branches: [security-payments-phase5]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  admin-and-support:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JavaScript
+        run: |
+          node --check assets/member-pages.js
+          node --check assets/support-chat.js
+          node --check assets/admin-release.js
+          node --check functions/index.js
+          node --check test/release327-admin-support.test.cjs
+      - name: Run release and existing member page tests
+        run: |
+          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs
+      - name: Validate database rules JSON
+        run: node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
