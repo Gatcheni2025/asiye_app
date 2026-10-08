@@ -2041,6 +2041,19 @@ document.addEventListener(
                 commuterId
             );
 
+        // Reconcile a successful wallet recharge after the Paystack
+        // browser returns; a delayed webhook must not leave a stale balance.
+        void ASIYE.payments?.reconcileWalletTopup?.();
+        if (!window._asiyeWalletReconcileBound) {
+            window._asiyeWalletReconcileBound = true;
+            window.addEventListener('focus', () => {
+                void ASIYE.payments?.reconcileWalletTopup?.();
+            });
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) void ASIYE.payments?.reconcileWalletTopup?.();
+            });
+        }
+
 
         localStorage.setItem(
             'userId',
