@@ -156,7 +156,7 @@
       ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
     },
     "support_chats": {
-      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || (query.orderByChild === 'authUid' && query.equalTo === auth.uid))",
       "$ticket": {
         ".read": "auth != null && (data.child('authUid').val() === auth.uid || root.child('admins').child(auth.uid).exists())",
         ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || (!data.exists() && newData.child('authUid').val() === auth.uid && newData.child('status').val() === 'open'))",
@@ -165,8 +165,18 @@
         },
         "status": {
           ".validate": "root.child('admins').child(auth.uid).exists() || (!data.exists() && newData.val() === 'open') || newData.val() === data.val()"
+        },
+        "messages": {
+          "$message": {
+            ".write": "auth != null && !data.exists() && newData.exists() && (root.child('admins').child(auth.uid).exists() || data.parent().parent().child('authUid').val() === auth.uid) && newData.child('senderUid').val() === auth.uid && (root.child('admins').child(auth.uid).exists() ? newData.child('senderRole').val() === 'admin' : (newData.child('senderRole').val() === 'driver' || newData.child('senderRole').val() === 'passenger'))",
+            ".validate": "newData.hasChildren(['senderUid','senderRole','text','createdAt']) && newData.child('text').isString() && newData.child('senderUid').isString() && newData.child('senderRole').isString() && newData.child('createdAt').isNumber()"
+          }
         }
-      }
+      },
+      ".indexOn": [
+        "authUid",
+        "updatedAt"
+      ]
     },
     "driver_applications": {
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
