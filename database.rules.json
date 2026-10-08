@@ -554,6 +554,22 @@
     "tripPaymentReferences": {
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
       ".write": "auth != null && root.child('admins').child(auth.uid).exists()"
+    },
+    "driverPayoutAccounts": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": false
+    },
+    "driverCardPayouts": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": false
+    },
+    "driverPayoutRefs": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": false
+    },
+    "driverPayoutQueues": {
+      ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": false
     }
   }
 }
