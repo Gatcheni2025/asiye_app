@@ -2878,6 +2878,9 @@ window.AsiyePages = {
                         Your ticket will be available to the Asiye support team.
                     </p>
                 </form>
+                <section class="member-info" data-support-conversations aria-label="My support messages">
+                    <p class="member-note">Loading support conversations…</p>
+                </section>
             `;
 
             const supportForm =
@@ -3028,6 +3031,8 @@ window.AsiyePages = {
                                             .TIMESTAMP
                                 });
 
+                            window.AsiyeSupportChat?.reload?.();
+
                             supportForm
                                 .reset();
 
@@ -3071,6 +3076,10 @@ window.AsiyePages = {
                 body.innerHTML +=
                     `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`;
             }
+            window.AsiyeSupportChat?.mount(body, {
+                role: driver ? 'driver' : 'passenger',
+                dialog
+            });
         } else {
             try {
                 if (!id) throw new Error('Sign in to view your records.');
