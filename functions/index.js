@@ -6411,14 +6411,16 @@ async function issueDriverCardPayout(requestId, passengerId, trip) {
       }
     });
     const transfer = result.data || {};
-    await recordRef.update({
-      status: transfer.status === "otp" ? "otp_required" :
-        transfer.status === "success" ? "transfer_pending" : "transfer_pending",
-      transferCode: String(transfer.transfer_code || ""),
-      paystackTransferId: String(transfer.id || ""),
-      paystackTransferState: String(transfer.status || "pending"),
-      updatedAt: admin.database.ServerValue.TIMESTAMP
-    });
+    await recordRef.transaction(current => {
+      if (!current || current.transferReference !== reference || current.status === "paid")
+        return;
+      return { ...current,
+        status: transfer.status === "otp" ? "otp_required" : "transfer_pending",
+        transferCode: String(transfer.transfer_code || current.transferCode || ""),
+        paystackTransferId: String(transfer.id || ""),
+        paystackTransferState: String(transfer.status || "pending"),
+        updatedAt: admin.database.ServerValue.TIMESTAMP };
+    }, undefined, false);
     // Never say "paid" until Paystack's signed transfer-success webhook.
     return { status: "transfer_pending", reference };
   } catch (error) {
@@ -10061,6 +10063,39 @@ exports.paystackWebhook =
         const event =
           request.body ||
           {};
+
+        if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(event.event)) {
+          const transfer = event.data || {};
+          const reference = String(transfer.reference || "");
+          if (!/^asiye_card_[a-f0-9]{32}$/.test(reference)) {
+            return response.status(200).send("ok");
+          }
+          const mapped = (await admin.database()
+            .ref(`driverPayoutRefs/${reference}`).once("value")).val();
+          if (!mapped?.requestId || !mapped?.passengerId) {
+            return response.status(200).send("ok");
+          }
+          const payoutRef = admin.database()
+            .ref(driverPayoutPath(mapped.requestId, mapped.passengerId));
+          const payout = (await payoutRef.once("value")).val();
+          if (!payout || payout.transferReference !== reference ||
+              Number(payout.driverSubunit) !== Number(transfer.amount) ||
+              payout.currency !== "ZAR") {
+            throw Error("Transfer webhook failed payout ledger matching.");
+          }
+          const status = event.event === "transfer.success" ? "paid" :
+            event.event === "transfer.reversed" ? "reversed" : "transfer_failed";
+          await payoutRef.transaction(current => {
+            if (!current || current.transferReference !== reference ||
+                Number(current.driverSubunit) !== Number(transfer.amount)) return;
+            if (current.status === "paid" && status !== "reversed") return;
+            return { ...current, status,
+              paystackTransferState: String(transfer.status || ""),
+              transferCode: String(transfer.transfer_code || current.transferCode || ""),
+              transferUpdatedAt: admin.database.ServerValue.TIMESTAMP };
+          }, undefined, false);
+          return response.status(200).send("ok");
+        }
 
         if (
           event.event !==
