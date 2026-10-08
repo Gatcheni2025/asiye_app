@@ -247,3 +247,19 @@ test('Pending driver remains on enrollment status and does not create a dashboar
     assert.equal(storage.has('driverId'), false);
     assert.equal(postedMessages.length, 0);
 });
+
+test('OTP passenger missing face photo cannot enter main app', async () => {
+    const { context, storage, postedMessages } = createMockContext('assets/passenger-v2/js/login.js');
+    const login = context.window.ASIYE_PASSENGER_LOGIN;
+    await login.completeLogin('new-passenger', { name: 'New Rider' },
+        { uid: 'passenger-auth', phoneNumber: '+27821234567' });
+    assert.equal(context.window.location.href, '');
+    assert.equal(storage.has('commuterId'), false);
+    assert.equal(postedMessages.length, 0);
+    assert.equal(getElementStatus(context, 'newPassengerStep'), true);
+});
+
+function getElementStatus(context, name) {
+    // The onboarding gate calls showStep only after refusing the session.
+    return context.window.ASIYE_PASSENGER_LOGIN.pendingProfileId === 'new-passenger';
+}
