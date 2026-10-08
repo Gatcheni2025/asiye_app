@@ -910,3 +910,76 @@ test('passenger can open their own support ticket but not one for another user',
     }
   ));
 });
+
+test('v2 enrollment accepts only verified-phone owner and includes all required documents', async () => {
+  const uid = 'new-driver-auth';
+  const db = env.authenticatedContext(uid, {
+    phone_number: '+27821234567'
+  }).database();
+  const docs = Object.fromEntries(['selfie','identity','car','licence','address']
+    .map(name => [name, 'driverEnrollments/' + uid + '/submission-1/' + name]));
+  const record = {
+    version: 2,
+    status: 'pending',
+    authUid: uid,
+    phone: '+27821234567',
+    phoneVerified: true,
+    fullName: 'New Driver One',
+    residentialAddress: '22 Main Road, Durban, KwaZulu-Natal',
+    vehicleReg: 'ND 123 456',
+    vehiclePending: {
+      type: 'sedan', make: 'Toyota', model: 'Corolla',
+      colour: 'White', registration: 'ND 123 456',
+      year: 2023, seats: 4
+    },
+    documents: docs,
+    references: Object.fromEntries([1,2,3].map(n => ['reference'+n, {
+      name: 'Reference '+n, phone: '082000000'+n, relationship: 'Colleague'
+    }])),
+    banking: {
+      accountHolder: 'New Driver One', bank: 'Standard Bank',
+      accountNumber: '123456789', branchCode: '051001', accountType: 'savings'
+    },
+    consent: true,
+    submittedAt: serverTimestamp()
+  };
+  await assertSucceeds(set(ref(db, 'driverEnrollments/' + uid), record));
+  await assertFails(update(ref(db, 'driverEnrollments/' + uid), {
+    status: 'approved'
+  }));
+  await assertFails(set(ref(dbFor('attacker-auth'), 'driverEnrollments/' + uid + '-other'), {
+    ...record, authUid: 'attacker-auth'
+  }));
+});
+
+test('v2 enrollment rejects invented phone verification and missing address proof', async () => {
+  const uid = 'new-driver-auth';
+  const db = env.authenticatedContext(uid, {
+    phone_number: '+27821234567'
+  }).database();
+  const base = {
+    version: 2, status: 'pending', fullName: 'New Driver',
+    authUid: uid, phone: '+27991111111', phoneVerified: true,
+    residentialAddress: '22 Main Road, Durban',
+    vehicleReg: 'ND 123 456',
+    vehiclePending: {
+      type: 'sedan', make: 'Toyota', model: 'Corolla', colour: 'White',
+      registration: 'ND 123 456', year: 2023, seats: 4
+    },
+    documents: Object.fromEntries(['selfie','identity','car','licence']
+      .map(name => [name, 'driverEnrollments/' + uid + '/s/' + name])),
+    references: Object.fromEntries([1,2,3].map(n => ['reference'+n, {
+      name: 'Reference '+n, phone: '082000000'+n, relationship: 'Colleague'
+    }])),
+    banking: {
+      accountHolder: 'New Driver', bank: 'Standard Bank',
+      accountNumber: '123456789', branchCode: '051001', accountType: 'savings'
+    },
+    consent: true,
+    submittedAt: serverTimestamp()
+  };
+  await assertFails(set(ref(db, 'driverEnrollments/' + uid), base));
+  await assertFails(set(ref(db, 'driverEnrollments/' + uid), {
+    ...base, phone: '+27821234567'
+  }));
+});
