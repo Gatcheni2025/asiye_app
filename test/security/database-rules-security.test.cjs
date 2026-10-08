@@ -12,7 +12,10 @@ const {
   set,
   update,
   runTransaction,
-  serverTimestamp
+  serverTimestamp,
+  query,
+  orderByChild,
+  equalTo
 } = require('firebase/database');
 
 let env;
@@ -793,4 +796,117 @@ test('trip payment ledgers and card reference maps are server-only', async () =>
     requestId: 'trip1',
     passengerId: 'p1'
   }));
+});
+
+test('support tickets are readable only through an owner-scoped query', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'support_chats'), {
+      ticket1: {
+        authUid: 'passenger-auth',
+        userId: 'p1',
+        role: 'passenger',
+        message: 'I need help.',
+        status: 'open',
+        createdAt: 100
+      },
+      ticket2: {
+        authUid: 'driver-auth',
+        userId: 'driver-record',
+        role: 'driver',
+        message: 'Driver needs help.',
+        status: 'open',
+        createdAt: 100
+      }
+    });
+  });
+
+  await assertFails(get(ref(dbFor('passenger-auth'), 'support_chats')));
+  await assertFails(get(ref(dbFor('attacker-auth'), 'support_chats/ticket1')));
+  await assertSucceeds(get(ref(dbFor('passenger-auth'), 'support_chats/ticket1')));
+  const onlyMyTickets = await assertSucceeds(get(query(
+    ref(dbFor('passenger-auth'), 'support_chats'),
+    orderByChild('authUid'),
+    equalTo('passenger-auth')
+  )));
+  if (onlyMyTickets.hasChild('ticket2')) {
+    throw Error('Another user ticket was leaked.');
+  }
+});
+
+test('support messages allow owner replies but block tampering and impersonation', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'support_chats/ticket1'), {
+      authUid: 'passenger-auth',
+      userId: 'p1',
+      role: 'passenger',
+      message: 'My original support request.',
+      status: 'open',
+      createdAt: 100
+    });
+  });
+  const base = 'support_chats/ticket1';
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), base + '/messages/owned-reply'),
+    {
+      senderUid: 'passenger-auth',
+      senderRole: 'passenger',
+      text: 'Here is more detail.',
+      createdAt: 101
+    }
+  ));
+  await assertFails(set(
+    ref(dbFor('attacker-auth'), base + '/messages/fake-reply'),
+    {
+      senderUid: 'attacker-auth',
+      senderRole: 'passenger',
+      text: 'Trying to impersonate.',
+      createdAt: 102
+    }
+  ));
+  await assertFails(set(
+    ref(dbFor('passenger-auth'), base + '/messages/forged-admin'),
+    {
+      senderUid: 'passenger-auth',
+      senderRole: 'admin',
+      text: 'Fake admin message.',
+      createdAt: 103
+    }
+  ));
+  await assertFails(update(
+    ref(dbFor('passenger-auth'), base),
+    { status: 'resolved' }
+  ));
+  await assertFails(update(
+    ref(dbFor('passenger-auth'), base + '/messages/owned-reply'),
+    { text: 'Rewritten history' }
+  ));
+});
+
+test('passenger can open their own support ticket but not one for another user', async () => {
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), 'support_chats/own-new'),
+    {
+      ticketId: 'own-new',
+      authUid: 'passenger-auth',
+      userId: 'p1',
+      role: 'passenger',
+      status: 'open',
+      subject: 'payment',
+      message: 'Card payment failed.',
+      createdAt: 100
+    }
+  ));
+  await assertFails(set(
+    ref(dbFor('passenger-auth'), 'support_chats/forged'),
+    {
+      ticketId: 'forged',
+      authUid: 'attacker-auth',
+      userId: 'p2',
+      role: 'passenger',
+      status: 'open',
+      subject: 'payment',
+      message: 'Forged ticket.',
+      createdAt: 100
+    }
+  ));
 });
