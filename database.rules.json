@@ -362,7 +362,7 @@
       "$uid": {
         ".read": "auth != null && (auth.uid === $uid || auth.token.enrollmentReviewer === true)",
         ".write": "auth != null && auth.uid === $uid && !data.exists()",
-        ".validate": "newData.hasChildren(['version','status','fullName','phone','vehicleReg','documents','references','banking','consent','submittedAt']) && newData.child('version').val() === 1 && newData.child('status').val() === 'pending' && newData.child('consent').val() === true && newData.child('submittedAt').val() === now && newData.child('references').hasChildren(['reference1','reference2','reference3']) && newData.child('documents').hasChildren(['selfie','car','identity','licence']) && newData.child('banking').hasChildren(['accountHolder','bank','accountNumber','branchCode','accountType'])",
+        ".validate": "newData.hasChildren(['version','status','fullName','phone','phoneVerified','residentialAddress','vehicleReg','vehiclePending','documents','references','banking','consent','submittedAt']) && newData.child('version').val() === 2 && newData.child('status').val() === 'pending' && newData.child('phoneVerified').val() === true && newData.child('phone').val() === auth.token.phone_number && newData.child('consent').val() === true && newData.child('submittedAt').val() === now && newData.child('references').hasChildren(['reference1','reference2','reference3']) && newData.child('documents').hasChildren(['selfie','car','identity','licence','address']) && newData.child('banking').hasChildren(['accountHolder','bank','accountNumber','branchCode','accountType'])",
         "fullName": {
           ".validate": "newData.isString() && newData.val().length > 1 && newData.val().length <= 100"
         },
@@ -373,7 +373,7 @@
           ".validate": "newData.isString() && newData.val().length > 1 && newData.val().length <= 20"
         },
         "version": {
-          ".validate": "newData.isNumber() && newData.val() === 1"
+          ".validate": "newData.isNumber() && newData.val() === 2"
         },
         "status": {
           ".validate": "newData.isString() && newData.val() === 'pending'"
@@ -449,6 +449,9 @@
           },
           "$other": {
             ".validate": false
+          },
+          "address": {
+            ".validate": "newData.isString() && newData.val().beginsWith('driverEnrollments/' + $uid + '/')"
           }
         },
         "banking": {
@@ -471,6 +474,15 @@
           "$other": {
             ".validate": false
           }
+        },
+        "phoneVerified": {
+          ".validate": "newData.isBoolean() && newData.val() === true"
+        },
+        "residentialAddress": {
+          ".validate": "newData.isString() && newData.val().length >= 10 && newData.val().length <= 300"
+        },
+        "vehiclePending": {
+          ".validate": "newData.hasChildren(['type','make','model','colour','registration','year','seats']) && newData.child('make').isString() && newData.child('model').isString() && newData.child('registration').isString() && newData.child('year').isNumber() && newData.child('year').val() >= 1990 && newData.child('year').val() <= 2100 && newData.child('seats').isNumber() && newData.child('seats').val() >= 1 && newData.child('seats').val() <= 15"
         }
       },
       ".read": "auth != null && auth.token.enrollmentReviewer === true",
