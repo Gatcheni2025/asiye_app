@@ -1427,7 +1427,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         }
 
         photo = XFile(path);
-      } else if (normalizedPurpose == 'driver-vehicle') {
+      } else if (normalizedPurpose == 'driver-vehicle' ||
+                 normalizedPurpose == 'driver-licence' ||
+                 normalizedPurpose == 'driver-address-proof' ||
+                 normalizedPurpose == 'driver-identity') {
         // A shutter press closes the in-app car camera and resumes the
         // existing driver Vehicle page without an external camera screen.
         final path = await Navigator.of(context).push<String>(
