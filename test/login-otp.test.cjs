@@ -97,6 +97,10 @@ function createMockContext(scriptPath) {
     context.window.localStorage = context.localStorage;
     context.window.document = context.document;
     context.window.firebase = context.firebase;
+    context.AsiyeEnrollment = {
+        getStatus: async () => ({ state: 'approved' })
+    };
+    context.window.AsiyeEnrollment = context.AsiyeEnrollment;
 
     vm.createContext(context);
     vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), context);
@@ -227,4 +231,19 @@ test('Driver prepareRecaptcha configures auto-renewing expired-callback and clea
     assert.equal(container.innerHTML, '');
     assert.ok(login.recaptchaVerifier);
     assert.ok(typeof login.recaptchaVerifier.options['expired-callback'] === 'function');
+});
+
+test('Pending driver remains on enrollment status and does not create a dashboard session', async () => {
+    const { context, storage, postedMessages } = createMockContext('assets/driver-v2/js/login.js');
+    context.AsiyeEnrollment.getStatus = async () => ({ state: 'pending' });
+    const login = context.window.ASIYE_DRIVER_LOGIN;
+
+    await login.completeDriverLogin(
+        'taxi_pending', { name: 'Pending Driver' },
+        { uid: 'pending-auth', phoneNumber: '+27821234567' }
+    );
+
+    assert.equal(context.window.location.href, './enrollment.html');
+    assert.equal(storage.has('driverId'), false);
+    assert.equal(postedMessages.length, 0);
 });
