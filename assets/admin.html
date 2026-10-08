@@ -651,14 +651,22 @@
         // ================================================================
         // AUTH CHECK
         // ================================================================
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                userEmailEl.textContent = user.email || 'admin@asiye.cloud';
-                console.log('✅ Admin logged in:', user.email);
-                loadApplications();
-            } else {
-                console.log('🔒 No user found, redirecting to login...');
+        auth.onAuthStateChanged(async (user) => {
+            if (!user) {
                 window.location.href = 'admin-login.html';
+                return;
+            }
+            // Firebase authentication alone is not an Asiye admin role.
+            // Check the server-side /admins membership before displaying data.
+            try {
+                const result = await firebase.functions().httpsCallable('adminWhoAmI')({});
+                if (!result.data?.uid) throw new Error('Not an administrator');
+                userEmailEl.textContent = user.email || result.data.email || 'Asiye Admin';
+                loadApplications();
+            } catch (error) {
+                userEmailEl.textContent = 'Admin access required';
+                applicationsList.textContent = 'This account is not authorised for Asiye Admin.';
+                console.error('Asiye admin access denied:', error.code || error.message);
             }
         });
 
@@ -1712,7 +1720,7 @@
         });
 
         database.ref('driver_applications').on('child_changed', function(snapshot) {
-            loadApplications();
+            if (currentView === 'pending' || currentView === 'verified') loadApplications();
         });
 
         console.log('✅ Admin dashboard with password management ready.');
