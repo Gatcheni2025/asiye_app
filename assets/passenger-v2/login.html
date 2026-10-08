@@ -65,7 +65,14 @@
 .role-switch-link{display:flex;align-items:center;justify-content:center;gap:9px;margin:14px 0 2px;padding:13px 16px;border:1px solid #e1e4e8;border-radius:14px;background:#fff;color:#111;text-decoration:none;font-size:13px;font-weight:800;box-shadow:0 5px 16px rgba(0,0,0,.04)}
 .role-switch-link:active{transform:scale(.985);background:#f5f6f7}
 </style>
-</head>
+<style>
+.passenger-photo-setup{margin:14px 0;padding:14px;border-radius:16px;background:#f3f8f5;text-align:center}
+.passenger-photo-setup h3{margin:4px 0}
+#newPassengerFacePreview{width:132px;height:132px;object-fit:cover;border-radius:50%;margin:12px auto;border:4px solid #207343}
+#newPassengerFaceCamera video{width:100%;max-height:330px;border-radius:12px}
+#newPassengerFaceStatus{font-size:13px;color:#285b3c}
+#scanPassengerFace{background:#215a3c}
+</style></head>
 
 
 <body>
@@ -363,8 +370,7 @@
 
             <p>
 
-                Your account is ready.
-                Add your name to continue.
+                Verify your profile before booking. Your full name and a live face picture are required.
 
             </p>
 
@@ -377,13 +383,17 @@
             >
 
 
-            <button
-                id="createPassengerProfile"
-                class="primary-button"
-            >
-
-                Continue to Asiye
-
+            <section class="passenger-photo-setup" aria-label="Required face scan">
+                <h3>Step 2 · Face scan</h3>
+                <p>Use your front camera to take a clear profile picture. It will be saved to your Asiye account.</p>
+                <img id="newPassengerFacePreview" alt="Your new passenger profile picture" hidden>
+                <div id="newPassengerFaceCamera" hidden></div>
+                <button type="button" id="newPassengerFaceShutter" hidden>Capture face picture</button>
+                <button type="button" id="scanPassengerFace" class="primary-button">Scan face with camera</button>
+                <p id="newPassengerFaceStatus" role="status" aria-live="polite">Face scan required before continuing.</p>
+            </section>
+            <button id="createPassengerProfile" class="primary-button" type="button">
+                Save profile &amp; continue
             </button>
 
         </div>
@@ -415,6 +425,7 @@
 
 <script src="./js/firebase.js"></script>
 
+<script src="./js/onboarding.js"></script>
 <script src="./js/login.js"></script>
 <script src="../native-auth-session.js"></script>
 
