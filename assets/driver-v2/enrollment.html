@@ -71,15 +71,31 @@
 
     <fieldset>
       <legend>4 · Licence & address confirmation</legend>
-      <label>Driver’s licence (clear photo or PDF)
-        <input type="file" name="licence" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" required>
+      <div class="capture-row">
+        <strong>Driver’s licence — front of licence</strong>
+        <p>Use the same in-app rear-camera shutter as the vehicle photo.</p>
+        <button type="button" id="captureLicence">Take licence picture</button>
+        <img id="licencePreview" alt="Captured driver's licence" hidden>
+        <p id="licenceStatus" role="status"></p>
+      </div>
+      <label>Alternatively select a clear driver's licence picture or PDF
+        <input type="file" name="licence" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp">
       </label>
-      <p class="field-help">Full document readable, maximum 10 MB.</p>
+      <p class="field-help">Full document readable, maximum 7 MB.</p>
       <label>Residential street address
-        <textarea name="residentialAddress" rows="3" maxlength="300" placeholder="Street address, suburb, town, province" required></textarea>
+        <input id="residentialAddress" name="residentialAddress" type="text" autocomplete="street-address"
+          maxlength="300" placeholder="Start typing your street and suburb..." required>
       </label>
-      <label>Proof of residential address (clear photo or PDF)
-        <input type="file" name="address" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" required>
+      <div id="addressSuggestions" class="address-suggestions" role="listbox" aria-label="Suggested South African addresses" hidden></div>
+      <p class="field-help" id="addressLookupStatus" role="status">Select a suggested address, or enter it manually if unavailable. Confirm your address matches your document.</p>
+      <div class="capture-row">
+        <strong>Proof of address document</strong>
+        <button type="button" id="captureAddressProof">Take proof-of-address picture</button>
+        <img id="addressProofPreview" alt="Proof of address picture" hidden>
+        <p id="addressProofStatus" role="status"></p>
+      </div>
+      <label>Alternatively select a picture or PDF of proof of address
+        <input type="file" name="address" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp">
       </label>
       <p class="field-help">Upload a document that shows the same residential address. Maximum 10 MB.</p>
     </fieldset>
@@ -93,9 +109,14 @@
     <fieldset>
       <legend>6 · Banking for driver payouts</legend>
       <label>Account holder <input name="accountHolder" maxlength="120" required></label>
-      <label>South African bank <input name="bank" maxlength="80" required></label>
+      <label>South African bank
+        <select id="enrollmentBank" name="bank" required>
+          <option value="">Choose your bank</option>
+        </select>
+      </label>
       <label>Account number <input name="accountNumber" inputmode="numeric" pattern="[0-9]{6,20}" required></label>
-      <label>Branch code <input name="branchCode" inputmode="numeric" pattern="[0-9]{6}" required></label>
+      <label>Universal branch code <input id="enrollmentBranchCode" name="branchCode" inputmode="numeric" pattern="[0-9]{6}" readonly required></label>
+      <p class="field-help">Branch code is selected from your bank. Verify with your banking app before submitting.</p>
       <label>Account type
         <select name="accountType" required>
           <option value="">Select account type</option>
@@ -137,7 +158,10 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+<script src="./js/config.js"></script>
 <script src="./js/firebase.js"></script>
+<script src="./js/enrollment-address.js"></script>
+<script src="./js/enrollment-banks.js"></script>
 <script src="./js/enrollment-validation.js"></script>
 <script src="./js/enrollment-gate.js"></script>
 <script src="./js/enrollment.js"></script>
