@@ -24,10 +24,13 @@ jobs:
           node --check assets/member-pages.js
           node --check assets/support-chat.js
           node --check assets/admin-release.js
+          node --check assets/passenger-v2/js/onboarding.js
+          node --check assets/passenger-v2/js/login.js
+          node --check functions/driver-card-payout.js
           node --check functions/index.js
           node --check test/release327-admin-support.test.cjs
       - name: Run release and existing member page tests
         run: |
-          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs
+          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs test/card-payout-passenger.test.cjs
       - name: Validate database rules JSON
         run: node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
