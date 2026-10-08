@@ -6102,11 +6102,37 @@ exports.uploadDriverEnrollmentDocument = onRequest(
       if((await admin.database().ref(`driverEnrollments/${uid}`).once("value")).exists())
         return response.status(409).json({error:"Application already submitted. Check pending approval."});
       const path=`driverEnrollments/${uid}/${submission}/${kind}`;
-      const token=require("node:crypto").randomUUID();
+      const digest=require("node:crypto").createHash("sha256").update(bytes).digest("hex");
       const file=admin.storage().bucket(PROFILE_STORAGE_BUCKET).file(path);
-      await file.save(bytes,{resumable:false,preconditionOpts:{ifGenerationMatch:0},
-        metadata:{contentType:mime,cacheControl:"private,max-age=300",
-          metadata:{firebaseStorageDownloadTokens:token,ownerUid:uid,enrollmentKind:kind}}});
+      const fromExisting=async()=>{
+        const [meta]=await file.getMetadata();
+        const stored=meta.metadata||{};
+        if(stored.ownerUid!==uid || stored.enrollmentKind!==kind ||
+            stored.contentSha256!==digest || Number(meta.size)!==bytes.length)
+          return null;
+        const token=String(stored.firebaseStorageDownloadTokens||"").split(",")[0];
+        if(!/^[0-9a-f-]{36}$/i.test(token)) return null;
+        return {ok:true,storagePath:path,
+          url:firebaseStorageDownloadUrl({bucketName:PROFILE_STORAGE_BUCKET,objectPath:path,token}),kind};
+      };
+      const [exists]=await file.exists();
+      if(exists){
+        const result=await fromExisting();
+        if(result) return response.status(200).json(result);
+        return response.status(409).json({error:"Document differs from the previously uploaded copy. Start a fresh enrollment submission."});
+      }
+      const token=require("node:crypto").randomUUID();
+      try {
+        await file.save(bytes,{resumable:false,preconditionOpts:{ifGenerationMatch:0},
+          metadata:{contentType:mime,cacheControl:"private,max-age=300",
+            metadata:{firebaseStorageDownloadTokens:token,ownerUid:uid,enrollmentKind:kind,contentSha256:digest}}});
+      } catch(error){
+        if(error.code===412){
+          const result=await fromExisting();
+          if(result) return response.status(200).json(result);
+        }
+        throw error;
+      }
       const [metadata]=await file.getMetadata();
       if(Number(metadata.size)!==bytes.length) throw Error("Storage confirmation failed.");
       const url=firebaseStorageDownloadUrl({bucketName:PROFILE_STORAGE_BUCKET,objectPath:path,token});
