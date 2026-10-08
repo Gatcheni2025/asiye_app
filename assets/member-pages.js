@@ -1754,6 +1754,8 @@ window.AsiyePages = {
                         carButton.textContent =
                             'Opening camera…';
 
+                        const savedPhotoBeforeCapture =
+                            user.vehiclePhoto || '';
                         try {
                             const capture =
                                 await AsiyeFaceCapture
@@ -1761,9 +1763,17 @@ window.AsiyePages = {
                                         'driver-vehicle'
                                     );
 
+                            // The in-app camera has now closed and Asiye's
+                            // Vehicle page is visible again. Show the photo
+                            // immediately while the authenticated upload runs.
+                            if (carPreview && capture?.dataUrl) {
+                                carPreview.src = capture.dataUrl;
+                                carPreview.hidden = false;
+                            }
+                            carButton.textContent = 'Saving car picture…';
                             if (carStatus) {
                                 carStatus.textContent =
-                                    'Uploading vehicle photo…';
+                                    'Saving your car picture in Asiye…';
                             }
 
                             const uploaded =
@@ -1785,13 +1795,21 @@ window.AsiyePages = {
                             // client write is denied by production security rules.
                             user.vehiclePhoto =
                                 uploaded.url;
+                            // Keep the active driver profile in sync with the
+                            // saved Firebase URL, without a forbidden write.
+                            if (app.state.driver) {
+                                app.state.driver.vehiclePhoto = uploaded.url;
+                                app.state.driver.vehicleApproved = false;
+                                app.state.driver.vehicleApprovalStatus =
+                                    'not_submitted';
+                                app.state.driver.isOnline = false;
+                            }
 
                             if (carPreview) {
-                                carPreview.src =
-                                    uploaded.url;
-                                carPreview.hidden =
-                                    false;
+                                carPreview.src = uploaded.url;
+                                carPreview.hidden = false;
                             }
+                            app.ui?.updateDriverProfileUI?.();
 
                             if (carStatus) {
                                 carStatus.textContent =
@@ -1802,10 +1820,16 @@ window.AsiyePages = {
                                 'Retake car photo';
 
                         } catch (error) {
+                            // Do not present a locally captured but unsaved
+                            // image as if it were stored on the driver account.
+                            if (carPreview) {
+                                carPreview.src = savedPhotoBeforeCapture;
+                                carPreview.hidden = !savedPhotoBeforeCapture;
+                            }
                             if (carStatus) {
                                 carStatus.textContent =
                                     error?.message ||
-                                    'Vehicle photo was not saved.';
+                                    'Vehicle photo was not saved. Please try again.';
                             }
 
                             carButton.textContent =
