@@ -5789,6 +5789,21 @@ exports.uploadProfileImageProxy =
             });
         }
 
+        // During phone signup, validate a complete name before committing
+        // both identity and face photo with the Admin SDK. Client-side
+        // Realtime Database writes can be blocked on legacy commuter IDs.
+        const fullName = String(request.body?.fullName || "").trim();
+        const signup = role === "passenger" && request.body?.completeSignup === true;
+        if (signup && (
+          !decoded.phone_number ||
+          fullName.length < 2 || fullName.length > 100 ||
+          /[<>\\u0000-\\u001f]/.test(fullName)
+        )) {
+          return response.status(422).json({
+            error: "Verified mobile number and full name are required."
+          });
+        }
+
         const dataUrl =
           String(
             request.body?.dataUrl ||
@@ -5968,6 +5983,14 @@ exports.uploadProfileImageProxy =
                     url
                 }
               : {
+                  ...(signup ? {
+                    name: fullName,
+                    phone: decoded.phone_number,
+                    authUid: decoded.uid,
+                    onboardingCompleted: true,
+                    profileSetupPending: false,
+                    profileCompletedAt: now
+                  } : {}),
                   profileImageUrl:
                     url,
                   profile_picture_url:
