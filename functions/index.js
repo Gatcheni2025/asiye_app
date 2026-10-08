@@ -6669,223 +6669,42 @@ function firebaseDatabaseBaseUrl() {
   ).replace(/\/$/, "");
 }
 
-async function creditPaystackWallet(
-  payment,
-  transaction
-) {
-  if (
-    !payment ||
-    payment.provider !== "paystack"
-  ) {
-    throw new Error(
-      "Paystack wallet payment was not found."
-    );
+async function creditPaystackWallet(payment, transaction) {
+  if (!payment || payment.provider !== "paystack") {
+    throw new Error("Paystack wallet payment was not found.");
   }
-
-  if (
-    payment.status ===
-      "complete"
-  ) {
-    return {
-      credited:
-        false,
-      balance:
-        Number(
-          payment.creditedBalance ||
-          0
-        )
-    };
+  if (!transactionMatchesPayment(transaction, payment)) {
+    throw new Error("Paystack reference, status, currency or amount does not match.");
   }
-
-  if (
-    !transactionMatchesPayment(
-      transaction,
-      payment
-    )
-  ) {
-    throw new Error(
-      "Paystack transaction does not match the wallet top-up."
-    );
+  const passengerId = safeProfileId(payment.passengerId || payment.uid);
+  if (!passengerId) throw new Error("Wallet passenger identity is missing.");
+  const ref = admin.database().ref(`commuters/${passengerId}`);
+  let finalCredit = null;
+  // Server-side transaction retries under concurrent topups and wallet holds.
+  // The applied-payment marker is committed atomically with the balance.
+  const tx = await ref.transaction(profile => {
+    if (!profile) return;
+    const credited = applyWalletCredit(profile, payment, Date.now());
+    finalCredit = credited;
+    return credited.credited ? credited.profile : undefined;
+  }, undefined, false);
+  if (!finalCredit && tx.snapshot.exists()) {
+    finalCredit = applyWalletCredit(tx.snapshot.val(), payment, Date.now());
   }
-
-  const passengerId =
-    String(
-      payment.passengerId ||
-      payment.uid ||
-      ""
-    ).trim();
-
-  if (!passengerId) {
-    throw new Error(
-      "Wallet passenger identity is missing."
-    );
-  }
-
-  const accessToken =
-    await adminDatabaseAccessToken();
-
-  const profileUrl =
-    firebaseDatabaseBaseUrl() +
-    "/commuters/" +
-    encodeURIComponent(
-      passengerId
-    ) +
-    ".json";
-
-  let creditedBalance =
-    null;
-
-  let credited =
-    false;
-
-  for (
-    let attempt = 0;
-    attempt < 6;
-    attempt += 1
-  ) {
-    const readResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "GET",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "X-Firebase-ETag":
-              "true",
-            "Cache-Control":
-              "no-cache"
-          }
-        }
-      );
-
-    if (!readResponse.ok) {
-      throw new Error(
-        "Unable to load wallet profile."
-      );
-    }
-
-    const profile =
-      await readResponse.json();
-
-    const etag =
-      readResponse.headers.get(
-        "etag"
-      );
-
-    if (
-      !profile ||
-      !etag
-    ) {
-      throw new Error(
-        "Wallet profile is unavailable."
-      );
-    }
-
-    const applied =
-      applyWalletCredit(
-        profile,
-        payment,
-        Date.now()
-      );
-
-    creditedBalance =
-      applied.balance;
-
-    if (!applied.credited) {
-      credited =
-        false;
-      break;
-    }
-
-    const writeResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "PUT",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "Content-Type":
-              "application/json",
-            "If-Match":
-              etag
-          },
-          body:
-            JSON.stringify(
-              applied.profile
-            )
-        }
-      );
-
-    if (
-      writeResponse.status ===
-      412
-    ) {
-      continue;
-    }
-
-    if (!writeResponse.ok) {
-      throw new Error(
-        "Unable to credit Asiye wallet."
-      );
-    }
-
-    credited =
-      true;
-    break;
-  }
-
-  if (creditedBalance === null) {
-    throw new Error(
-      "Wallet credit could not be confirmed."
-    );
-  }
-
-  await admin.database()
-    .ref(
-      "walletPayments/" +
-      payment.reference
-    )
-    .update({
-      status:
-        "complete",
-      provider:
-        "paystack",
-      channel:
-        String(
-          transaction.channel ||
-          ""
-        ),
-      paystackTransactionId:
-        String(
-          transaction.id ||
-          ""
-        ),
-      paidAt:
-        transaction.paid_at ||
-        transaction.paidAt ||
-        admin.database
-          .ServerValue
-          .TIMESTAMP,
-      creditedBalance,
-      creditedAt:
-        admin.database
-          .ServerValue
-          .TIMESTAMP
-    });
-
-  return {
-    credited,
-    balance:
-      creditedBalance
-  };
+  if (!finalCredit) throw new Error("Passenger wallet profile is unavailable.");
+  // Payment record may lag a successful wallet transaction; its idempotency
+  // marker prevents a second credit when webhook and return callback race.
+  await admin.database().ref("walletPayments/" + payment.reference).update({
+    status: "complete", provider: "paystack",
+    channel: String(transaction.channel || ""),
+    paystackTransactionId: String(transaction.id || ""),
+    paidAt: transaction.paid_at || transaction.paidAt ||
+      admin.database.ServerValue.TIMESTAMP,
+    creditedBalance: finalCredit.balance,
+    creditedAt: admin.database.ServerValue.TIMESTAMP
+  });
+  return { credited: !!tx.committed, balance: finalCredit.balance };
 }
-
 // =================================================================
 // --- RIDE PAYMENT HOLDS: CASH / CARD / ASIYE WALLET ---
 // =================================================================
@@ -7051,130 +6870,21 @@ function tripPaymentPath(
   );
 }
 
-async function updateWalletProfileWithEtag(
-  passengerId,
-  mutate
-) {
-  const accessToken =
-    await adminDatabaseAccessToken();
-
-  const profileUrl =
-    firebaseDatabaseBaseUrl() +
-    "/commuters/" +
-    encodeURIComponent(
-      passengerId
-    ) +
-    ".json";
-
-  for (
-    let attempt = 0;
-    attempt < 7;
-    attempt += 1
-  ) {
-    const readResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "GET",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "X-Firebase-ETag":
-              "true",
-            "Cache-Control":
-              "no-cache"
-          }
-        }
-      );
-
-    if (!readResponse.ok) {
-      throw new Error(
-        "Unable to load Asiye Wallet."
-      );
-    }
-
-    const profile =
-      await readResponse
-        .json();
-
-    const etag =
-      readResponse.headers.get(
-        "etag"
-      );
-
-    if (
-      !profile ||
-      !etag
-    ) {
-      throw new Error(
-        "Passenger wallet profile is unavailable."
-      );
-    }
-
-    const result =
-      mutate(
-        structuredClone(
-          profile
-        )
-      );
-
-    if (
-      result &&
-      result.write ===
-        false
-    ) {
-      return result;
-    }
-
-    const nextProfile =
-      result?.profile ||
-      profile;
-
-    const writeResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "PUT",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "Content-Type":
-              "application/json",
-            "If-Match":
-              etag
-          },
-          body:
-            JSON.stringify(
-              nextProfile
-            )
-        }
-      );
-
-    if (
-      writeResponse.status ===
-        412
-    ) {
-      continue;
-    }
-
-    if (!writeResponse.ok) {
-      throw new Error(
-        "Unable to update Asiye Wallet."
-      );
-    }
-
-    return result;
-  }
-
-  throw new Error(
-    "Wallet changed while reserving payment. Please try again."
-  );
+async function updateWalletProfileWithEtag(passengerId, mutate) {
+  const id = safeProfileId(passengerId);
+  if (!id) throw new Error("Passenger identity is invalid.");
+  const walletRef = admin.database().ref(`commuters/${id}`);
+  let lastResult = null;
+  const tx = await walletRef.transaction(profile => {
+    if (!profile) return;
+    const result = mutate(structuredClone(profile));
+    lastResult = result;
+    if (result?.write === false) return;
+    return result?.profile || profile;
+  }, undefined, false);
+  if (!lastResult) throw new Error("Passenger wallet profile is unavailable.");
+  return lastResult;
 }
-
 async function holdWalletTripPayment(
   requestId,
   passengerId,
