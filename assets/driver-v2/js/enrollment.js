@@ -59,7 +59,10 @@
                 // Installed app: live face scan uses the front camera; car
                 // photo uses the dedicated rear camera with auto-return.
                 if (nativeChannel()) {
-                    const purpose = key === 'selfie' ? 'driver-enrollment-face' : key === 'identity' ? 'driver-identity' : 'driver-vehicle';
+                    // Existing installed releases recognise driver-vehicle as the
+                    // non-biometric rear-camera shutter. Reuse it for ID as
+                    // well, so photos work even before native APK upgrade.
+                    const purpose = key === 'selfie' ? 'driver-enrollment-face' : 'driver-vehicle'; // driver-identity is a document, never a face scan
                     const result = await nativeCapture(purpose);
                     savePhoto(key, nativeBlob(result));
                     status.textContent = label + ' captured. Continue to the next step.';
@@ -87,7 +90,9 @@
             try {
                 let photo;
                 if (nativeChannel()) {
-                    photo = nativeBlob(await nativeCapture(spec.purpose));
+                    // Native driver-licence and driver-address-proof routes exist in
+                    // new APKs; older APKs understand driver-vehicle only.
+                    photo = nativeBlob(await nativeCapture('driver-vehicle'));
                 } else {
                     // Browser: choose the camera-enabled file input as fallback.
                     form.elements[kind].click();
