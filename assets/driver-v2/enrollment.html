@@ -1,10 +1,145 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Driver enrollment · Asiye</title><link rel="stylesheet" href="../member-pages.css"><link rel="stylesheet" href="./css/enrollment.css"></head><body>
-<main class="enrollment"><header><img src="../data/AsiyeNew.png" alt="Asiye"><p>DRIVER ENROLLMENT</p><h1>Let’s get you road-ready.</h1><p>Complete every section. You can start driving after your application is verified.</p></header><p id="enrollmentStatus" role="status">Checking your application…</p>
-<form id="enrollmentForm" hidden novalidate><div class="enrollment-progress"><p id="stepLabel" aria-live="polite"></p><progress id="stepProgress" max="6" value="1" aria-label="Enrollment progress"></progress></div><p id="stepError" role="alert" tabindex="-1" hidden></p>
-<fieldset><legend>1 · Identity and vehicle photos</legend><p>Take clear photos. Your selfie is reviewed by a person; this is not an automated identity check.</p><div id="captureFields"></div><video id="captureVideo" autoplay playsinline muted hidden></video><button id="takePhoto" type="button" hidden>Take photo</button><button id="cancelCamera" type="button" hidden>Close camera</button></fieldset>
-<fieldset><legend>2 · Driver’s licence</legend><label>Upload licence copy (PDF or image, up to 10 MB)<input type="file" name="licence" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" aria-describedby="licenceHelp" required></label><p id="licenceHelp" class="field-help">Choose a PDF or a clear JPG, PNG or WebP photo. Include the whole licence with readable details. Maximum file size: 10 MB.</p></fieldset>
-<fieldset><legend>3 · Personal and vehicle details</legend><label>Full legal name<input name="fullName" autocomplete="name" maxlength="100" required></label><label>Phone number<input name="phone" type="tel" maxlength="20" autocomplete="tel" aria-describedby="phoneHelp" required></label><p id="phoneHelp" class="field-help">For example: 082 123 4567 or +27 82 123 4567. Spaces, brackets and hyphens are allowed.</p><label>Vehicle make<input name="vehicleMake" maxlength="60" placeholder="e.g. Toyota" required></label><label>Vehicle model<input name="vehicleModel" maxlength="60" placeholder="e.g. Corolla" required></label><label>Vehicle colour<input name="vehicleColor" maxlength="40" placeholder="e.g. White" required></label><label>Vehicle year<input name="vehicleYear" type="number" inputmode="numeric" min="1990" max="2027" step="1" placeholder="2023" required></label><label>Vehicle registration<input name="vehicleReg" maxlength="20" placeholder="e.g. ND 123 456" required></label></fieldset>
-<fieldset><legend>4 · Three references</legend><p>Provide three different people who have agreed to be contacted.</p><div id="referenceFields"></div></fieldset>
-<fieldset><legend>5 · Banking details</legend><label>Account holder<input name="accountHolder" maxlength="120" required></label><label>Bank name<input name="bank" maxlength="80" required></label><p>Use the details from your bank statement. Enter numbers only for your account number and six-digit branch code.</p><label>Account number<input name="accountNumber" inputmode="numeric" pattern="[0-9]{6,20}" required></label><label>Branch code<input name="branchCode" inputmode="numeric" pattern="[0-9]{6}" required></label><label>Account type<select name="accountType" required><option value="">Select account type</option><option value="cheque">Cheque / current</option><option value="savings">Savings</option><option value="transmission">Transmission</option></select></label></fieldset>
-<fieldset><legend>6 · Review and submit</legend><p>Check your details before sending your application. Banking account numbers are masked below.</p><div id="enrollmentReview"></div><label class="consent"><input type="checkbox" required> I confirm these details are accurate and my references have agreed to be contacted for driver verification.</label><p>Documents and banking details are submitted for enrollment review. Nothing is uploaded until you submit.</p><button type="submit" id="submitEnrollment">Submit for verification</button></fieldset><div class="step-actions"><button type="button" id="previousStep">Back</button><button type="button" id="nextStep">Continue</button></div><p class="draft-note">Your entries stay while you move between steps. Closing or refreshing this page clears unsent details.</p></form><button type="button" id="refreshEnrollment">Check verification status</button><a href="./login.html">Back to sign in</a></main>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script><script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script><script src="./js/firebase.js"></script><script src="./js/enrollment-validation.js"></script><script src="./js/enrollment.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Asiye · Driver registration</title>
+  <link rel="stylesheet" href="../member-pages.css">
+  <link rel="stylesheet" href="./css/enrollment.css">
+</head>
+<body>
+<main class="enrollment">
+  <header class="enrollment-header">
+    <img src="../data/AsiyeNew.png" alt="Asiye">
+    <p class="eyebrow">ASIYE DRIVER · REGISTRATION</p>
+    <h1>Get ready to drive.</h1>
+    <p>Apply once, and the Asiye team will review your identity, vehicle and documents. You can drive after approval.</p>
+  </header>
+  <p id="enrollmentStatus" role="status" aria-live="polite">Checking your application…</p>
+  <section id="pendingPanel" class="review-panel" hidden aria-label="Driver application status">
+    <div class="review-symbol" aria-hidden="true">✓</div>
+    <h2 id="pendingTitle">Application received</h2>
+    <p id="pendingDescription">Your documents are saved. Asiye Admin will review your application. You do not need to enroll again.</p>
+    <p class="application-ref" id="applicationReference"></p>
+    <button type="button" id="checkStatusAgain">Check approval status</button>
+    <p>Need help? Contact <a href="mailto:support@asiye.cloud">Asiye Support</a>.</p>
+  </section>
+
+  <form id="enrollmentForm" hidden novalidate>
+    <div class="enrollment-progress">
+      <p id="stepLabel" aria-live="polite"></p>
+      <progress id="stepProgress" max="7" value="1" aria-label="Enrollment progress"></progress>
+    </div>
+    <p id="stepError" role="alert" tabindex="-1" hidden></p>
+
+    <fieldset>
+      <legend>1 · Personal details & verified phone</legend>
+      <p>Your phone was already verified when you signed in with OTP. It is saved to your driver account; no second OTP is needed.</p>
+      <label>Full legal name <input name="fullName" autocomplete="name" maxlength="100" required></label>
+      <label>Verified mobile number <input name="phone" id="verifiedPhone" type="tel" autocomplete="tel" readonly required></label>
+      <p id="phoneVerifiedNote" class="field-help">Using your verified login number.</p>
+      <p>If you used Google or Apple without verifying a mobile number, sign out and verify a phone number first.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>2 · Face scan & identity document</legend>
+      <p>Complete a live camera face scan so your selfie becomes the photo submitted for admin verification. Then capture your South African ID or passport.</p>
+      <div id="capture-selfie"></div>
+      <div id="capture-identity"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>3 · Your car</legend>
+      <p>Capture the whole car using the rear camera. Make sure its colour and registration plate are visible.</p>
+      <div id="capture-car"></div>
+      <label>Vehicle type
+        <select name="vehicleType" required>
+          <option value="">Select category</option>
+          <option value="sedan">Sedan</option>
+          <option value="hatchback">Hatchback</option>
+          <option value="suv">SUV</option>
+          <option value="minibus">Minibus</option>
+        </select>
+      </label>
+      <label>Make <input name="vehicleMake" maxlength="60" placeholder="e.g. Toyota" required></label>
+      <label>Model <input name="vehicleModel" maxlength="60" placeholder="e.g. Corolla" required></label>
+      <label>Colour <input name="vehicleColor" maxlength="40" placeholder="e.g. White" required></label>
+      <label>Year <input name="vehicleYear" type="number" inputmode="numeric" min="1990" max="2027" step="1" placeholder="2023" required></label>
+      <label>Registration number <input name="vehicleReg" maxlength="20" placeholder="e.g. ND 123 456" required></label>
+      <label>Passenger seats <input name="vehicleSeats" type="number" inputmode="numeric" min="1" max="15" step="1" value="4" required></label>
+    </fieldset>
+
+    <fieldset>
+      <legend>4 · Licence & address confirmation</legend>
+      <label>Driver’s licence (clear photo or PDF)
+        <input type="file" name="licence" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" required>
+      </label>
+      <p class="field-help">Full document readable, maximum 10 MB.</p>
+      <label>Residential street address
+        <textarea name="residentialAddress" rows="3" maxlength="300" placeholder="Street address, suburb, town, province" required></textarea>
+      </label>
+      <label>Proof of residential address (clear photo or PDF)
+        <input type="file" name="address" accept="application/pdf,image/jpeg,image/png,image/webp,.pdf,.jpg,.jpeg,.png,.webp" required>
+      </label>
+      <p class="field-help">Upload a document that shows the same residential address. Maximum 10 MB.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>5 · Three references</legend>
+      <p>Include three different contacts who have agreed to be contacted by the verification team.</p>
+      <div id="referenceFields"></div>
+    </fieldset>
+
+    <fieldset>
+      <legend>6 · Banking for driver payouts</legend>
+      <label>Account holder <input name="accountHolder" maxlength="120" required></label>
+      <label>South African bank <input name="bank" maxlength="80" required></label>
+      <label>Account number <input name="accountNumber" inputmode="numeric" pattern="[0-9]{6,20}" required></label>
+      <label>Branch code <input name="branchCode" inputmode="numeric" pattern="[0-9]{6}" required></label>
+      <label>Account type
+        <select name="accountType" required>
+          <option value="">Select account type</option>
+          <option value="cheque">Cheque / current</option>
+          <option value="savings">Savings</option>
+          <option value="transmission">Transmission</option>
+        </select>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>7 · Review & submit</legend>
+      <p>After you submit, the application is locked for review. You will see a pending status, not the registration form again.</p>
+      <div id="enrollmentReview"></div>
+      <label class="consent"><input type="checkbox" name="consent" required>
+        I confirm the information is accurate, my references consent to being contacted and my documents may be reviewed.
+      </label>
+      <button type="submit" id="submitEnrollment">Submit once for admin approval</button>
+    </fieldset>
+
+    <div class="step-actions">
+      <button type="button" id="previousStep">Back</button>
+      <button type="button" id="nextStep">Save & continue</button>
+    </div>
+    <p class="draft-note">Review each step before submitting. Unsubmitted details remain on this screen while you move between steps.</p>
+  </form>
+
+  <video id="captureVideo" autoplay playsinline muted hidden></video>
+  <div class="camera-actions">
+    <button id="takePhoto" type="button" hidden>Capture photo</button>
+    <button id="cancelCamera" type="button" hidden>Close camera</button>
+  </div>
+  <nav class="enrollment-bottom-actions">
+    <button type="button" id="refreshEnrollment">Refresh approval status</button>
+    <button type="button" id="logoutEnrollment">Log out / Switch account</button>
+  </nav>
+</main>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-storage-compat.js"></script>
+<script src="./js/firebase.js"></script>
+<script src="./js/enrollment-validation.js"></script>
+<script src="./js/enrollment-gate.js"></script>
+<script src="./js/enrollment.js"></script>
+</body>
+</html>
