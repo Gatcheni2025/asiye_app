@@ -1516,13 +1516,11 @@ ASIYE_DRIVER.trip = {
         const request =
             this.request;
 
-        if (
-            !request ||
-            request.type ===
-                'delivery'
-        ) {
+        if (!request) {
             return true;
         }
+        // Parcel deliveries must also settle confirmed card/wallet payments.
+        // The server rejects a card payment that has not been verified.
 
         const authUser =
             firebase.auth()
