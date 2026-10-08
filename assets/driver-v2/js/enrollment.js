@@ -318,9 +318,10 @@
 
             // Seed the driver's own taxi profile while keeping it locked
             // offline. Approval promotes these verified enrollment fields.
-            await firebase.database()
-                .ref(`taxis/${user.uid}`)
-                .update({
+            try {
+                await firebase.database()
+                    .ref(`taxis/${user.uid}`)
+                    .update({
                     name: enrollmentRecord.fullName,
                     fullName: enrollmentRecord.fullName,
                     phone: enrollmentRecord.phone,
@@ -346,6 +347,13 @@
                     enrollmentVersion: 2,
                     updatedAt: firebase.database.ServerValue.TIMESTAMP
                 });
+            } catch (profileError) {
+                // The enrollment was already saved. Admin approval can create
+                // the taxi profile using Admin SDK; never misreport a successful
+                // one-time submission as failed or offer the form again.
+                console.warn('Driver taxi profile seed deferred to admin review:',
+                    profileError.code || 'unknown');
+            }
 
             // Show the saved application state. The form cannot be reopened.
             busy = false;
