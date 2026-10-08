@@ -1389,35 +1389,28 @@ window.ASIYE_PASSENGER_LOGIN = {
         const button = document.getElementById('createPassengerProfile');
         const name = String(document.getElementById('newPassengerName')?.value || '').trim();
         if (name.length < 2) { this.toast('Please add your full name.'); return; }
-        const dataUrl = await window.AsiyePassengerOnboarding?.photoForUpload?.() || '';
-        if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(dataUrl)) {
-            this.toast('Scan your face and take a picture before continuing.');
-            return;
-        }
         const id = this.pendingProfileId || user.uid;
         if (button) { button.disabled = true; button.textContent = 'Saving face picture…'; }
         try {
-            const root = firebase.database().ref(`commuters/${id}`);
-            // First save a minimal profile to prove ownership to the
-            // authenticated server-side image uploader. Do NOT mark complete.
-            await root.update({
-                name,
-                phone: user.phoneNumber || this.currentPhone || '',
-                email: user.email || '',
-                authUid: user.uid,
-                profileSetupPending: true,
-                onboardingCompleted: false
-            });
+            const dataUrl = await window.AsiyePassengerOnboarding?.photoForUpload?.() || '';
+            if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(dataUrl)) {
+                throw Error('Scan your face and take a picture before continuing.');
+            }
             const token = await user.getIdToken(true);
             const response = await fetch(
                 'https://us-central1-asiye-80386.cloudfunctions.net/uploadProfileImageProxy',
                 {
                     method: 'POST',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
                         userId: id,
                         purpose: 'passenger-profile',
                         filename: 'passenger-face.jpg',
+                        fullName: name,
+                        completeSignup: true,
                         dataUrl
                     })
                 }
@@ -1425,25 +1418,25 @@ window.ASIYE_PASSENGER_LOGIN = {
             const uploaded = await response.json().catch(() => ({}));
             if (!response.ok || !/^https:\/\//.test(String(uploaded.url || ''))) {
                 throw Error(response.status === 404
-                    ? 'Profile photo service is unavailable (HTTP 404). The new Firebase function must be deployed.'
-                    : uploaded.error || 'Could not save your face picture. Please rescan and try again.');
+                    ? 'Profile photo service is not deployed (HTTP 404). Ask Asiye Support to publish the Firebase function.'
+                    : uploaded.error || 'Could not save your face picture. Please try again.');
             }
             if (!await this.storedFaceAvailable(uploaded.url)) {
-                throw Error('Image upload returned a broken URL (404). Your profile is not marked complete; retry your face scan.');
+                throw Error('Profile image is not downloadable. Ask Asiye Support to check Firebase image storage.');
             }
-            await root.update({
+            // The verified upload function writes the name, OTP phone, face
+            // and onboarding status as Admin SDK. Do not do a client write:
+            // some legacy commuter IDs are read-only for the WebView.
+            await this.completeLogin(id, {
+                ...this.pendingProfile,
                 name,
+                phone: user.phoneNumber || '',
                 profileImageUrl: uploaded.url,
                 profile_picture_url: uploaded.url,
                 passengerProfileImageUrl: uploaded.url,
                 faceScanCompleted: true,
-                onboardingCompleted: true,
-                profileSetupPending: false,
-                profileCompletedAt: firebase.database.ServerValue.TIMESTAMP
-            });
-            await this.completeLogin(id, { ...this.pendingProfile, name,
-                profileImageUrl: uploaded.url,
-                profile_picture_url: uploaded.url, onboardingCompleted: true }, user);
+                onboardingCompleted: true
+            }, user);
         } catch (error) {
             console.warn('Passenger registration incomplete:', error?.code || error?.message);
             const status = document.getElementById('newPassengerFaceStatus');
