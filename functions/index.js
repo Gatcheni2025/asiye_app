@@ -9160,10 +9160,28 @@ p{color:#596170;line-height:1.55}
 <script>
 (function(){
   var reference = ${JSON.stringify(reference)};
-  var target = "asiye://payment-complete?reference=" + encodeURIComponent(reference || "");
-  setTimeout(function(){
-    try { window.location.replace(target); } catch (_) {}
-  }, 500);
+  var encoded = encodeURIComponent(reference || "");
+  var scheme = "asiye://payment-complete?reference=" + encoded;
+  var androidIntent =
+    "intent://payment-complete?reference=" + encoded +
+    "#Intent;scheme=asiye;package=com.asiyeapp.asiye;end";
+  var isAndroid = /Android/i.test(navigator.userAgent || "");
+  var primary = isAndroid ? androidIntent : scheme;
+  var link = document.getElementById("backToAsiye");
+  if (link) link.setAttribute("href", primary);
+
+  function returnToApp(target) {
+    try {
+      window.location.href = target;
+    } catch (_) {}
+  }
+
+  // Chrome handles intent:// more reliably for returning from an external
+  // Paystack checkout. The custom-scheme retry also covers older Android
+  // browsers and iOS.
+  returnToApp(primary);
+  setTimeout(function(){ returnToApp(scheme); }, 500);
+  setTimeout(function(){ returnToApp(scheme); }, 1400);
 })();
 </script>
 </main>
