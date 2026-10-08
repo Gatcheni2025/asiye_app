@@ -42,7 +42,7 @@
     };
     const stopCamera = () => { stream?.getTracks().forEach(track => track.stop()); stream = null; document.getElementById('captureVideo').hidden = true; document.getElementById('takePhoto').hidden = true; document.getElementById('cancelCamera').hidden = true; };
     const savePhoto = (key, file) => {
-        if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 10 * 1024 * 1024) throw Error('Use a JPG, PNG or WebP image under 10 MB.');
+        if (!file || !/^image\/(jpeg|png|webp)$/.test(file.type) || file.size > 10 * 1024 * 1024) throw Error('Use a JPG, PNG or WebP image under 7 MB.');
         photos[key] = file;
         if (previews[key]) URL.revokeObjectURL(previews[key]);
         previews[key] = URL.createObjectURL(file);
