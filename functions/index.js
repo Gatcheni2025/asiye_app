@@ -8317,6 +8317,123 @@ async function recordCardTripPaymentHeld(
   };
 }
 
+exports.configureDriverCardPayout = onRequest(
+  { region: "us-central1", invoker: "public", secrets: [paystackSecretKey] },
+  async (request, response) => {
+    walletSmsCors(request, response);
+    response.set("Cache-Control", "no-store");
+    if (request.method === "OPTIONS") return response.status(204).send("");
+    try {
+      const actor = await verifiedRequestUser(request);
+      if (!actor) return response.status(401).json({ error: "Driver sign-in required." });
+      const driverId = safeProfileId(request.method === "GET"
+        ? request.query?.driverId : request.body?.driverId);
+      if (!driverId || !await profileOwnedByAuth("taxis", driverId, actor.uid))
+        return response.status(403).json({ error: "Not your driver account." });
+      const driver = (await admin.database().ref(`taxis/${driverId}`)
+        .once("value")).val();
+      if (!driver || driver.verificationStatus !== "verified")
+        return response.status(403).json({ error: "Driver must be verified before setting up payouts." });
+      if (request.method === "GET" && request.query?.action === "banks") {
+        const banks = await paystackRequest("/bank?currency=ZAR&perPage=100");
+        return response.status(200).json({ ok: true, banks: (banks.data || [])
+          .filter(item => item.active !== false)
+          .map(item => ({ name: String(item.name), code: String(item.code) })) });
+      }
+      if (request.method === "GET") {
+        const saved = (await admin.database()
+          .ref(`driverPayoutAccounts/${driverId}`).once("value")).val();
+        return response.status(200).json({ ok: true, status: saved?.status || "not_configured",
+          accountLast4: saved?.accountLast4 || "", bankName: saved?.bankName || "",
+          accountName: saved?.accountName || "" });
+      }
+      if (request.method !== "POST")
+        return response.status(405).json({ error: "Method not supported." });
+      const clean = bankInput(request.body);
+      const validated = await paystackRequest("/bank/validate", {
+        method: "POST",
+        body: {
+          account_name: clean.accountName,
+          account_number: clean.accountNumber,
+          account_type: clean.accountType,
+          bank_code: clean.bankCode,
+          country_code: "ZA",
+          document_type: clean.documentType,
+          document_number: clean.documentNumber
+        }
+      });
+      if (validated.data?.verified !== true ||
+          validated.data?.accountAcceptsCredits !== true ||
+          validated.data?.accountHolderMatch !== true) {
+        return response.status(422).json({
+          error: "Bank account could not be verified for this driver. Check the account holder and ID number."
+        });
+      }
+      const recipientResult = await paystackRequest("/transferrecipient", {
+        method: "POST",
+        body: {
+          type: "basa", name: clean.accountName,
+          account_number: clean.accountNumber, bank_code: clean.bankCode,
+          currency: "ZAR", description: "Asiye driver fare earnings"
+        }
+      });
+      const recipientCode = String(recipientResult.data?.recipient_code || "");
+      if (!/^RCP_[A-Za-z0-9]+$/.test(recipientCode)) {
+        throw Error("Paystack did not provide a bank payout recipient.");
+      }
+      await admin.database().ref(`driverPayoutAccounts/${driverId}`).set({
+        status: "verified", recipientCode,
+        accountName: clean.accountName,
+        accountLast4: clean.accountNumber.slice(-4),
+        bankCode: clean.bankCode,
+        bankName: String(recipientResult.data?.details?.bank_name || clean.bankCode),
+        verifiedBy: "paystack",
+        verifiedAt: admin.database.ServerValue.TIMESTAMP,
+        ownerUid: actor.uid
+      });
+      await admin.database().ref(`taxis/${driverId}`).update({
+        payoutStatus: "verified", payoutAccountLast4: clean.accountNumber.slice(-4)
+      });
+      return response.status(200).json({ ok: true, status: "verified",
+        accountLast4: clean.accountNumber.slice(-4) });
+    } catch (error) {
+      console.error("Driver payout bank configuration error", error?.message);
+      return response.status(422).json({
+        error: error?.message || "Bank verification could not be completed."
+      });
+    }
+  }
+);
+
+// Server-only payout trigger: the passenger has already paid, but the
+// assigned driver receives their 80% only after trip completion.
+exports.disburseCompletedCardTrips = functions.runWith({
+  secrets: [paystackSecretKey]
+}).database.ref("/requests/{requestId}/status").onUpdate(async(change, context) => {
+  if (change.before.val() === change.after.val() || change.after.val() !== "completed")
+    return null;
+  const requestId = context.params.requestId;
+  const trip = (await change.after.ref.parent.once("value")).val();
+  if (!trip?.taxiId && !trip?.driverId) return null;
+  const payments = (await admin.database()
+    .ref(`tripPayments/${requestId}`).once("value")).val() || {};
+  const failures = [];
+  for (const [passengerId, payment] of Object.entries(payments)) {
+    if (payment?.method !== "card" || payment?.status !== "captured") continue;
+    try {
+      await issueDriverCardPayout(requestId, passengerId, trip);
+    } catch (error) {
+      console.error("Card driver payout needs review", { requestId, passengerId,
+        error: error?.message || String(error) });
+      failures.push(passengerId);
+    }
+  }
+  if (failures.length) await admin.database().ref(`requests/${requestId}`).update({
+    driverPayoutAttention: true
+  });
+  return null;
+});
+
 exports.prepareTripPayment =
   onRequest(
     {
