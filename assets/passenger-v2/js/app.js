@@ -2026,6 +2026,13 @@ document.addEventListener(
         }
 
 
+        if (authUser.phoneNumber && ASIYE.profile?.photoAvailable &&
+            !(await ASIYE.profile.photoAvailable(commuter))) {
+            console.warn('Passenger image URL returned 404 or could not load. Require profile rescan.');
+            window.location.replace('./login.html');
+            return;
+        }
+
         ASIYE.setUser(
             commuterId,
             commuter
