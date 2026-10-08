@@ -241,8 +241,10 @@ ASIYE.parcels = {
                 'delivery',
             carCategory:
                 'go',
-            status:
-                'pending',
+            status: ASIYE.state.booking.paymentMethod === 'card'
+                ? 'payment_required' : 'pending',
+            paymentStatus: ASIYE.state.booking.paymentMethod === 'card'
+                ? 'payment_required' : 'unpaid',
 
             commuterId:
                 uid,
@@ -358,6 +360,19 @@ ASIYE.parcels = {
             'currentRequestId',
             requestId
         );
+
+        // A parcel paid by card follows the same secure Paystack checkout
+        // as Go. Never dispatch a driver before Paystack confirms payment.
+        if (requestData.paymentMethod === 'card') {
+            if (!ASIYE.payments?.prepare) {
+                throw new Error('Secure parcel card payment is unavailable.');
+            }
+            await ASIYE.payments.prepare(requestId);
+            return requestId;
+        }
+        if (requestData.paymentMethod === 'wallet') {
+            await ASIYE.payments.prepare(requestId);
+        }
 
         await ASIYE.booking.notifyGoDrivers(
             requestId,
