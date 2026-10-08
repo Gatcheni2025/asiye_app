@@ -87,3 +87,29 @@ test('private Paystack bank tokens and card transfer records reject client write
  assert.match(rules[key]['.read'],/admins/);
  }
 });
+
+test('parcel card trips must clear Paystack before drivers are notified',()=>{
+ const p=read('assets/passenger-v2/js/parcels.js');
+ const d=read('assets/driver-v2/js/trip-controller.js');
+ const backend=read('functions/index.js');
+ assert.match(p,/paymentMethod === 'card'/);
+ assert.match(p,/ASIYE\.payments\.prepare\(requestId\)/);
+ assert.match(p,/payment_required/);
+ assert.match(backend,/trip\.type === "delivery"/);
+ assert.match(d,/settleSelectedPayments/);
+ assert.match(backend,/driverPayoutPath/);
+});
+
+test('driver card commission already withheld is not charged as new driver debt',()=>{
+ const text=read('assets/driver-v2/js/trip-controller.js');
+ assert.match(text,/alreadyWithheldCommission/);
+ assert.match(text,/additionalCommissionDebt/);
+ assert.match(text,/Number\(additionalCommissionDebt \|\| 0\)/);
+});
+
+test('admin can inspect failed and pending payouts without making duplicate transfers',()=>{
+ assert.match(read('assets/admin.html'),/Card Payouts · 80\/20/);
+ assert.match(read('assets/admin-release.js'),/showCardPayouts/);
+ assert.match(read('assets/admin-release.js'),/Needs reconciliation/);
+ assert.match(read('functions/index.js'),/"driverCardPayouts"/);
+});
