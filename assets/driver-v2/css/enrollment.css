@@ -32,3 +32,10 @@ textarea {display:block;width:100%;padding:12px;border:1px solid #c9dbd0;border-
 .step-actions button{flex:1}
 .consent input{accent-color:#207343}
 @media(max-width:640px){.enrollment{border-radius:0;margin:0;box-shadow:none}.enrollment-header{padding:18px}.enrollment-bottom-actions button{flex:1}.review-panel{padding:18px}}
+
+/* Mobile-friendly address suggestions and captured document thumbnails */
+.address-suggestions{display:grid;gap:4px;background:#fff;border:1px solid #ccdcd0;border-radius:12px;box-shadow:0 12px 28px rgba(16,45,31,.13);padding:7px;margin-top:-8px;max-height:230px;overflow-y:auto}
+.address-suggestions button{text-align:left;white-space:normal;background:#f4faf6;color:#193e29;border-radius:8px;padding:12px;font-weight:550}
+.address-suggestions button:hover,.address-suggestions button:focus{background:#e1f1e7}
+#licencePreview,#addressProofPreview{width:100%;max-width:380px;max-height:260px;object-fit:contain;border:1px solid #d4dfda;border-radius:12px;background:#fafafa;margin-top:12px}
+input[readonly]{background:#f0f6f0}
