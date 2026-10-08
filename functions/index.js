@@ -4398,6 +4398,7 @@ exports.adminFetchData = functions.https.onCall(
       "walletAdjustments",
       "withdrawals",
       "payout_requests",
+      "driverCardPayouts",
       "adminAudit"
     ]);
 
