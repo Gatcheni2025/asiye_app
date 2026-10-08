@@ -390,6 +390,28 @@ ASIYE.payments = {
         return result;
     },
 
+    // Paystack may return to the app before its webhook is delivered. When
+    // the WebView resumes, verify the saved wallet reference server-to-server
+    // instead of expecting the user to reopen the Wallet panel manually.
+    _walletCheckActive: false,
+    async reconcileWalletTopup() {
+        const reference = localStorage.getItem('pendingPaystackReference');
+        if (!reference || this._walletCheckActive || !firebase.auth().currentUser) return null;
+        this._walletCheckActive = true;
+        try {
+            const result = await this.post('verifyPaystackWalletTopup', { reference });
+            if (result.status === 'complete') {
+                localStorage.removeItem('pendingPaystackReference');
+                await ASIYE.wallet.refresh();
+                ASIYE.ui?.toast?.('Payment confirmed. Your Asiye Wallet has been updated.');
+            }
+            return result;
+        } catch (error) {
+            console.warn('Wallet payment reconciliation will retry after return:',error?.code||error?.message);
+            return null; // Keep the reference for the next resume.
+        } finally { this._walletCheckActive = false; }
+    },
+
     pendingCard() {
         try {
             return JSON.parse(
