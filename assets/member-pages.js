@@ -1595,6 +1595,17 @@ window.AsiyePages = {
             `;
 
             if (driver) {
+                const link = document.createElement('a');
+                link.href = './payout.html';
+                link.className = 'member-primary member-secondary-support';
+                link.textContent = 'Set up bank account · 80% card payouts';
+                body.append(link);
+                const payoutInfo = document.createElement('p');
+                payoutInfo.className = 'member-note';
+                payoutInfo.textContent = user.payoutStatus === 'verified'
+                    ? 'Your card payout bank is verified (ending ' + (user.payoutAccountLast4 || '****') + ').'
+                    : 'Validate your South African banking details to receive completed card-trip earnings.';
+                body.append(payoutInfo);
                 this.bindDriverFaceScan(
                     body
                 );
