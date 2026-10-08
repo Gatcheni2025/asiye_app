@@ -105,10 +105,10 @@ test('vehicle details use the authenticated review endpoint rather than client w
 });
 
 test('backend owns vehicle images and verifies driver identity', () => {
-    assert.match(functionsSource, /exports\\.uploadProfileImageProxy\\s*=/);
-    assert.match(functionsSource, /exports\\.submitDriverVehicleForReview\\s*=/);
-    assert.match(functionsSource, /profileOwnedByAuth\\(/);
+    assert.match(functionsSource, /exports\.uploadProfileImageProxy\s*=/);
+    assert.match(functionsSource, /exports\.submitDriverVehicleForReview\s*=/);
+    assert.match(functionsSource, /profileOwnedByAuth\(/);
     assert.match(functionsSource, /vehicleImageStoragePath/);
     assert.match(functionsSource, /vehicleApproved: false/);
-    assert.match(memberPagesSource, /preserveAspectRatio: options\\.purpose === 'driver-vehicle'/);
+    assert.match(memberPagesSource, /preserveAspectRatio: options\.purpose === 'driver-vehicle'/);
 });
