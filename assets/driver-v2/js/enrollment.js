@@ -155,22 +155,77 @@
     };
     const check = async () => {
         if (!user || busy) return;
+        status.textContent = 'Checking registration and admin approval…';
+        form.hidden = true;
+        pendingPanel.hidden = true;
         try {
-            const [application, approval] = await Promise.all(['driverEnrollments','driverApprovals'].map(node => firebase.database().ref(`${node}/${user.uid}`).once('value')));
-            if (approval.val()?.status === 'approved') { status.textContent = 'Verified. Sign in to start driving.'; form.hidden = true; return; }
-            if (application.exists()) { status.textContent = approval.val()?.status === 'rejected' ? 'Your application was not approved. Contact Asiye support for the review outcome.' : 'Application submitted. Waiting for verification. You cannot start driving yet.'; form.hidden = true; return; }
-            status.textContent = 'Complete all sections below to apply.'; form.hidden = false;
+            const state = await AsiyeEnrollment.getStatus(user);
+            if (state.state === 'approved') {
+                status.textContent = 'Approved. Opening your Asiye driver dashboard…';
+                window.location.replace('./index.html');
+                return;
+            }
+            if (state.state === 'pending' || state.state === 'rejected') {
+                const rejected = state.state === 'rejected';
+                document.getElementById('pendingTitle').textContent = rejected
+                    ? 'Your application needs attention'
+                    : 'Registration submitted · Pending approval';
+                document.getElementById('pendingDescription').textContent = rejected
+                    ? state.reason + ' Contact Asiye Support. A new application cannot be started from here.'
+                    : 'Your information and documents have been sent for review. Admin approval is required before you can drive. There is no need to register again.';
+                document.getElementById('applicationReference').textContent =
+                    'Application reference: ' + user.uid.slice(-8).toUpperCase();
+                pendingPanel.hidden = false;
+                status.textContent = rejected
+                    ? 'Review outcome: changes required or rejected'
+                    : 'Pending · Waiting for Asiye Admin verification';
+                return;
+            }
+            if (state.state === 'new') {
+                if (!user.phoneNumber) {
+                    status.textContent = 'Your mobile number must be verified with an OTP before driver registration. Log out and sign in using your phone number.';
+                    return;
+                }
+                verifiedPhone.value = user.phoneNumber;
+                phoneNote.textContent = '✓ Verified by SMS OTP · ' + user.phoneNumber;
+                form.hidden = false;
+                status.textContent = 'Complete the seven steps once. Your application will then wait for administrator approval.';
+                return;
+            }
+            status.textContent = 'Sign in using your verified mobile number.';
         } catch (error) {
-            const denied = /permission.?denied/i.test(String(error.code || error.message));
-            status.textContent = denied
-                ? 'Enrollment access is not configured. The administrator must publish Realtime Database rules for driverEnrollments and driverApprovals, then you can retry.'
-                : 'Enrollment could not load. Check your connection, then retry.';
-            console.warn('Enrollment database read failed:', error.code || 'unknown');
-            form.hidden = true;
+            console.warn('Driver enrollment status read failed:', error.code || error.message);
+            status.textContent = 'Unable to check your existing enrollment. Please retry while connected to the internet. Your registration has not been reset.';
         }
     };
+
     document.getElementById('refreshEnrollment').onclick = check;
-    firebase.auth().onAuthStateChanged(value => { user = value; if (!user) { window.location.replace('./login.html'); return; } check(); });
+    document.getElementById('checkStatusAgain').onclick = check;
+    document.getElementById('logoutEnrollment').onclick = async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
+        try {
+            stopCamera();
+            await firebase.auth().signOut();
+            ['driverId','userId','commuterId','authUid','userType',
+                'driverPhone','driverName','currentRequestId'].forEach(key => {
+                try { localStorage.removeItem(key); } catch (_) {}
+            });
+            window.location.replace('./login.html');
+        } catch (error) {
+            button.disabled = false;
+            status.textContent = 'Unable to log out. Please check your connection and retry.';
+        }
+    };
+    firebase.auth().onAuthStateChanged(value => {
+        user = value;
+        if (!user) {
+            window.location.replace('./login.html');
+            return;
+        }
+        verifiedPhone.value = user.phoneNumber || '';
+        check();
+    });
     form.onsubmit = async event => {
         event.preventDefault(); if (!user || busy) return;
         if (step < steps.length-1) { await nextStep(); return; }
