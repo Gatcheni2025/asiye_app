@@ -1687,6 +1687,27 @@ ASIYE_DRIVER.trip = {
                 100
             ) / 100;
 
+        // Card-paid portions already deliver the Asiye 20% through the
+        // server-managed card settlement. Do not add that same fee to the
+        // driver's commission debt again.
+        const cardGross = request.type === 'club'
+            ? Object.values(request.passengers || {})
+                .filter(passenger => ![
+                    'cancelled','cancelled_by_commuter','cancelled_by_driver',
+                    'cancelled_by_admin','rejected'
+                ].includes(passenger?.status) &&
+                String(passenger?.paymentMethod || request.paymentMethod).toLowerCase() === 'card')
+                .reduce((sum, passenger) => sum +
+                    Number(passenger.price || request.pricePerPassenger || 0), 0)
+            : String(request.paymentMethod || '').toLowerCase() === 'card'
+                ? grossFare : 0;
+        const alreadyWithheldCommission = Math.min(
+            platformCommission, Math.round(Math.min(grossFare, cardGross) * 20) / 100
+        );
+        const additionalCommissionDebt = Math.max(
+            0, Math.round((platformCommission - alreadyWithheldCommission) * 100) / 100
+        );
+
 
         const settlementId =
             `${this.requestId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
@@ -1794,7 +1815,7 @@ ASIYE_DRIVER.trip = {
                             Math.round(
                                 (
                                     Number(driver.commissionDebt || 0) +
-                                    Number(settlement.platformCommission || 0)
+                                    Number(additionalCommissionDebt || 0)
                                 ) *
                                 100
                             ) / 100;
