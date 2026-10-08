@@ -6383,6 +6383,9 @@ async function issueDriverCardPayout(requestId, passengerId, trip) {
       existing.paymentReference !== payment.reference) {
     throw Error("Card payout ledger conflict; manual reconciliation required.");
   }
+  await admin.database().ref(`driverPayoutQueues/${driverId}/${reference}`).set({
+    requestId, passengerId, createdAt: admin.database.ServerValue.TIMESTAMP
+  });
   // Never transfer twice if another invocation has already attempted it.
   if (!["due", "awaiting_bank"].includes(existing.status)) return { status: existing.status };
   const bank = (await admin.database()
@@ -8396,6 +8399,22 @@ exports.configureDriverCardPayout = onRequest(
       await admin.database().ref(`taxis/${driverId}`).update({
         payoutStatus: "verified", payoutAccountLast4: clean.accountNumber.slice(-4)
       });
+      // Start previously earned but undelivered card payouts once the driver
+      // provides a verified bank. Every transfer reference remains immutable.
+      const queue = (await admin.database().ref(`driverPayoutQueues/${driverId}`)
+        .limitToFirst(100).once("value")).val() || {};
+      for (const item of Object.values(queue)) {
+        try {
+          const completedTrip = (await admin.database()
+            .ref(`requests/${item.requestId}`).once("value")).val();
+          if (completedTrip?.status === "completed") {
+            await issueDriverCardPayout(item.requestId, item.passengerId, completedTrip);
+          }
+        } catch (error) {
+          console.warn("Bank enabled; existing payout requires review",
+            item.requestId, error?.message || String(error));
+        }
+      }
       return response.status(200).json({ ok: true, status: "verified",
         accountLast4: clean.accountNumber.slice(-4) });
     } catch (error) {
