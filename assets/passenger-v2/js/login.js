@@ -1038,13 +1038,10 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-        if (
-            nameInput &&
-            user.displayName
-        ) {
-
-            nameInput.value =
-                user.displayName;
+        if (nameInput) {
+            nameInput.value = String(
+                profile?.data?.name || user.displayName || ''
+            ).trim();
         }
 
 
