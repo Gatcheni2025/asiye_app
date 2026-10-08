@@ -3642,6 +3642,22 @@ exports.adminManagePlatform = functions.https.onCall(
         lastReplyAt: now,
         lastReplyBy: "admin"
       });
+      // Surface admin replies in the existing driver/passenger notification
+      // inbox; do not trust a ticket's userId as an unchecked RTDB path.
+      const userId = safeProfileId(ticket.userId);
+      if (userId && (ticket.role === "driver" || ticket.role === "passenger")) {
+        const recipient = ticket.role === "driver" ? "taxis" : "commuters";
+        await admin.database()
+          .ref(`notifications/${recipient}/${userId}`)
+          .push()
+          .set({
+            type: "support_reply",
+            title: "Asiye Support replied",
+            body: "You have a new message from Asiye Support.",
+            ticketId: id,
+            timestamp: now
+          });
+      }
       await writeAdminAudit(actor, "support_replied", id, {});
       return { ok: true };
     }
