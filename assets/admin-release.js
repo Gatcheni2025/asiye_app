@@ -408,5 +408,58 @@
     });
   }
 
-  window.AsiyeAdminRelease = { showVehicles, showSupport, showEnrollments, safeImage };
+  async function showCardPayouts() {
+    setView('cardPayouts');
+    title('Driver Card Payouts · 80/20', 'Reconcile paid, pending and bank-unverified driver transfers.');
+    try {
+      await assertAdmin();
+      const records = await fetchData('driverCardPayouts');
+      if (activeView !== 'cardPayouts') return;
+      const view = main();
+      view.replaceChildren();
+      const all = [];
+      Object.entries(records || {}).forEach(([tripId, passengers]) =>
+        Object.entries(passengers || {}).forEach(([passengerId, value]) =>
+          all.push({ tripId, passengerId, ...value })));
+      const toolbar = e('div', 'app-card');
+      toolbar.append(e('strong', '', all.length + ' card payout entries'));
+      toolbar.append(button('Refresh payouts', showCardPayouts));
+      view.append(toolbar);
+      const filters = e('select');
+      filters.setAttribute('aria-label', 'Payout filter');
+      [['all','All'],['paid','Paid'],['transfer_pending','Transfer pending'],
+       ['awaiting_bank','Awaiting bank'],['needs_reconciliation','Needs reconciliation'],
+       ['otp_required','OTP required'],['transfer_failed','Transfer failed']].forEach(([v,t])=>{
+         const option=e('option','',t);option.value=v;filters.append(option);
+       });
+      view.append(filters);
+      const list=e('div');view.append(list);
+      const render=()=>{
+        list.replaceChildren();
+        const relevant=all.filter(entry=>filters.value==='all'||entry.status===filters.value)
+          .sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0));
+        if (!relevant.length)list.append(e('p','member-note','No payouts match this filter.'));
+        relevant.forEach(item=>{
+          const card=e('article','app-card');
+          card.append(e('h3','', 'Driver ' + (item.driverId||'Unknown')));
+          card.append(e('p','app-email','Trip '+item.tripId+' · Passenger '+item.passengerId));
+          card.append(e('p','', 'Gross: R'+(Number(item.grossSubunit||0)/100).toFixed(2)+
+             ' · Driver 80%: R'+(Number(item.driverSubunit||0)/100).toFixed(2)+
+             ' · Asiye 20%: R'+(Number(item.asiyeSubunit||0)/100).toFixed(2)));
+          card.append(e('strong','', 'Status: '+(item.status||'unknown')));
+          if (['needs_reconciliation','otp_required','transfer_failed','reversed'].includes(item.status)) {
+            card.append(e('p','member-note',
+              'Action required in Paystack Dashboard. Verify the existing transfer reference before retrying; never send a duplicate.'));
+          }
+          card.append(e('p','app-email','Created: '+at(item.createdAt)));
+          list.append(card);
+        });
+      };
+      filters.onchange=render;render();
+    } catch(error) {
+      if (activeView === 'cardPayouts')fail(error);
+    }
+  }
+
+  window.AsiyeAdminRelease = { showVehicles, showSupport, showEnrollments, showCardPayouts, safeImage };
 })();
