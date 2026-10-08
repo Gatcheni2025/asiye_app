@@ -1660,8 +1660,8 @@ window.AsiyePages = {
                             Capture the actual car showing its colour and registration plate.
                         </p>
                         ${user.vehiclePhoto
-                            ? `<img data-driver-car-preview src="${esc(user.vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`
-                            : `<img data-driver-car-preview alt="Driver vehicle" hidden style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`}
+                            ? `<img data-driver-car-preview src="${esc(user.vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:240px;object-fit:contain;border-radius:14px;margin:10px 0;">`
+                            : `<img data-driver-car-preview alt="Driver vehicle" hidden style="display:block;width:100%;max-height:240px;object-fit:contain;border-radius:14px;margin:10px 0;">`}
                         <button
                             type="button"
                             class="member-primary"
