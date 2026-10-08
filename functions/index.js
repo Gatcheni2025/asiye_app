@@ -6339,6 +6339,100 @@ const {
 const PAYSTACK_API =
   "https://api.paystack.co";
 
+const {
+  splitCardFare, stableTransferReference, isVerifiedCardPayment,
+  isPayoutReady, bankInput
+} = require("./driver-card-payout");
+
+// Driver card transfers are private server-owned financial records.
+// The passenger card charge stays on Asiye's Paystack account until the
+// driver's identity, trip completion and bank have been confirmed.
+const driverPayoutPath = (requestId, passengerId) =>
+  `driverCardPayouts/${requestId}/${passengerId}`;
+
+async function issueDriverCardPayout(requestId, passengerId, trip) {
+  const driverId = safeProfileId(trip?.taxiId || trip?.driverId);
+  if (trip?.status !== "completed" || !driverId) return { status: "not_ready" };
+  const payment = (await admin.database()
+    .ref(tripPaymentPath(requestId, passengerId)).once("value")).val();
+  if (!payment || payment.status !== "captured" || payment.method !== "card") {
+    return { status: "not_card_capture" };
+  }
+  // Charge was only "held" after direct Paystack verification; check again
+  // before any bank transfer. A cancelled/refunded charge cannot pay a driver.
+  const verified = await verifyPaystackReference(payment.reference);
+  if (!isVerifiedCardPayment(payment, verified)) {
+    throw Error("Card payment cannot be reconciled with Paystack.");
+  }
+  const split = splitCardFare(Number(payment.amountSubunit));
+  const recordRef = admin.database().ref(driverPayoutPath(requestId, passengerId));
+  const reference = stableTransferReference(requestId, passengerId);
+  const created = await recordRef.transaction(existing => existing || ({
+    status: "due",
+    provider: "paystack",
+    method: "card",
+    requestId, passengerId, driverId,
+    paymentReference: payment.reference,
+    paymentTransactionId: String(verified.id || ""),
+    transferReference: reference,
+    ...split,
+    createdAt: admin.database.ServerValue.TIMESTAMP
+  }), undefined, false);
+  const existing = created.snapshot.val();
+  if (!existing || existing.driverId !== driverId ||
+      existing.paymentReference !== payment.reference) {
+    throw Error("Card payout ledger conflict; manual reconciliation required.");
+  }
+  // Never transfer twice if another invocation has already attempted it.
+  if (!["due", "awaiting_bank"].includes(existing.status)) return { status: existing.status };
+  const bank = (await admin.database()
+    .ref(`driverPayoutAccounts/${driverId}`).once("value")).val();
+  if (!isPayoutReady({ trip, payment, driverId, banking: bank })) {
+    await recordRef.child("status").set("awaiting_bank");
+    return { status: "awaiting_bank" };
+  }
+  // CAS lock across concurrent status triggers / manual invocations.
+  const locked = await recordRef.transaction(record => {
+    if (!record || !["due","awaiting_bank"].includes(record.status)) return;
+    return { ...record, status: "transfer_processing",
+      recipientCode: bank.recipientCode,
+      transferAttemptedAt: admin.database.ServerValue.TIMESTAMP };
+  }, undefined, false);
+  if (!locked.committed) return { status: "already_processing" };
+  const refMap = admin.database().ref(`driverPayoutRefs/${reference}`);
+  await refMap.set({ requestId, passengerId, driverId });
+  try {
+    const result = await paystackRequest("/transfer", {
+      method: "POST",
+      body: {
+        source: "balance", amount: split.driverSubunit, currency: "ZAR",
+        recipient: bank.recipientCode, reference,
+        reason: `Asiye completed trip ${requestId.slice(0, 60)}`
+      }
+    });
+    const transfer = result.data || {};
+    await recordRef.update({
+      status: transfer.status === "otp" ? "otp_required" :
+        transfer.status === "success" ? "transfer_pending" : "transfer_pending",
+      transferCode: String(transfer.transfer_code || ""),
+      paystackTransferId: String(transfer.id || ""),
+      paystackTransferState: String(transfer.status || "pending"),
+      updatedAt: admin.database.ServerValue.TIMESTAMP
+    });
+    // Never say "paid" until Paystack's signed transfer-success webhook.
+    return { status: "transfer_pending", reference };
+  } catch (error) {
+    // Network timeouts may happen AFTER Paystack received the transfer.
+    // Do not retry with a new reference or guess whether funds moved.
+    await recordRef.update({
+      status: "needs_reconciliation",
+      lastError: String(error.message || "Transfer requires review").slice(0, 250),
+      updatedAt: admin.database.ServerValue.TIMESTAMP
+    });
+    throw error;
+  }
+}
+
 const PAYSTACK_CALLBACK_URL =
   "https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn";
 
