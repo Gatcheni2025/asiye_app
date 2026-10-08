@@ -282,5 +282,131 @@
     thread.append(controls);
   }
 
-  window.AsiyeAdminRelease = { showVehicles, showSupport, safeImage };
+
+  // New-driver enrollment review: the complete identity, vehicle and
+  // residency evidence is visible before an account can be activated.
+  async function showEnrollments() {
+    setView('enrollments');
+    title('Driver enrollment approvals', 'Review submitted OTP-verified applications and supporting images and documents.');
+    try {
+      await assertAdmin();
+      const records = await fetchData('driverEnrollments');
+      if (activeView !== 'enrollments') return;
+      renderEnrollments(records);
+    } catch (error) {
+      if (activeView === 'enrollments') fail(error);
+    }
+  }
+
+  function renderEnrollments(records) {
+    const holder = main();
+    holder.replaceChildren();
+    const top = e('div', 'app-card');
+    top.append(e('strong', '', 'New driver registrations · Pending admin verification'));
+    top.append(button('Refresh applications', showEnrollments));
+    holder.append(top);
+    const list = Object.entries(records || {})
+      .map(([uid, value]) => ({ uid, ...(value || {}) }))
+      .filter(item => item.status === 'pending' || item.status === 'pending_review')
+      .sort((a,b) => Number(b.submittedAt || 0) - Number(a.submittedAt || 0));
+    if (!list.length) {
+      holder.append(e('p', 'empty-state', 'No new applications awaiting approval.'));
+      return;
+    }
+    list.forEach(app => {
+      const card = e('article', 'app-card');
+      const vehicle = app.vehiclePending || {};
+      card.append(e('h3', '', app.fullName || 'New driver'));
+      card.append(e('p', 'app-email', (app.phone || 'Unverified phone') +
+        ' · Submitted ' + at(app.submittedAt) +
+        ' · ' + (app.phoneVerified ? 'OTP verified' : 'Phone verification missing')));
+      card.append(e('p', 'app-details', 'Residential address: ' + (app.residentialAddress || 'Not supplied')));
+      const docs = app.documentUrls || {};
+      const attachments = [
+        ['Live face scan', docs.selfie || app.profileImageUrl, true],
+        ['Car photo', docs.car || app.vehiclePhoto, true],
+        ['Identity document', docs.identity, true],
+        ['Driver licence', docs.licence, false],
+        ['Proof of address', docs.address, false]
+      ];
+      const media = e('div', 'release-enrollment-media');
+      let allDocs = true;
+      attachments.forEach(([label,url,withPreview]) => {
+        const link = safeImage(url);
+        if (!link) allDocs = false;
+        const item = e('div', 'doc-item');
+        item.append(e('strong', 'doc-label', label));
+        if (link) {
+          if (withPreview && !/\.(pdf)(\?|$)/i.test(link)) {
+            const image = e('img', 'release-document-image');
+            image.src = link;
+            image.alt = label + ' submitted for verification';
+            image.loading = 'lazy';
+            item.append(image);
+          }
+          const action = e('a', 'doc-link', 'View full document');
+          action.href = link;
+          action.target = '_blank';
+          action.rel = 'noopener noreferrer';
+          item.append(action);
+        } else item.append(e('p', 'member-note', 'Document missing'));
+        media.append(item);
+      });
+      card.append(media);
+      const editPanel = e('div', 'release-vehicle-grid');
+      const values = {
+        type: vehicle.type || 'sedan',
+        make: vehicle.make || app.vehicleMake || '',
+        model: vehicle.model || app.vehicleModel || '',
+        colour: vehicle.colour || app.vehicleColor || '',
+        registration: vehicle.registration || app.vehicleReg || '',
+        year: vehicle.year || app.vehicleYear || '',
+        seats: vehicle.seats || 4
+      };
+      Object.entries(values).forEach(([key,value])=>editPanel.append(makeField(key,value)));
+      card.append(e('h4', '', 'Review and correct vehicle details'));
+      card.append(editPanel);
+      const reason = e('textarea');
+      reason.placeholder = 'Explain what is missing or why the application is rejected';
+      reason.maxLength = 600;
+      reason.setAttribute('aria-label', 'Rejection reason');
+      card.append(reason);
+      const status = e('p', 'member-note', '');
+      card.append(status);
+      const actions = e('div', 'app-actions');
+      async function decide(decision) {
+        if (decision === 'approved' && (!allDocs || !app.phoneVerified)) {
+          status.textContent = 'All five images/documents and OTP verification are required.';
+          return;
+        }
+        if (decision === 'rejected' && reason.value.trim().length < 5) {
+          status.textContent = 'Please explain what the driver needs to correct.';
+          return;
+        }
+        if (!confirm('Confirm ' + decision + ' for ' + (app.fullName || app.uid) + '?')) return;
+        [...actions.querySelectorAll('button')].forEach(btn => { btn.disabled = true; });
+        status.textContent = 'Recording administrator decision…';
+        try {
+          const corrected = Object.fromEntries([...editPanel.querySelectorAll('input')]
+            .map(input => [input.name, ['year','seats'].includes(input.name)
+              ? Number(input.value) : input.value.trim()]));
+          const result = await callable('reviewDriverEnrollment')({
+            uid: app.uid, decision, reason: reason.value.trim(), vehicle: corrected
+          });
+          if (!result.data?.ok) throw Error('Review could not be saved.');
+          notice('Driver application ' + decision + '.');
+          await showEnrollments();
+        } catch (error) {
+          status.textContent = error?.message || 'Could not review driver.';
+          [...actions.querySelectorAll('button')].forEach(btn => { btn.disabled = false; });
+        }
+      }
+      actions.append(button('Approve & activate', () => decide('approved'), 'btn btn-approve'));
+      actions.append(button('Reject with reason', () => decide('rejected'), 'btn btn-reject'));
+      card.append(actions);
+      holder.append(card);
+    });
+  }
+
+  window.AsiyeAdminRelease = { showVehicles, showSupport, showEnrollments, safeImage };
 })();
