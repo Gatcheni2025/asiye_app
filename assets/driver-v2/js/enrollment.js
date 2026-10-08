@@ -346,10 +346,11 @@
                     updatedAt: firebase.database.ServerValue.TIMESTAMP
                 });
 
+            // Show the saved application state. The form cannot be reopened.
+            busy = false;
             form.reset();
             form.hidden = true;
             await check();
-            status.textContent = 'Application received. Waiting for Asiye Admin verification.';
 
         } catch (error) {
             if (error.code === 'storage/unauthorized') {
