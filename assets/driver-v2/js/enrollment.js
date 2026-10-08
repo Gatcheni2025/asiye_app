@@ -1,7 +1,7 @@
 (() => {
     const form = document.getElementById('enrollmentForm');
     const status = document.getElementById('enrollmentStatus');
-    const photos = {}, previews = {};
+    const photos = {}, previews = {}, capturedDocuments = {};
     let stream, current, user, busy = false;
     const kinds = { selfie: 'Live face scan (required)', identity: 'ID or passport photo', car: 'Rear camera car photo' };
     const verifiedPhone = document.getElementById('verifiedPhone');
@@ -58,8 +58,8 @@
             try {
                 // Installed app: live face scan uses the front camera; car
                 // photo uses the dedicated rear camera with auto-return.
-                if (nativeChannel() && (key === 'selfie' || key === 'car')) {
-                    const purpose = key === 'selfie' ? 'driver-enrollment-face' : 'driver-vehicle';
+                if (nativeChannel()) {
+                    const purpose = key === 'selfie' ? 'driver-enrollment-face' : key === 'identity' ? 'driver-identity' : 'driver-vehicle';
                     const result = await nativeCapture(purpose);
                     savePhoto(key, nativeBlob(result));
                     status.textContent = label + ' captured. Continue to the next step.';
@@ -72,6 +72,67 @@
             } catch { status.textContent = 'Camera unavailable. Enable camera permission or use the device camera field.'; }
         };
         document.getElementById('capture-' + key).append(row);
+    }
+    const extraDocuments = {
+        licence: { button:'captureLicence', preview:'licencePreview', status:'licenceStatus', purpose:'driver-licence' },
+        address: { button:'captureAddressProof', preview:'addressProofPreview', status:'addressProofStatus', purpose:'driver-address-proof' }
+    };
+    for (const [kind, spec] of Object.entries(extraDocuments)) {
+        const button = document.getElementById(spec.button);
+        const progress = document.getElementById(spec.status);
+        const preview = document.getElementById(spec.preview);
+        button.onclick = async () => {
+            button.disabled = true;
+            progress.textContent = 'Opening document camera…';
+            try {
+                let photo;
+                if (nativeChannel()) {
+                    photo = nativeBlob(await nativeCapture(spec.purpose));
+                } else {
+                    // Browser: choose the camera-enabled file input as fallback.
+                    form.elements[kind].click();
+                    progress.textContent = 'Capture a clear photo and return to Asiye.';
+                    return;
+                }
+                if (!photo || photo.size < 100) throw Error('Camera returned an empty picture.');
+                capturedDocuments[kind] = new File([photo],kind+'.jpg',{type:photo.type});
+                preview.src = URL.createObjectURL(photo);
+                preview.hidden = false;
+                progress.textContent = 'Picture captured. You can continue.';
+            } catch(error) {
+                progress.textContent = error.message || 'Unable to capture document. Retry.';
+            } finally { button.disabled = false; }
+        };
+        form.elements[kind].addEventListener('change', event => {
+            if (event.target.files?.length) {
+                capturedDocuments[kind] = null;
+                preview.hidden = true;
+                progress.textContent = 'Document selected: '+event.target.files[0].name;
+            }
+        });
+    }
+    const readDataUrl = blob => new Promise((resolve,reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Could not read this document. Please recapture.'));
+        reader.readAsDataURL(blob);
+    });
+    async function uploadDocument(user,submissionId,kind,blob) {
+        const dataUrl = await readDataUrl(blob);
+        const token = await user.getIdToken(true);
+        const response = await fetch(
+            'https://us-central1-asiye-80386.cloudfunctions.net/uploadDriverEnrollmentDocument',
+            {method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+             body:JSON.stringify({submissionId,kind,dataUrl})}
+        );
+        const result = await response.json().catch(()=>({}));
+        if (!response.ok || !result.url || !result.storagePath) {
+            const problem = response.status === 404
+                ? 'Document upload service is not deployed (HTTP 404). Admin must deploy uploadDriverEnrollmentDocument.'
+                : result.error || 'Document could not be uploaded. Retry this step.';
+            throw new Error(problem);
+        }
+        return result;
     }
     for (let i=1;i<=3;i++) document.getElementById('referenceFields').insertAdjacentHTML('beforeend', `<div class="reference"><h3>Reference ${i}</h3><label>Full name<input name="refName${i}" maxlength="120" required></label><label>Phone number<input name="refPhone${i}" type="tel" maxlength="25" aria-describedby="refPhoneHelp${i}" required></label><p id="refPhoneHelp${i}" class="field-help">Example: 082 123 4567 or +27 82 123 4567.</p><label>Relationship<input name="refRelation${i}" maxlength="80" required></label></div>`);
     document.getElementById('cancelCamera').onclick = stopCamera;
@@ -125,7 +186,7 @@
         if(index===2 && !photos.car) { showStep(index);showError('Capture a clear picture of your car.');return false; }
         if(index===3) {
             for (const key of ['licence','address']) {
-                const file=form.elements[key].files[0];
+                const file=form.elements[key].files[0] || capturedDocuments[key];
                 if(!await EnrollmentValidation.licenceType(file)) {
                     showStep(index);showError('Upload a clear ' + (key === 'licence' ? 'driver licence' : 'proof of address') + ' image or PDF under 10 MB.');return false;
                 }
@@ -231,7 +292,9 @@
         event.preventDefault(); if (!user || busy) return;
         if (step < steps.length-1) { await nextStep(); return; }
         for(let i=0;i<steps.length;i++) if(!await validateStep(i))return;
-        const data = new FormData(form), file = data.get('licence'), addressFile = data.get('address');
+        const data = new FormData(form),
+            file = capturedDocuments.licence || form.elements.licence.files[0],
+            addressFile = capturedDocuments.address || form.elements.address.files[0];
         const references = EnrollmentValidation.references(data);
         if (new Set(Object.values(references).map(ref=>EnrollmentValidation.phoneKey(ref.phone))).size !== 3) { status.textContent='Please provide three different reference phone numbers.'; return; }
         if (Object.keys(kinds).some(key=>!photos[key])) { status.textContent='Add your selfie, car photo, and ID/passport photo.'; return; }
@@ -261,14 +324,10 @@
             const documentUrls = {};
             const submissionId = crypto.randomUUID();
             for (const [key,blob] of Object.entries({...photos,licence:file,address:addressFile})) {
-                status.textContent = `Uploading ${key}…`;
-                const path = `driverEnrollments/${user.uid}/${submissionId}/${key}`;
-                const upload = await firebase.storage().ref(path).put(
-                    blob,
-                    {contentType:key === 'licence' ? licenceType : key === 'address' ? addressType : blob.type}
-                );
-                documents[key] = path;
-                documentUrls[key] = await upload.ref.getDownloadURL();
+                status.textContent = `Uploading ${key} securely…`;
+                const saved = await uploadDocument(user,submissionId,key,blob);
+                documents[key] = saved.storagePath;
+                documentUrls[key] = saved.url;
             }
 
             const vehiclePending = {
@@ -363,11 +422,11 @@
 
         } catch (error) {
             if (error.code === 'storage/unauthorized') {
-                status.textContent = 'Document upload is not permitted. The administrator must publish the enrollment Storage rules. Your entered details are still here.';
+                status.textContent = 'Document upload authorization failed. Please sign out and sign in with OTP again.';
             } else if (/permission.?denied/i.test(String(error.code || error.message))) {
                 status.textContent = 'The enrollment record could not be saved. Check Realtime Database enrollment permissions or refresh to see whether it was already submitted. Your entered details are still here.';
             } else {
-                status.textContent = 'Submission failed. Your entered details are still here. Check your connection and try again.';
+                status.textContent = error?.message || 'Submission failed. Your entered details are still here. Check your connection and retry.';
             }
             console.warn('Enrollment submission failed:', error.code || 'unknown');
         }
