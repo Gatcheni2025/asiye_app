@@ -74,12 +74,16 @@
    if(!message)return;
    node.append(el('div','notice'+(type==='error'?' error':''),message));
  }
+ let accessError='';
  function showLogin(message=''){
    authenticated=false;
+   currentToken++;
+   items=[];records={};
    $('shell').hidden=true;$('loginScreen').hidden=false;$('boot').hidden=true;
-   $('loginError').textContent=message;
+   $('loginError').textContent=message||accessError;
  }
  function setUser(user){
+   accessError='';
    $('adminEmail').textContent=user.email||'Administrator';
    $('loginScreen').hidden=true;$('boot').hidden=true;$('shell').hidden=false;
    authenticated=true;
@@ -96,10 +100,11 @@
      setUser(user);
      await navigate(view);
    }catch(err){
-     await auth.signOut();
-     showLogin('Admin access denied. '+(err.code==='functions/permission-denied'?
+     accessError='Admin access denied. '+(err.code==='functions/permission-denied'?
        'Your account is not on the Asiye administrator list.':
-       'Please contact an authorized platform administrator.'));
+       'Please contact an authorized platform administrator.');
+     await auth.signOut();
+     showLogin(accessError);
    }
  },()=>showLogin('Unable to restore Firebase authentication.'));
  $('loginForm').addEventListener('submit',async ev=>{
@@ -311,7 +316,7 @@
  }
  function openRecord(row){
    const body=el('div','detail-grid');
-   const hide=new Set(['documents','documentUrls','walletAppliedPayments','walletRideHolds','password','token','accessToken','secret','messages']);
+   const hide=new Set(['documents','documentUrls','walletAppliedPayments','walletRideHolds','password','token','accessToken','secret','messages','banking','accountNumber','idNumber','identityNumber']);
    for(const [key,value] of Object.entries(row)){
      if(hide.has(key)||key.startsWith('_'))continue;
      if(value && typeof value==='object') {
