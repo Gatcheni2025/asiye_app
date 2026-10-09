@@ -1,0 +1,46 @@
+name: Asiye Admin Server Upload Package
+
+on:
+  pull_request:
+    branches: [security-payments-phase5]
+    paths:
+      - "assets/admin/**"
+      - ".github/workflows/admin_server_bundle.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate administrator pages
+        run: |
+          node --check assets/admin/console.js
+          node --test test/admin-portal.test.cjs
+      - name: Package static pages only
+        run: |
+          mkdir -p dist/admin
+          cp assets/admin/index.html assets/admin/console.css assets/admin/console.js dist/admin/
+          python3 - <<'PY'
+          import zipfile
+          from pathlib import Path
+          source = Path('dist')
+          with zipfile.ZipFile('asiye-admin-server-upload.zip', 'w', zipfile.ZIP_DEFLATED) as dest:
+              for path in sorted((source/'admin').iterdir()):
+                  dest.write(path, path.relative_to(source))
+          with zipfile.ZipFile('asiye-admin-server-upload.zip') as archive:
+              print('Included:', archive.namelist())
+              assert sorted(archive.namelist()) == sorted([
+                  'admin/index.html', 'admin/console.css', 'admin/console.js'])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asiye-admin-server-upload
+          path: asiye-admin-server-upload.zip
+          if-no-files-found: error
