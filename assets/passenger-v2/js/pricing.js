@@ -52,16 +52,19 @@ ASIYE.pricing = {
             1,
             Math.round(marketReferenceFare * (1 - this.rates.goDiscount))
         );
-        const club4Fare = Math.ceil((marketReferenceFare / 4) * (1 + this.rates.clubMarkup));
-        const club7Fare = Math.ceil((marketReferenceFare / 7) * (1 + this.rates.clubMarkup));
+        // Asiye Work releases the standard pool at 3 passengers and the
+        // larger-vehicle pool at 4 passengers. Price against the actual
+        // passenger target, not every physical vehicle seat.
+        const club4Fare = Math.ceil((marketReferenceFare / 3) * (1 + this.rates.clubMarkup));
+        const club7Fare = Math.ceil((marketReferenceFare / 4) * (1 + this.rates.clubMarkup));
 
         return {
             marketReference: marketReferenceFare,
             go: goFare,
             club4: club4Fare,
             club7: club7Fare,
-            club4Total: club4Fare * 4,
-            club7Total: club7Fare * 7,
+            club4Total: club4Fare * 3,
+            club7Total: club7Fare * 4,
             goDiscountPercent: 15,
             clubMarkupPercent: 15
         };
