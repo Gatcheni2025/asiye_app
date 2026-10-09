@@ -79,7 +79,7 @@ test('passenger registration does not depend on client commuter write permission
  assert.doesNotMatch(flow,/root\.update\(/);
  assert.match(backend,/const signup = role === "passenger"/);
  assert.match(backend,/onboardingCompleted: true/);
- assert.match(backend,/phone: decoded\.phone_number/);
+ assert.match(backend,/phone: verifiedPhone/);
 });
 test('ID and residential proof use rear photo capture on old and new Android APKs',()=>{
  const js=read('assets/driver-v2/js/enrollment.js');
