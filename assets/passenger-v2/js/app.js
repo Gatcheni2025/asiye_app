@@ -1045,7 +1045,7 @@ ASIYE.ui = {
                                 true
                         ) {
                             ASIYE.ui.toast(
-                                'Complete the card payment to send your ride request.'
+                                'Complete the Paystack card payment. After payment, Asiye will create your trip PIN and ask you to share the live trip with a loved one.'
                             );
 
                             return;
