@@ -173,8 +173,22 @@ ASIYE.booking = {
             requestRef.key;
 
 
+        /*
+         * Card bookings are paid BEFORE a safety PIN or live-share link is
+         * created. This prevents Paystack checkout and the loved-one share
+         * sheet from competing for control of the app.
+         *
+         * Cash/Wallet keep the existing pre-dispatch safety flow.
+         */
+        const isCardPayment =
+            paymentMethod ===
+            'card';
+
+
         const pickupPin =
-            await this.requirePassengerPin();
+            isCardPayment
+                ? null
+                : await this.requirePassengerPin();
 
 
         const requestData = {
@@ -324,6 +338,151 @@ ASIYE.booking = {
         await requestRef.set(
             requestData
         );
+
+
+        /*
+         * CARD FIRST:
+         * 1. Save a non-dispatched draft request.
+         * 2. Open Paystack.
+         * 3. Do not generate/share a PIN yet.
+         * 4. The verified Paystack return calls finalizePaidCardBooking().
+         */
+        if (isCardPayment) {
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${uid}`
+                )
+                .update({
+                    currentRequest:
+                        requestId
+                });
+
+
+            ASIYE.state.booking
+                .requestId =
+                requestId;
+
+
+            ASIYE.state.booking
+                .request =
+                requestData;
+
+
+            localStorage.setItem(
+                'currentRequestId',
+                requestId
+            );
+
+
+            try {
+                if (
+                    !ASIYE.payments ||
+                    typeof ASIYE.payments.prepare !==
+                        'function'
+                ) {
+                    throw new Error(
+                        'Secure card payment is unavailable. Reopen Asiye and try again.'
+                    );
+                }
+
+
+                const cardPayment =
+                    await ASIYE.payments
+                        .prepare(
+                            requestId
+                        );
+
+
+                if (
+                    cardPayment
+                        ?.paymentPending ===
+                        true
+                ) {
+                    requestData.status =
+                        'payment_required';
+
+                    requestData.paymentStatus =
+                        'payment_required';
+
+                    ASIYE.state.booking
+                        .request =
+                        requestData;
+
+                    return {
+                        requestId,
+                        paymentPending:
+                            true
+                    };
+                }
+
+
+                if (
+                    cardPayment?.ready ===
+                        true &&
+                    [
+                        'held',
+                        'captured'
+                    ].includes(
+                        String(
+                            cardPayment.status ||
+                            ''
+                        )
+                    )
+                ) {
+                    await this
+                        .finalizePaidCardBooking(
+                            requestId
+                        );
+
+                    return requestId;
+                }
+
+
+                throw new Error(
+                    'Card payment could not be confirmed.'
+                );
+
+            } catch (error) {
+                /*
+                 * If Paystack was never initialized, remove the empty draft.
+                 * Once a payment reference exists, keep the request so a
+                 * successful payment can always be reconciled safely.
+                 */
+                const pendingCard =
+                    ASIYE.payments
+                        ?.pendingCard?.();
+
+                if (
+                    !pendingCard ||
+                    pendingCard.requestId !==
+                        requestId
+                ) {
+                    await requestRef
+                        .remove()
+                        .catch(
+                            () => {}
+                        );
+
+                    await firebase
+                        .database()
+                        .ref(
+                            `commuters/${uid}`
+                        )
+                        .update({
+                            currentRequest:
+                                null
+                        })
+                        .catch(
+                            () => {}
+                        );
+
+                    this.clearLocalRide();
+                }
+
+                throw error;
+            }
+        }
 
 
         let liveTrackingUrl;
@@ -521,6 +680,279 @@ ASIYE.booking = {
 
 
         return requestId;
+    },
+
+
+    /*
+     * Final card-booking gate.
+     * Paystack MUST already be verified and held/captured before this runs.
+     * Only then do we create the safety PIN, live link, share it, dispatch
+     * drivers and present the live ride screen.
+     */
+    async finalizePaidCardBooking(
+        requestId,
+        restoredRequest = null
+    ) {
+        if (!requestId) {
+            throw new Error(
+                'Paid booking reference is missing.'
+            );
+        }
+
+
+        const requestRef =
+            firebase
+                .database()
+                .ref(
+                    `requests/${requestId}`
+                );
+
+
+        let request =
+            restoredRequest;
+
+
+        if (!request) {
+            const snapshot =
+                await requestRef
+                    .once(
+                        'value'
+                    );
+
+            request =
+                snapshot.val();
+        }
+
+
+        if (!request) {
+            throw new Error(
+                'Paid ride could not be restored.'
+            );
+        }
+
+
+        if (
+            String(
+                request.paymentMethod ||
+                ''
+            ).toLowerCase() !==
+                'card'
+        ) {
+            throw new Error(
+                'This booking is not a card booking.'
+            );
+        }
+
+
+        const paymentStatus =
+            String(
+                request.paymentStatus ||
+                ''
+            );
+
+
+        if (
+            ![
+                'held',
+                'captured'
+            ].includes(
+                paymentStatus
+            ) ||
+            request.paymentsReady !==
+                true
+        ) {
+            throw new Error(
+                'Card payment must be confirmed before the booking can continue.'
+            );
+        }
+
+
+        /*
+         * A duplicate Paystack return must not create a second PIN/share or
+         * dispatch the same ride twice.
+         */
+        if (
+            request.cardBookingFinalized ===
+                true &&
+            request.safetyShareCompleted ===
+                true &&
+            request.status ===
+                'pending'
+        ) {
+            ASIYE.state.booking
+                .requestId =
+                requestId;
+
+            ASIYE.state.booking
+                .request =
+                request;
+
+            localStorage.setItem(
+                'currentRequestId',
+                requestId
+            );
+
+            await ASIYE.ride
+                ?.start?.(
+                    requestId
+                );
+
+            return request;
+        }
+
+
+        const existingPin =
+            String(
+                request.pickupPin ||
+                ''
+            );
+
+
+        const pickupPin =
+            /^\d{4}$/.test(
+                existingPin
+            )
+                ? existingPin
+                : this.generatePin();
+
+
+        /*
+         * At this point payment is safe. Move to the safety gate and persist
+         * the generated PIN before opening the share sheet.
+         */
+        await requestRef
+            .update({
+                pickupPin,
+                requirePin:
+                    true,
+                safetyShareRequired:
+                    true,
+                safetyShareCompleted:
+                    false,
+                status:
+                    'share_required'
+            });
+
+
+        const liveTrackingUrl =
+            await this.createLiveShareUrl(
+                requestId
+            );
+
+
+        await this.requireTripShare({
+            requestId,
+            liveTrackingUrl,
+            pickupPin,
+            pickupAddress:
+                request.pickupAddress ||
+                'Current location',
+            destination:
+                request.destination ||
+                request.destinationName ||
+                'Not available',
+            service:
+                'Asiye Go'
+        });
+
+
+        const finalPatch = {
+            pickupPin,
+            safetyShareCompleted:
+                true,
+            safetyShareAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP,
+            status:
+                'pending',
+            paymentStatus,
+            paymentsReady:
+                true,
+            cardBookingFinalized:
+                true,
+            cardBookingFinalizedAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP
+        };
+
+
+        await requestRef
+            .update(
+                finalPatch
+            );
+
+
+        const finalRequest = {
+            ...request,
+            ...finalPatch,
+            pickupPin,
+            safetyShareCompleted:
+                true,
+            status:
+                'pending',
+            paymentStatus,
+            paymentsReady:
+                true,
+            cardBookingFinalized:
+                true
+        };
+
+
+        const uid =
+            ASIYE.state.userId;
+
+
+        if (uid) {
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${uid}`
+                )
+                .update({
+                    currentRequest:
+                        requestId
+                });
+        }
+
+
+        ASIYE.state.booking
+            .requestId =
+            requestId;
+
+
+        ASIYE.state.booking
+            .request =
+            finalRequest;
+
+
+        localStorage.setItem(
+            'currentRequestId',
+            requestId
+        );
+
+
+        await this.notifyGoDrivers(
+            requestId,
+            finalRequest
+        );
+
+
+        await ASIYE.ride
+            ?.start?.(
+                requestId
+            );
+
+
+        ASIYE.ui?.toast?.(
+            'Payment confirmed. PIN created and trip shared. Looking for your driver.'
+        );
+
+
+        return finalRequest;
     },
 
 
