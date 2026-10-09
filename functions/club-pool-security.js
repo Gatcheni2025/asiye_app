@@ -28,7 +28,20 @@ function applyClubJoin(pool, passengerId, details = {}, joinedAt = Date.now()) {
 
   const capacity = Math.max(
     1,
-    Number(pool.capacity || pool.maxCapacity || 3) || 3
+    Number(pool.capacity || pool.maxCapacity || 4) || 4
+  );
+
+  const requiredPassengers = Math.min(
+    capacity,
+    Math.max(
+      1,
+      Number(
+        pool.minimumPassengers ||
+        pool.requiredPassengers ||
+        (pool.clubMode === 'club7' ? 4 : 3)
+      ) ||
+      (pool.clubMode === 'club7' ? 4 : 3)
+    )
   );
 
   const activeIds = Object.entries(pool.passengers)
@@ -82,7 +95,9 @@ function applyClubJoin(pool, passengerId, details = {}, joinedAt = Date.now()) {
 
   const newCount = activeAfterJoin.length;
   pool.passengerCount = newCount;
-  pool.remainingSeats = Math.max(0, capacity - newCount);
+  pool.requiredPassengers = requiredPassengers;
+  pool.minimumPassengers = requiredPassengers;
+  pool.remainingSeats = Math.max(0, requiredPassengers - newCount);
 
   const marketReference = Number(
     pool.marketReferenceFare ||
@@ -91,14 +106,16 @@ function applyClubJoin(pool, passengerId, details = {}, joinedAt = Date.now()) {
     0
   ) || 0;
 
-  const seatPrice = Math.ceil((marketReference / capacity) * 1.15);
+  const seatPrice = Math.ceil(
+    (marketReference / requiredPassengers) * 1.15
+  );
   pool.pricePerPassenger = seatPrice;
 
   for (const activeId of activeAfterJoin) {
     pool.passengers[activeId].price = seatPrice;
   }
 
-  if (newCount >= capacity) {
+  if (newCount >= requiredPassengers) {
     pool.status = 'pool_ready';
     pool.poolReady = true;
     pool.poolReadyAt = joinedAt;
