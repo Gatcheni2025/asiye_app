@@ -1135,13 +1135,42 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     }
   }
 
+  // Never expose raw Firebase exception text, phone numbers or verification
+  // tokens in the login UI. Both driver and passenger use this native flow.
+  String _phoneAuthUserMessage(Object error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'invalid-phone-number':
+          return 'Enter a valid South African mobile number, for example 082 123 4567.';
+        case 'invalid-verification-code':
+          return 'That verification code is incorrect. Check the SMS and try again.';
+        case 'session-expired':
+        case 'invalid-verification-id':
+          return 'This verification code has expired. Tap Resend code to request a new one.';
+        case 'too-many-requests':
+        case 'quota-exceeded':
+          return 'Too many verification attempts. Please wait before trying again.';
+        case 'network-request-failed':
+          return 'Unable to connect. Check your internet connection and try again.';
+        case 'app-not-authorized':
+        case 'invalid-app-credential':
+          return 'We could not verify this app installation. Please update Asiye or contact support.';
+        case 'missing-verification-code':
+          return 'Enter the 6-digit verification code from your SMS.';
+      }
+    }
+    return 'Phone verification could not be completed. Please try again or contact support.';
+  }
+
   Future<void> _startPhoneSignIn(
     String phone, {
     bool forceResend = false,
   }) async {
     final cleanPhone = phone.trim();
-    if (cleanPhone.isEmpty) {
-      _controller?.runJavaScript("window.onNativePhoneAuthError?.('Enter a valid phone number.');");
+    if (!RegExp(r'^\+27[6-8][0-9]{8}$').hasMatch(cleanPhone)) {
+      await _sendNativeAuthError('phone', Exception(
+        'Enter a valid South African mobile number, for example 082 123 4567.',
+      ));
       return;
     }
 
@@ -1213,8 +1242,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           }
         },
         verificationFailed: (FirebaseAuthException error) async {
-          final message =
-              error.message ?? error.code;
+          debugPrint('Phone verification failed: ${error.code}');
+          final message = _phoneAuthUserMessage(error);
 
           await _savePendingPhoneAuth(
             clear: true,
@@ -1276,7 +1305,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         },
       );
     } catch (e) {
-      _controller?.runJavaScript("window.onNativePhoneAuthError?.(${jsonEncode(e.toString())});");
+      await _sendNativeAuthError('phone', Exception(_phoneAuthUserMessage(e)));
     }
   }
 
@@ -1305,11 +1334,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                   ) ??
                   '');
 
-      if (resolvedVerificationId.isEmpty ||
-          digits.length != 6) {
-        throw Exception(
-          'Enter the 6-digit verification code.',
-        );
+      if (digits.length != 6) {
+        throw Exception('Enter the 6-digit verification code from your SMS.');
+      }
+      if (resolvedVerificationId.isEmpty) {
+        throw Exception('Your verification session has expired. Tap Resend code.');
       }
 
       User? user = FirebaseAuth.instance.currentUser;
@@ -1362,12 +1391,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         );
       }
     } catch (error) {
-      final message = error
-          .toString()
-          .replaceFirst(
-            'Exception: ',
-            '',
-          );
+      final message = error is FirebaseAuthException
+          ? _phoneAuthUserMessage(error)
+          : error is Exception && error.toString().startsWith('Exception: Enter the')
+              ? error.toString().replaceFirst('Exception: ', '')
+              : error.toString().contains('verification session has expired')
+                  ? 'Your verification session has expired. Tap Resend code.'
+                  : _phoneAuthUserMessage(error);
 
       if (mounted) {
         setState(() {
@@ -1379,7 +1409,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
       await _sendNativeAuthError(
         'phone',
-        error,
+        Exception(message),
       );
     }
   }

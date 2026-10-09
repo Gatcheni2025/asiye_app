@@ -418,7 +418,17 @@
                     ''
                 );
 
-        if (
+        if (/invalid-verification-code/i.test(message)) {
+            message = 'That verification code is incorrect. Check the SMS and try again.';
+        } else if (/session-expired|invalid-verification-id/i.test(message)) {
+            message = 'This verification code has expired. Tap Resend code to request a new one.';
+        } else if (/invalid-phone-number/i.test(message)) {
+            message = 'Enter a valid South African mobile number, for example 082 123 4567.';
+        } else if (/too-many-requests|quota-exceeded/i.test(message)) {
+            message = 'Too many verification attempts. Please wait before trying again.';
+        } else if (/invalid-app-credential|app-not-authorized|valid app identifier|play integrity/i.test(message)) {
+            message = 'We could not verify this app installation. Please update Asiye or contact support.';
+        } else if (
             /network|socket|timed out|timeout/i
                 .test(message)
         ) {
