@@ -419,6 +419,11 @@
                 );
 
         if (
+            /valid app identifier|play integrity|invalid-app-credential|app-not-authorized/i.test(message)
+        ) {
+            message =
+                'Phone verification is unavailable because this Android installation could not be verified. Please contact Asiye support. Google and Apple sign-in remain available.';
+        } else if (
             /network|socket|timed out|timeout/i
                 .test(message)
         ) {

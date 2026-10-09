@@ -1218,8 +1218,22 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> with WidgetsBindingObse
           }
         },
         verificationFailed: (FirebaseAuthException error) async {
-          final message =
-              error.message ?? error.code;
+          // Firebase rejects phone verification before sending an SMS when
+          // the installed APK is not recognized by Play Integrity/reCAPTCHA.
+          // Preserve the precise Firebase code in logs for release diagnosis.
+          debugPrint('Asiye native phone verification failed: '
+              '${error.code}: ${error.message}');
+          final rawMessage = error.message ?? error.code;
+          final appIdentityFailure = error.code == 'invalid-app-credential' ||
+              error.code == 'app-not-authorized' ||
+              rawMessage.toLowerCase().contains('valid app identifier') ||
+              rawMessage.toLowerCase().contains('play integrity');
+          final message = appIdentityFailure
+              ? 'Phone verification is temporarily unavailable because this '
+                'Android build is not recognized by Firebase. Please contact '
+                'Asiye support and include error ${error.code}. '
+                'You can still sign in using Google or Apple.'
+              : rawMessage;
 
           await _savePendingPhoneAuth(
             clear: true,
