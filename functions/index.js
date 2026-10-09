@@ -1933,7 +1933,6 @@ async function requireAsiyeAdmin(context) {
 
   if (
     token.admin === true ||
-    token.enrollmentReviewer === true ||
     token.asiyeAdmin === true
   ) {
     return {
@@ -1976,6 +1975,15 @@ async function requireAsiyeAdmin(context) {
           : ""
       )
   };
+}
+
+// A document reviewer may approve/reject enrollment, but cannot browse
+// financial records, adjust wallets, cancel rides or access support chats.
+async function requireAsiyeEnrollmentReviewer(context) {
+  if (context?.auth?.uid && context.auth.token?.enrollmentReviewer === true) {
+    return {uid: context.auth.uid, email: context.auth.token.email || ""};
+  }
+  return requireAsiyeAdmin(context);
 }
 
 function safeAdminString(value, maxLength = 250) {
@@ -2103,7 +2111,7 @@ exports.adminWhoAmI = functions.https.onCall(
 
 exports.reviewDriverEnrollment = functions.https.onCall(
   async (data, context) => {
-    const actor = await requireAsiyeAdmin(context);
+    const actor = await requireAsiyeEnrollmentReviewer(context);
 
     const uid = safeAdminString(data?.uid, 160);
     const decision =
