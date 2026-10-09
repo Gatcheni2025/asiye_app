@@ -3,7 +3,7 @@ name: Android Release
 on:
   workflow_dispatch:
   push:
-    branches: [main, security-payments-phase5]
+    branches: [main, security-payments-phase5, release/11.0.59-329-build]
     paths:
       - "lib/**"
       - "assets/**"
