@@ -12,13 +12,13 @@ ASIYE.club = {
         club4: {
 
             name:
-                'Asiye Club 4',
+                'Asiye Work 3',
 
             capacity:
                 4,
 
             minimumPassengers:
-                4,
+                3,
 
             pickupWindowMinutes:
                 10,
@@ -31,13 +31,13 @@ ASIYE.club = {
         club7: {
 
             name:
-                'Asiye Club 7',
+                'Asiye Work 4',
 
             capacity:
                 7,
 
             minimumPassengers:
-                7,
+                4,
 
             pickupWindowMinutes:
                 15,
@@ -186,8 +186,14 @@ ASIYE.club = {
             confirmedPassengers:
                 1,
 
+            requiredPassengers:
+                config.minimumPassengers,
+
             remainingSeats:
-                config.capacity - 1,
+                Math.max(
+                    0,
+                    config.minimumPassengers - 1
+                ),
 
             totalFare:
                 pricing.totalFare,
@@ -533,7 +539,7 @@ ASIYE.club = {
                 ASIYE.state.destination.name,
 
             service:
-                'Asiye Club'
+                'Asiye Work'
         });
 
 
@@ -872,7 +878,10 @@ ASIYE.club = {
                 1,
 
             remainingSeats:
-                config.capacity - 1,
+                Math.max(
+                    0,
+                    config.minimumPassengers - 1
+                ),
 
             departureTime:
                 departureTime,
@@ -1020,7 +1029,7 @@ ASIYE.club = {
                     destination.address ||
                     destination.name,
                 service:
-                    'Asiye Club'
+                    'Asiye Work'
             });
 
 
@@ -1204,6 +1213,11 @@ ASIYE.club = {
         const capacity =
 
             Number(
+                request.minimumPassengers ||
+                request.requiredPassengers ||
+                this.getConfig(
+                    request.clubMode
+                ).minimumPassengers ||
                 request.capacity ||
                 this.getConfig(
                     request.clubMode
