@@ -111,13 +111,31 @@ ASIYE.club = {
             Number(totalFare || 0);
 
 
+        const targetPassengers =
+            Number(
+                config.minimumPassengers ||
+                config.capacity
+            );
+
+
         const pricePerPassenger =
             fare > 0
-            ? Math.max(1, Math.ceil((fare / config.capacity) * 1.15))
+            ? Math.max(
+                1,
+                Math.ceil(
+                    (
+                        fare /
+                        targetPassengers
+                    ) *
+                    1.15
+                )
+            )
             : 0;
 
+
         const clubTotal =
-            pricePerPassenger * config.capacity;
+            pricePerPassenger *
+            targetPassengers;
 
 
         return {
