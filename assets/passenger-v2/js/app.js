@@ -864,8 +864,8 @@ ASIYE.ui = {
 
             ${this.renderRideCard(
                 'club4',
-                'Asiye Club 4',
-                '4 passengers · Fare split between everyone',
+                'Asiye Work 3',
+                '3 passengers · Shared work commute',
                 prices.club4,
                 'fa-users'
             )}
@@ -873,8 +873,8 @@ ASIYE.ui = {
 
             ${this.renderRideCard(
                 'club7',
-                'Asiye Club 7',
-                '7 passengers · Lowest daily commuter fare',
+                'Asiye Work 4',
+                '4 passengers · Larger shared work commute',
                 prices.club7,
                 'fa-van-shuttle'
             )}
@@ -1177,10 +1177,10 @@ ASIYE.ui = {
                 'Continue with Asiye Go',
 
             club4:
-                'Continue with Club 4',
+                'Continue with Work 3',
 
             club7:
-                'Continue with Club 7'
+                'Continue with Work 4'
         };
 
 
@@ -1261,7 +1261,7 @@ ASIYE.ui = {
 
 
                 <h2 class="sheet-page-title">
-                    Confirm Club
+                    Confirm Work ride
                 </h2>
 
             </div>
@@ -1564,9 +1564,9 @@ ASIYE.ui = {
                             request.clubMode ===
                             'club7'
                             ?
-                            'Asiye Club 7'
+                            'Asiye Work 4'
                             :
-                            'Asiye Club 4'
+                            'Asiye Work 3'
                         }
 
                     </div>
