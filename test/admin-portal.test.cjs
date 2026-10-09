@@ -98,7 +98,7 @@ test('full operations access excludes enrollment-only reviewers',()=>{
  assert.doesNotMatch(block,/token\.enrollmentReviewer === true/);
  assert.match(block,/token\.asiyeAdmin === true/);
  const reviewer=src.slice(end,src.indexOf('function safeAdminString(',end));
- assert.match(reviewer,/token\.enrollmentReviewer === true/);
+ assert.match(reviewer,/token\?\.enrollmentReviewer === true/);
  assert.match(src,/const actor = await requireAsiyeEnrollmentReviewer\(context\)/);
 });
 test('details action identifiers always use server Firebase collection keys',()=>{
