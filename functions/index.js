@@ -5794,13 +5794,22 @@ exports.uploadProfileImageProxy =
         // Realtime Database writes can be blocked on legacy commuter IDs.
         const fullName = String(request.body?.fullName || "").trim();
         const signup = role === "passenger" && request.body?.completeSignup === true;
+        // Firebase custom-token sessions can omit phone_number. Verify the
+        // phone attached to the SAME Firebase Auth UID; never trust form text.
+        const verifiedPhone = signup
+          ? String((await admin.auth().getUser(decoded.uid)).phoneNumber ||
+              decoded.phone_number || "").trim()
+          : "";
         if (signup && (
-          !decoded.phone_number ||
+          !verifiedPhone ||
           fullName.length < 2 || fullName.length > 100 ||
           /[<>\\u0000-\\u001f]/.test(fullName)
         )) {
           return response.status(422).json({
-            error: "Verified mobile number and full name are required."
+            code: !verifiedPhone ? "phone-otp-required" : "name-required",
+            error: !verifiedPhone
+              ? "This Firebase account has no verified mobile number. Complete SMS OTP before saving the profile."
+              : "Enter your full name before saving."
           });
         }
 
@@ -5985,7 +5994,7 @@ exports.uploadProfileImageProxy =
               : {
                   ...(signup ? {
                     name: fullName,
-                    phone: decoded.phone_number,
+                    phone: verifiedPhone,
                     authUid: decoded.uid,
                     onboardingCompleted: true,
                     profileSetupPending: false,
@@ -6065,6 +6074,14 @@ exports.uploadProfileImageProxy =
     }
   );
 
+
+// Verified, create-once driver enrollment stays pending admin approval.
+exports.submitDriverEnrollmentSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  require("./enrollment-submission").makeEnrollmentSubmission({
+    admin, bucketName:PROFILE_STORAGE_BUCKET, cors:walletSmsCors
+  })
+);
 
 // Server-authenticated enrollment media upload. Allows enrollment even
 // when client Storage rules have not been deployed; never trusts a UID
