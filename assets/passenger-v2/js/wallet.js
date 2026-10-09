@@ -269,6 +269,9 @@ ASIYE.payments = {
     openingReference:
         null,
 
+    _cardSafetyFinalizeActive:
+        false,
+
     async post(
         endpoint,
         body = {}
@@ -515,13 +518,6 @@ ASIYE.payments = {
             );
         }
 
-        localStorage.removeItem(
-            'pendingTripCardPayment'
-        );
-
-        this.openingReference =
-            null;
-
         const requestSnapshot =
             await firebase
                 .database()
@@ -541,6 +537,62 @@ ASIYE.payments = {
             );
         }
 
+
+        /*
+         * ASIYE GO CARD:
+         * payment success is the gate to safety sharing and dispatch.
+         * Do not clear the pending payment marker until PIN generation,
+         * live sharing and booking finalisation all succeed.
+         */
+        if (
+            request.type ===
+                'ehailing' &&
+            request.rideType ===
+                'go' &&
+            String(
+                request.paymentMethod ||
+                ''
+            ).toLowerCase() ===
+                'card'
+        ) {
+            if (
+                !ASIYE.booking ||
+                typeof ASIYE.booking
+                    .finalizePaidCardBooking !==
+                    'function'
+            ) {
+                throw new Error(
+                    'Paid ride safety finalisation is unavailable. Reopen Asiye and try again.'
+                );
+            }
+
+
+            await ASIYE.booking
+                .finalizePaidCardBooking(
+                    pending.requestId,
+                    request
+                );
+
+
+            localStorage.removeItem(
+                'pendingTripCardPayment'
+            );
+
+            this.openingReference =
+                null;
+
+            return true;
+        }
+
+
+        localStorage.removeItem(
+            'pendingTripCardPayment'
+        );
+
+        this.openingReference =
+            null;
+
+
         if (
             request.type ===
                 'club'
@@ -557,6 +609,11 @@ ASIYE.payments = {
             return true;
         }
 
+
+        /*
+         * Parcel/card flows already complete their safety share before
+         * checkout in build 329. Keep their existing dispatch behaviour.
+         */
         if (
             request.status ===
                 'pending' ||
@@ -580,6 +637,7 @@ ASIYE.payments = {
 
             return true;
         }
+
 
         await ASIYE.ride
             ?.start?.(
@@ -657,6 +715,78 @@ ASIYE.payments = {
                 return;
             }
         }
+
+        /*
+         * If Paystack was already verified but the user did not finish the
+         * loved-one share sheet (or the app restarted), resume the safety
+         * finalisation instead of opening a second Paystack checkout.
+         */
+        if (
+            request.type ===
+                'ehailing' &&
+            request.rideType ===
+                'go' &&
+            method ===
+                'card' &&
+            [
+                'held',
+                'captured'
+            ].includes(
+                status
+            ) &&
+            request.paymentsReady ===
+                true &&
+            request.safetyShareCompleted !==
+                true
+        ) {
+            if (
+                this._cardSafetyFinalizeActive
+            ) {
+                return;
+            }
+
+            this._cardSafetyFinalizeActive =
+                true;
+
+            try {
+                await ASIYE.booking
+                    ?.finalizePaidCardBooking?.(
+                        request.requestId,
+                        request
+                    );
+
+                const pending =
+                    this.pendingCard();
+
+                if (
+                    pending?.requestId ===
+                        request.requestId
+                ) {
+                    localStorage.removeItem(
+                        'pendingTripCardPayment'
+                    );
+
+                    this.openingReference =
+                        null;
+                }
+            } catch (error) {
+                console.error(
+                    'Paid card booking safety finalisation failed:',
+                    error
+                );
+
+                ASIYE.ui?.toast?.(
+                    error.message ||
+                    'Payment is confirmed. Share the trip with a loved one to complete booking.'
+                );
+            } finally {
+                this._cardSafetyFinalizeActive =
+                    false;
+            }
+
+            return;
+        }
+
 
         if (
             method !==
