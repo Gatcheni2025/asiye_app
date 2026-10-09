@@ -5797,8 +5797,7 @@ exports.uploadProfileImageProxy =
         // Firebase custom-token sessions can omit phone_number. Verify the
         // phone attached to the SAME Firebase Auth UID; never trust form text.
         const verifiedPhone = signup
-          ? String((await admin.auth().getUser(decoded.uid)).phoneNumber ||
-              decoded.phone_number || "").trim()
+          ? String((await admin.auth().getUser(decoded.uid)).phoneNumber || "").trim()
           : "";
         if (signup && (
           !verifiedPhone ||
