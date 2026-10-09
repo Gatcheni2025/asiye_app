@@ -1,5 +1,54 @@
 # Asiye 11.0.57 (327) · enrollment, profile, wallet and booking recovery
 
+## 9 October follow-up · 11.0.58 (328) registration fix
+
+**Reason:** The prior 327 function deployment fixed media upload, but the
+passenger form still failed on OAuth/custom-token identities with no OTP-verified
+phone attached to the Firebase Auth account. Driver documents uploaded, but the
+final direct WebView Realtime Database write was denied. These are separate
+issues from Firebase Storage upload.
+
+### Scoped Firebase deployment
+
+Use the reviewed **release/11.0.57-admin-support-327** branch. Node.js 22,
+Firebase CLI authentication and authorized project access are required.
+
+```powershell
+cd C:\Users\PC\Desktop\coding\asiye_app_phase5
+git fetch origin
+git pull --ff-only origin release/11.0.57-admin-support-327
+git rev-parse --short HEAD
+$env:FUNCTIONS_DISCOVERY_TIMEOUT = "60"
+npx firebase-tools deploy --project asiye-80386 --only "functions:uploadProfileImageProxy,functions:uploadDriverEnrollmentDocument,functions:submitDriverEnrollmentSecure"
+npx firebase-tools deploy --project asiye-80386 --only hosting
+```
+
+The new `submitDriverEnrollmentSecure` validates Firebase Auth phone ownership,
+all five uploaded document objects, references and bank account format, then
+creates an immutable **pending** enrollment via Admin SDK transaction. It never
+approves, activates or switches a driver online. **Do not deploy database
+security rules to work around permission_denied.** The current hosted
+`/driver-v2/enrollment.html` can also be updated via Hosting; however, the
+Flutter app currently calls `loadFlutterAsset`, so install a signed **11.0.58
+(328)** APK to receive bundled JS changes. Hosting-only is not enough for
+installed WebView assets.
+
+For passenger Google/Apple logins, Firebase Authentication does not treat an
+entered number as verified. If the signed-in UID has no Firebase Auth phone,
+the page must return to the SMS OTP step; only then should a passenger save
+the scanned photo. **Do not let users claim someone else's existing commuter
+record by phone text or email.**
+
+Acceptance: (1) verify OTP, full name, face picture and successful passenger
+profile save with reachable photo; (2) driver reviews 7 steps and receives
+**Pending admin approval**; (3) reject a driver identity without phone Auth or
+with another UID's uploaded documents; (4) confirm wallet, card and ride
+checkout remain unchanged. A green CI build is not proof that these live flows
+work.
+
+---
+
+
 This fixes the source code on `release/11.0.57-admin-support-327`. It does NOT change the deployed Firebase backend or previously installed APK until it is released.
 
 ## Why the old build fails
