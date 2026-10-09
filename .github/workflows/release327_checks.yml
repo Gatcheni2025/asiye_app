@@ -33,10 +33,12 @@ jobs:
           node --check assets/passenger-v2/js/login.js
           node --check functions/driver-card-payout.js
           node --check functions/index.js
+          node --check functions/admin-operations.js
+          node --check assets/admin/console.js
           node --check functions/enrollment-submission.js
           node --check test/release327-admin-support.test.cjs
       - name: Run release and existing member page tests
         run: |
-          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs test/card-payout-passenger.test.cjs test/release328-recovery.test.cjs test/enrollment-validation.test.cjs test/registration-submission.test.cjs
+          node --test test/release327-admin-support.test.cjs test/member-pages.test.cjs test/driver-enrollment-v2.test.cjs test/login-otp.test.cjs test/card-payout-passenger.test.cjs test/release328-recovery.test.cjs test/enrollment-validation.test.cjs test/registration-submission.test.cjs test/admin-portal.test.cjs
       - name: Validate database rules JSON
         run: node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
