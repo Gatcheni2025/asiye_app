@@ -88,3 +88,21 @@ test('refund creation requires positive amount and traceable payment',async()=>{
  await assert.rejects(h.execute({action:'createRefundCase',amount:100,reason:'Unspecified'}),/trip ID or gateway/);
  await assert.rejects(h.execute({action:'createRefundCase',providerReference:'x',amount:-10,reason:'invalid'}),/positive refund/);
 });
+
+test('full operations access excludes enrollment-only reviewers',()=>{
+ const src=root('functions/index.js');
+ const start=src.indexOf('async function requireAsiyeAdmin(');
+ const end=src.indexOf('async function requireAsiyeEnrollmentReviewer(',start);
+ const block=src.slice(start,end);
+ assert.ok(start>=0&&end>start);
+ assert.doesNotMatch(block,/token\.enrollmentReviewer === true/);
+ assert.match(block,/token\.asiyeAdmin === true/);
+ const reviewer=src.slice(end,src.indexOf('function safeAdminString(',end));
+ assert.match(reviewer,/token\.enrollmentReviewer === true/);
+ assert.match(src,/const actor = await requireAsiyeEnrollmentReviewer\(context\)/);
+});
+test('details action identifiers always use server Firebase collection keys',()=>{
+ const src=root('assets/admin/console.js');
+ assert.match(src,/\.map\(\(\[id,record\]\)=>\(\{\.\.\.record,id\}\)\)/);
+ assert.doesNotMatch(src,/\.map\(\(\[id,record\]\)=>\(\{id,\.\.\.record\}\)\)/);
+});
