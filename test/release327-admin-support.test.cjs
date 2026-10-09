@@ -13,8 +13,8 @@ const main = read('lib/main.dart');
 const camera = read('lib/vehicle_camera_screen_native.dart');
 const rules = JSON.parse(read('database.rules.json')).rules;
 
-test('release version and admin title match build 327', () => {
-  assert.match(read('pubspec.yaml'), /^version: 11\.0\.57\+327$/m);
+test('build 328 retains compatible administrator title', () => {
+  assert.match(read('pubspec.yaml'), /^version: 11\.0\.58\+328$/m);
   assert.match(admin, /Asiye Admin 11\.0\.57/);
   assert.match(admin, /data-release-view="vehicle"/);
   assert.match(admin, /data-release-view="support"/);
