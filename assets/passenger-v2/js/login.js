@@ -1048,6 +1048,16 @@ window.ASIYE_PASSENGER_LOGIN = {
             console.warn('Passenger saved face picture unavailable; prompting rescan.');
         }
 
+        // Google/Apple accounts do not automatically have an OTP-verified
+        // phone. Complete the phone step BEFORE scanning and saving a new
+        // profile; never claim that typing a number verifies ownership.
+        if (!user.phoneNumber) {
+            this.showStep('loginStep');
+            const phoneError = document.getElementById('phoneError');
+            if (phoneError) phoneError.textContent =
+                'Verify your mobile number by SMS OTP before completing your first Asiye profile. Enter your number and tap Continue with phone.';
+            return;
+        }
 
         /*
          * New passenger.
@@ -1386,6 +1396,13 @@ window.ASIYE_PASSENGER_LOGIN = {
     async createPassengerProfile() {
         const user = this.pendingUser || firebase.auth().currentUser;
         if (!user) { this.toast('Please sign in again.'); return; }
+        if (!user.phoneNumber) {
+            this.showStep('loginStep');
+            const notice = document.getElementById('phoneError');
+            if (notice) notice.textContent =
+                'Your first profile requires a verified mobile number. Complete the SMS OTP step, then take your face picture.';
+            return;
+        }
         const button = document.getElementById('createPassengerProfile');
         const name = String(document.getElementById('newPassengerName')?.value || '').trim();
         if (name.length < 2) { this.toast('Please add your full name.'); return; }
@@ -1429,6 +1446,13 @@ window.ASIYE_PASSENGER_LOGIN = {
                 }
                 id = user.uid;
                 ({ response, uploaded } = await upload(id));
+            }
+            if (response.status === 422 && uploaded.code === 'phone-otp-required') {
+                this.showStep('loginStep');
+                const phoneError = document.getElementById('phoneError');
+                if (phoneError) phoneError.textContent = uploaded.error ||
+                    'Verify your number with SMS OTP to complete your profile.';
+                return;
             }
             if (!response.ok || !/^https:\/\//.test(String(uploaded.url || ''))) {
                 throw Error(response.status === 404
