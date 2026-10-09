@@ -1167,7 +1167,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     bool forceResend = false,
   }) async {
     final cleanPhone = phone.trim();
-    if (!RegExp(r'^\\+27[6-8][0-9]{8}\
+    if (!RegExp(r'^\+27[6-8][0-9]{8}$').hasMatch(cleanPhone)) {
+      await _sendNativeAuthError('phone', Exception(
+        'Enter a valid South African mobile number, for example 082 123 4567.',
+      ));
+      return;
+    }
 
     if (_phoneVerificationNumber != cleanPhone) {
       _phoneVerificationNumber = cleanPhone;
