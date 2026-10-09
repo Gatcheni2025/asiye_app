@@ -414,47 +414,31 @@
                 submittedAt: firebase.database.ServerValue.TIMESTAMP
             };
 
-            await firebase.database()
-                .ref(`driverEnrollments/${user.uid}`)
-                .set(enrollmentRecord);
-
-            // Seed the driver's own taxi profile while keeping it locked
-            // offline. Approval promotes these verified enrollment fields.
+            // Browser RTDB rules on older deployments may deny direct writes
+            // even when document uploads succeeded. Submit through the
+            // authenticated, create-once backend; it verifies all five file
+            // metadata owners and keeps approval status pending.
+            status.textContent = 'Saving your application for admin review…';
+            const token = await user.getIdToken(true);
+            let response;
             try {
-                await firebase.database()
-                    .ref(`taxis/${user.uid}`)
-                    .update({
-                    name: enrollmentRecord.fullName,
-                    fullName: enrollmentRecord.fullName,
-                    phone: enrollmentRecord.phone,
-                    authUid: user.uid,
-                    userUid: user.uid,
-                    profile_picture_url: documentUrls.selfie,
-                    profileImageUrl: documentUrls.selfie,
-                    vehiclePhoto: documentUrls.car,
-                    vehicleMake: vehiclePending.make,
-                    vehicleModel: vehiclePending.model,
-                    vehicleColor: vehiclePending.colour,
-                    vehicleYear: vehiclePending.year,
-                    vehicleReg: vehiclePending.registration,
-                    taxiRegistrationNumber: vehiclePending.registration,
-                    vehiclePending,
-                    vehicleApproved: false,
-                    vehicleApprovalStatus: 'pending',
-                    verificationStatus: 'pending',
-                    provisionalActivation: false,
-                    isOnline: false,
-                    isBroadcasting: false,
-                    isFull: false,
-                    enrollmentVersion: 2,
-                    updatedAt: firebase.database.ServerValue.TIMESTAMP
-                });
-            } catch (profileError) {
-                // The enrollment was already saved. Admin approval can create
-                // the taxi profile using Admin SDK; never misreport a successful
-                // one-time submission as failed or offer the form again.
-                console.warn('Driver taxi profile seed deferred to admin review:',
-                    profileError.code || 'unknown');
+                response = await fetch(
+                    'https://us-central1-asiye-80386.cloudfunctions.net/submitDriverEnrollmentSecure',
+                    {
+                        method: 'POST',
+                        headers: {Authorization: 'Bearer '+token,
+                                  'Content-Type': 'application/json'},
+                        body: JSON.stringify({submissionId,enrollment:enrollmentRecord})
+                    }
+                );
+            } catch(error) {
+                throw Error('Cannot reach the enrollment submission service. Your photos and form are preserved; ask Asiye Admin to deploy submitDriverEnrollmentSecure.');
+            }
+            const submitted = await response.json().catch(()=>({}));
+            if(!response.ok || !submitted.ok) {
+                throw Error(response.status===404
+                    ? 'The enrollment submission function is not deployed. Ask Asiye Admin to publish submitDriverEnrollmentSecure.'
+                    : submitted.error || 'Unable to submit registration to the server.');
             }
 
             // Show the saved application state. The form cannot be reopened.
@@ -467,7 +451,7 @@
             if (error.code === 'storage/unauthorized') {
                 status.textContent = 'Document upload authorization failed. Please sign out and sign in with OTP again.';
             } else if (/permission.?denied/i.test(String(error.code || error.message))) {
-                status.textContent = 'The enrollment record could not be saved. Check Realtime Database enrollment permissions or refresh to see whether it was already submitted. Your entered details are still here.';
+                status.textContent = 'Firebase could not confirm the submission. Refresh the approval status before trying again; your details are still here.';
             } else {
                 status.textContent = error?.message || 'Submission failed. Your entered details are still here. Check your connection and retry.';
             }
