@@ -114,6 +114,74 @@ ASIYE_DRIVER.requests = {
 
 
                     /*
+                     * Privacy-safe Asiye Work area alert.
+                     *
+                     * IMPORTANT: never load requests/{requestId} here. The
+                     * backend deliberately sends no requestId or trip details
+                     * until the passenger group is ready.
+                     */
+                    if (
+                        notification.type ===
+                            'club_area_alert'
+                    ) {
+
+                        const timestamp =
+                            Number(
+                                notification.timestamp ||
+                                0
+                            );
+
+
+                        if (
+                            timestamp &&
+                            Date.now() -
+                                timestamp >
+                                10 *
+                                60 *
+                                1000
+                        ) {
+
+                            return;
+                        }
+
+
+                        ASIYE_DRIVER.ui
+                            ?.toast?.(
+                                notification.message ||
+                                'An Asiye Work booking is forming near your area. Details will unlock when the group is ready.',
+                                'club'
+                            );
+
+
+                        window.dispatchEvent(
+                            new CustomEvent(
+                                'asiye-driver-work-area-alert',
+                                {
+                                    detail: {
+                                        title:
+                                            notification.title ||
+                                            'Asiye Work · Area booking',
+
+                                        message:
+                                            notification.message ||
+                                            'A shared Work booking is forming near you.',
+
+                                        requiredPassengers:
+                                            Number(
+                                                notification.requiredPassengers ||
+                                                0
+                                            )
+                                    }
+                                }
+                            )
+                        );
+
+
+                        return;
+                    }
+
+
+                    /*
                      * Ignore non-booking notifications.
                      */
 
@@ -387,6 +455,36 @@ ASIYE_DRIVER.requests = {
         }
 
 
+        const isClub =
+            request.type ===
+                'club' ||
+            request.rideType ===
+                'club4' ||
+            request.rideType ===
+                'club7';
+
+
+        /*
+         * A forming Work pool is NEVER an actionable request. Drivers may
+         * receive the generic area alert, but full request data and Accept
+         * remain locked until the pool and all passenger payments are ready.
+         */
+        if (
+            isClub &&
+            (
+                request.poolReady !==
+                    true ||
+                request.paymentsReady !==
+                    true ||
+                status !==
+                    'pool_ready'
+            )
+        ) {
+
+            return false;
+        }
+
+
         /*
          * Another driver already claimed it.
          */
@@ -600,6 +698,33 @@ ASIYE_DRIVER.requests = {
                     driverId
             }
         );
+
+
+        const freshIsClub =
+            freshRequest.type ===
+                'club' ||
+            freshRequest.rideType ===
+                'club4' ||
+            freshRequest.rideType ===
+                'club7';
+
+
+        if (
+            freshIsClub &&
+            (
+                freshRequest.poolReady !==
+                    true ||
+                freshRequest.paymentsReady !==
+                    true ||
+                freshRequest.status !==
+                    'pool_ready'
+            )
+        ) {
+
+            throw new Error(
+                'This Asiye Work group is still forming. Full booking details unlock only when all passengers are ready.'
+            );
+        }
 
 
         /* ========================================================
@@ -1179,10 +1304,29 @@ ASIYE_DRIVER.requests = {
                     );
 
 
+                const requiredPassengers =
+
+                    Math.min(
+                        capacity,
+                        Number(
+                            claimedRequest.minimumPassengers ||
+                            claimedRequest.requiredPassengers ||
+                            (
+                                claimedRequest.clubMode ===
+                                    'club7' ||
+                                claimedRequest.rideType ===
+                                    'club7'
+                                ? 4
+                                : 3
+                            )
+                        )
+                    );
+
+
                 poolReady =
 
                     passengerCount >=
-                    capacity;
+                    requiredPassengers;
             }
 
 
