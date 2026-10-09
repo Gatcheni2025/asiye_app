@@ -58,8 +58,8 @@
    passengers:['Passengers','Profile details, identity and account status.','commuters'],
    bookings:['Ride bookings','Review ride requests and operational status.','requests'],
    parcels:['Deliveries','Track parcel requests and fulfillment status.','delivery_requests'],
-   wallets:['Wallet balances','Inspect passenger balances and audited manual adjustments.','commuters'],
-   payments:['Payments','Wallet deposits and EFT reconciliation records.','walletPayments'],
+   wallets:['Wallet balances','View passenger and driver wallets. Adjust passenger balances only with audit notes.','commuters'],
+   payments:['Payments','Review wallet deposits and trip card payment records.','walletPayments'],
    earnings:['Earning records','Recorded driver card payouts; not a complete earnings ledger.','driverCardPayouts'],
    payouts:['Payouts','Withdrawal and payout requests. Approval does not initiate bank transfers.','payout_requests'],
    refunds:['Refund cases','Track disputed charges and refunds without moving money.','refundCases'],
@@ -156,6 +156,35 @@
        if(currentToken!==token)return;
        records=Object.fromEntries(entries);
        renderOverview();
+     }else if(view==='wallets'){
+       const [passengers,drivers]=await Promise.all([
+         fetchResource('commuters'),fetchResource('taxis')
+       ]);
+       if(currentToken!==token)return;
+       records={commuters:passengers,taxis:drivers};
+       items=latest([
+         ...refs(passengers).map(r=>({...r,_accountType:'passenger'})),
+         ...refs(drivers).map(r=>({...r,_accountType:'driver'}))
+       ]);
+       render();
+     }else if(view==='payments'){
+       const [wallets,trips]=await Promise.all([
+         fetchResource('walletPayments'),fetchResource('tripPayments')
+       ]);
+       if(currentToken!==token)return;
+       const cardRecords=[];
+       for(const [tripId,passengers] of Object.entries(trips)){
+         if(!passengers||typeof passengers!=='object')continue;
+         for(const [passengerId,payment] of Object.entries(passengers)){
+           if(!payment||typeof payment!=='object')continue;
+           cardRecords.push({...payment,id:tripId+'/'+passengerId,
+             requestId:tripId,passengerId,_source:'tripCard',
+             provider:payment.provider||'card'});
+         }
+       }
+       records={walletPayments:wallets,tripPayments:trips};
+       items=latest([...refs(wallets).map(r=>({...r,_source:'wallet'})),...cardRecords]);
+       render();
      }else if(view==='payouts'){
        const [pr,withdraw]=await Promise.all([fetchResource('payout_requests'),fetchResource('withdrawals')]);
        if(currentToken!==token)return;
@@ -222,12 +251,12 @@
  }
  const columns={
    enrollments:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Vehicle',r=>[r.vehicleMake,r.vehicleModel].filter(Boolean).join(' ')],['Submitted',r=>fmtDate(r.submittedAt)],['Status',r=>r.status]],
-   drivers:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Car registration',r=>r.vehicleReg||r.taxiRegistrationNumber],['Online',r=>r.isOnline?'Online':'Offline'],['Verification',r=>r.verificationStatus]],
+   drivers:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Car registration',r=>r.vehicleReg||r.taxiRegistrationNumber],['Wallet',r=>money(r.walletBalance)],['Online',r=>r.isOnline?'Online':'Offline'],['Verification',r=>r.verificationStatus]],
    passengers:[['Passenger',r=>r.name],['Phone',r=>r.phone],['Account',r=>r.isActive===false?'Suspended':'Active'],['Wallet',r=>money(r.walletBalance??r.credits)]],
    bookings:[['Booking',r=>r.id],['Passenger',r=>r.commuterId],['Driver',r=>r.taxiId||r.driverAuthUid],['Fare',r=>money(r.finalAmount??r.agreedFare??r.calculatedPrice)],['Status',r=>r.status]],
    parcels:[['Delivery',r=>r.id],['Sender',r=>r.commuterId||r.senderId],['Driver',r=>r.taxiId],['Amount',r=>money(r.finalAmount??r.agreedFare??r.calculatedPrice)],['Status',r=>r.status]],
-   wallets:[['Passenger',r=>r.name],['Phone',r=>r.phone],['Wallet balance',r=>money(r.walletBalance??r.credits)],['Updated',r=>fmtDate(r.walletUpdatedAt)]],
-   payments:[['Payment reference',r=>r.reference||r.id],['Provider',r=>r.provider],['Passenger',r=>r.passengerId||r.uid],['Amount',r=>money(r.amount)],['Status',r=>r.status]],
+   wallets:[['Account',r=>r.fullName||r.name],['Type',r=>r._accountType],['Phone',r=>r.phone],['Wallet balance',r=>money(r.walletBalance??r.credits)],['Updated',r=>fmtDate(r.walletUpdatedAt)]],
+   payments:[['Payment reference',r=>r.reference||r.id],['Source',r=>r._source==='tripCard'?'Trip card':'Wallet'],['Provider',r=>r.provider],['Passenger',r=>r.passengerId||r.uid],['Amount',r=>money(r.amount??r.totalAmount)],['Status',r=>r.status]],
    earnings:[['Payout record',r=>r.reference||r.id],['Driver',r=>r.driverId||r.uid],['Trip',r=>r.requestId||r.tripId],['Amount',r=>money(r.amount??r.netAmount??r.driverAmount)],['Status',r=>r.status]],
    payouts:[['Payout',r=>r.id],['Source',r=>r._collection],['Driver',r=>r.driverId||r.uid||r.userId],['Amount',r=>money(r.amount)],['Status',r=>r.status]],
    refunds:[['Case',r=>r.id],['Booking',r=>r.bookingId],['Amount',r=>money(r.amount)],['Created',r=>fmtDate(r.createdAt)],['Status',r=>r.status]],
@@ -364,7 +393,7 @@
        await changed({action:'updateSupport',id,status:'resolved',note:'Resolved from Operations Desk'},'Ticket resolved.');
      }]);
    }
-   if(view==='passengers'||view==='wallets'){
+   if(view==='passengers'||(view==='wallets'&&row._accountType==='passenger')){
      actions.push(['Edit account',async()=>{
        const name=required('Passenger display name:',row.name||'');
        if(name===null||!name)return;
@@ -389,7 +418,7 @@
        await changed({action:'cancelRequest',requestId:id,reason},'Booking cancelled. Check payment holds separately.');
      },'soft danger']);
    }
-   if(view==='payments'){
+   if(view==='payments'&&row._source!=='tripCard'){
      actions.push(['Add payment note',async()=>{
        const note=required('Note for the transaction audit trail:',row.adminNote||'');
        if(!note)return;
