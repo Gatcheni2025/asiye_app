@@ -5802,7 +5802,7 @@ exports.uploadProfileImageProxy =
         if (signup && (
           !verifiedPhone ||
           fullName.length < 2 || fullName.length > 100 ||
-          /[<>\\u0000-\\u001f]/.test(fullName)
+          /[<>\u0000-\u001f]/.test(fullName)
         )) {
           return response.status(422).json({
             code: !verifiedPhone ? "phone-otp-required" : "name-required",
