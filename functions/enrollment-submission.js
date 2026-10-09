@@ -30,9 +30,9 @@ function makeEnrollmentSubmission({ admin, bucketName, cors }) {
       if (!/^[a-zA-Z0-9_-]{1,128}$/.test(uid)) bad('Invalid driver identity.', 403);
       const authUser = await admin.auth().getUser(uid);
       // Never trust phone text from the form or a WebView bridge payload.
-      const phone = String(authUser.phoneNumber || identity.phone_number || '').trim();
-      if (!phone || (authUser.phoneNumber && identity.phone_number &&
-          authUser.phoneNumber !== identity.phone_number))
+      const phone = String(authUser.phoneNumber || '').trim();
+      if (!phone || (identity.phone_number &&
+          phone !== identity.phone_number))
         bad('Your Firebase account has no verified mobile number. Sign in using SMS OTP.', 403);
 
       const input = req.body?.enrollment;
