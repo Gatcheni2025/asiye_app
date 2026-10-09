@@ -104,3 +104,21 @@ test('new passenger with no phone is sent to actual OTP screen instead of false 
  assert.match(backend,/admin\.auth\(\)\.getUser\(decoded\.uid\)/);
  assert.match(backend,/phone: verifiedPhone/);
 });
+
+
+test('passenger signup backend accepts ordinary names and rejects control characters',()=>{
+ const backend=fs.readFileSync('functions/index.js','utf8');
+ const match=backend.match(/fullName\.length > 100 \|\|\s*(\/\[[^\n]+\]\/)\.test\(fullName\)/);
+ assert.ok(match,'Passenger signup must contain an explicit unsafe-character check');
+ const expression=match[1];
+ // Build the actual regex from its source: a doubly escaped \u class
+ // can erroneously reject ordinary letters including "Tom".
+ const regex=new RegExp(expression.slice(1,-1));
+ for (const name of ['Tom','John','John Smith','Sbabulile','Nonhlanhla','Ayanda Mkhize']) {
+   assert.equal(regex.test(name),false,'Valid passenger name blocked: '+name);
+ }
+ for (const unsafe of ['<script>','Thabo\nX','Bongani\u0000Mkhize','Nomsa\u001fM']) {
+   assert.equal(regex.test(unsafe),true,'Unsafe passenger name accepted');
+ }
+ assert.match(backend,/fullName\.length < 2 \|\| fullName\.length > 100/);
+});
