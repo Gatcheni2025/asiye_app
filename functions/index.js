@@ -1567,7 +1567,7 @@ exports.notifyPassengerOnClubJoin = functions.database
 
 
 // =================================================================
-// --- ASIYE WORK: NOTIFY NEARBY DRIVERS WHEN THE POOL IS FULL ---
+// --- ASIYE WORK: AREA ALERT FIRST, FULL REQUEST ONLY WHEN READY ---
 // =================================================================
 
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -1637,6 +1637,296 @@ function clubPickupTimeLabel(request) {
   return text || "ASAP";
 }
 
+function clubRequiredPassengerCount(request) {
+  const physicalCapacity =
+    Math.max(
+      1,
+      Number(
+        request?.capacity ||
+        request?.maxCapacity ||
+        (
+          request?.clubMode === "club7"
+            ? 7
+            : 4
+        )
+      ) ||
+      4
+    );
+
+  const configuredTarget =
+    Number(
+      request?.minimumPassengers ||
+      request?.requiredPassengers ||
+      (
+        request?.clubMode === "club7"
+          ? 4
+          : 3
+      )
+    );
+
+  return Math.min(
+    physicalCapacity,
+    Math.max(
+      1,
+      Number.isFinite(configuredTarget)
+        ? configuredTarget
+        : (
+            request?.clubMode === "club7"
+              ? 4
+              : 3
+          )
+    )
+  );
+}
+
+function activeClubPassengerCount(request) {
+  return Object.values(
+    request?.passengers ||
+    {}
+  )
+    .filter(
+      passenger =>
+        ![
+          "cancelled",
+          "cancelled_by_commuter",
+          "cancelled_by_driver",
+          "cancelled_by_admin",
+          "rejected"
+        ].includes(
+          String(
+            passenger?.status ||
+            ""
+          )
+        )
+    )
+    .length;
+}
+
+async function nearbyWorkDrivers(
+  request,
+  limit = 8
+) {
+  const pickupLat = Number(
+    request.poolCenterLat ??
+    request.commuterLocation?.latitude
+  );
+  const pickupLng = Number(
+    request.poolCenterLng ??
+    request.commuterLocation?.longitude
+  );
+
+  if (
+    !Number.isFinite(pickupLat) ||
+    !Number.isFinite(pickupLng)
+  ) {
+    return [];
+  }
+
+  const requiredVehicleSeats =
+    Number(
+      request.capacity ||
+      (
+        request.clubMode === "club7"
+          ? 7
+          : 4
+      )
+    );
+
+  const taxisSnapshot =
+    await admin.database()
+      .ref("/taxis")
+      .once("value");
+
+  const candidates = [];
+
+  taxisSnapshot.forEach(child => {
+    const taxi = child.val() || {};
+
+    if (
+      taxi.isOnline !== true ||
+      taxi.currentRequest ||
+      taxi.isFull === true
+    ) {
+      return;
+    }
+
+    const lat =
+      Number(taxi.latitude);
+    const lng =
+      Number(taxi.longitude);
+
+    if (
+      !Number.isFinite(lat) ||
+      !Number.isFinite(lng)
+    ) {
+      return;
+    }
+
+    const declaredSeats =
+      Number(
+        taxi.capacity ||
+        taxi.seats ||
+        0
+      );
+
+    if (
+      Number.isFinite(declaredSeats) &&
+      declaredSeats > 0 &&
+      declaredSeats < requiredVehicleSeats
+    ) {
+      return;
+    }
+
+    const distanceKm =
+      haversineKm(
+        pickupLat,
+        pickupLng,
+        lat,
+        lng
+      );
+
+    if (
+      distanceKm > 10
+    ) {
+      return;
+    }
+
+    candidates.push({
+      driverId:
+        child.key,
+      distanceKm,
+      phone:
+        normaliseSmsPhone(
+          taxi.phone ||
+          taxi.phoneNumber ||
+          taxi.mobile ||
+          ""
+        ),
+      driverName:
+        taxi.name ||
+        taxi.fullName ||
+        "Driver"
+    });
+  });
+
+  candidates.sort(
+    (left, right) =>
+      left.distanceKm -
+      right.distanceKm
+  );
+
+  return candidates.slice(
+    0,
+    limit
+  );
+}
+
+/*
+ * Stage 1: the pool has started forming.
+ *
+ * Nearby drivers receive ONLY a generic area-level heads-up. This payload
+ * intentionally contains no requestId, passenger identity, exact pickup,
+ * destination, fare, PIN or coordinates. Without a requestId the push helper
+ * also cannot load the underlying request record.
+ */
+exports.notifyDriversOfClubAreaBooking =
+  functions.database
+    .ref(
+      "/requests/{requestId}/status"
+    )
+    .onUpdate(
+      async (
+        change,
+        context
+      ) => {
+        if (
+          change.before.val() ===
+            "pooling" ||
+          change.after.val() !==
+            "pooling"
+        ) {
+          return null;
+        }
+
+        const requestId =
+          context.params.requestId;
+
+        const request =
+          (
+            await change.after.ref.parent
+              .once("value")
+          ).val();
+
+        if (
+          !request ||
+          request.type !==
+            "club" ||
+          request.poolReady ===
+            true ||
+          request.taxiId
+        ) {
+          return null;
+        }
+
+        const candidates =
+          await nearbyWorkDrivers(
+            request,
+            8
+          );
+
+        const requiredPassengers =
+          clubRequiredPassengerCount(
+            request
+          );
+
+        await Promise.all(
+          candidates.map(
+            async candidate => {
+              await admin.database()
+                .ref(
+                  `/notifications/taxis/${candidate.driverId}/work-area-${requestId}`
+                )
+                .set({
+                  type:
+                    "club_area_alert",
+                  title:
+                    "Asiye Work · Area booking",
+                  message:
+                    `A shared Work booking is forming near you. Full trip details will unlock only when all ${requiredPassengers} passengers are ready.`,
+                  serviceName:
+                    "Asiye Work",
+                  requiredPassengers,
+                  passengerCount:
+                    Math.min(
+                      activeClubPassengerCount(
+                        request
+                      ),
+                      requiredPassengers
+                    ),
+                  privacyLevel:
+                    "area_only",
+                  timestamp:
+                    admin.database
+                      .ServerValue
+                      .TIMESTAMP
+                });
+            }
+          )
+        );
+
+        console.log(
+          `Asiye Work ${requestId} sent a privacy-safe area alert to ${candidates.length} nearby driver(s).`
+        );
+
+        return null;
+      }
+    );
+
+/*
+ * Stage 2: every required passenger has joined and every required payment /
+ * post-payment safety step is ready. Only now may a driver receive requestId
+ * and detailed trip information, and only now can the booking be accepted.
+ */
 exports.notifyDriversWhenClubReady = functions
   .runWith({
     secrets: [
@@ -1666,113 +1956,48 @@ exports.notifyDriversWhenClubReady = functions
       return null;
     }
 
-    const pickupLat = Number(
-      request.poolCenterLat ??
-      request.commuterLocation?.latitude
-    );
-    const pickupLng = Number(
-      request.poolCenterLng ??
-      request.commuterLocation?.longitude
-    );
+    const requiredPassengers =
+      clubRequiredPassengerCount(
+        request
+      );
 
-    if (!Number.isFinite(pickupLat) || !Number.isFinite(pickupLng)) {
-      console.warn(`Club ${requestId} has no usable pickup coordinates.`);
+    const passengerCount =
+      activeClubPassengerCount(
+        request
+      );
+
+    if (
+      passengerCount <
+      requiredPassengers
+    ) {
+      console.warn(
+        `Asiye Work ${requestId} became payment-ready with only ${passengerCount}/${requiredPassengers} passengers.`
+      );
+
       return null;
     }
 
-    const requiredSeats = Number(
-      request.capacity ||
-      (request.clubMode === "club7" ? 7 : 4)
-    );
-
-    const taxisSnapshot = await admin.database().ref("/taxis").once("value");
-    const candidates = [];
-
-    taxisSnapshot.forEach(child => {
-      const taxi = child.val() || {};
-
-      if (
-        taxi.isOnline !== true ||
-        taxi.currentRequest ||
-        taxi.isFull === true
-      ) {
-        return;
-      }
-
-      const driverPhone =
-        normaliseSmsPhone(
-          taxi.phone ||
-          taxi.phoneNumber ||
-          taxi.mobile ||
-          ""
-        );
-
-      if (!driverPhone) {
-        return;
-      }
-
-      const lat = Number(taxi.latitude);
-      const lng = Number(taxi.longitude);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
-
-      const declaredSeats = Number(taxi.capacity || taxi.seats || 0);
-      if (
-        Number.isFinite(declaredSeats) &&
-        declaredSeats > 0 &&
-        declaredSeats < requiredSeats
-      ) {
-        return;
-      }
-
-      const distanceKm = haversineKm(
-        pickupLat,
-        pickupLng,
-        lat,
-        lng
+    const selected =
+      await nearbyWorkDrivers(
+        request,
+        8
       );
-
-      if (distanceKm > 10) return;
-
-      candidates.push({
-        driverId:
-          child.key,
-        distanceKm,
-        phone:
-          driverPhone,
-        driverName:
-          taxi.name ||
-          taxi.fullName ||
-          "Driver"
-      });
-    });
-
-    candidates.sort((left, right) => left.distanceKm - right.distanceKm);
-    const selected = candidates.slice(0, 8);
 
     const pickupTime =
       clubPickupTimeLabel(
         request
       );
 
-    const passengerCount =
+    const requiredSeats =
       Number(
-        request.passengerCount ||
-        Object.keys(
-          request.passengers ||
-          {}
-        ).length
+        request.capacity ||
+        (
+          request.clubMode ===
+            "club7"
+            ? 7
+            : 4
+        )
       );
-
-    if (
-      request.clubMode === "club4" &&
-      passengerCount < 3
-    ) {
-      console.warn(
-        `Club ${requestId} became ready before 3 passengers were recorded.`
-      );
-
-      return null;
-    }
 
     await Promise.all(
       selected.map(
@@ -1801,17 +2026,21 @@ exports.notifyDriversWhenClubReady = functions
                 "Destination",
               fare:
                 Number(
-                  request.pricePerPassenger ||
+                  request.driverGrossFare ||
+                  request.totalPoolFare ||
                   0
                 ),
-              passengerCount:
-                passengerCount ||
-                requiredSeats,
+              passengerCount,
+              requiredPassengers,
               capacity:
                 requiredSeats,
               distanceKm:
                 candidate.distanceKm,
               pickupTime,
+              poolReady:
+                true,
+              paymentsReady:
+                true,
               timestamp:
                 admin.database
                   .ServerValue
@@ -1841,7 +2070,8 @@ exports.notifyDriversWhenClubReady = functions
                   status:
                     "sending",
                   phone:
-                    candidate.phone,
+                    candidate.phone ||
+                    "",
                   distanceKm:
                     candidate.distanceKm,
                   attemptedAt:
@@ -1854,8 +2084,20 @@ exports.notifyDriversWhenClubReady = functions
             return;
           }
 
+          if (!candidate.phone) {
+            await smsRef.update({
+              status:
+                "skipped_no_phone",
+              skippedAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+            return;
+          }
+
           const smsBody =
-            `Asiye: You have a load to fetch at ${pickupTime}. Check your Asiye app to accept or reject.`;
+            `Asiye: Your Work passenger group is ready for collection at ${pickupTime}. Open Asiye to view and accept the full request.`;
 
           try {
             const result =
@@ -1882,7 +2124,7 @@ exports.notifyDriversWhenClubReady = functions
 
           } catch (error) {
             console.error(
-              `Club SMS failed for driver ${candidate.driverId}`,
+              `Work SMS failed for driver ${candidate.driverId}`,
               error
             );
 
@@ -1905,7 +2147,7 @@ exports.notifyDriversWhenClubReady = functions
     );
 
     console.log(
-      `Asiye Work ${requestId} sent to ${selected.length} nearby driver(s) within 10 km, with Twilio SMS reminders.`
+      `Asiye Work ${requestId} released full details to ${selected.length} nearby driver(s) only after ${passengerCount}/${requiredPassengers} passengers and payments were ready.`
     );
 
     return null;
