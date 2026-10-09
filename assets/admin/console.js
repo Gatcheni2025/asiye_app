@@ -46,7 +46,7 @@
    }catch{return '';}
  };
  const refs=(records)=>Object.entries(records||{}).filter(([id,r])=>r&&typeof r==='object')
-  .map(([id,record])=>({id,...record}));
+  .map(([id,record])=>({...record,id})); // DB key, never user-supplied id, owns actions
  const latest=(rows,key)=>{
    return rows.sort((a,b)=>Number(b[key]||b.updatedAt||b.createdAt||b.timestamp||0)
     -Number(a[key]||a.updatedAt||a.createdAt||a.timestamp||0));
@@ -347,7 +347,7 @@
      const messages=row.messages||{};
      const convo=el('section','doc-list');
      convo.append(el('h3','','Conversation'));
-     Object.values(messages).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0))
+     Object.values(messages).filter(Boolean).sort((a,b)=>Number(a.createdAt||0)-Number(b.createdAt||0))
        .slice(-100).forEach(m=>{
          const card=el('div','doc-item');
          card.append(el('div','',String(m.senderRole||m.senderUid||'Customer')+': '+String(m.text||'').slice(0,1500)));
