@@ -4417,6 +4417,7 @@ exports.adminFetchData = functions.https.onCall(
       "requests",
       "delivery_requests",
       "support_chats",
+      "tripPayments",
       "walletPayments",
       "walletAdjustments",
       "withdrawals",
