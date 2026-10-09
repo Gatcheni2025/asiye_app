@@ -1067,6 +1067,22 @@ window.ASIYE_DRIVER_LOGIN = {
                 'profileCheckStep'
             );
 
+            // Resolve approval FIRST. A registered driver who is pending
+            // review must not be sent through registration a second time.
+            const enrollment = await AsiyeEnrollment.getStatus(user);
+            if (enrollment.state === 'pending' ||
+                enrollment.state === 'rejected') {
+                window.location.replace('./enrollment.html');
+                return;
+            }
+            if (enrollment.state === 'approved' && enrollment.linked) {
+                await this.completeDriverLogin(
+                    enrollment.linked.id,
+                    enrollment.linked.data,
+                    user
+                );
+                return;
+            }
 
             /* ====================================================
                1. NORMAL UID LOOKUP: taxis/{uid}
@@ -1366,10 +1382,9 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-            this.showStep(
-                'notDriverStep'
-            );
-
+            // A newly OTP-authenticated driver must be able to enroll.
+            window.location.replace('./enrollment.html');
+            return;
 
         } catch (error) {
 
@@ -1475,6 +1490,11 @@ window.ASIYE_DRIVER_LOGIN = {
         driverData,
         authUser
     ) {
+        const account = await AsiyeEnrollment.getStatus(authUser);
+        if (account.state !== 'approved') {
+            window.location.replace('./enrollment.html');
+            return;
+        }
 
         localStorage.setItem(
             'driverId',

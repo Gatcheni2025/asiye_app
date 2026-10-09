@@ -97,6 +97,10 @@ function createMockContext(scriptPath) {
     context.window.localStorage = context.localStorage;
     context.window.document = context.document;
     context.window.firebase = context.firebase;
+    context.AsiyeEnrollment = {
+        getStatus: async () => ({ state: 'approved' })
+    };
+    context.window.AsiyeEnrollment = context.AsiyeEnrollment;
 
     vm.createContext(context);
     vm.runInContext(fs.readFileSync(scriptPath, 'utf8'), context);
@@ -142,7 +146,7 @@ test('Passenger completeLogin stores session, notifies Flutter and redirects to 
     const { context, storage, postedMessages } = createMockContext('assets/passenger-v2/js/login.js');
     const login = context.window.ASIYE_PASSENGER_LOGIN;
 
-    await login.completeLogin('commuter_42', { name: 'Thabo' }, { uid: 'auth_uid_42', phoneNumber: '+27821234567' });
+    await login.completeLogin('commuter_42', { name: 'Thabo', profileImageUrl: 'https://example.test/face.jpg' }, { uid: 'auth_uid_42', phoneNumber: '+27821234567' });
 
     assert.equal(storage.get('userId'), 'commuter_42');
     assert.equal(storage.get('commuterId'), 'commuter_42');
@@ -228,3 +232,34 @@ test('Driver prepareRecaptcha configures auto-renewing expired-callback and clea
     assert.ok(login.recaptchaVerifier);
     assert.ok(typeof login.recaptchaVerifier.options['expired-callback'] === 'function');
 });
+
+test('Pending driver remains on enrollment status and does not create a dashboard session', async () => {
+    const { context, storage, postedMessages } = createMockContext('assets/driver-v2/js/login.js');
+    context.AsiyeEnrollment.getStatus = async () => ({ state: 'pending' });
+    const login = context.window.ASIYE_DRIVER_LOGIN;
+
+    await login.completeDriverLogin(
+        'taxi_pending', { name: 'Pending Driver' },
+        { uid: 'pending-auth', phoneNumber: '+27821234567' }
+    );
+
+    assert.equal(context.window.location.href, './enrollment.html');
+    assert.equal(storage.has('driverId'), false);
+    assert.equal(postedMessages.length, 0);
+});
+
+test('OTP passenger missing face photo cannot enter main app', async () => {
+    const { context, storage, postedMessages } = createMockContext('assets/passenger-v2/js/login.js');
+    const login = context.window.ASIYE_PASSENGER_LOGIN;
+    await login.completeLogin('new-passenger', { name: 'New Rider' },
+        { uid: 'passenger-auth', phoneNumber: '+27821234567' });
+    assert.equal(context.window.location.href, '');
+    assert.equal(storage.has('commuterId'), false);
+    assert.equal(postedMessages.length, 0);
+    assert.equal(getElementStatus(context, 'newPassengerStep'), true);
+});
+
+function getElementStatus(context, name) {
+    // The onboarding gate calls showStep only after refusing the session.
+    return context.window.ASIYE_PASSENGER_LOGIN.pendingProfileId === 'new-passenger';
+}

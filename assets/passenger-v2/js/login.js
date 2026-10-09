@@ -151,46 +151,9 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-            const profile =
-
-                await this.resolvePassengerProfile(
-                    user
-                );
-
-
-            if (profile) {
-
-                await this.completeLogin(
-
-                    profile.id,
-
-                    profile.data,
-
-                    user
-                );
-
-            } else {
-
-                const storedId =
-                    localStorage.getItem('commuterId') ||
-                    localStorage.getItem('userId');
-
-                if (storedId) {
-
-                    await this.completeLogin(
-                        storedId,
-                        null,
-                        user
-                    );
-
-                } else {
-
-                    await this.afterAuthentication(
-                        user
-                    );
-                }
-            }
-
+            // Never trust a cached commuterId without the saved profile.
+            // Incomplete profiles must resume the photo/name step.
+            await this.afterAuthentication(user);
 
         } catch (error) {
 
@@ -1024,6 +987,20 @@ window.ASIYE_PASSENGER_LOGIN = {
        AUTH SUCCESS
        ======================================================== */
 
+    async storedFaceAvailable(url) {
+        const link = String(url || '').trim();
+        if (!/^https:\/\//i.test(link)) return false;
+        return await new Promise(resolve => {
+            const picture = new Image();
+            let finished = false;
+            const complete = value => { if (!finished) { finished = true; clearTimeout(timer); resolve(value); } };
+            const timer = setTimeout(() => complete(false), 12000);
+            picture.onload = () => complete(picture.naturalWidth > 0);
+            picture.onerror = () => complete(false);
+            picture.src = link;
+        });
+    },
+
     async afterAuthentication(
         user
     ) {
@@ -1051,21 +1028,36 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-        if (profile) {
-
-            await this.completeLogin(
-
-                profile.id,
-
-                profile.data,
-
-                user
-            );
-
-
-            return;
+        this.pendingProfileId = profile?.id || user.uid;
+        this.pendingProfile = profile?.data || null;
+        const complete = Boolean(
+            String(profile?.data?.name || '').trim().length >= 2 &&
+            (profile?.data?.profileImageUrl ||
+             profile?.data?.profile_picture_url ||
+             profile?.data?.passengerProfileImageUrl)
+        );
+        if (profile && complete) {
+            const savedUrl = profile.data.profileImageUrl ||
+                profile.data.profile_picture_url || profile.data.passengerProfileImageUrl;
+            // Catch genuine HTTP 404 and expired Firebase tokens before
+            // logging in. A corrupt URL is not a completed face scan.
+            if (await this.storedFaceAvailable(savedUrl)) {
+                await this.completeLogin(profile.id, profile.data, user);
+                return;
+            }
+            console.warn('Passenger saved face picture unavailable; prompting rescan.');
         }
 
+        // Google/Apple accounts do not automatically have an OTP-verified
+        // phone. Complete the phone step BEFORE scanning and saving a new
+        // profile; never claim that typing a number verifies ownership.
+        if (!user.phoneNumber) {
+            this.showStep('loginStep');
+            const phoneError = document.getElementById('phoneError');
+            if (phoneError) phoneError.textContent =
+                'Verify your mobile number by SMS OTP before completing your first Asiye profile. Enter your number and tap Continue with phone.';
+            return;
+        }
 
         /*
          * New passenger.
@@ -1077,13 +1069,10 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
-        if (
-            nameInput &&
-            user.displayName
-        ) {
-
-            nameInput.value =
-                user.displayName;
+        if (nameInput) {
+            nameInput.value = String(
+                profile?.data?.name || user.displayName || ''
+            ).trim();
         }
 
 
@@ -1405,112 +1394,95 @@ window.ASIYE_PASSENGER_LOGIN = {
        ======================================================== */
 
     async createPassengerProfile() {
-
-        const user =
-            this.pendingUser ||
-            firebase.auth()
-                .currentUser;
-
-
-        if (!user) {
-
-            this.toast(
-                'Please sign in again.'
-            );
-
+        const user = this.pendingUser || firebase.auth().currentUser;
+        if (!user) { this.toast('Please sign in again.'); return; }
+        if (!user.phoneNumber) {
+            this.showStep('loginStep');
+            const notice = document.getElementById('phoneError');
+            if (notice) notice.textContent =
+                'Your first profile requires a verified mobile number. Complete the SMS OTP step, then take your face picture.';
             return;
         }
-
-
-        const name =
-
-            document
-                .getElementById(
-                    'newPassengerName'
-                )
-                ?.value
-                .trim();
-
-
-        if (!name) {
-
-            this.toast(
-                'Enter your name.'
-            );
-
-            return;
-        }
-
-
-        const profile = {
-
-            name:
-                name,
-
-            phone:
-                user.phoneNumber ||
-                this.currentPhone ||
-                '',
-
-            email:
-                user.email ||
-                '',
-
-            credits:
-                0,
-
-            walletBalance:
-                0,
-
-            accountType:
-                'passenger',
-
-            authUid:
-                user.uid,
-
-            authProvider:
-
-                user.providerData?.[0]
-                    ?.providerId ||
-                'phone',
-
-            createdAt:
-
-                firebase
-                    .database
-                    .ServerValue
-                    .TIMESTAMP
-        };
-
-
+        const button = document.getElementById('createPassengerProfile');
+        const name = String(document.getElementById('newPassengerName')?.value || '').trim();
+        if (name.length < 2) { this.toast('Please add your full name.'); return; }
+        let id = this.pendingProfileId || user.uid;
+        if (button) { button.disabled = true; button.textContent = 'Saving face picture…'; }
         try {
-
-            await firebase
-                .database()
-                .ref(
-                    `commuters/${user.uid}`
-                )
-                .set(
-                    profile
+            const dataUrl = await window.AsiyePassengerOnboarding?.photoForUpload?.() || '';
+            if (!/^data:image\/(?:jpeg|png|webp);base64,/.test(dataUrl)) {
+                throw Error('Scan your face and take a picture before continuing.');
+            }
+            const token = await user.getIdToken(true);
+            const upload = async profileId => {
+                const response = await fetch(
+                    'https://us-central1-asiye-80386.cloudfunctions.net/uploadProfileImageProxy',
+                    {
+                        method: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            userId: profileId,
+                            purpose: 'passenger-profile',
+                            filename: 'passenger-face.jpg',
+                            fullName: name,
+                            completeSignup: true,
+                            dataUrl
+                        })
+                    }
                 );
-
-        } catch (saveError) {
-
-            console.warn(
-                'Could not save new passenger profile directly:',
-                saveError
-            );
+                return { response, uploaded: await response.json().catch(() => ({})) };
+            };
+            let { response, uploaded } = await upload(id);
+            if (response.status === 403 && id !== user.uid) {
+                // A legacy commuter record may be linked by phone while
+                // belonging to a different Firebase UID. Never overwrite it.
+                // Also never abandon stored funds from a legacy wallet.
+                if (Number(this.pendingProfile?.walletBalance ||
+                           this.pendingProfile?.credits || 0) > 0) {
+                    throw Error('This older account has an existing wallet balance. Contact Asiye Support to link it securely before continuing.');
+                }
+                id = user.uid;
+                ({ response, uploaded } = await upload(id));
+            }
+            if (response.status === 422 && uploaded.code === 'phone-otp-required') {
+                this.showStep('loginStep');
+                const phoneError = document.getElementById('phoneError');
+                if (phoneError) phoneError.textContent = uploaded.error ||
+                    'Verify your number with SMS OTP to complete your profile.';
+                return;
+            }
+            if (!response.ok || !/^https:\/\//.test(String(uploaded.url || ''))) {
+                throw Error(response.status === 404
+                    ? 'Profile photo service is not deployed (HTTP 404). Ask Asiye Support to publish the Firebase function.'
+                    : uploaded.error || 'Could not save your face picture. Please try again.');
+            }
+            if (!await this.storedFaceAvailable(uploaded.url)) {
+                throw Error('Profile image is not downloadable. Ask Asiye Support to check Firebase image storage.');
+            }
+            // The verified upload function writes the name, OTP phone, face
+            // and onboarding status as Admin SDK. Do not do a client write:
+            // some legacy commuter IDs are read-only for the WebView.
+            await this.completeLogin(id, {
+                ...this.pendingProfile,
+                name,
+                phone: user.phoneNumber || '',
+                profileImageUrl: uploaded.url,
+                profile_picture_url: uploaded.url,
+                passengerProfileImageUrl: uploaded.url,
+                faceScanCompleted: true,
+                onboardingCompleted: true
+            }, user);
+        } catch (error) {
+            console.warn('Passenger registration incomplete:', error?.code || error?.message);
+            const status = document.getElementById('newPassengerFaceStatus');
+            if (status) status.textContent = error?.message || 'Unable to save picture. Try again.';
+            this.showStep('newPassengerStep');
+        } finally {
+            if (button) { button.disabled = false; button.textContent = 'Save profile & continue'; }
         }
-
-
-        await this.completeLogin(
-
-            user.uid,
-
-            profile,
-
-            user
-        );
     },
 
 
@@ -1523,6 +1495,18 @@ window.ASIYE_PASSENGER_LOGIN = {
         commuterData,
         user
     ) {
+        if (user?.phoneNumber && !(
+            String(commuterData?.name || '').trim().length >= 2 &&
+            (commuterData?.profileImageUrl || commuterData?.profile_picture_url ||
+             commuterData?.passengerProfileImageUrl)
+        )) {
+            this.pendingUser = user;
+            this.pendingProfileId = commuterId || user.uid;
+            this.pendingProfile = commuterData;
+            document.getElementById('newPassengerName').value = commuterData?.name || user.displayName || '';
+            this.showStep('newPassengerStep');
+            return;
+        }
 
         const id =
             commuterId ||

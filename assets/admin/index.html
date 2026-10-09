@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta http-equiv="Cache-Control" content="no-store">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' data: https://firebasestorage.googleapis.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>Asiye Operations | Secure Admin</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/admin/console.css?v=1">
+</head>
+<body>
+<div id="boot" class="boot"><div class="boot-logo">ASIYE<span>●</span></div><p>Connecting to your secure operations desk…</p></div>
+<section id="loginScreen" class="login-wrap" hidden>
+  <div class="login-card">
+    <div class="brand">ASIYE<span>●</span><small>OPERATIONS</small></div>
+    <p class="eyebrow">RESTRICTED ACCESS</p>
+    <h1>Control your operations.</h1>
+    <p class="muted">Sign in with your authorized Asiye administrator account. Access is checked by Firebase on every sensitive action.</p>
+    <form id="loginForm" autocomplete="on">
+      <label>Email address<input type="email" id="loginEmail" autocomplete="username" required placeholder="admin@asiye.cloud"></label>
+      <label>Password<input type="password" id="loginPassword" autocomplete="current-password" required minlength="6"></label>
+      <button class="primary full" type="submit" id="loginButton">Sign in securely →</button>
+    </form>
+    <button type="button" class="text-button" id="resetPassword">Send password reset email</button>
+    <p id="loginError" class="error" role="alert"></p>
+    <p class="muted tiny">This page does not grant admin rights. Contact an existing Asiye administrator if your account is not authorized.</p>
+  </div>
+</section>
+<div id="shell" class="shell" hidden>
+ <aside class="sidebar" id="sidebar">
+   <div class="side-top"><div class="brand">ASIYE<span>●</span><small>OPERATIONS</small></div><button class="side-close" id="sideClose" aria-label="Close menu">×</button></div>
+   <p class="side-caption">COMMAND CENTRE</p>
+   <nav id="navigation" aria-label="Operations sections">
+     <button class="nav active" data-view="overview"><span class="nav-icon">◫</span>Overview</button>
+     <button class="nav" data-view="enrollments"><span class="nav-icon">✓</span>Driver approvals</button>
+     <button class="nav" data-view="drivers"><span class="nav-icon">↗</span>Drivers</button>
+     <button class="nav" data-view="passengers"><span class="nav-icon">♙</span>Passengers</button>
+     <button class="nav" data-view="bookings"><span class="nav-icon">⇄</span>Ride bookings</button>
+     <button class="nav" data-view="parcels"><span class="nav-icon">▣</span>Deliveries</button>
+     <button class="nav" data-view="wallets"><span class="nav-icon">◉</span>Wallet balances</button>
+     <button class="nav" data-view="payments"><span class="nav-icon">▤</span>Payments</button>
+     <button class="nav" data-view="earnings"><span class="nav-icon">▥</span>Earning records</button>
+     <button class="nav" data-view="payouts"><span class="nav-icon">⬡</span>Payouts</button>
+     <button class="nav" data-view="refunds"><span class="nav-icon">↶</span>Refund cases</button>
+     <button class="nav" data-view="support"><span class="nav-icon">☷</span>Support chats</button>
+     <button class="nav" data-view="documents"><span class="nav-icon">▧</span>Documents</button>
+     <button class="nav" data-view="invitations"><span class="nav-icon">＋</span>Register users</button>
+     <button class="nav" data-view="audit"><span class="nav-icon">◷</span>Audit log</button>
+   </nav>
+   <div class="side-foot"><div class="status-dot"></div><span>Firebase · Restricted data</span><a href="/" rel="noreferrer">Public website ↗</a></div>
+ </aside>
+ <div class="main-wrap">
+   <header class="topbar">
+     <div class="top-left"><button class="menu-toggle" id="menuToggle" aria-label="Open menu">☰</button><span class="breadcrumb">ASIYE / <strong id="breadcrumb">Overview</strong></span></div>
+     <div class="top-right"><span class="system-state"><span class="status-dot"></span>Connected</span><button class="soft" id="refresh">↻ Refresh</button><div class="admin-user"><span id="adminEmail"></span><button class="text-button" id="logout">Log out</button></div></div>
+   </header>
+   <main class="workspace">
+     <div class="page-heading"><div><p class="eyebrow">ASIYE OPERATIONS</p><h1 id="pageTitle">Overview</h1><p id="pageSubtitle" class="muted">Manage your platform securely.</p></div><div class="heading-action"><span class="tiny muted" id="lastRefreshed"></span></div></div>
+     <div id="notice" role="status" aria-live="polite"></div>
+     <section id="metrics" class="metrics" aria-label="Recent operational snapshot"></section>
+     <section class="panel" id="panel">
+       <div class="panel-heading"><div><h2 id="tableTitle">Recent activity</h2><p class="muted tiny" id="tableNote">Records are limited to the latest 500 per resource, not lifetime platform totals.</p></div><div class="filters"><input id="search" type="search" placeholder="Search current records…" aria-label="Search records"><button type="button" class="soft" id="newRecord" hidden>+ Create</button></div></div>
+       <div id="workspaceBody" class="table-container"><div class="empty">Loading…</div></div>
+     </section>
+   </main>
+ </div>
+</div>
+<dialog id="drawer" class="drawer">
+  <div class="drawer-header"><div><p class="eyebrow" id="drawerEyebrow">RECORD</p><h2 id="drawerTitle">Record details</h2></div><button type="button" id="drawerClose" class="close" aria-label="Close panel">×</button></div>
+  <div id="drawerBody" class="drawer-body"></div>
+  <div id="drawerActions" class="drawer-actions"></div>
+</dialog>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-functions.js"></script>
+<script src="/admin/console.js?v=1" defer></script>
+</body>
+</html>

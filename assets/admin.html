@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asiye Admin · Driver Verification & Password Management</title>
+    <title>Asiye Admin 11.0.57 · Vehicles & Support</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-functions.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-storage.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -459,6 +460,29 @@
         ::-webkit-scrollbar-track { background: #10161e; }
         ::-webkit-scrollbar-thumb { background: #2a3340; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #3a4a5a; }
+        /* Asiye release management */
+        .release-enrollment-media {display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin:18px 0}
+        .release-document-image {display:block;max-height:160px;width:100%;object-fit:contain;background:#0f1824;border-radius:10px;margin:8px 0}
+        .release-vehicle-photo { display: block; max-width: 480px; width: 100%;
+          height: 240px; object-fit: contain; background: #10161e; border-radius: 12px; margin: 1rem 0; }
+        .release-vehicle-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:12px; }
+        .release-field { display:flex;flex-direction:column;gap:6px;font-size:.8rem;color:#b5c0d5; }
+        .release-field input, .release-support-detail textarea, .release-vehicle-grid + textarea {
+          background:#10161e;border:1px solid #405069;border-radius:8px;padding:10px;color:#fff;width:100%; }
+        .release-support-layout { display:grid;grid-template-columns:minmax(180px, 280px) 1fr;gap:1rem; }
+        .release-support-list { display:flex;flex-direction:column;gap:10px; }
+        .release-ticket-button { width:100%;text-align:left;white-space:normal; }
+        .release-ticket-button.active { border:2px solid #5b7cfa; }
+        .release-support-history { max-height:400px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin:16px 0; }
+        .release-support-detail { min-width:0; }
+        .release-support-detail .member-info { padding:12px;background:#1a222e;border-radius:10px;overflow-wrap:anywhere; }
+        .release-support-detail .member-info p { white-space:pre-wrap;margin-top:6px; }
+        .release-support-detail textarea { margin:10px 0; }
+        .release-support-detail .app-actions { margin-top:10px; }
+        #statsGrid[hidden] { display:none; }
+        @media(max-width:760px){.release-support-layout{grid-template-columns:1fr}
+          .release-vehicle-photo{height:190px}
+          .release-support-history{max-height:350px}}
     </style>
 </head>
 <body>
@@ -485,6 +509,20 @@
             </div>
             <div class="menu-item" onclick="loadRejectedDrivers()">
                 <i class="fas fa-times-circle"></i> Rejected
+            </div>
+            <div class="divider"></div>
+            <div class="menu-label">Release 11.0.57</div>
+            <div class="menu-item" data-release-view="enrollments" onclick="AsiyeAdminRelease.showEnrollments()">
+                <i class="fas fa-id-card"></i> New Driver Approvals
+            </div>
+            <div class="menu-item" data-release-view="vehicle" onclick="AsiyeAdminRelease.showVehicles()">
+                <i class="fas fa-car"></i> Vehicle Reviews
+            </div>
+            <div class="menu-item" data-release-view="cardPayouts" onclick="AsiyeAdminRelease.showCardPayouts()">
+                <i class="fas fa-money-bill-transfer"></i> Card Payouts · 80/20
+            </div>
+            <div class="menu-item" data-release-view="support" onclick="AsiyeAdminRelease.showSupport()">
+                <i class="fas fa-comments"></i> Support Inbox
             </div>
             <div class="divider"></div>
             <div class="menu-label">Management</div>
@@ -621,14 +659,22 @@
         // ================================================================
         // AUTH CHECK
         // ================================================================
-        auth.onAuthStateChanged((user) => {
-            if (user) {
-                userEmailEl.textContent = user.email || 'admin@asiye.cloud';
-                console.log('✅ Admin logged in:', user.email);
-                loadApplications();
-            } else {
-                console.log('🔒 No user found, redirecting to login...');
+        auth.onAuthStateChanged(async (user) => {
+            if (!user) {
                 window.location.href = 'admin-login.html';
+                return;
+            }
+            // Firebase authentication alone is not an Asiye admin role.
+            // Check the server-side /admins membership before displaying data.
+            try {
+                const result = await firebase.functions().httpsCallable('adminWhoAmI')({});
+                if (!result.data?.uid) throw new Error('Not an administrator');
+                userEmailEl.textContent = user.email || result.data.email || 'Asiye Admin';
+                loadApplications();
+            } catch (error) {
+                userEmailEl.textContent = 'Admin access required';
+                applicationsList.textContent = 'This account is not authorised for Asiye Admin.';
+                console.error('Asiye admin access denied:', error.code || error.message);
             }
         });
 
@@ -1682,10 +1728,11 @@
         });
 
         database.ref('driver_applications').on('child_changed', function(snapshot) {
-            loadApplications();
+            if (currentView === 'pending' || currentView === 'verified') loadApplications();
         });
 
         console.log('✅ Admin dashboard with password management ready.');
     </script>
+    <script src="admin-release.js?v=327"></script>
 </body>
 </html>

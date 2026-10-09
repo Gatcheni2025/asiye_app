@@ -20,6 +20,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'face_scan_screen.dart';
+import 'vehicle_camera_screen.dart';
 import 'dart:io' show ContentType, HttpClient, HttpHeaders, Platform;
 
 bool _isFirebaseInitialized = false;
@@ -1402,7 +1403,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           normalizedPurpose.contains('car') ||
           normalizedPurpose.contains('licence') ||
           normalizedPurpose.contains('license') ||
-          normalizedPurpose.contains('document');
+          normalizedPurpose.contains('document') ||
+          normalizedPurpose == 'driver-identity' ||
+          normalizedPurpose == 'driver-address-proof';
 
       XFile? photo;
 
@@ -1425,6 +1428,27 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           return;
         }
 
+        photo = XFile(path);
+      } else if (normalizedPurpose == 'driver-vehicle' ||
+                 normalizedPurpose == 'driver-licence' ||
+                 normalizedPurpose == 'driver-address-proof' ||
+                 normalizedPurpose == 'driver-identity') {
+        // Driver ID, licence, address proof and vehicle are all photos,
+        // never biometric face scans. Rear shutter returns to enrollment.
+        // A shutter press closes the in-app document camera and resumes the
+        // existing driver Vehicle page without an external camera screen.
+        final path = await Navigator.of(context).push<String>(
+          MaterialPageRoute<String>(
+            fullscreenDialog: true,
+            builder: (_) => const AsiyeVehicleCameraScreen(),
+          ),
+        );
+        if (path == null || path.isEmpty) {
+          await _controller?.runJavaScript(
+            "window.onNativeFaceCaptureError?.('cancelled');",
+          );
+          return;
+        }
         photo = XFile(path);
       } else {
         final picker = ImagePicker();

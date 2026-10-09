@@ -78,10 +78,12 @@ jobs:
         run: |
           find assets -type f -name "*.js" -print0 | xargs -0 -n1 node --check
           node --check functions/index.js
+          node --check functions/driver-card-payout.js
+          node --check assets/passenger-v2/js/onboarding.js
 
       - name: Test authentication
         run: |
-          node --test test/login-otp.test.cjs test/native-auth-session.test.cjs
+          node --test test/login-otp.test.cjs test/native-auth-session.test.cjs test/card-payout-passenger.test.cjs
 
       - name: Build release APK
         run: flutter build apk --release

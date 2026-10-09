@@ -37,6 +37,25 @@ ASIYE.profile = {
         }
     },
 
+    async photoAvailable(user = ASIYE.state?.user || {}) {
+        const url = this.getUrl(user);
+        if (!/^https:\/\//.test(url)) return false;
+        return await new Promise(resolve => {
+            const image = new Image();
+            let completed = false;
+            const done = ok => {
+                if (completed) return;
+                completed = true;
+                clearTimeout(timeout);
+                resolve(ok);
+            };
+            const timeout = setTimeout(() => done(false), 10000);
+            image.onload = () => done(image.naturalWidth > 0);
+            image.onerror = () => done(false);
+            image.src = url;
+        });
+    },
+
     refreshUI(user = ASIYE.state?.user || {}) {
         const url =
             this.getUrl(
@@ -78,6 +97,15 @@ ASIYE.profile = {
 
                     image.alt =
                         'Passenger profile picture';
+
+                    image.onerror = () => {
+                        // A stale Firebase token used to render a broken
+                        // avatar and silently block rides. Show the initial
+                        // instead; user can replace it from Account.
+                        image.remove();
+                        target.textContent = initial;
+                        target.title = 'Picture could not load. Open Account to scan again.';
+                    };
 
                     image.style.cssText =
                         'width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;';
@@ -218,25 +246,15 @@ ASIYE.profile = {
             user.faceScanCompleted === true ||
             user.faceScanVerified === true;
 
-        // A social-login/avatar image is not enough for the first trip.
-        // The first booking requires a fresh camera face scan. Once saved,
-        // later trips can reuse the verified profile picture.
-        if (existing && faceScanCompleted) {
+        // Never open a camera or upload an image from within a payment or
+        // booking request. Phone signup has a dedicated face capture step.
+        // Re-scanning, if needed, is done explicitly in the Account panel.
+        if (existing && faceScanCompleted && String(user.name || '').trim().length >= 2) {
             return existing;
         }
-
-        ASIYE.ui?.toast?.(
-            'Before your first trip, scan your face. The camera photo becomes your Asiye profile picture.'
+        throw new Error(
+            'Your passenger profile needs a saved face photo before booking. Open Account, tap Scan face, then retry the ride.'
         );
-
-        try {
-            return await this.scanAndSave();
-        } catch (error) {
-            throw new Error(
-                error?.message ||
-                'Scan your face to add a profile picture before booking.'
-            );
-        }
     },
 
     bindAccount(container) {

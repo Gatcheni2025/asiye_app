@@ -12,7 +12,10 @@ const {
   set,
   update,
   runTransaction,
-  serverTimestamp
+  serverTimestamp,
+  query,
+  orderByChild,
+  equalTo
 } = require('firebase/database');
 
 let env;
@@ -792,5 +795,191 @@ test('trip payment ledgers and card reference maps are server-only', async () =>
   await assertFails(set(ref(db, 'tripPaymentReferences/FORGED'), {
     requestId: 'trip1',
     passengerId: 'p1'
+  }));
+});
+
+test('support tickets are readable only through an owner-scoped query', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'support_chats'), {
+      ticket1: {
+        authUid: 'passenger-auth',
+        userId: 'p1',
+        role: 'passenger',
+        message: 'I need help.',
+        status: 'open',
+        createdAt: 100
+      },
+      ticket2: {
+        authUid: 'driver-auth',
+        userId: 'driver-record',
+        role: 'driver',
+        message: 'Driver needs help.',
+        status: 'open',
+        createdAt: 100
+      }
+    });
+  });
+
+  await assertFails(get(ref(dbFor('passenger-auth'), 'support_chats')));
+  await assertFails(get(ref(dbFor('attacker-auth'), 'support_chats/ticket1')));
+  await assertSucceeds(get(ref(dbFor('passenger-auth'), 'support_chats/ticket1')));
+  const onlyMyTickets = await assertSucceeds(get(query(
+    ref(dbFor('passenger-auth'), 'support_chats'),
+    orderByChild('authUid'),
+    equalTo('passenger-auth')
+  )));
+  if (onlyMyTickets.hasChild('ticket2')) {
+    throw Error('Another user ticket was leaked.');
+  }
+});
+
+test('support messages allow owner replies but block tampering and impersonation', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'support_chats/ticket1'), {
+      authUid: 'passenger-auth',
+      userId: 'p1',
+      role: 'passenger',
+      message: 'My original support request.',
+      status: 'open',
+      createdAt: 100
+    });
+  });
+  const base = 'support_chats/ticket1';
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), base + '/messages/owned-reply'),
+    {
+      senderUid: 'passenger-auth',
+      senderRole: 'passenger',
+      text: 'Here is more detail.',
+      createdAt: 101
+    }
+  ));
+  await assertFails(set(
+    ref(dbFor('attacker-auth'), base + '/messages/fake-reply'),
+    {
+      senderUid: 'attacker-auth',
+      senderRole: 'passenger',
+      text: 'Trying to impersonate.',
+      createdAt: 102
+    }
+  ));
+  await assertFails(set(
+    ref(dbFor('passenger-auth'), base + '/messages/forged-admin'),
+    {
+      senderUid: 'passenger-auth',
+      senderRole: 'admin',
+      text: 'Fake admin message.',
+      createdAt: 103
+    }
+  ));
+  await assertFails(update(
+    ref(dbFor('passenger-auth'), base),
+    { status: 'resolved' }
+  ));
+  await assertFails(update(
+    ref(dbFor('passenger-auth'), base + '/messages/owned-reply'),
+    { text: 'Rewritten history' }
+  ));
+});
+
+test('passenger can open their own support ticket but not one for another user', async () => {
+  await assertSucceeds(set(
+    ref(dbFor('passenger-auth'), 'support_chats/own-new'),
+    {
+      ticketId: 'own-new',
+      authUid: 'passenger-auth',
+      userId: 'p1',
+      role: 'passenger',
+      status: 'open',
+      subject: 'payment',
+      message: 'Card payment failed.',
+      createdAt: 100
+    }
+  ));
+  await assertFails(set(
+    ref(dbFor('passenger-auth'), 'support_chats/forged'),
+    {
+      ticketId: 'forged',
+      authUid: 'attacker-auth',
+      userId: 'p2',
+      role: 'passenger',
+      status: 'open',
+      subject: 'payment',
+      message: 'Forged ticket.',
+      createdAt: 100
+    }
+  ));
+});
+
+test('v2 enrollment accepts only verified-phone owner and includes all required documents', async () => {
+  const uid = 'new-driver-auth';
+  const db = env.authenticatedContext(uid, {
+    phone_number: '+27821234567'
+  }).database();
+  const docs = Object.fromEntries(['selfie','identity','car','licence','address']
+    .map(name => [name, 'driverEnrollments/' + uid + '/submission-1/' + name]));
+  const record = {
+    version: 2,
+    status: 'pending',
+    authUid: uid,
+    phone: '+27821234567',
+    phoneVerified: true,
+    fullName: 'New Driver One',
+    residentialAddress: '22 Main Road, Durban, KwaZulu-Natal',
+    vehicleReg: 'ND 123 456',
+    vehiclePending: {
+      type: 'sedan', make: 'Toyota', model: 'Corolla',
+      colour: 'White', registration: 'ND 123 456',
+      year: 2023, seats: 4
+    },
+    documents: docs,
+    references: Object.fromEntries([1,2,3].map(n => ['reference'+n, {
+      name: 'Reference '+n, phone: '082000000'+n, relationship: 'Colleague'
+    }])),
+    banking: {
+      accountHolder: 'New Driver One', bank: 'Standard Bank',
+      accountNumber: '123456789', branchCode: '051001', accountType: 'savings'
+    },
+    consent: true,
+    submittedAt: serverTimestamp()
+  };
+  await assertSucceeds(set(ref(db, 'driverEnrollments/' + uid), record));
+  await assertFails(update(ref(db, 'driverEnrollments/' + uid), {
+    status: 'approved'
+  }));
+  await assertFails(set(ref(dbFor('attacker-auth'), 'driverEnrollments/' + uid + '-other'), {
+    ...record, authUid: 'attacker-auth'
+  }));
+});
+
+test('v2 enrollment rejects invented phone verification and missing address proof', async () => {
+  const uid = 'new-driver-auth';
+  const db = env.authenticatedContext(uid, {
+    phone_number: '+27821234567'
+  }).database();
+  const base = {
+    version: 2, status: 'pending', fullName: 'New Driver',
+    authUid: uid, phone: '+27991111111', phoneVerified: true,
+    residentialAddress: '22 Main Road, Durban',
+    vehicleReg: 'ND 123 456',
+    vehiclePending: {
+      type: 'sedan', make: 'Toyota', model: 'Corolla', colour: 'White',
+      registration: 'ND 123 456', year: 2023, seats: 4
+    },
+    documents: Object.fromEntries(['selfie','identity','car','licence']
+      .map(name => [name, 'driverEnrollments/' + uid + '/s/' + name])),
+    references: Object.fromEntries([1,2,3].map(n => ['reference'+n, {
+      name: 'Reference '+n, phone: '082000000'+n, relationship: 'Colleague'
+    }])),
+    banking: {
+      accountHolder: 'New Driver', bank: 'Standard Bank',
+      accountNumber: '123456789', branchCode: '051001', accountType: 'savings'
+    },
+    consent: true,
+    submittedAt: serverTimestamp()
+  };
+  await assertFails(set(ref(db, 'driverEnrollments/' + uid), base));
+  await assertFails(set(ref(db, 'driverEnrollments/' + uid), {
+    ...base, phone: '+27821234567'
   }));
 });

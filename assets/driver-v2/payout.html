@@ -1,0 +1,94 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asiye Driver · Card payouts</title>
+<link rel="stylesheet" href="./css/enrollment.css">
+<style>
+body{background:#edf4ef}.enrollment{max-width:620px}.payout-bar{background:#16472e;color:white;border-radius:18px;padding:22px}
+.payout-bar h1,.payout-bar p{color:white;margin:4px 0 10px}
+.payout-share{display:flex;justify-content:space-around;gap:10px;margin:20px 0}
+.payout-share div{background:#e2f0e8;border-radius:14px;padding:14px;text-align:center;flex:1}
+.payout-share strong{font-size:28px;display:block;color:#175c35}
+.status-card{padding:12px;background:#f6faf6;border-radius:10px;margin:14px 0}
+footer{display:flex;gap:12px;margin-top:24px}
+footer a,footer button{flex:1;text-align:center}
+</style>
+</head><body>
+<main class="enrollment">
+<header class="payout-bar"><img src="../data/AsiyeNew.png" alt="Asiye">
+<p>DRIVER PAYOUTS</p><h1>Get your card earnings</h1>
+<p>For completed card-paid rides, Asiye keeps 20% and 80% is due to your verified South African bank account. Bank transfers depend on Paystack settlement and may not arrive immediately.</p></header>
+<div class="payout-share"><div><strong>80%</strong>Driver payout</div><div><strong>20%</strong>Asiye platform</div></div>
+<div id="payoutStatus" class="status-card" role="status" aria-live="polite">Loading payout account…</div>
+<form id="payoutForm" hidden>
+<h2>Verify your bank account</h2>
+<p>Paystack must validate your banking details before Asiye can send you any card earnings. Use the exact name and identity details registered with your bank.</p>
+<label>South African bank <select id="payoutBank" required><option value="">Loading supported banks…</option></select></label>
+<label>Name on bank account <input id="payoutName" type="text" maxlength="120" autocomplete="name" required></label>
+<label>Bank account number <input id="payoutNumber" type="text" inputmode="numeric" autocomplete="off" pattern="[0-9]{6,20}" required></label>
+<label>Bank account type <select id="payoutType" required><option value="personal">Personal</option><option value="business">Business</option></select></label>
+<label>Verification document type <select id="payoutDocType"><option value="identityNumber">South African ID</option><option value="passportNumber">Passport</option><option value="businessRegistrationNumber">Business registration</option></select></label>
+<label>Verification document number <input id="payoutDoc" type="text" autocomplete="off" maxlength="30" required></label>
+<p>We send your verification details securely to Paystack. Your full bank account and ID numbers are not retained in Asiye's payout account record.</p>
+<button type="submit" id="verifyPayoutBank">Validate bank and enable card payouts</button>
+</form>
+<footer><a href="./index.html">Back to driver app</a><button type="button" id="logoutBank">Log out</button></footer>
+</main>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="./js/firebase.js"></script>
+<script>
+(async () => {
+const base='https://us-central1-asiye-80386.cloudfunctions.net/configureDriverCardPayout';
+const state=document.getElementById('payoutStatus');
+const form=document.getElementById('payoutForm');
+const user=await new Promise(resolve=>{const off=firebase.auth().onAuthStateChanged(u=>{off();resolve(u);});});
+if(!user){location.replace('./login.html');return;}
+const driverId=localStorage.getItem('driverId') || user.uid;
+const send=async (action,body) => {
+ const token=await user.getIdToken(true);
+ const url=base+'?driverId='+encodeURIComponent(driverId)+(action?'&action='+encodeURIComponent(action):'');
+ const response=await fetch(url,{method:body?'POST':'GET',
+   headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
+   body:body?JSON.stringify({driverId,...body}):undefined});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(data.error||'Could not contact payout service.');
+ return data;
+};
+try {
+ const [info,banks]=await Promise.all([send('status'),send('banks')]);
+ const list=document.getElementById('payoutBank');
+ list.replaceChildren(new Option('Choose your bank',''));
+ (banks.banks||[]).forEach(bank=>list.add(new Option(bank.name,bank.code)));
+ state.textContent=info.status==='verified'
+  ? 'Verified payout bank: '+info.bankName+' · Account ending '+info.accountLast4+'. Future completed card payments are eligible for automatic payouts.'
+  : 'Payout account not configured. Please enter your bank details below to receive 80% of completed card payments.';
+ document.getElementById('payoutName').value=info.accountName||'';
+ form.hidden=false;
+} catch(error){state.textContent=error.message+' Please sign in as an approved driver and retry.';form.hidden=true;}
+form.onsubmit=async event=>{
+ event.preventDefault();
+ const button=document.getElementById('verifyPayoutBank');
+ button.disabled=true;state.textContent='Verifying your banking details with Paystack…';
+ try {
+   const saved=await send('',{
+     bankCode:document.getElementById('payoutBank').value,
+     accountName:document.getElementById('payoutName').value.trim(),
+     accountNumber:document.getElementById('payoutNumber').value.trim(),
+     accountType:document.getElementById('payoutType').value,
+     documentType:document.getElementById('payoutDocType').value,
+     documentNumber:document.getElementById('payoutDoc').value.trim()
+   });
+   state.textContent='Bank verified for card payouts. Account ending '+saved.accountLast4+'.';
+   document.getElementById('payoutNumber').value='';
+   document.getElementById('payoutDoc').value='';
+ }catch(error){state.textContent=error.message;}
+ finally{button.disabled=false;}
+};
+document.getElementById('logoutBank').onclick=async()=>{
+ await firebase.auth().signOut();
+ ['driverId','userId','authUid','userType'].forEach(k=>localStorage.removeItem(k));
+ location.replace('./login.html');
+};
+})();
+</script>
+</body></html>

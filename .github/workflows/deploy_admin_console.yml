@@ -1,0 +1,70 @@
+name: Deploy Asiye Operations Console
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_firebase_hosting:
+        description: "Publish /admin to Firebase Hosting (does not modify a separate asiye.cloud web server)"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asiye-operations-console-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FUNCTIONS_DISCOVERY_TIMEOUT: "60"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/11.0.57-admin-support-327
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate admin-only server and static code
+        run: |
+          node --check functions/index.js
+          node --check functions/admin-operations.js
+          node --check assets/admin/console.js
+          node --test test/admin-portal.test.cjs
+      - name: Install Firebase dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+      - name: Verify authorized Firebase credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Missing FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 (or FIREBASE_SERVICE_ACCOUNT) GitHub secret"
+            exit 1
+          fi
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+      - name: Deploy only authorized admin Cloud Functions
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --project asiye-80386
+          --only "functions:adminWhoAmI,functions:adminFetchData,functions:adminManagePlatform,functions:reviewDriverEnrollment,functions:adminOperations"
+          --non-interactive
+      - name: Deploy separate admin page on Firebase Hosting
+        if: ${{ inputs.publish_firebase_hosting }}
+        run: >
+          npx --yes firebase-tools@latest deploy
+          --project asiye-80386
+          --only hosting
+          --non-interactive
+      - name: External marketing host notice
+        run: |
+          echo "Only Firebase project asiye-80386 was updated."
+          echo "If asiye.cloud is hosted elsewhere, upload the admin static ZIP to that web host."
+          echo "A successful deploy is not a replacement for real-admin access and functional tests."

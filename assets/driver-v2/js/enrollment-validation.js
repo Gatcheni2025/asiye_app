@@ -7,7 +7,7 @@ window.EnrollmentValidation = {
         }]));
     },
     async licenceType(file) {
-        if (!file || !file.size || file.size > 10 * 1024 * 1024) return null;
+        if (!file || !file.size || file.size > 7 * 1024 * 1024) return null;
         const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
         const starts = values => values.every((value, i) => bytes[i] === value);
         if (starts([37, 80, 68, 70, 45])) return 'application/pdf';

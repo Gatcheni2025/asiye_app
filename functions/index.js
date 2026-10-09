@@ -1933,7 +1933,6 @@ async function requireAsiyeAdmin(context) {
 
   if (
     token.admin === true ||
-    token.enrollmentReviewer === true ||
     token.asiyeAdmin === true
   ) {
     return {
@@ -1976,6 +1975,15 @@ async function requireAsiyeAdmin(context) {
           : ""
       )
   };
+}
+
+// A document reviewer may approve/reject enrollment, but cannot browse
+// financial records, adjust wallets, cancel rides or access support chats.
+async function requireAsiyeEnrollmentReviewer(context) {
+  if (context?.auth?.uid && context.auth.token?.enrollmentReviewer === true) {
+    return {uid: context.auth.uid, email: context.auth.token.email || ""};
+  }
+  return requireAsiyeAdmin(context);
 }
 
 function safeAdminString(value, maxLength = 250) {
@@ -2103,7 +2111,7 @@ exports.adminWhoAmI = functions.https.onCall(
 
 exports.reviewDriverEnrollment = functions.https.onCall(
   async (data, context) => {
-    const actor = await requireAsiyeAdmin(context);
+    const actor = await requireAsiyeEnrollmentReviewer(context);
 
     const uid = safeAdminString(data?.uid, 160);
     const decision =
@@ -2240,11 +2248,21 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       !approvedVehicle.year ||
       !enrollmentPhone ||
       !enrollmentProfileImage ||
-      !enrollmentVehiclePhoto
+      !enrollmentVehiclePhoto ||
+      Number(enrollment.version || 0) >= 2 && (
+        enrollment.phoneVerified !== true ||
+        !enrollment.residentialAddress ||
+        !enrollment.documents?.identity ||
+        !enrollment.documents?.licence ||
+        !enrollment.documents?.address ||
+        !enrollment.documentUrls?.identity ||
+        !enrollment.documentUrls?.licence ||
+        !enrollment.documentUrls?.address
+      )
     ) {
       throw new functions.https.HttpsError(
         "failed-precondition",
-        "Driver phone, selfie, car photo, vehicle make, model, colour, year and registration are required before approval."
+        "Verification requires an OTP-verified phone, face selfie, ID, driver licence, address proof and complete car photo and details."
       );
     }
 
@@ -3537,6 +3555,131 @@ exports.adminManagePlatform = functions.https.onCall(
       };
     }
 
+
+    // Vehicle edits must be reviewed by an authenticated administrator.
+    // Never let a driver's own client mark their vehicle approved.
+    if (action === "reviewVehicle") {
+      const id = safeAdminString(data?.id, 160);
+      const decision = safeAdminString(data?.decision, 32).toLowerCase();
+      const reason = safeAdminString(data?.reason, 500);
+      if (!id || !["approved", "rejected", "changes_requested"].includes(decision)) {
+        throw new functions.https.HttpsError("invalid-argument", "Driver and review decision are required.");
+      }
+      if (decision !== "approved" && reason.length < 5) {
+        throw new functions.https.HttpsError("invalid-argument", "Explain what the driver needs to change.");
+      }
+      const ref = admin.database().ref(`taxis/${id}`);
+      const snapshot = await ref.once("value");
+      const driver = snapshot.val();
+      if (!driver) {
+        throw new functions.https.HttpsError("not-found", "Driver profile not found.");
+      }
+      if (driver.vehicleApprovalStatus !== "pending" || !driver.vehiclePending) {
+        throw new functions.https.HttpsError("failed-precondition", "Driver must submit vehicle changes before review.");
+      }
+      const source = data?.vehicle || driver.vehiclePending;
+      const clean = (value, max) => safeAdminString(value, max);
+      const vehicle = {
+        type: clean(source.type, 40),
+        make: clean(source.make, 80),
+        model: clean(source.model, 80),
+        colour: clean(source.colour || source.color, 60),
+        registration: clean(source.registration, 30),
+        year: Number(source.year),
+        seats: Number(source.seats)
+      };
+      if (Object.keys(vehicle).some(key => typeof vehicle[key] === "string" && vehicle[key].length < 2) ||
+          !Number.isInteger(vehicle.year) || vehicle.year < 1990 ||
+          vehicle.year > new Date().getFullYear() + 1 ||
+          !Number.isInteger(vehicle.seats) || vehicle.seats < 1 || vehicle.seats > 15) {
+        throw new functions.https.HttpsError("invalid-argument", "Vehicle details are incomplete or invalid.");
+      }
+      if (decision === "approved" && !String(driver.vehiclePhoto || "").trim()) {
+        throw new functions.https.HttpsError("failed-precondition", "A saved car picture is required before approval.");
+      }
+      const now = admin.database.ServerValue.TIMESTAMP;
+      const patch = {
+        vehicleApprovalStatus: decision,
+        vehicleApproved: decision === "approved",
+        vehicleReviewReason: decision === "approved" ? "" : reason,
+        vehicleReviewedAt: now,
+        vehicleReviewedBy: actor.uid,
+        isOnline: false,
+        isBroadcasting: false
+      };
+      if (decision === "approved") {
+        Object.assign(patch, {
+          vehicle,
+          vehicleType: vehicle.type,
+          vehicleMake: vehicle.make,
+          vehicleModel: vehicle.model,
+          vehicleColor: vehicle.colour,
+          vehicleReg: vehicle.registration,
+          taxiRegistrationNumber: vehicle.registration,
+          vehicleYear: vehicle.year,
+          vehicleSeats: vehicle.seats,
+          seats: vehicle.seats,
+          vehiclePending: null
+        });
+      } else {
+        patch.vehiclePending = { ...driver.vehiclePending, ...vehicle };
+      }
+      await ref.update(patch);
+      await admin.database().ref(`notifications/taxis/${id}`).push().set({
+        type: "vehicle_review",
+        title: "Vehicle review update",
+        body: decision === "approved" ? "Your vehicle has been approved. You can go online if other checks are complete." : reason,
+        status: decision,
+        timestamp: now
+      });
+      await writeAdminAudit(actor, "vehicle_reviewed", id, { decision, reason });
+      return { ok: true, decision, vehicle };
+    }
+
+    if (action === "replySupport") {
+      const id = safeAdminString(data?.id, 160);
+      const message = safeAdminString(data?.message, 1500);
+      if (!id || message.length < 2) {
+        throw new functions.https.HttpsError("invalid-argument", "A ticket and reply are required.");
+      }
+      const ref = admin.database().ref(`support_chats/${id}`);
+      const ticket = (await ref.once("value")).val();
+      if (!ticket) {
+        throw new functions.https.HttpsError("not-found", "Support conversation not found.");
+      }
+      const now = admin.database.ServerValue.TIMESTAMP;
+      await ref.child("messages").push().set({
+        text: message,
+        senderUid: actor.uid,
+        senderRole: "admin",
+        createdAt: now
+      });
+      await ref.update({
+        status: "pending",
+        updatedAt: now,
+        lastReplyAt: now,
+        lastReplyBy: "admin"
+      });
+      // Surface admin replies in the existing driver/passenger notification
+      // inbox; do not trust a ticket's userId as an unchecked RTDB path.
+      const userId = safeProfileId(ticket.userId);
+      if (userId && (ticket.role === "driver" || ticket.role === "passenger")) {
+        const recipient = ticket.role === "driver" ? "taxis" : "commuters";
+        await admin.database()
+          .ref(`notifications/${recipient}/${userId}`)
+          .push()
+          .set({
+            type: "support_reply",
+            title: "Asiye Support replied",
+            body: "You have a new message from Asiye Support.",
+            ticketId: id,
+            timestamp: now
+          });
+      }
+      await writeAdminAudit(actor, "support_replied", id, {});
+      return { ok: true };
+    }
+
     if (action === "updateSupport") {
       const id =
         safeAdminString(
@@ -4236,6 +4379,21 @@ exports.adminManagePlatform = functions.https.onCall(
 );
 
 
+// Separate hosted operations desk. Enforces the same admin authorization as
+// the legacy portal, with audited invitations and non-disbursing refund cases.
+exports.adminOperations = functions.https.onCall(async (data, context) => {
+  const actor = await requireAsiyeAdmin(context);
+  try {
+    return await require("./admin-operations").handle({
+      data, actor, admin, audit: writeAdminAudit
+    });
+  } catch (error) {
+    if (error.code === "invalid-argument")
+      throw new functions.https.HttpsError("invalid-argument", error.message);
+    throw error;
+  }
+});
+
 // =================================================================
 // --- ADMIN READ API ---
 // =================================================================
@@ -4259,10 +4417,14 @@ exports.adminFetchData = functions.https.onCall(
       "requests",
       "delivery_requests",
       "support_chats",
+      "tripPayments",
       "walletPayments",
       "walletAdjustments",
       "withdrawals",
       "payout_requests",
+      "driverCardPayouts",
+      "refundCases",
+      "adminInvitations",
       "adminAudit"
     ]);
 
@@ -5653,6 +5815,29 @@ exports.uploadProfileImageProxy =
             });
         }
 
+        // During phone signup, validate a complete name before committing
+        // both identity and face photo with the Admin SDK. Client-side
+        // Realtime Database writes can be blocked on legacy commuter IDs.
+        const fullName = String(request.body?.fullName || "").trim();
+        const signup = role === "passenger" && request.body?.completeSignup === true;
+        // Firebase custom-token sessions can omit phone_number. Verify the
+        // phone attached to the SAME Firebase Auth UID; never trust form text.
+        const verifiedPhone = signup
+          ? String((await admin.auth().getUser(decoded.uid)).phoneNumber || "").trim()
+          : "";
+        if (signup && (
+          !verifiedPhone ||
+          fullName.length < 2 || fullName.length > 100 ||
+          /[<>\u0000-\u001f]/.test(fullName)
+        )) {
+          return response.status(422).json({
+            code: !verifiedPhone ? "phone-otp-required" : "name-required",
+            error: !verifiedPhone
+              ? "This Firebase account has no verified mobile number. Complete SMS OTP before saving the profile."
+              : "Enter your full name before saving."
+          });
+        }
+
         const dataUrl =
           String(
             request.body?.dataUrl ||
@@ -5712,10 +5897,14 @@ exports.uploadProfileImageProxy =
           role === "driver" &&
           purpose === "driver-vehicle";
 
+        // Each new capture uses an immutable object path. Reusing
+        // profile.jpg rotated download tokens and made older avatar URLs 404
+        // before a replacement image was actually committed.
+        const revision = require("node:crypto").randomUUID();
         const objectPath =
           isDriverVehicle
-            ? `vehicle-images/drivers/${userId}/vehicle.${extension}`
-            : `profile-images/${roleFolder}/${userId}/profile.${extension}`;
+            ? `vehicle-images/drivers/${userId}/vehicle-${revision}.${extension}`
+            : `profile-images/${roleFolder}/${userId}/profile-${revision}.${extension}`;
 
         const downloadToken =
           require("node:crypto")
@@ -5765,6 +5954,22 @@ exports.uploadProfileImageProxy =
               downloadToken
           });
 
+        // Avoid declaring a profile-photo upload successful when its
+        // Firebase download URL actually returns HTTP 404.
+        const [savedMetadata] = await file.getMetadata();
+        if (Number(savedMetadata.size || 0) !== bytes.length ||
+            !String(savedMetadata.metadata?.firebaseStorageDownloadTokens || "")
+               .split(",").includes(downloadToken)) {
+          throw new Error("Profile image was not persisted correctly.");
+        }
+        const imageProbe = await fetch(url, {
+          method: "GET", signal: AbortSignal.timeout(15000)
+        });
+        if (!imageProbe.ok) {
+          throw new Error("Saved profile image is unavailable (HTTP " + imageProbe.status + ").");
+        }
+        await imageProbe.arrayBuffer();
+
         const now =
           admin.database
             .ServerValue
@@ -5780,7 +5985,11 @@ exports.uploadProfileImageProxy =
                 vehicleImageStoragePath:
                   objectPath,
                 "documents/CAR_FRONT":
-                  url
+                  url,
+                vehicleApproved: false,
+                vehicleApprovalStatus: "not_submitted",
+                isOnline: false,
+                isBroadcasting: false
               }
             : role === "driver"
               ? {
@@ -5808,6 +6017,14 @@ exports.uploadProfileImageProxy =
                     url
                 }
               : {
+                  ...(signup ? {
+                    name: fullName,
+                    phone: verifiedPhone,
+                    authUid: decoded.uid,
+                    onboardingCompleted: true,
+                    profileSetupPending: false,
+                    profileCompletedAt: now
+                  } : {}),
                   profileImageUrl:
                     url,
                   profile_picture_url:
@@ -5882,6 +6099,94 @@ exports.uploadProfileImageProxy =
     }
   );
 
+
+// Verified, create-once driver enrollment stays pending admin approval.
+exports.submitDriverEnrollmentSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  require("./enrollment-submission").makeEnrollmentSubmission({
+    admin, bucketName:PROFILE_STORAGE_BUCKET, cors:walletSmsCors
+  })
+);
+
+// Server-authenticated enrollment media upload. Allows enrollment even
+// when client Storage rules have not been deployed; never trusts a UID
+// provided by the browser or overwrites a submitted application.
+exports.uploadDriverEnrollmentDocument = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(request,response)=>{
+    walletSmsCors(request,response);
+    if(request.method==="OPTIONS") return response.status(204).send("");
+    if(request.method!=="POST") return response.status(405).json({error:"POST required"});
+    response.set("Cache-Control","no-store");
+    try{
+      const match=String(request.get("authorization")||"").match(/^Bearer (.+)$/);
+      if(!match) return response.status(401).json({error:"Sign in first."});
+      const actor=await admin.auth().verifyIdToken(match[1]);
+      if(!actor.phone_number) return response.status(403).json({error:"Phone OTP verification required."});
+      const uid=safeProfileId(actor.uid);
+      const submission=String(request.body?.submissionId||"");
+      const kind=String(request.body?.kind||"");
+      if(!uid||!/^[A-Za-z0-9_-]{10,72}$/.test(submission)||
+        !["selfie","car","identity","licence","address"].includes(kind))
+        return response.status(400).json({error:"Invalid document selection."});
+      const matchData=String(request.body?.dataUrl||"").match(
+        /^data:(image\/(?:jpeg|png|webp)|application\/pdf);base64,([a-zA-Z0-9+/=]+)$/);
+      if(!matchData) return response.status(400).json({error:"Only JPG, PNG, WebP or PDF is supported."});
+      const mime=matchData[1],bytes=Buffer.from(matchData[2],"base64");
+      const validMime=mime==="application/pdf"
+        ? bytes.subarray(0,5).toString("ascii")==="%PDF-"
+        : mime==="image/jpeg" ? bytes[0]===255&&bytes[1]===216
+        : mime==="image/png" ? bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+        : bytes.subarray(0,4).toString("ascii")==="RIFF"&&bytes.subarray(8,12).toString("ascii")==="WEBP";
+      if(!validMime||bytes.length<100||bytes.length>7*1024*1024||
+         (["selfie","car","identity"].includes(kind)&&!mime.startsWith("image/")))
+        return response.status(400).json({error:"Unsupported or oversized document (7 MB maximum)."});
+      if((await admin.database().ref(`driverEnrollments/${uid}`).once("value")).exists())
+        return response.status(409).json({error:"Application already submitted. Check pending approval."});
+      const path=`driverEnrollments/${uid}/${submission}/${kind}`;
+      const digest=require("node:crypto").createHash("sha256").update(bytes).digest("hex");
+      const file=admin.storage().bucket(PROFILE_STORAGE_BUCKET).file(path);
+      const fromExisting=async()=>{
+        const [meta]=await file.getMetadata();
+        const stored=meta.metadata||{};
+        if(stored.ownerUid!==uid || stored.enrollmentKind!==kind ||
+            stored.contentSha256!==digest || Number(meta.size)!==bytes.length)
+          return null;
+        const token=String(stored.firebaseStorageDownloadTokens||"").split(",")[0];
+        if(!/^[0-9a-f-]{36}$/i.test(token)) return null;
+        return {ok:true,storagePath:path,
+          url:firebaseStorageDownloadUrl({bucketName:PROFILE_STORAGE_BUCKET,objectPath:path,token}),kind};
+      };
+      const [exists]=await file.exists();
+      if(exists){
+        const result=await fromExisting();
+        if(result) return response.status(200).json(result);
+        return response.status(409).json({error:"Document differs from the previously uploaded copy. Start a fresh enrollment submission."});
+      }
+      const token=require("node:crypto").randomUUID();
+      try {
+        await file.save(bytes,{resumable:false,preconditionOpts:{ifGenerationMatch:0},
+          metadata:{contentType:mime,cacheControl:"private,max-age=300",
+            metadata:{firebaseStorageDownloadTokens:token,ownerUid:uid,enrollmentKind:kind,contentSha256:digest}}});
+      } catch(error){
+        if(error.code===412){
+          const result=await fromExisting();
+          if(result) return response.status(200).json(result);
+        }
+        throw error;
+      }
+      const [metadata]=await file.getMetadata();
+      if(Number(metadata.size)!==bytes.length) throw Error("Storage confirmation failed.");
+      const url=firebaseStorageDownloadUrl({bucketName:PROFILE_STORAGE_BUCKET,objectPath:path,token});
+      return response.status(200).json({ok:true,storagePath:path,url,kind});
+    }catch(error){
+      console.error("Enrollment document upload",error?.code||"error",error?.message||String(error));
+      return response.status(error?.code===412?409:500).json({
+        error:error?.code===412?"Document already stored. Start a new upload attempt.":"Document upload failed. Retry without re-entering registration."
+      });
+    }
+  }
+);
 
 // =================================================================
 // --- DRIVER VEHICLE REVIEW SUBMISSION ---
@@ -6200,6 +6505,105 @@ const {
 const PAYSTACK_API =
   "https://api.paystack.co";
 
+const {
+  splitCardFare, stableTransferReference, isVerifiedCardPayment,
+  isPayoutReady, bankInput
+} = require("./driver-card-payout");
+
+// Driver card transfers are private server-owned financial records.
+// The passenger card charge stays on Asiye's Paystack account until the
+// driver's identity, trip completion and bank have been confirmed.
+const driverPayoutPath = (requestId, passengerId) =>
+  `driverCardPayouts/${requestId}/${passengerId}`;
+
+async function issueDriverCardPayout(requestId, passengerId, trip) {
+  const driverId = safeProfileId(trip?.taxiId || trip?.driverId);
+  if (trip?.status !== "completed" || !driverId) return { status: "not_ready" };
+  const payment = (await admin.database()
+    .ref(tripPaymentPath(requestId, passengerId)).once("value")).val();
+  if (!payment || payment.status !== "captured" || payment.method !== "card") {
+    return { status: "not_card_capture" };
+  }
+  // Charge was only "held" after direct Paystack verification; check again
+  // before any bank transfer. A cancelled/refunded charge cannot pay a driver.
+  const verified = await verifyPaystackReference(payment.reference);
+  if (!isVerifiedCardPayment(payment, verified)) {
+    throw Error("Card payment cannot be reconciled with Paystack.");
+  }
+  const split = splitCardFare(Number(payment.amountSubunit));
+  const recordRef = admin.database().ref(driverPayoutPath(requestId, passengerId));
+  const reference = stableTransferReference(requestId, passengerId);
+  const created = await recordRef.transaction(existing => existing || ({
+    status: "due",
+    provider: "paystack",
+    method: "card",
+    requestId, passengerId, driverId,
+    paymentReference: payment.reference,
+    paymentTransactionId: String(verified.id || ""),
+    transferReference: reference,
+    ...split,
+    createdAt: admin.database.ServerValue.TIMESTAMP
+  }), undefined, false);
+  const existing = created.snapshot.val();
+  if (!existing || existing.driverId !== driverId ||
+      existing.paymentReference !== payment.reference) {
+    throw Error("Card payout ledger conflict; manual reconciliation required.");
+  }
+  await admin.database().ref(`driverPayoutQueues/${driverId}/${reference}`).set({
+    requestId, passengerId, createdAt: admin.database.ServerValue.TIMESTAMP
+  });
+  // Never transfer twice if another invocation has already attempted it.
+  if (!["due", "awaiting_bank"].includes(existing.status)) return { status: existing.status };
+  const bank = (await admin.database()
+    .ref(`driverPayoutAccounts/${driverId}`).once("value")).val();
+  if (!isPayoutReady({ trip, payment, driverId, banking: bank })) {
+    await recordRef.child("status").set("awaiting_bank");
+    return { status: "awaiting_bank" };
+  }
+  // CAS lock across concurrent status triggers / manual invocations.
+  const locked = await recordRef.transaction(record => {
+    if (!record || !["due","awaiting_bank"].includes(record.status)) return;
+    return { ...record, status: "transfer_processing",
+      recipientCode: bank.recipientCode,
+      transferAttemptedAt: admin.database.ServerValue.TIMESTAMP };
+  }, undefined, false);
+  if (!locked.committed) return { status: "already_processing" };
+  const refMap = admin.database().ref(`driverPayoutRefs/${reference}`);
+  await refMap.set({ requestId, passengerId, driverId });
+  try {
+    const result = await paystackRequest("/transfer", {
+      method: "POST",
+      body: {
+        source: "balance", amount: split.driverSubunit, currency: "ZAR",
+        recipient: bank.recipientCode, reference,
+        reason: `Asiye completed trip ${requestId.slice(0, 60)}`
+      }
+    });
+    const transfer = result.data || {};
+    await recordRef.transaction(current => {
+      if (!current || current.transferReference !== reference || current.status === "paid")
+        return;
+      return { ...current,
+        status: transfer.status === "otp" ? "otp_required" : "transfer_pending",
+        transferCode: String(transfer.transfer_code || current.transferCode || ""),
+        paystackTransferId: String(transfer.id || ""),
+        paystackTransferState: String(transfer.status || "pending"),
+        updatedAt: admin.database.ServerValue.TIMESTAMP };
+    }, undefined, false);
+    // Never say "paid" until Paystack's signed transfer-success webhook.
+    return { status: "transfer_pending", reference };
+  } catch (error) {
+    // Network timeouts may happen AFTER Paystack received the transfer.
+    // Do not retry with a new reference or guess whether funds moved.
+    await recordRef.update({
+      status: "needs_reconciliation",
+      lastError: String(error.message || "Transfer requires review").slice(0, 250),
+      updatedAt: admin.database.ServerValue.TIMESTAMP
+    });
+    throw error;
+  }
+}
+
 const PAYSTACK_CALLBACK_URL =
   "https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn";
 
@@ -6360,223 +6764,42 @@ function firebaseDatabaseBaseUrl() {
   ).replace(/\/$/, "");
 }
 
-async function creditPaystackWallet(
-  payment,
-  transaction
-) {
-  if (
-    !payment ||
-    payment.provider !== "paystack"
-  ) {
-    throw new Error(
-      "Paystack wallet payment was not found."
-    );
+async function creditPaystackWallet(payment, transaction) {
+  if (!payment || payment.provider !== "paystack") {
+    throw new Error("Paystack wallet payment was not found.");
   }
-
-  if (
-    payment.status ===
-      "complete"
-  ) {
-    return {
-      credited:
-        false,
-      balance:
-        Number(
-          payment.creditedBalance ||
-          0
-        )
-    };
+  if (!transactionMatchesPayment(transaction, payment)) {
+    throw new Error("Paystack reference, status, currency or amount does not match.");
   }
-
-  if (
-    !transactionMatchesPayment(
-      transaction,
-      payment
-    )
-  ) {
-    throw new Error(
-      "Paystack transaction does not match the wallet top-up."
-    );
+  const passengerId = safeProfileId(payment.passengerId || payment.uid);
+  if (!passengerId) throw new Error("Wallet passenger identity is missing.");
+  const ref = admin.database().ref(`commuters/${passengerId}`);
+  let finalCredit = null;
+  // Server-side transaction retries under concurrent topups and wallet holds.
+  // The applied-payment marker is committed atomically with the balance.
+  const tx = await ref.transaction(profile => {
+    if (!profile) return;
+    const credited = applyWalletCredit(profile, payment, Date.now());
+    finalCredit = credited;
+    return credited.credited ? credited.profile : undefined;
+  }, undefined, false);
+  if (!finalCredit && tx.snapshot.exists()) {
+    finalCredit = applyWalletCredit(tx.snapshot.val(), payment, Date.now());
   }
-
-  const passengerId =
-    String(
-      payment.passengerId ||
-      payment.uid ||
-      ""
-    ).trim();
-
-  if (!passengerId) {
-    throw new Error(
-      "Wallet passenger identity is missing."
-    );
-  }
-
-  const accessToken =
-    await adminDatabaseAccessToken();
-
-  const profileUrl =
-    firebaseDatabaseBaseUrl() +
-    "/commuters/" +
-    encodeURIComponent(
-      passengerId
-    ) +
-    ".json";
-
-  let creditedBalance =
-    null;
-
-  let credited =
-    false;
-
-  for (
-    let attempt = 0;
-    attempt < 6;
-    attempt += 1
-  ) {
-    const readResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "GET",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "X-Firebase-ETag":
-              "true",
-            "Cache-Control":
-              "no-cache"
-          }
-        }
-      );
-
-    if (!readResponse.ok) {
-      throw new Error(
-        "Unable to load wallet profile."
-      );
-    }
-
-    const profile =
-      await readResponse.json();
-
-    const etag =
-      readResponse.headers.get(
-        "etag"
-      );
-
-    if (
-      !profile ||
-      !etag
-    ) {
-      throw new Error(
-        "Wallet profile is unavailable."
-      );
-    }
-
-    const applied =
-      applyWalletCredit(
-        profile,
-        payment,
-        Date.now()
-      );
-
-    creditedBalance =
-      applied.balance;
-
-    if (!applied.credited) {
-      credited =
-        false;
-      break;
-    }
-
-    const writeResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "PUT",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "Content-Type":
-              "application/json",
-            "If-Match":
-              etag
-          },
-          body:
-            JSON.stringify(
-              applied.profile
-            )
-        }
-      );
-
-    if (
-      writeResponse.status ===
-      412
-    ) {
-      continue;
-    }
-
-    if (!writeResponse.ok) {
-      throw new Error(
-        "Unable to credit Asiye wallet."
-      );
-    }
-
-    credited =
-      true;
-    break;
-  }
-
-  if (creditedBalance === null) {
-    throw new Error(
-      "Wallet credit could not be confirmed."
-    );
-  }
-
-  await admin.database()
-    .ref(
-      "walletPayments/" +
-      payment.reference
-    )
-    .update({
-      status:
-        "complete",
-      provider:
-        "paystack",
-      channel:
-        String(
-          transaction.channel ||
-          ""
-        ),
-      paystackTransactionId:
-        String(
-          transaction.id ||
-          ""
-        ),
-      paidAt:
-        transaction.paid_at ||
-        transaction.paidAt ||
-        admin.database
-          .ServerValue
-          .TIMESTAMP,
-      creditedBalance,
-      creditedAt:
-        admin.database
-          .ServerValue
-          .TIMESTAMP
-    });
-
-  return {
-    credited,
-    balance:
-      creditedBalance
-  };
+  if (!finalCredit) throw new Error("Passenger wallet profile is unavailable.");
+  // Payment record may lag a successful wallet transaction; its idempotency
+  // marker prevents a second credit when webhook and return callback race.
+  await admin.database().ref("walletPayments/" + payment.reference).update({
+    status: "complete", provider: "paystack",
+    channel: String(transaction.channel || ""),
+    paystackTransactionId: String(transaction.id || ""),
+    paidAt: transaction.paid_at || transaction.paidAt ||
+      admin.database.ServerValue.TIMESTAMP,
+    creditedBalance: finalCredit.balance,
+    creditedAt: admin.database.ServerValue.TIMESTAMP
+  });
+  return { credited: !!tx.committed, balance: finalCredit.balance };
 }
-
 // =================================================================
 // --- RIDE PAYMENT HOLDS: CASH / CARD / ASIYE WALLET ---
 // =================================================================
@@ -6742,130 +6965,21 @@ function tripPaymentPath(
   );
 }
 
-async function updateWalletProfileWithEtag(
-  passengerId,
-  mutate
-) {
-  const accessToken =
-    await adminDatabaseAccessToken();
-
-  const profileUrl =
-    firebaseDatabaseBaseUrl() +
-    "/commuters/" +
-    encodeURIComponent(
-      passengerId
-    ) +
-    ".json";
-
-  for (
-    let attempt = 0;
-    attempt < 7;
-    attempt += 1
-  ) {
-    const readResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "GET",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "X-Firebase-ETag":
-              "true",
-            "Cache-Control":
-              "no-cache"
-          }
-        }
-      );
-
-    if (!readResponse.ok) {
-      throw new Error(
-        "Unable to load Asiye Wallet."
-      );
-    }
-
-    const profile =
-      await readResponse
-        .json();
-
-    const etag =
-      readResponse.headers.get(
-        "etag"
-      );
-
-    if (
-      !profile ||
-      !etag
-    ) {
-      throw new Error(
-        "Passenger wallet profile is unavailable."
-      );
-    }
-
-    const result =
-      mutate(
-        structuredClone(
-          profile
-        )
-      );
-
-    if (
-      result &&
-      result.write ===
-        false
-    ) {
-      return result;
-    }
-
-    const nextProfile =
-      result?.profile ||
-      profile;
-
-    const writeResponse =
-      await fetch(
-        profileUrl,
-        {
-          method:
-            "PUT",
-          headers: {
-            Authorization:
-              "Bearer " +
-              accessToken,
-            "Content-Type":
-              "application/json",
-            "If-Match":
-              etag
-          },
-          body:
-            JSON.stringify(
-              nextProfile
-            )
-        }
-      );
-
-    if (
-      writeResponse.status ===
-        412
-    ) {
-      continue;
-    }
-
-    if (!writeResponse.ok) {
-      throw new Error(
-        "Unable to update Asiye Wallet."
-      );
-    }
-
-    return result;
-  }
-
-  throw new Error(
-    "Wallet changed while reserving payment. Please try again."
-  );
+async function updateWalletProfileWithEtag(passengerId, mutate) {
+  const id = safeProfileId(passengerId);
+  if (!id) throw new Error("Passenger identity is invalid.");
+  const walletRef = admin.database().ref(`commuters/${id}`);
+  let lastResult = null;
+  const tx = await walletRef.transaction(profile => {
+    if (!profile) return;
+    const result = mutate(structuredClone(profile));
+    lastResult = result;
+    if (result?.write === false) return;
+    return result?.profile || profile;
+  }, undefined, false);
+  if (!lastResult) throw new Error("Passenger wallet profile is unavailable.");
+  return lastResult;
 }
-
 async function holdWalletTripPayment(
   requestId,
   passengerId,
@@ -7834,6 +7948,12 @@ async function initialiseCardTripPayment(
           false
       });
   }
+  if (trip.type === "delivery") {
+    await admin.database().ref(`delivery_requests/${requestId}`).update({
+      status: "payment_required", paymentStatus: "payment_required",
+      paymentsReady: false
+    });
+  }
 
   return {
     ready:
@@ -8075,6 +8195,12 @@ async function recordCardTripPaymentHeld(
             : trip.status
       });
   }
+  if (trip.type === "delivery") {
+    await admin.database().ref(`delivery_requests/${requestId}`).update({
+      paymentStatus: "held", paymentsReady: true,
+      status: trip.safetyShareCompleted ? "pending" : trip.status
+    });
+  }
 
   return {
     requestId,
@@ -8083,6 +8209,139 @@ async function recordCardTripPaymentHeld(
       "held"
   };
 }
+
+exports.configureDriverCardPayout = onRequest(
+  { region: "us-central1", invoker: "public", secrets: [paystackSecretKey] },
+  async (request, response) => {
+    walletSmsCors(request, response);
+    response.set("Cache-Control", "no-store");
+    if (request.method === "OPTIONS") return response.status(204).send("");
+    try {
+      const actor = await verifiedRequestUser(request);
+      if (!actor) return response.status(401).json({ error: "Driver sign-in required." });
+      const driverId = safeProfileId(request.method === "GET"
+        ? request.query?.driverId : request.body?.driverId);
+      if (!driverId || !await profileOwnedByAuth("taxis", driverId, actor.uid))
+        return response.status(403).json({ error: "Not your driver account." });
+      const driver = (await admin.database().ref(`taxis/${driverId}`)
+        .once("value")).val();
+      if (!driver || driver.verificationStatus !== "verified")
+        return response.status(403).json({ error: "Driver must be verified before setting up payouts." });
+      if (request.method === "GET" && request.query?.action === "banks") {
+        const banks = await paystackRequest("/bank?currency=ZAR&enabled_for_verification=true&perPage=100");
+        return response.status(200).json({ ok: true, banks: (banks.data || [])
+          .filter(item => item.active !== false)
+          .map(item => ({ name: String(item.name), code: String(item.code) })) });
+      }
+      if (request.method === "GET") {
+        const saved = (await admin.database()
+          .ref(`driverPayoutAccounts/${driverId}`).once("value")).val();
+        return response.status(200).json({ ok: true, status: saved?.status || "not_configured",
+          accountLast4: saved?.accountLast4 || "", bankName: saved?.bankName || "",
+          accountName: saved?.accountName || "" });
+      }
+      if (request.method !== "POST")
+        return response.status(405).json({ error: "Method not supported." });
+      const clean = bankInput(request.body);
+      const validated = await paystackRequest("/bank/validate", {
+        method: "POST",
+        body: {
+          account_name: clean.accountName,
+          account_number: clean.accountNumber,
+          account_type: clean.accountType,
+          bank_code: clean.bankCode,
+          country_code: "ZA",
+          document_type: clean.documentType,
+          document_number: clean.documentNumber
+        }
+      });
+      if (validated.data?.verified !== true ||
+          validated.data?.accountAcceptsCredits !== true ||
+          validated.data?.accountHolderMatch !== true) {
+        return response.status(422).json({
+          error: "Bank account could not be verified for this driver. Check the account holder and ID number."
+        });
+      }
+      const recipientResult = await paystackRequest("/transferrecipient", {
+        method: "POST",
+        body: {
+          type: "basa", name: clean.accountName,
+          account_number: clean.accountNumber, bank_code: clean.bankCode,
+          currency: "ZAR", description: "Asiye driver fare earnings"
+        }
+      });
+      const recipientCode = String(recipientResult.data?.recipient_code || "");
+      if (!/^RCP_[A-Za-z0-9]+$/.test(recipientCode)) {
+        throw Error("Paystack did not provide a bank payout recipient.");
+      }
+      await admin.database().ref(`driverPayoutAccounts/${driverId}`).set({
+        status: "verified", recipientCode,
+        accountName: clean.accountName,
+        accountLast4: clean.accountNumber.slice(-4),
+        bankCode: clean.bankCode,
+        bankName: String(recipientResult.data?.details?.bank_name || clean.bankCode),
+        verifiedBy: "paystack",
+        verifiedAt: admin.database.ServerValue.TIMESTAMP,
+        ownerUid: actor.uid
+      });
+      await admin.database().ref(`taxis/${driverId}`).update({
+        payoutStatus: "verified", payoutAccountLast4: clean.accountNumber.slice(-4)
+      });
+      // Start previously earned but undelivered card payouts once the driver
+      // provides a verified bank. Every transfer reference remains immutable.
+      const queue = (await admin.database().ref(`driverPayoutQueues/${driverId}`)
+        .limitToFirst(100).once("value")).val() || {};
+      for (const item of Object.values(queue)) {
+        try {
+          const completedTrip = (await admin.database()
+            .ref(`requests/${item.requestId}`).once("value")).val();
+          if (completedTrip?.status === "completed") {
+            await issueDriverCardPayout(item.requestId, item.passengerId, completedTrip);
+          }
+        } catch (error) {
+          console.warn("Bank enabled; existing payout requires review",
+            item.requestId, error?.message || String(error));
+        }
+      }
+      return response.status(200).json({ ok: true, status: "verified",
+        accountLast4: clean.accountNumber.slice(-4) });
+    } catch (error) {
+      console.error("Driver payout bank configuration error", error?.message);
+      return response.status(422).json({
+        error: error?.message || "Bank verification could not be completed."
+      });
+    }
+  }
+);
+
+// Server-only payout trigger: the passenger has already paid, but the
+// assigned driver receives their 80% only after trip completion.
+exports.disburseCompletedCardTrips = functions.runWith({
+  secrets: [paystackSecretKey]
+}).database.ref("/requests/{requestId}/status").onUpdate(async(change, context) => {
+  if (change.before.val() === change.after.val() || change.after.val() !== "completed")
+    return null;
+  const requestId = context.params.requestId;
+  const trip = (await change.after.ref.parent.once("value")).val();
+  if (!trip?.taxiId && !trip?.driverId) return null;
+  const payments = (await admin.database()
+    .ref(`tripPayments/${requestId}`).once("value")).val() || {};
+  const failures = [];
+  for (const [passengerId, payment] of Object.entries(payments)) {
+    if (payment?.method !== "card" || payment?.status !== "captured") continue;
+    try {
+      await issueDriverCardPayout(requestId, passengerId, trip);
+    } catch (error) {
+      console.error("Card driver payout needs review", { requestId, passengerId,
+        error: error?.message || String(error) });
+      failures.push(passengerId);
+    }
+  }
+  if (failures.length) await admin.database().ref(`requests/${requestId}`).update({
+    driverPayoutAttention: true
+  });
+  return null;
+});
 
 exports.prepareTripPayment =
   onRequest(
@@ -9711,6 +9970,39 @@ exports.paystackWebhook =
         const event =
           request.body ||
           {};
+
+        if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(event.event)) {
+          const transfer = event.data || {};
+          const reference = String(transfer.reference || "");
+          if (!/^asiye_card_[a-f0-9]{32}$/.test(reference)) {
+            return response.status(200).send("ok");
+          }
+          const mapped = (await admin.database()
+            .ref(`driverPayoutRefs/${reference}`).once("value")).val();
+          if (!mapped?.requestId || !mapped?.passengerId) {
+            return response.status(200).send("ok");
+          }
+          const payoutRef = admin.database()
+            .ref(driverPayoutPath(mapped.requestId, mapped.passengerId));
+          const payout = (await payoutRef.once("value")).val();
+          if (!payout || payout.transferReference !== reference ||
+              Number(payout.driverSubunit) !== Number(transfer.amount) ||
+              payout.currency !== "ZAR") {
+            throw Error("Transfer webhook failed payout ledger matching.");
+          }
+          const status = event.event === "transfer.success" ? "paid" :
+            event.event === "transfer.reversed" ? "reversed" : "transfer_failed";
+          await payoutRef.transaction(current => {
+            if (!current || current.transferReference !== reference ||
+                Number(current.driverSubunit) !== Number(transfer.amount)) return;
+            if (current.status === "paid" && status !== "reversed") return;
+            return { ...current, status,
+              paystackTransferState: String(transfer.status || ""),
+              transferCode: String(transfer.transfer_code || current.transferCode || ""),
+              transferUpdatedAt: admin.database.ServerValue.TIMESTAMP };
+          }, undefined, false);
+          return response.status(200).send("ok");
+        }
 
         if (
           event.event !==

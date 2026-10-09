@@ -41,42 +41,28 @@
         return new Blob([buffer], { type: mime });
     };
 
-    const compressImage = async blob => {
+    const compressImage = async (blob, { preserveAspectRatio = false } = {}) => {
         const bitmap = await createImageBitmap(blob);
-
-        // Profile pictures are intentionally square. The native face scan
-        // uses the front camera and asks the user to centre their face, so a
-        // centred square crop gives a consistent, premium avatar everywhere.
-        const sourceSide = Math.min(bitmap.width, bitmap.height);
-        const sourceX = Math.max(0, (bitmap.width - sourceSide) / 2);
-        const sourceY = Math.max(0, (bitmap.height - sourceSide) / 2);
-        const outputSide = Math.min(900, sourceSide);
-
         const canvas = document.createElement('canvas');
-        canvas.width = Math.max(1, Math.round(outputSide));
-        canvas.height = Math.max(1, Math.round(outputSide));
-
-        canvas.getContext('2d').drawImage(
-            bitmap,
-            sourceX,
-            sourceY,
-            sourceSide,
-            sourceSide,
-            0,
-            0,
-            canvas.width,
-            canvas.height
-        );
-
+        if (preserveAspectRatio) {
+            const scale = Math.min(1, 1280 / Math.max(bitmap.width, bitmap.height));
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            canvas.getContext('2d').drawImage(bitmap, 0, 0, bitmap.width, bitmap.height,
+                0, 0, canvas.width, canvas.height);
+        } else {
+            const side = Math.min(bitmap.width, bitmap.height);
+            canvas.width = Math.min(900, side);
+            canvas.height = canvas.width;
+            canvas.getContext('2d').drawImage(bitmap,
+                (bitmap.width - side) / 2, (bitmap.height - side) / 2,
+                side, side, 0, 0, canvas.width, canvas.height);
+        }
         bitmap.close?.();
-
-        return await new Promise((resolve, reject) => {
-            canvas.toBlob(
-                result => result ? resolve(result) : reject(new Error('Could not prepare profile photo.')),
-                'image/jpeg',
-                0.86
-            );
-        });
+        return await new Promise((resolve, reject) => canvas.toBlob(
+            result => result ? resolve(result) : reject(new Error('Could not prepare image.')),
+            'image/jpeg', preserveAspectRatio ? 0.82 : 0.86
+        ));
     };
 
     window.AsiyePhpImageUpload = window.AsiyePhpImageUpload || {
@@ -127,7 +113,8 @@
 
             const compressed =
                 await compressImage(
-                    source
+                    source,
+                    { preserveAspectRatio: options.purpose === 'driver-vehicle' }
                 );
 
             const dataUrl =
@@ -1608,6 +1595,17 @@ window.AsiyePages = {
             `;
 
             if (driver) {
+                const link = document.createElement('a');
+                link.href = './payout.html';
+                link.className = 'member-primary member-secondary-support';
+                link.textContent = 'Set up bank account · 80% card payouts';
+                body.append(link);
+                const payoutInfo = document.createElement('p');
+                payoutInfo.className = 'member-note';
+                payoutInfo.textContent = user.payoutStatus === 'verified'
+                    ? 'Your card payout bank is verified (ending ' + (user.payoutAccountLast4 || '****') + ').'
+                    : 'Validate your South African banking details to receive completed card-trip earnings.';
+                body.append(payoutInfo);
                 this.bindDriverFaceScan(
                     body
                 );
@@ -1819,6 +1817,9 @@ window.AsiyePages = {
 
                                         user.credits =
                                             balance;
+
+                                        localStorage.removeItem('pendingPaystackReference');
+                                        await this.refreshPassengerWallet(balance);
 
                                         if (balanceElement) {
                                             balanceElement.textContent =
@@ -2223,8 +2224,8 @@ window.AsiyePages = {
                             Capture the actual car showing its colour and registration plate.
                         </p>
                         ${user.vehiclePhoto
-                            ? `<img data-driver-car-preview src="${esc(user.vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`
-                            : `<img data-driver-car-preview alt="Driver vehicle" hidden style="display:block;width:100%;max-height:190px;object-fit:cover;border-radius:14px;margin:10px 0;">`}
+                            ? `<img data-driver-car-preview src="${esc(user.vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:240px;object-fit:contain;border-radius:14px;margin:10px 0;">`
+                            : `<img data-driver-car-preview alt="Driver vehicle" hidden style="display:block;width:100%;max-height:240px;object-fit:contain;border-radius:14px;margin:10px 0;">`}
                         <button
                             type="button"
                             class="member-primary"
@@ -2317,16 +2318,22 @@ window.AsiyePages = {
                         carButton.textContent =
                             'Opening camera…';
 
+                        const previousPhoto = user.vehiclePhoto || '';
                         try {
                             const capture =
                                 await AsiyeFaceCapture
                                     .capture(
                                         'driver-vehicle'
                                     );
-
+                            // Native camera closes automatically before this point.
+                            if (carPreview && capture?.dataUrl) {
+                                carPreview.src = capture.dataUrl;
+                                carPreview.hidden = false;
+                            }
+                            carButton.textContent = 'Saving car picture…';
                             if (carStatus) {
                                 carStatus.textContent =
-                                    'Uploading vehicle photo…';
+                                    'Saving car photo in Asiye…';
                             }
 
                             const uploaded =
@@ -2348,6 +2355,13 @@ window.AsiyePages = {
 
                             user.vehiclePhotoUpdatedAt =
                                 Date.now();
+                            Object.assign(app.state.driver || {}, {
+                                vehiclePhoto: uploaded.url,
+                                vehicleApproved: false,
+                                vehicleApprovalStatus: 'not_submitted',
+                                isOnline: false
+                            });
+                            app.ui?.updateDriverProfileUI?.();
 
                             if (carPreview) {
                                 carPreview.src =
@@ -2365,6 +2379,10 @@ window.AsiyePages = {
                                 'Retake car photo';
 
                         } catch (error) {
+                            if (carPreview) {
+                                carPreview.src = previousPhoto;
+                                carPreview.hidden = !previousPhoto;
+                            }
                             if (carStatus) {
                                 carStatus.textContent =
                                     error?.message ||
@@ -2878,6 +2896,9 @@ window.AsiyePages = {
                         Your ticket will be available to the Asiye support team.
                     </p>
                 </form>
+                <section class="member-info" data-support-conversations aria-label="My support messages">
+                    <p class="member-note">Loading support conversations…</p>
+                </section>
             `;
 
             const supportForm =
@@ -3028,6 +3049,8 @@ window.AsiyePages = {
                                             .TIMESTAMP
                                 });
 
+                            window.AsiyeSupportChat?.reload?.();
+
                             supportForm
                                 .reset();
 
@@ -3071,6 +3094,10 @@ window.AsiyePages = {
                 body.innerHTML +=
                     `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`;
             }
+            window.AsiyeSupportChat?.mount(body, {
+                role: driver ? 'driver' : 'passenger',
+                dialog
+            });
         } else {
             try {
                 if (!id) throw new Error('Sign in to view your records.');
