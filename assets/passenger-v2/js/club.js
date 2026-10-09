@@ -125,6 +125,9 @@ ASIYE.club = {
             capacity:
                 config.capacity,
 
+            requiredPassengers:
+                targetPassengers,
+
             totalFare:
                 clubTotal,
 
