@@ -4371,6 +4371,21 @@ exports.adminManagePlatform = functions.https.onCall(
 );
 
 
+// Separate hosted operations desk. Enforces the same admin authorization as
+// the legacy portal, with audited invitations and non-disbursing refund cases.
+exports.adminOperations = functions.https.onCall(async (data, context) => {
+  const actor = await requireAsiyeAdmin(context);
+  try {
+    return await require("./admin-operations").handle({
+      data, actor, admin, audit: writeAdminAudit
+    });
+  } catch (error) {
+    if (error.code === "invalid-argument")
+      throw new functions.https.HttpsError("invalid-argument", error.message);
+    throw error;
+  }
+});
+
 // =================================================================
 // --- ADMIN READ API ---
 // =================================================================
@@ -4399,6 +4414,8 @@ exports.adminFetchData = functions.https.onCall(
       "withdrawals",
       "payout_requests",
       "driverCardPayouts",
+      "refundCases",
+      "adminInvitations",
       "adminAudit"
     ]);
 
