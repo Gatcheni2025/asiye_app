@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - security-compatibility-phase4
+      - release/11.0.60-330-work-final
     paths:
       - 'functions/index.js'
       - 'functions/club-pool-security.js'
@@ -58,9 +59,9 @@ jobs:
         with:
           credentials_json: ${{ env.FIREBASE_CREDS }}
 
-      - name: Deploy compatibility functions only
+      - name: Deploy Work privacy and secure trip functions
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:createTripShareToken,functions:getTripShare,functions:joinClubPoolSecure"
+          --only "functions:createTripShareToken,functions:getTripShare,functions:joinClubPoolSecure,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:notifyDriversOfClubAreaBooking,functions:notifyDriversWhenClubReady"
           --non-interactive
