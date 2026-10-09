@@ -1128,9 +1128,9 @@ ASIYE_DRIVER.ui = {
                 request.clubMode ===
                 'club7'
 
-                ? 'ASIYE WORK 7'
+                ? 'ASIYE WORK 3'
 
-                : 'ASIYE WORK 4'
+                : 'ASIYE WORK 3'
             )
 
             : isDelivery
@@ -1153,7 +1153,15 @@ ASIYE_DRIVER.ui = {
                 request.totalPoolFare ||
                 (
                     Number(request.pricePerPassenger || 0) *
-                    Number(request.capacity || request.maxCapacity || 1)
+                    Number(
+                        request.minimumPassengers ||
+                        request.requiredPassengers ||
+                        (
+                            request.clubMode === 'club7'
+                            ? 4
+                            : 3
+                        )
+                    )
                 ) ||
                 0
             )
@@ -1235,13 +1243,13 @@ ASIYE_DRIVER.ui = {
             isClub
 
             ? Number(
-                request.capacity ||
-                request.maxCapacity ||
+                request.minimumPassengers ||
+                request.requiredPassengers ||
                 (
                     request.clubMode ===
                     'club7'
-                    ? 7
-                    : 4
+                    ? 4
+                    : 3
                 )
             )
 
