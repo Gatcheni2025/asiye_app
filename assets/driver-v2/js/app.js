@@ -1128,7 +1128,7 @@ ASIYE_DRIVER.ui = {
                 request.clubMode ===
                 'club7'
 
-                ? 'ASIYE WORK 3'
+                ? 'ASIYE WORK 4'
 
                 : 'ASIYE WORK 3'
             )
