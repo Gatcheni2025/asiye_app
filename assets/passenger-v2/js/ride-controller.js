@@ -358,9 +358,15 @@ ASIYE.ride = {
 
             case 'pool_ready':
 
-                this.renderPoolReady(
-                    request
-                );
+                /*
+                 * Keep the same live Work progress screen when the passenger
+                 * group becomes ready. It now shows that full driver details
+                 * have been released and that Asiye is waiting for acceptance.
+                 */
+                ASIYE.ui
+                    .renderClubWaiting(
+                        request
+                    );
 
                 break;
 
