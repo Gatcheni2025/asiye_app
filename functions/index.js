@@ -5248,6 +5248,23 @@ function isGoNegotiationTrip(trip) {
   );
 }
 
+function goFareAgreementPath(requestId) {
+  return `goFareAgreements/${String(requestId || "").trim()}`;
+}
+
+async function readGoFareAgreement(requestId) {
+  const snapshot =
+    await admin.database()
+      .ref(
+        goFareAgreementPath(
+          requestId
+        )
+      )
+      .once("value");
+
+  return snapshot.val() || null;
+}
+
 function goCommercialPatch(amount, pricing) {
   const fare =
     Math.round(Number(amount));
@@ -5624,10 +5641,101 @@ async function reserveGoNegotiatedDriver({
       throw error;
     }
 
-    committed = true;
-
     const trip =
       transaction.snapshot.val() || {};
+
+    const agreementRef =
+      admin.database()
+        .ref(
+          goFareAgreementPath(
+            requestId
+          )
+        );
+
+    const agreementResult =
+      await agreementRef.transaction(
+        existing => {
+          const commercial =
+            goCommercialPatch(
+              amount,
+              goNegotiationPricing(
+                trip
+              )
+            );
+
+          if (existing) {
+            const sameAgreement =
+              String(
+                existing.driverId ||
+                ""
+              ) ===
+                String(driver.id) &&
+              Number(
+                existing.agreedFare ||
+                0
+              ) ===
+                Number(
+                  commercial.finalAmount
+                );
+
+            return sameAgreement
+              ? existing
+              : undefined;
+          }
+
+          return {
+            requestId,
+            passengerId:
+              String(
+                trip.commuterId ||
+                ""
+              ),
+            driverId:
+              driver.id,
+            driverAuthUid:
+              driverAuthUid ||
+              driver.data?.authUid ||
+              driver.data?.userUid ||
+              driver.id,
+            agreedFare:
+              commercial.finalAmount,
+            marketReferenceFare:
+              commercial.marketReferenceFare,
+            minimumFareOffer:
+              commercial.minimumFareOffer,
+            maximumFareOffer:
+              commercial.maximumFareOffer,
+            commissionRate:
+              commercial.commissionRate,
+            platformCommission:
+              commercial.platformCommission,
+            driverNetFare:
+              commercial.driverNetFare,
+            currency:
+              "ZAR",
+            createdAt:
+              admin.database
+                .ServerValue
+                .TIMESTAMP
+          };
+        },
+        undefined,
+        false
+      );
+
+    if (!agreementResult.committed) {
+      const error =
+        new Error(
+          "The protected fare agreement could not be locked."
+        );
+
+      error.code =
+        "negotiation/agreement-conflict";
+
+      throw error;
+    }
+
+    committed = true;
 
     if (trip.commuterId) {
       await admin.database()
@@ -6854,26 +6962,45 @@ exports.finalizeNegotiatedGoBooking =
             });
         }
 
+        const agreement =
+          await readGoFareAgreement(
+            requestId
+          );
+
         const agreedFare =
           goMoney(
-            trip.agreedFare ||
+            agreement?.agreedFare ||
             0
           );
 
         if (
+          !agreement ||
+          String(
+            agreement.driverId ||
+            ""
+          ) !==
+            String(
+              trip.taxiId ||
+              ""
+            ) ||
           agreedFare <= 0 ||
           Math.abs(
             agreedFare -
             goMoney(
               paymentContext.amount
             )
-          ) > 0.01
+          ) > 0.01 ||
+          Number(
+            agreement.commissionRate
+          ) !==
+            ASIYE_GO_NEGOTIATION
+              .commissionRate
         ) {
           return response
             .status(409)
             .json({
               error:
-                "The payment amount does not match the agreed fare."
+                "The payment amount does not match the protected fare agreement."
             });
         }
 
@@ -10478,8 +10605,9 @@ async function prepareTripPaymentServer(
       trip
     ) &&
     trip.negotiationEnabled ===
-      true &&
-    (
+      true
+  ) {
+    if (
       trip.fareStatus !==
         "agreed" ||
       !trip.taxiId ||
@@ -10491,17 +10619,60 @@ async function prepareTripPaymentServer(
       Number(
         trip.agreedFare
       ) <= 0
-    )
-  ) {
-    const error =
-      new Error(
-        "Agree the protected Asiye Go fare with a driver before payment."
+    ) {
+      const error =
+        new Error(
+          "Agree the protected Asiye Go fare with a driver before payment."
+        );
+
+      error.code =
+        "payment/fare-not-agreed";
+
+      throw error;
+    }
+
+    const agreement =
+      await readGoFareAgreement(
+        requestId
       );
 
-    error.code =
-      "payment/fare-not-agreed";
+    const agreementFare =
+      goMoney(
+        agreement?.agreedFare ||
+        0
+      );
 
-    throw error;
+    if (
+      !agreement ||
+      String(
+        agreement.driverId ||
+        ""
+      ) !==
+        String(
+          trip.taxiId ||
+          ""
+        ) ||
+      agreementFare <= 0 ||
+      Math.abs(
+        agreementFare -
+        goMoney(amount)
+      ) > 0.01 ||
+      Number(
+        agreement.commissionRate
+      ) !==
+        ASIYE_GO_NEGOTIATION
+          .commissionRate
+    ) {
+      const error =
+        new Error(
+          "The trip fare does not match the protected server agreement."
+        );
+
+      error.code =
+        "payment/fare-agreement-mismatch";
+
+      throw error;
+    }
   }
 
   if (
@@ -10975,7 +11146,9 @@ exports.prepareTripPayment =
           error?.code ===
             "payment/insufficient-wallet" ||
           error?.code ===
-            "payment/fare-not-agreed"
+            "payment/fare-not-agreed" ||
+          error?.code ===
+            "payment/fare-agreement-mismatch"
             ? 409
             : error?.code ===
                 "payment/not-passenger"
