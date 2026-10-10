@@ -547,7 +547,9 @@ ASIYE.ride = {
                 'sheetContent'
             );
 
+
         if (!container) return;
+
 
         const method =
             String(
@@ -556,22 +558,108 @@ ASIYE.ride = {
             )
                 .toLowerCase();
 
+
+        const negotiated =
+            request.negotiationEnabled ===
+                true &&
+            request.fareStatus ===
+                'agreed' &&
+            Boolean(
+                request.taxiId
+            );
+
+
+        const agreedFare =
+            Number(
+                request.agreedFare ||
+                request.finalAmount ||
+                0
+            );
+
+
+        const driverName =
+            request.driverName ||
+            'Your driver';
+
+
+        const paymentCopy =
+            method ===
+                'card'
+                ? 'Complete the Paystack payment for the agreed fare. Your driver is reserved while you pay.'
+                : method ===
+                    'wallet'
+                    ? 'Asiye is reserving the agreed fare from your Wallet. Your driver stays reserved.'
+                    : 'Your cash fare is agreed. Asiye is completing the pickup PIN and safety-share step.';
+
+
         container.innerHTML = `
             <div class="asiye-row">
                 <div class="asiye-status-icon asiye-search-icon">
-                    <i class="fas fa-credit-card"></i>
+                    <i class="fas fa-${method === 'card' ? 'credit-card' : method === 'wallet' ? 'wallet' : 'money-bill-wave'}"></i>
                 </div>
 
                 <div>
-                    <strong>Complete payment</strong>
+                    <div class="home-kicker">
+                        ${negotiated ? 'Fare agreed' : 'Payment'}
+                    </div>
+
+                    <h2 class="sheet-page-title">
+                        ${
+                            negotiated
+                                ? `R${agreedFare.toFixed(0)} · Driver reserved`
+                                : 'Complete payment'
+                        }
+                    </h2>
+
                     <p style="margin:6px 0 0;color:#777;font-size:12px;line-height:1.45;">
-                        ${method === 'card'
-                            ? 'Complete the Paystack card payment before Asiye sends this request to a driver.'
-                            : 'Your selected payment method must be ready before the ride can continue.'}
+                        ${
+                            negotiated
+                                ? ASIYE.ui.escape(paymentCopy)
+                                : method === 'card'
+                                    ? 'Complete the Paystack card payment before the ride can continue.'
+                                    : 'Your selected payment method must be ready before the ride can continue.'
+                        }
                     </p>
                 </div>
             </div>
+
+            ${
+                negotiated
+                    ? `
+                    <div class="asiye-request-activity">
+                        <div class="asiye-request-step done">
+                            <span><i class="fas fa-check"></i></span>
+                            <div>
+                                <strong>Fare agreed</strong>
+                                <small>${ASIYE.ui.escape(driverName)} is reserved at R${agreedFare.toFixed(0)}.</small>
+                            </div>
+                        </div>
+
+                        <div class="asiye-request-step active">
+                            <span><i class="fas fa-${method === 'card' ? 'credit-card' : method === 'wallet' ? 'wallet' : 'shield-halved'}"></i></span>
+                            <div>
+                                <strong>
+                                    ${method === 'card' ? 'Complete Paystack payment' : method === 'wallet' ? 'Reserve Wallet fare' : 'Complete safety check'}
+                                </strong>
+                                <small>
+                                    Next Asiye creates your pickup PIN and live-share link.
+                                </small>
+                            </div>
+                        </div>
+
+                        <div class="asiye-request-step">
+                            <span><i class="fas fa-car-side"></i></span>
+                            <div>
+                                <strong>Driver starts pickup</strong>
+                                <small>Unlocked only after payment readiness, PIN and safety sharing are complete.</small>
+                            </div>
+                        </div>
+                    </div>
+                    `
+                    : ''
+            }
         `;
+
 
         if (
             method ===
