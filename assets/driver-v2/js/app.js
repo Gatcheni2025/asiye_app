@@ -1495,6 +1495,13 @@ ASIYE_DRIVER.ui = {
         `;
 
 
+        ASIYE_DRIVER.goNegotiation
+            ?.decorateIncomingRequest?.(
+                request,
+                content
+            );
+
+
         overlay.classList.add(
             'open'
         );
