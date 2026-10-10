@@ -90,7 +90,11 @@ ASIYE.booking = {
 
         const fare =
             Number(
-                quote.go || 0
+                ASIYE.goNegotiation
+                    ?.currentOffer?.() ??
+                quote.goSuggested ??
+                quote.go ??
+                0
             );
 
 
@@ -103,28 +107,11 @@ ASIYE.booking = {
             .toLowerCase();
 
 
-        if (
-            paymentMethod ===
-            'wallet'
-        ) {
-            if (
-                !ASIYE.wallet ||
-                typeof ASIYE.wallet.requireFare !==
-                    'function'
-            ) {
-                throw new Error(
-                    'Asiye Wallet is unavailable. Reopen the app and try again.'
-                );
-            }
-
-
-            await ASIYE.wallet
-                .requireFare(
-                    fare,
-                    'Asiye Go'
-                );
-        }
-
+        /*
+         * Wallet affordability is checked only after a driver accepts the
+         * passenger offer (or the passenger accepts a protected counter).
+         * The agreed fare may differ from the initial offer.
+         */
 
         const profileImageUrl =
             await ASIYE.profile
@@ -186,9 +173,7 @@ ASIYE.booking = {
 
 
         const pickupPin =
-            isCardPayment
-                ? null
-                : await this.requirePassengerPin();
+            null;
 
 
         const requestData = {
@@ -206,7 +191,7 @@ ASIYE.booking = {
                 'go',
 
             status:
-                'share_required',
+                'pending',
 
 
             /* Passenger */
@@ -288,11 +273,86 @@ ASIYE.booking = {
             finalAmount:
                 fare,
 
+            marketReferenceFare:
+                Number(
+                    quote.marketReference ||
+                    0
+                ),
+
+            suggestedFare:
+                Number(
+                    quote.goSuggested ||
+                    quote.go ||
+                    fare
+                ),
+
+            minimumFareOffer:
+                Number(
+                    quote.goMinimumOffer ||
+                    fare
+                ),
+
+            maximumFareOffer:
+                Number(
+                    quote.goMaximumOffer ||
+                    fare
+                ),
+
+            passengerOffer:
+                fare,
+
+            agreedFare:
+                null,
+
+            driverCounterFare:
+                null,
+
+            fareStatus:
+                'passenger_offer',
+
+            negotiationEnabled:
+                true,
+
+            negotiationRound:
+                1,
+
             commissionRate:
-                0.20,
+                Number(
+                    quote.goCommissionRate ||
+                    0.20
+                ),
+
+            platformCommission:
+                ASIYE.pricing
+                    .money(
+                        fare *
+                        Number(
+                            quote.goCommissionRate ||
+                            0.20
+                        )
+                    ),
+
+            driverNetFare:
+                ASIYE.pricing
+                    .money(
+                        fare *
+                        (
+                            1 -
+                            Number(
+                                quote.goCommissionRate ||
+                                0.20
+                            )
+                        )
+                    ),
 
             paymentMethod:
                 paymentMethod,
+
+            paymentStatus:
+                'negotiation_pending',
+
+            paymentsReady:
+                false,
 
 
             /* Safety */
@@ -339,6 +399,104 @@ ASIYE.booking = {
             requestData
         );
 
+
+        /*
+         * PROTECTED GO NEGOTIATION:
+         * The server recomputes the permitted corridor and overwrites all
+         * commercial fields before any driver sees the request.
+         *
+         * Payment, PIN generation and loved-one sharing happen only after
+         * the fare is agreed with a driver.
+         */
+        try {
+
+            const validated =
+                await ASIYE.goNegotiation
+                    .submitOffer(
+                        requestId,
+                        fare
+                    );
+
+
+            if (
+                validated?.pricing
+            ) {
+                Object.assign(
+                    requestData,
+                    validated.pricing
+                );
+            }
+
+
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${uid}`
+                )
+                .update({
+                    currentRequest:
+                        requestId
+                });
+
+
+            ASIYE.state.booking
+                .requestId =
+                requestId;
+
+
+            ASIYE.state.booking
+                .request =
+                requestData;
+
+
+            localStorage.setItem(
+                'currentRequestId',
+                requestId
+            );
+
+
+            await this.notifyGoDrivers(
+                requestId,
+                requestData
+            );
+
+
+            return requestId;
+
+        } catch (error) {
+
+            await requestRef
+                .remove()
+                .catch(
+                    () => {}
+                );
+
+
+            await firebase
+                .database()
+                .ref(
+                    `commuters/${uid}`
+                )
+                .update({
+                    currentRequest:
+                        null
+                })
+                .catch(
+                    () => {}
+                );
+
+
+            this.clearLocalRide();
+
+
+            throw error;
+        }
+
+
+        /*
+         * Legacy fixed-fare payment flow retained below for compatibility
+         * with older cached WebViews. Build 331 returns above.
+         */
 
         /*
          * CARD FIRST:
