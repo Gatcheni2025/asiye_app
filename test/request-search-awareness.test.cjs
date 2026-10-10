@@ -101,7 +101,7 @@ test('Work UI clearly shows passenger and driver stages', () => {
   );
   assert.match(
     passengerUiSource,
-    /Passengers ${progress.confirmed}/${progress.capacity}/
+    /Passengers \${progress\.confirmed}\\/\${progress\.capacity}/
   );
   assert.match(
     passengerUiSource,
