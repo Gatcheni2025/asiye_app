@@ -2926,3 +2926,49 @@ button:disabled {
         grid-template-columns:1fr;
     }
 }
+
+
+/* GO DRIVER COUNTER RESPONSE */
+.go-counter-comparison,
+.go-counter-protection{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+    margin-top:14px;
+}
+.go-counter-protection{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+}
+.go-counter-comparison > div,
+.go-counter-protection > div{
+    padding:11px;
+    border-radius:13px;
+    background:#f7faf7;
+    border:1px solid #e1e8e2;
+}
+.go-counter-comparison span,
+.go-counter-protection span{
+    display:block;
+    font-size:8px;
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    color:#7a847e;
+}
+.go-counter-comparison strong,
+.go-counter-protection strong{
+    display:block;
+    margin-top:5px;
+    font-size:13px;
+    color:#1d4931;
+}
+.go-counter-note{
+    margin:13px 0;
+    font-size:10px;
+    line-height:1.55;
+    color:#6f7b73;
+}
+@media(max-width:360px){
+    .go-counter-comparison{
+        grid-template-columns:1fr;
+    }
+}
