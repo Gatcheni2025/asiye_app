@@ -125,7 +125,8 @@ test('Negotiated card finalizer creates PIN/share then server activates reserved
         );
     const rideStart =
         block.indexOf(
-            'await ASIYE.ride'
+            'await ASIYE.ride',
+            finalize
         );
 
     assert.ok(pin >= 0);
