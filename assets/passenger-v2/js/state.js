@@ -81,6 +81,23 @@ ASIYE.state = {
         fare:
             0,
 
+        goNegotiation: {
+            offer:
+                null,
+
+            minimum:
+                null,
+
+            maximum:
+                null,
+
+            suggested:
+                null,
+
+            marketReference:
+                null
+        },
+
         requestId:
             null,
 
