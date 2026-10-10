@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
-    timeout-minutes: 20
+    timeout-minutes: 45
 
     steps:
       - name: Checkout compatibility branch
@@ -72,16 +72,12 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Work/privacy functions are already deployed from the validated
+          # 330/331 runs. Deploy only the Go search + negotiation + financial
+          # lifecycle functions touched by this release, one at a time to stay
+          # below the Cloud Run regional CPU deployment quota.
           FUNCTIONS=(
-            createTripShareToken
-            getTripShare
-            joinClubPoolSecure
-            refreshClubPaymentReadinessAfterSafetyShare
-            notifyDriversOfClubAreaBooking
-            refreshDriversWhileClubPooling
-            notifyDriversWhenClubReady
             dispatchGoRideRequest
-            notifyPassengerOnGoBookingCreated
             submitGoFareOffer
             counterGoFare
             acceptGoFareOffer
