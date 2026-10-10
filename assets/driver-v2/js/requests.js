@@ -357,13 +357,30 @@ ASIYE_DRIVER.requests = {
                                 );
 
 
+                            const passengerReady =
+                                notification.ready ===
+                                    true ||
+                                (
+                                    assigned.status ===
+                                        'accepted' &&
+                                    assigned.paymentsReady ===
+                                        true
+                                );
+
+
                             ASIYE_DRIVER.ui
                                 ?.toast?.(
-                                    `Fare R${Number(
-                                        assigned.agreedFare ||
-                                        notification.agreedFare ||
-                                        0
-                                    ).toFixed(0)} agreed. Waiting for passenger payment confirmation.`
+                                    passengerReady
+                                        ? `Passenger ready at R${Number(
+                                            assigned.agreedFare ||
+                                            notification.agreedFare ||
+                                            0
+                                        ).toFixed(0)}. Payment and safety checks are complete — start pickup when ready.`
+                                        : `Fare R${Number(
+                                            assigned.agreedFare ||
+                                            notification.agreedFare ||
+                                            0
+                                        ).toFixed(0)} agreed. Waiting for passenger payment confirmation.`
                                 );
                         }
 
