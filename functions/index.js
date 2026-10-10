@@ -10468,6 +10468,42 @@ async function prepareTripPaymentServer(
   } =
     context;
 
+  /*
+   * Negotiated Go has a hard server-side payment gate. A modified WebView
+   * cannot initialise Paystack, reserve Wallet funds, or mark Cash due until
+   * a protected fare is agreed and the accepting driver is reserved.
+   */
+  if (
+    isGoNegotiationTrip(
+      trip
+    ) &&
+    trip.negotiationEnabled ===
+      true &&
+    (
+      trip.fareStatus !==
+        "agreed" ||
+      !trip.taxiId ||
+      !Number.isFinite(
+        Number(
+          trip.agreedFare
+        )
+      ) ||
+      Number(
+        trip.agreedFare
+      ) <= 0
+    )
+  ) {
+    const error =
+      new Error(
+        "Agree the protected Asiye Go fare with a driver before payment."
+      );
+
+    error.code =
+      "payment/fare-not-agreed";
+
+    throw error;
+  }
+
   if (
     trip.type ===
       "club" &&
@@ -10937,7 +10973,9 @@ exports.prepareTripPayment =
       } catch (error) {
         const status =
           error?.code ===
-            "payment/insufficient-wallet"
+            "payment/insufficient-wallet" ||
+          error?.code ===
+            "payment/fare-not-agreed"
             ? 409
             : error?.code ===
                 "payment/not-passenger"
