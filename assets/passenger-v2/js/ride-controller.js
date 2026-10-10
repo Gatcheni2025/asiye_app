@@ -33,6 +33,15 @@ ASIYE.ride = {
     lastApproachRoutePoint:
         null,
 
+    driverSearchRetryTimer:
+        null,
+
+    driverSearchRetryCount:
+        0,
+
+    driverSearchRetryMax:
+        6,
+
     async refreshLiveTripRoute(driverLatitude, driverLongitude) {
         const now = Date.now();
         const previous = this.lastApproachRoutePoint;
@@ -191,6 +200,22 @@ ASIYE.ride = {
 
         this.requestListener =
             null;
+
+
+        if (
+            this.driverSearchRetryTimer
+        ) {
+            clearTimeout(
+                this.driverSearchRetryTimer
+            );
+
+            this.driverSearchRetryTimer =
+                null;
+        }
+
+
+        this.driverSearchRetryCount =
+            0;
 
 
         this.stopDriver();
@@ -536,6 +561,82 @@ ASIYE.ride = {
        GO SEARCHING
        ======================================================== */
 
+    scheduleGoDriverSearchRetry(
+        request
+    ) {
+
+        if (
+            !request ||
+            request.type ===
+                'club' ||
+            request.taxiId ||
+            Number(
+                request.driverFoundCount ||
+                0
+            ) > 0 ||
+            String(
+                request.driverSearchStatus ||
+                ''
+            ).startsWith(
+                'driver_found'
+            )
+        ) {
+
+            if (
+                this.driverSearchRetryTimer
+            ) {
+                clearTimeout(
+                    this.driverSearchRetryTimer
+                );
+
+                this.driverSearchRetryTimer =
+                    null;
+            }
+
+            return;
+        }
+
+
+        if (
+            this.driverSearchRetryTimer ||
+            this.driverSearchRetryCount >=
+                this.driverSearchRetryMax
+        ) {
+            return;
+        }
+
+
+        this.driverSearchRetryTimer =
+            setTimeout(
+                async () => {
+
+                    this.driverSearchRetryTimer =
+                        null;
+
+                    this.driverSearchRetryCount +=
+                        1;
+
+
+                    try {
+                        await ASIYE.booking
+                            ?.notifyGoDrivers?.(
+                                request.requestId ||
+                                this.requestId,
+                                request
+                            );
+
+                    } catch (error) {
+                        console.warn(
+                            'Go driver search retry failed:',
+                            error
+                        );
+                    }
+                },
+                8000
+            );
+    },
+
+
     renderGoSearching(request) {
 
         const container =
@@ -547,6 +648,67 @@ ASIYE.ride = {
         if (!container) return;
 
 
+        const searchStatus =
+            String(
+                request.driverSearchStatus ||
+                ''
+            );
+
+
+        const foundCount =
+            Number(
+                request.driverFoundCount ||
+                request.driverDispatchCount ||
+                0
+            );
+
+
+        const driverFound =
+            foundCount > 0 ||
+            searchStatus.startsWith(
+                'driver_found'
+            );
+
+
+        const distanceKm =
+            Number(
+                request.nearestDriverDistanceKm ||
+                0
+            );
+
+
+        if (driverFound) {
+
+            if (
+                this.driverSearchRetryTimer
+            ) {
+                clearTimeout(
+                    this.driverSearchRetryTimer
+                );
+
+                this.driverSearchRetryTimer =
+                    null;
+            }
+
+            this.driverSearchRetryCount =
+                0;
+
+        } else {
+
+            this.scheduleGoDriverSearchRetry(
+                request
+            );
+        }
+
+
+        const driverDetail =
+            distanceKm > 0
+                ? `Nearest available driver is about ${distanceKm.toFixed(1)} km from your pickup.`
+                : foundCount > 1
+                    ? `${foundCount} nearby drivers have received your request.`
+                    : 'A nearby driver has received your request.';
+
+
         container.innerHTML = `
 
             <div class="asiye-row">
@@ -554,8 +716,9 @@ ASIYE.ride = {
                 <div class="
                     asiye-status-icon
                     asiye-search-icon
+                    ${driverFound ? 'asiye-driver-found-icon' : ''}
                 ">
-                    <i class="fas fa-car-side"></i>
+                    <i class="fas fa-${driverFound ? 'check' : 'car-side'}"></i>
                 </div>
 
                 <div>
@@ -565,13 +728,65 @@ ASIYE.ride = {
                     </div>
 
                     <h2 class="sheet-page-title">
-                        Finding your driver
+                        ${
+                            driverFound
+                            ? 'Driver found'
+                            : 'Searching for a nearby driver'
+                        }
                     </h2>
 
                     <div class="home-greeting">
-                        Connecting you with nearby Asiye drivers.
+                        ${
+                            driverFound
+                            ? 'Waiting for a driver to accept your trip.'
+                            : 'Checking active Asiye drivers around your pickup. We will keep searching automatically.'
+                        }
                     </div>
 
+                </div>
+
+            </div>
+
+            <div class="asiye-request-activity">
+
+                <div class="asiye-request-step done">
+                    <span><i class="fas fa-check"></i></span>
+                    <div>
+                        <strong>Ride request created</strong>
+                        <small>Your route and payment are ready.</small>
+                    </div>
+                </div>
+
+                <div class="asiye-request-step ${driverFound ? 'done' : 'active'}">
+                    <span>
+                        <i class="fas fa-${driverFound ? 'check' : 'location-crosshairs'}"></i>
+                    </span>
+                    <div>
+                        <strong>
+                            ${driverFound ? 'Driver found' : 'Finding a driver'}
+                        </strong>
+                        <small>
+                            ${
+                                driverFound
+                                ? ASIYE.ui.escape(driverDetail)
+                                : 'Scanning online drivers near your pickup.'
+                            }
+                        </small>
+                    </div>
+                </div>
+
+                <div class="asiye-request-step ${driverFound ? 'active' : ''}">
+                    <span><i class="fas fa-hand-pointer"></i></span>
+                    <div>
+                        <strong>Driver acceptance</strong>
+                        <small>
+                            ${
+                                driverFound
+                                ? 'Your request is with nearby drivers. Waiting for one to accept.'
+                                : 'This starts as soon as an available driver is located.'
+                            }
+                        </small>
+                    </div>
                 </div>
 
             </div>
