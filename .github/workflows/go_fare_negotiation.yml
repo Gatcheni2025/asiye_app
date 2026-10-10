@@ -15,6 +15,7 @@ on:
       - 'assets/driver-v2/js/requests.js'
       - 'assets/driver-v2/js/trip-controller.js'
       - 'test/go-fare-negotiation.test.cjs'
+      - 'test/go-fare-settlement-lifecycle.test.cjs'
       - '.github/workflows/go_fare_negotiation.yml'
   workflow_dispatch:
 
@@ -44,5 +45,5 @@ jobs:
           node --check assets/driver-v2/js/requests.js
           node --check assets/driver-v2/js/trip-controller.js
 
-      - name: Test protected Go negotiation
-        run: node --test test/go-fare-negotiation.test.cjs
+      - name: Test protected Go negotiation and settlement
+        run: node --test test/go-fare-negotiation.test.cjs test/go-fare-settlement-lifecycle.test.cjs
