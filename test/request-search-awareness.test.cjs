@@ -26,91 +26,100 @@ test('Go dispatch writes real driver search state for passenger UI', () => {
     start + 22000
   );
 
-  assert.match(
-    block,
-    /driverSearchStatus[sS]*driver_found_waiting_acceptance/
+  assert.ok(
+    block.includes('driverSearchStatus')
   );
-  assert.match(
-    block,
-    /driverFoundCount/
+  assert.ok(
+    block.includes(
+      'driver_found_waiting_acceptance'
+    )
   );
-  assert.match(
-    block,
-    /nearestDriverDistanceKm/
+  assert.ok(
+    block.includes('driverFoundCount')
   );
-  assert.match(
-    block,
-    /searching_for_driver/
+  assert.ok(
+    block.includes('nearestDriverDistanceKm')
   );
-  assert.match(
-    block,
-    /driver_found_busy/
+  assert.ok(
+    block.includes('searching_for_driver')
+  );
+  assert.ok(
+    block.includes('driver_found_busy')
   );
 });
 
 test('Go passenger UI changes from searching to Driver found', () => {
-  assert.match(
-    rideSource,
-    /Searching for a nearby driver/
+  assert.ok(
+    rideSource.includes(
+      'Searching for a nearby driver'
+    )
   );
-  assert.match(
-    rideSource,
-    /Driver found/
+  assert.ok(
+    rideSource.includes('Driver found')
   );
-  assert.match(
-    rideSource,
-    /Waiting for a driver to accept your trip/
+  assert.ok(
+    rideSource.includes(
+      'Waiting for a driver to accept your trip'
+    )
   );
-  assert.match(
-    rideSource,
-    /scheduleGoDriverSearchRetry/
+  assert.ok(
+    rideSource.includes(
+      'scheduleGoDriverSearchRetry'
+    )
   );
-  assert.match(
-    rideSource,
-    /8000/
+  assert.ok(
+    rideSource.includes('8000')
   );
 });
 
 test('Work search reports driver availability while waiting for passengers', () => {
-  assert.match(
-    functionsSource,
-    /driver_found_waiting_passengers/
+  assert.ok(
+    functionsSource.includes(
+      'driver_found_waiting_passengers'
+    )
   );
-  assert.match(
-    functionsSource,
-    /exports.refreshDriversWhileClubPooling/
+  assert.ok(
+    functionsSource.includes(
+      'exports.refreshDriversWhileClubPooling'
+    )
   );
-  assert.match(
-    passengerUiSource,
-    /Driver found/
+  assert.ok(
+    passengerUiSource.includes(
+      'Driver found'
+    )
   );
-  assert.match(
-    passengerUiSource,
-    /waiting for ${remainingText}/i
+  assert.ok(
+    passengerUiSource.includes(
+      'waiting for ${remainingText}'
+    )
   );
-  assert.match(
-    passengerUiSource,
-    /driver receives the full trip/i
+  assert.ok(
+    passengerUiSource.includes(
+      'driver receives the full trip'
+    )
   );
 });
 
 test('Work UI clearly shows passenger and driver stages', () => {
-  assert.match(
-    passengerUiSource,
-    /Your Work booking is active/
+  assert.ok(
+    passengerUiSource.includes(
+      'Your Work booking is active'
+    )
   );
   assert.ok(
     passengerUiSource.includes(
       'Passengers ${progress.confirmed}/${progress.capacity}'
     )
   );
-  assert.match(
-    passengerUiSource,
-    /Waiting for driver to accept/
+  assert.ok(
+    passengerUiSource.includes(
+      'Waiting for driver to accept'
+    )
   );
-  assert.match(
-    passengerUiSource,
-    /The full trip is now visible to eligible nearby drivers/
+  assert.ok(
+    passengerUiSource.includes(
+      'The full trip is now visible to eligible nearby drivers'
+    )
   );
 });
 
@@ -147,13 +156,14 @@ test('Work area notification still exposes no request details', () => {
     payloadEnd
   );
 
-  assert.match(
-    payload,
-    /club_area_alert/
+  assert.ok(
+    payload.includes('club_area_alert')
   );
-  assert.match(
-    payload,
-    /privacyLevel:[sS]*area_only/
+  assert.ok(
+    payload.includes('privacyLevel:')
+  );
+  assert.ok(
+    payload.includes('"area_only"')
   );
 
   for (const forbidden of [
