@@ -260,9 +260,10 @@ ASIYE.wallet = {
 
 /* ============================================================
    RIDE PAYMENT ORCHESTRATION
-   Cash: no pre-charge.
-   Wallet: reserve immediately for Go; Club reserves when full.
-   Card: Paystack checkout; funds are held internally until completion.
+   Negotiated Go: no money is reserved until driver + passenger agree a fare.
+   Cash: marks the agreed fare due after negotiation.
+   Wallet: reserves the agreed fare after negotiation; Club reserves when full.
+   Card: opens Paystack only after negotiation; funds remain held until completion.
    ============================================================ */
 
 ASIYE.payments = {
@@ -270,6 +271,9 @@ ASIYE.payments = {
         null,
 
     _cardSafetyFinalizeActive:
+        false,
+
+    _negotiatedPaymentActive:
         false,
 
     async post(
@@ -783,6 +787,104 @@ ASIYE.payments = {
                 this._cardSafetyFinalizeActive =
                     false;
             }
+
+            return;
+        }
+
+
+        /*
+         * NEGOTIATED ASIYE GO
+         *
+         * A driver is already reserved before this stage. Cash and Wallet
+         * payment readiness is prepared only after the protected fare has
+         * been agreed. Card falls through to the existing Paystack opener
+         * below, also only after fare agreement.
+         */
+        const negotiatedGo =
+            request.type ===
+                'ehailing' &&
+            request.rideType ===
+                'go' &&
+            request.negotiationEnabled ===
+                true &&
+            request.fareStatus ===
+                'agreed' &&
+            Boolean(
+                request.taxiId
+            );
+
+
+        if (
+            negotiatedGo &&
+            request.status ===
+                'payment_required' &&
+            method !==
+                'card'
+        ) {
+
+            if (
+                this._negotiatedPaymentActive
+            ) {
+                return;
+            }
+
+
+            this._negotiatedPaymentActive =
+                true;
+
+
+            try {
+
+                const result =
+                    await this.prepare(
+                        request.requestId
+                    );
+
+
+                if (
+                    result?.ready ===
+                        true
+                ) {
+
+                    await ASIYE.booking
+                        ?.finalizeNegotiatedGoBooking?.(
+                            request.requestId,
+                            result,
+                            {
+                                ...request,
+                                paymentStatus:
+                                    result.status ||
+                                    request.paymentStatus
+                            }
+                        );
+                }
+
+
+            } catch (error) {
+
+                console.error(
+                    'Negotiated Go payment preparation failed:',
+                    error
+                );
+
+
+                ASIYE.ui?.toast?.(
+                    error.message ||
+                    (
+                        method ===
+                            'wallet'
+                        ? 'Your Asiye Wallet could not reserve the agreed fare.'
+                        : 'The agreed fare could not be prepared.'
+                    )
+                );
+
+
+            } finally {
+
+                this._negotiatedPaymentActive =
+                    false;
+            }
+
 
             return;
         }
