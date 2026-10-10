@@ -5647,6 +5647,40 @@ async function reserveGoNegotiatedDriver({
         });
     }
 
+    /*
+     * If the passenger accepted a driver's counter, the driver's app may no
+     * longer have the original request overlay open. Send a dedicated
+     * assignment notification so the reserved driver immediately switches to
+     * the payment-waiting trip state.
+     */
+    await admin.database()
+      .ref(
+        `notifications/taxis/${driver.id}/fare-agreed-${requestId}`
+      )
+      .set({
+        type:
+          "go_fare_agreed_driver",
+        title:
+          "Asiye Go fare agreed",
+        message:
+          `Fare R${money(trip.agreedFare)} agreed. The passenger is completing payment and safety confirmation.`,
+        requestId,
+        agreedFare:
+          Number(
+            trip.agreedFare ||
+            0
+          ),
+        paymentMethod:
+          String(
+            trip.paymentMethod ||
+            "cash"
+          ),
+        timestamp:
+          admin.database
+            .ServerValue
+            .TIMESTAMP
+      });
+
     return trip;
 
   } finally {
