@@ -93,6 +93,51 @@ beforeEach(async () => {
             p1: { commuterId: 'p1', status: 'waiting' }
           },
           createdAt: 1
+        },
+        'negotiated-active': {
+          type: 'ehailing',
+          rideType: 'go',
+          commuterId: 'p1',
+          status: 'accepted',
+          taxiId: 'driver-record',
+          driverAuthUid: 'driver-auth',
+          negotiationEnabled: true,
+          fareStatus: 'agreed',
+          agreedFare: 100,
+          finalAmount: 100,
+          commissionRate: 0.20,
+          platformCommission: 20,
+          driverNetFare: 80,
+          paymentMethod: 'card',
+          paymentStatus: 'held',
+          paymentsReady: true,
+          createdAt: 1
+        },
+        'negotiated-completed': {
+          type: 'ehailing',
+          rideType: 'go',
+          commuterId: 'p1',
+          status: 'completed',
+          taxiId: 'driver-record',
+          driverAuthUid: 'driver-auth',
+          negotiationEnabled: true,
+          fareStatus: 'agreed',
+          agreedFare: 100,
+          finalAmount: 100,
+          commissionRate: 0.20,
+          platformCommission: 20,
+          driverNetFare: 80,
+          paymentMethod: 'card',
+          paymentStatus: 'captured',
+          paymentsReady: true,
+          paymentSettlementStatus: 'settled',
+          driverSettlement: {
+            source: 'server_protected_go',
+            grossFare: 100,
+            platformCommission: 20,
+            driverNetFare: 80
+          },
+          createdAt: 1
         }
       }
     });
@@ -325,6 +370,89 @@ test('passenger cannot clear an assigned taxi or mark a trip completed', async (
   await assertFails(update(ref(dbFor('passenger-auth'), 'requests/trip1'), {
     status: 'completed'
   }));
+});
+
+test('negotiated Go commercial fields cannot be rewritten by passenger or driver clients', async () => {
+  const passengerDb = dbFor('passenger-auth');
+  const driverDb = dbFor('driver-auth');
+
+  await assertFails(update(ref(passengerDb, 'requests/negotiated-active'), {
+    agreedFare: 60,
+    finalAmount: 60,
+    paymentMethod: 'cash'
+  }));
+
+  await assertFails(update(ref(driverDb, 'requests/negotiated-active'), {
+    platformCommission: 0,
+    driverNetFare: 100
+  }));
+});
+
+test('negotiated Go clients cannot forge server settlement or complete early', async () => {
+  const driverDb = dbFor('driver-auth');
+
+  await assertFails(update(ref(driverDb, 'requests/negotiated-active'), {
+    driverSettlement: {
+      source: 'server_protected_go',
+      grossFare: 100,
+      platformCommission: 20,
+      driverNetFare: 80
+    },
+    paymentSettlementStatus: 'settled',
+    status: 'completed'
+  }));
+
+  await assertFails(update(ref(driverDb, 'requests/negotiated-active'), {
+    status: 'completed'
+  }));
+});
+
+test('server-settled negotiated Go completion is terminal for clients', async () => {
+  await assertFails(update(ref(dbFor('passenger-auth'), 'requests/negotiated-completed'), {
+    status: 'cancelled_by_commuter'
+  }));
+
+  await assertFails(update(ref(dbFor('driver-auth'), 'requests/negotiated-completed'), {
+    status: 'cancelled_by_driver'
+  }));
+
+  await assertFails(update(ref(dbFor('driver-auth'), 'requests/negotiated-completed'), {
+    driverSettlement: {
+      source: 'server_protected_go',
+      grossFare: 100,
+      platformCommission: 0,
+      driverNetFare: 100
+    }
+  }));
+});
+
+test('private negotiated Go agreement ledger is inaccessible to clients', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'goFareAgreements/protected-trip'), {
+      requestId: 'protected-trip',
+      passengerId: 'p1',
+      driverId: 'driver-record',
+      agreedFare: 100,
+      commissionRate: 0.20,
+      platformCommission: 20,
+      driverNetFare: 80,
+      paymentMethod: 'card'
+    });
+  });
+
+  await assertFails(
+    get(ref(dbFor('passenger-auth'), 'goFareAgreements/protected-trip'))
+  );
+
+  await assertFails(
+    get(ref(dbFor('driver-auth'), 'goFareAgreements/protected-trip'))
+  );
+
+  await assertFails(
+    update(ref(dbFor('passenger-auth'), 'goFareAgreements/protected-trip'), {
+      agreedFare: 1
+    })
+  );
 });
 
 test('notification recipient may delete own notification but unrelated user may not', async () => {
