@@ -293,6 +293,35 @@ ASIYE.ride = {
         }
 
 
+        const isNegotiatedGo =
+            request.type !==
+                'club' &&
+            request.type !==
+                'delivery' &&
+            String(
+                request.rideType ||
+                'go'
+            ) ===
+                'go' &&
+            request.negotiationEnabled ===
+                true;
+
+
+        if (
+            isNegotiatedGo &&
+            request.fareStatus ===
+                'driver_counter' &&
+            !request.taxiId
+        ) {
+
+            this.renderGoFareCounter(
+                request
+            );
+
+            return;
+        }
+
+
         switch (status) {
 
 
@@ -639,6 +668,296 @@ ASIYE.ride = {
                     }
                 },
                 8000
+            );
+    },
+
+
+    renderGoFareCounter(
+        request
+    ) {
+
+        const container =
+            document.getElementById(
+                'sheetContent'
+            );
+
+
+        if (!container) {
+            return;
+        }
+
+
+        if (
+            this.driverSearchRetryTimer
+        ) {
+            clearTimeout(
+                this.driverSearchRetryTimer
+            );
+
+            this.driverSearchRetryTimer =
+                null;
+        }
+
+
+        const passengerOffer =
+            Number(
+                request.passengerOffer ||
+                request.finalAmount ||
+                0
+            );
+
+
+        const counterFare =
+            Number(
+                request.driverCounterFare ||
+                passengerOffer
+            );
+
+
+        const maximum =
+            Number(
+                request.maximumFareOffer ||
+                counterFare
+            );
+
+
+        const driverName =
+            request.negotiationDriverName ||
+            'A nearby driver';
+
+
+        const asiyeCommission =
+            Number(
+                request.counterPlatformCommission ||
+                (
+                    counterFare *
+                    Number(
+                        request.commissionRate ||
+                        0.20
+                    )
+                )
+            );
+
+
+        const driverReceives =
+            Number(
+                request.counterDriverNetFare ||
+                (
+                    counterFare -
+                    asiyeCommission
+                )
+            );
+
+
+        container.innerHTML = `
+            <div class="asiye-row">
+                <div class="asiye-status-icon">
+                    <i class="fas fa-comments-dollar"></i>
+                </div>
+
+                <div>
+                    <div class="home-kicker">
+                        Asiye Go negotiation
+                    </div>
+
+                    <h2 class="sheet-page-title">
+                        Driver counter: R${counterFare.toFixed(0)}
+                    </h2>
+
+                    <div class="home-greeting">
+                        ${ASIYE.ui.escape(driverName)}
+                        has sent a protected counter offer.
+                        No payment has been taken yet.
+                    </div>
+                </div>
+            </div>
+
+            <div class="go-counter-comparison">
+                <div>
+                    <span>Your offer</span>
+                    <strong>
+                        R${passengerOffer.toFixed(0)}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Driver counter</span>
+                    <strong>
+                        R${counterFare.toFixed(0)}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Maximum allowed</span>
+                    <strong>
+                        R${maximum.toFixed(0)}
+                    </strong>
+                </div>
+            </div>
+
+            <div class="go-counter-protection">
+                <div>
+                    <span>Driver receives</span>
+                    <strong>
+                        R${driverReceives.toFixed(2)}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>Asiye fee</span>
+                    <strong>
+                        R${asiyeCommission.toFixed(2)}
+                    </strong>
+                </div>
+            </div>
+
+            <p class="go-counter-note">
+                The counter is still below the Asiye Go ceiling.
+                Accept it to lock this driver and continue to payment,
+                or keep your original offer and Asiye will continue searching.
+            </p>
+
+            <button
+                id="acceptGoFareCounter"
+                class="primary-button"
+            >
+                Accept R${counterFare.toFixed(0)}
+            </button>
+
+            <button
+                id="keepGoFareOffer"
+                class="secondary-button"
+                style="margin-top:9px;"
+            >
+                Keep my R${passengerOffer.toFixed(0)} offer
+            </button>
+        `;
+
+
+        document
+            .getElementById(
+                'acceptGoFareCounter'
+            )
+            ?.addEventListener(
+                'click',
+                async event => {
+
+                    const button =
+                        event.currentTarget;
+
+
+                    button.disabled =
+                        true;
+
+                    button.textContent =
+                        'Locking fare...';
+
+
+                    try {
+
+                        await ASIYE.goNegotiation
+                            .acceptDriverCounter(
+                                request.requestId ||
+                                this.requestId
+                            );
+
+
+                        ASIYE.ui
+                            ?.toast?.(
+                                `Fare R${counterFare.toFixed(0)} agreed. Preparing payment.`
+                            );
+
+
+                    } catch (error) {
+
+                        button.disabled =
+                            false;
+
+                        button.textContent =
+                            `Accept R${counterFare.toFixed(0)}`;
+
+
+                        ASIYE.ui
+                            ?.toast?.(
+                                error.message ||
+                                'Could not accept this driver counter.'
+                            );
+                    }
+                }
+            );
+
+
+        document
+            .getElementById(
+                'keepGoFareOffer'
+            )
+            ?.addEventListener(
+                'click',
+                async event => {
+
+                    const button =
+                        event.currentTarget;
+
+
+                    button.disabled =
+                        true;
+
+                    button.textContent =
+                        'Continuing search...';
+
+
+                    try {
+
+                        await ASIYE.goNegotiation
+                            .keepPassengerOffer(
+                                request.requestId ||
+                                this.requestId
+                            );
+
+
+                        const refreshed = {
+                            ...request,
+                            fareStatus:
+                                'passenger_offer',
+                            driverCounterFare:
+                                null,
+                            negotiationDriverId:
+                                null,
+                            status:
+                                'searching'
+                        };
+
+
+                        await ASIYE.booking
+                            ?.notifyGoDrivers?.(
+                                request.requestId ||
+                                this.requestId,
+                                refreshed
+                            );
+
+
+                        ASIYE.ui
+                            ?.toast?.(
+                                `Keeping your R${passengerOffer.toFixed(0)} offer. Searching for another driver.`
+                            );
+
+
+                    } catch (error) {
+
+                        button.disabled =
+                            false;
+
+                        button.textContent =
+                            `Keep my R${passengerOffer.toFixed(0)} offer`;
+
+
+                        ASIYE.ui
+                            ?.toast?.(
+                                error.message ||
+                                'Could not continue the fare search.'
+                            );
+                    }
+                }
             );
     },
 
