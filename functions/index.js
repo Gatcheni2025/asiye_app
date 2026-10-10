@@ -1499,7 +1499,17 @@ exports.notifyPassengerOnGoBookingCreated = functions.database
       0
     );
 
+    const isNegotiatedGo =
+      request.negotiationEnabled ===
+        true &&
+      String(
+        request.rideType ||
+        "go"
+      ) ===
+        "go";
+
     const cardPaymentRequired =
+      !isNegotiatedGo &&
       String(
         request.paymentMethod ||
         ""
@@ -1518,17 +1528,23 @@ exports.notifyPassengerOnGoBookingCreated = functions.database
       .ref(`/notifications/commuters/${request.commuterId}`)
       .push({
         type:
-          cardPaymentRequired
-            ? "payment_required"
-            : "booking_received",
+          isNegotiatedGo
+            ? "go_fare_offer_sent"
+            : cardPaymentRequired
+              ? "payment_required"
+              : "booking_received",
         title:
-          cardPaymentRequired
-            ? "Complete your Paystack payment"
-            : "Booking received",
+          isNegotiatedGo
+            ? "Fare offer sent"
+            : cardPaymentRequired
+              ? "Complete your Paystack payment"
+              : "Booking received",
         message:
-          cardPaymentRequired
-            ? `Pay R${money(amount)} securely with Paystack. Your booking will only be sent to drivers and your pickup PIN created after payment is confirmed.`
-            : `We received your booking and are finding you a car. Amount to pay: R${money(amount)}.`,
+          isNegotiatedGo
+            ? `Your R${money(request.passengerOffer || amount)} Asiye Go offer is searching nearby drivers. Payment starts only after you and a driver agree the fare.`
+            : cardPaymentRequired
+              ? `Pay R${money(amount)} securely with Paystack. Your booking will only be sent to drivers and your pickup PIN created after payment is confirmed.`
+              : `We received your booking and are finding you a car. Amount to pay: R${money(amount)}.`,
         requestId: context.params.requestId,
         amount,
         timestamp: admin.database.ServerValue.TIMESTAMP
