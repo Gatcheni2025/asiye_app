@@ -856,7 +856,7 @@ ASIYE.ui = {
             ${this.renderRideCard(
                 'go',
                 'Asiye Go',
-                'Private ride · 15% below market reference',
+                'Private ride · Negotiate within a protected fare range',
                 prices.go,
                 'fa-car-side'
             )}
@@ -912,6 +912,12 @@ ASIYE.ui = {
         this.bindPaymentMethodChooser(
             container
         );
+
+        ASIYE.goNegotiation
+            ?.mount?.(
+                container,
+                prices
+            );
 
 
         /*
@@ -997,7 +1003,11 @@ ASIYE.ui = {
 
                     /*
                      * Asiye Go flow.
+                     * Validate the protected passenger offer before creating
+                     * or dispatching the request.
                      */
+                    ASIYE.goNegotiation
+                        ?.validate?.();
 
                     const button =
                         document.getElementById(
@@ -1162,6 +1172,13 @@ ASIYE.ui = {
                     selected
                 );
             });
+
+
+        ASIYE.goNegotiation
+            ?.setVisible?.(
+                selected ===
+                'go'
+            );
 
 
         const button =
