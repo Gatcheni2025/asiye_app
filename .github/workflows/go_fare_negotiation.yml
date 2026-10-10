@@ -1,0 +1,48 @@
+name: Go Fare Negotiation
+
+on:
+  push:
+    branches:
+      - feature/11.0.61-331-pricing-search
+    paths:
+      - 'functions/index.js'
+      - 'assets/passenger-v2/js/pricing.js'
+      - 'assets/passenger-v2/js/go-negotiation.js'
+      - 'assets/passenger-v2/js/booking.js'
+      - 'assets/passenger-v2/js/ride-controller.js'
+      - 'assets/passenger-v2/js/wallet.js'
+      - 'assets/driver-v2/js/go-negotiation.js'
+      - 'assets/driver-v2/js/requests.js'
+      - 'assets/driver-v2/js/trip-controller.js'
+      - 'test/go-fare-negotiation.test.cjs'
+      - '.github/workflows/go_fare_negotiation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate negotiation JavaScript
+        run: |
+          node --check functions/index.js
+          node --check assets/passenger-v2/js/pricing.js
+          node --check assets/passenger-v2/js/go-negotiation.js
+          node --check assets/passenger-v2/js/booking.js
+          node --check assets/passenger-v2/js/ride-controller.js
+          node --check assets/passenger-v2/js/wallet.js
+          node --check assets/driver-v2/js/go-negotiation.js
+          node --check assets/driver-v2/js/requests.js
+          node --check assets/driver-v2/js/trip-controller.js
+
+      - name: Test protected Go negotiation
+        run: node --test test/go-fare-negotiation.test.cjs
