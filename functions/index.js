@@ -6752,6 +6752,336 @@ exports.declineGoFareCounter =
   );
 
 
+exports.finalizeNegotiatedGoBooking =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Passenger authentication is required."
+            });
+        }
+
+        const requestId =
+          String(
+            request.body?.requestId ||
+            ""
+          ).trim();
+
+        const paymentContext =
+          await tripPassengerContext(
+            decoded,
+            requestId
+          );
+
+        const trip =
+          paymentContext.trip;
+
+        if (
+          !isGoNegotiationTrip(
+            trip
+          ) ||
+          trip.negotiationEnabled !==
+            true ||
+          trip.fareStatus !==
+            "agreed" ||
+          !trip.taxiId
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "The negotiated Go fare is not ready to finalize."
+            });
+        }
+
+        const agreedFare =
+          goMoney(
+            trip.agreedFare ||
+            0
+          );
+
+        if (
+          agreedFare <= 0 ||
+          Math.abs(
+            agreedFare -
+            goMoney(
+              paymentContext.amount
+            )
+          ) > 0.01
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "The payment amount does not match the agreed fare."
+            });
+        }
+
+        const pickupPin =
+          String(
+            trip.pickupPin ||
+            ""
+          );
+
+        if (
+          trip.safetyShareCompleted !==
+            true ||
+          !/^\d{4}$/.test(
+            pickupPin
+          )
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "Share the trip with a loved one before the booking is activated."
+            });
+        }
+
+        const payment =
+          (
+            await admin.database()
+              .ref(
+                tripPaymentPath(
+                  requestId,
+                  paymentContext.passengerId
+                )
+              )
+              .once(
+                "value"
+              )
+          ).val() || {};
+
+        const method =
+          normaliseRidePaymentMethod(
+            paymentContext.method
+          );
+
+        const paymentStatus =
+          String(
+            payment.status ||
+            trip.paymentStatus ||
+            ""
+          );
+
+        const paidAmount =
+          goMoney(
+            payment.amount ??
+            agreedFare
+          );
+
+        if (
+          Math.abs(
+            paidAmount -
+            agreedFare
+          ) > 0.01
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "The reserved payment does not match the agreed fare."
+            });
+        }
+
+        const paymentReady =
+          method ===
+            "cash"
+            ? paymentStatus ===
+                "cash_due"
+            : [
+                "held",
+                "captured"
+              ].includes(
+                paymentStatus
+              );
+
+        if (!paymentReady) {
+          return response
+            .status(409)
+            .json({
+              error:
+                method === "card"
+                  ? "Paystack payment must be confirmed before the trip starts."
+                  : method === "wallet"
+                    ? "Wallet funds must be reserved before the trip starts."
+                    : "Trip payment is not ready."
+            });
+        }
+
+        const requestRef =
+          admin.database()
+            .ref(
+              `requests/${requestId}`
+            );
+
+        const transaction =
+          await requestRef.transaction(
+            current => {
+              if (
+                !current ||
+                current.fareStatus !==
+                  "agreed" ||
+                !current.taxiId ||
+                String(
+                  current.status ||
+                  ""
+                ).startsWith(
+                  "cancelled"
+                )
+              ) {
+                return;
+              }
+
+              if (
+                current.status ===
+                  "accepted" &&
+                current.negotiatedBookingFinalized ===
+                  true
+              ) {
+                return current;
+              }
+
+              return {
+                ...current,
+                status:
+                  "accepted",
+                paymentStatus:
+                  paymentStatus,
+                paymentsReady:
+                  true,
+                negotiatedBookingFinalized:
+                  true,
+                negotiatedBookingFinalizedAt:
+                  Date.now()
+              };
+            },
+            undefined,
+            false
+          );
+
+        if (!transaction.committed) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "This negotiated trip can no longer be activated."
+            });
+        }
+
+        const finalized =
+          transaction.snapshot.val() ||
+          {};
+
+        await admin.database()
+          .ref(
+            `notifications/taxis/${finalized.taxiId}/negotiated-ready-${requestId}`
+          )
+          .set({
+            type:
+              "go_fare_agreed_driver",
+            title:
+              "Passenger ready",
+            message:
+              `Payment and safety checks are complete for the R${money(agreedFare)} fare. Start pickup when ready.`,
+            requestId,
+            agreedFare,
+            ready:
+              true,
+            timestamp:
+              admin.database
+                .ServerValue
+                .TIMESTAMP
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId,
+            status:
+              "accepted",
+            agreedFare,
+            paymentStatus,
+            paymentsReady:
+              true,
+            taxiId:
+              finalized.taxiId
+          });
+
+      } catch (error) {
+        const status =
+          error?.code ===
+            "payment/not-passenger"
+            ? 403
+            : error?.code ===
+                "payment/trip-not-found"
+              ? 404
+              : 500;
+
+        console.error(
+          "Finalize negotiated Go booking failed",
+          error?.message ||
+          error
+        );
+
+        return response
+          .status(status)
+          .json({
+            error:
+              error?.message ||
+              "Unable to activate this negotiated Go trip."
+          });
+      }
+    }
+  );
+
+
 // =================================================================
 // --- SERVER-SIDE ASIYE GO DRIVER DISPATCH ---
 // =================================================================
