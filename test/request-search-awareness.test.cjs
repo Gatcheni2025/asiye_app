@@ -99,9 +99,10 @@ test('Work UI clearly shows passenger and driver stages', () => {
     passengerUiSource,
     /Your Work booking is active/
   );
-  assert.match(
-    passengerUiSource,
-    /Passengers \${progress\.confirmed}\\/\${progress\.capacity}/
+  assert.ok(
+    passengerUiSource.includes(
+      'Passengers ${progress.confirmed}/${progress.capacity}'
+    )
   );
   assert.match(
     passengerUiSource,
