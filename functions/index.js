@@ -11374,6 +11374,423 @@ exports.verifyTripCardPayment =
     }
   );
 
+async function settleProtectedGoFinancials(
+  requestId,
+  trip
+) {
+  if (
+    !isGoNegotiationTrip(trip) ||
+    trip.negotiationEnabled !== true
+  ) {
+    return null;
+  }
+
+  if (
+    trip.fareStatus !== "agreed" ||
+    !trip.taxiId ||
+    trip.negotiatedBookingFinalized !== true ||
+    trip.paymentsReady !== true ||
+    trip.safetyShareCompleted !== true ||
+    ![
+      "passenger_onboard",
+      "in_transit"
+    ].includes(
+      String(trip.status || "")
+    )
+  ) {
+    const error =
+      new Error(
+        "The protected Go trip is not ready for final settlement."
+      );
+
+    error.code =
+      "settlement/not-ready";
+
+    throw error;
+  }
+
+  const agreement =
+    await readGoFareAgreement(
+      requestId
+    );
+
+  if (
+    !agreement ||
+    String(
+      agreement.driverId ||
+      ""
+    ) !==
+      String(
+        trip.taxiId ||
+        ""
+      ) ||
+    Number(
+      agreement.commissionRate
+    ) !==
+      ASIYE_GO_NEGOTIATION
+        .commissionRate
+  ) {
+    const error =
+      new Error(
+        "The protected Go fare agreement does not match the assigned driver."
+      );
+
+    error.code =
+      "settlement/agreement-mismatch";
+
+    throw error;
+  }
+
+  const grossFare =
+    goMoney(
+      agreement.agreedFare ||
+      0
+    );
+
+  const platformCommission =
+    goMoney(
+      agreement.platformCommission ||
+      0
+    );
+
+  const driverNetFare =
+    goMoney(
+      agreement.driverNetFare ||
+      0
+    );
+
+  const expectedCommission =
+    goMoney(
+      grossFare *
+      ASIYE_GO_NEGOTIATION
+        .commissionRate
+    );
+
+  const expectedDriverNet =
+    goMoney(
+      grossFare -
+      expectedCommission
+    );
+
+  if (
+    grossFare <= 0 ||
+    Math.abs(
+      platformCommission -
+      expectedCommission
+    ) > 0.01 ||
+    Math.abs(
+      driverNetFare -
+      expectedDriverNet
+    ) > 0.01
+  ) {
+    const error =
+      new Error(
+        "The protected Go settlement split is invalid."
+      );
+
+    error.code =
+      "settlement/split-mismatch";
+
+    throw error;
+  }
+
+  const passengerId =
+    String(
+      trip.commuterId ||
+      ""
+    );
+
+  if (!passengerId) {
+    const error =
+      new Error(
+        "Passenger identity is missing from the protected Go trip."
+      );
+
+    error.code =
+      "settlement/passenger-missing";
+
+    throw error;
+  }
+
+  const payment =
+    (
+      await admin.database()
+        .ref(
+          tripPaymentPath(
+            requestId,
+            passengerId
+          )
+        )
+        .once(
+          "value"
+        )
+    ).val() || {};
+
+  const method =
+    normaliseRidePaymentMethod(
+      payment.method ||
+      trip.paymentMethod
+    );
+
+  const paymentAmount =
+    goMoney(
+      payment.amount ||
+      0
+    );
+
+  const paymentStatus =
+    String(
+      payment.status ||
+      ""
+    );
+
+  const paymentReady =
+    method === "cash"
+      ? paymentStatus ===
+          "cash_due"
+      : paymentStatus ===
+          "captured";
+
+  if (
+    !paymentReady ||
+    Math.abs(
+      paymentAmount -
+      grossFare
+    ) > 0.01
+  ) {
+    const error =
+      new Error(
+        "The settled passenger payment does not match the protected Go fare."
+      );
+
+    error.code =
+      "settlement/payment-mismatch";
+
+    throw error;
+  }
+
+  const driverId =
+    String(
+      agreement.driverId
+    );
+
+  const appliedAt =
+    Date.now();
+
+  /*
+   * Driver earnings are applied server-side and idempotently. The request ID
+   * becomes the permanent per-driver marker, so retries cannot count the same
+   * negotiated trip twice.
+   *
+   * Cash is physically collected by the driver, therefore the 20% platform
+   * share becomes commission debt. Card and Wallet are platform-controlled
+   * funds, so the platform share is already retained and no debt is added.
+   */
+  await admin.database()
+    .ref(
+      `taxis/${driverId}`
+    )
+    .transaction(
+      driver => {
+        if (!driver) {
+          return;
+        }
+
+        const applied = {
+          ...(
+            driver
+              .earningsAppliedTrips ||
+            {}
+          )
+        };
+
+        if (
+          applied[
+            requestId
+          ]
+        ) {
+          return driver;
+        }
+
+        applied[
+          requestId
+        ] = {
+          grossFare,
+          platformCommission,
+          driverNetFare,
+          paymentMethod:
+            method,
+          appliedAt
+        };
+
+        driver.earningsAppliedTrips =
+          applied;
+
+        driver.totalTrips =
+          Number(
+            driver.totalTrips ||
+            0
+          ) + 1;
+
+        driver.grossEarnings =
+          goMoney(
+            Number(
+              driver.grossEarnings ||
+              0
+            ) +
+            grossFare
+          );
+
+        driver.totalEarnings =
+          goMoney(
+            Number(
+              driver.totalEarnings ||
+              0
+            ) +
+            driverNetFare
+          );
+
+        driver.netEarnings =
+          driver.totalEarnings;
+
+        driver.commissionAccrued =
+          goMoney(
+            Number(
+              driver.commissionAccrued ||
+              0
+            ) +
+            platformCommission
+          );
+
+        driver.commissionDebt =
+          goMoney(
+            Number(
+              driver.commissionDebt ||
+              0
+            ) +
+            (
+              method === "cash"
+                ? platformCommission
+                : 0
+            )
+          );
+
+        driver.lastTripGross =
+          grossFare;
+
+        driver.lastTripCommission =
+          platformCommission;
+
+        driver.lastTripNet =
+          driverNetFare;
+
+        return driver;
+      },
+      undefined,
+      false
+    );
+
+  const settlement = {
+    settlementId:
+      `protected-go:${requestId}`,
+    source:
+      "server_protected_go",
+    grossFare,
+    commissionRate:
+      ASIYE_GO_NEGOTIATION
+        .commissionRate,
+    platformCommission,
+    driverNetFare,
+    paymentMethod:
+      method,
+    paymentStatus,
+    agreementDriverId:
+      driverId,
+    appliedAt
+  };
+
+  await admin.database()
+    .ref(
+      `requests/${requestId}`
+    )
+    .update({
+      agreedFare:
+        grossFare,
+      finalAmount:
+        grossFare,
+      commissionRate:
+        ASIYE_GO_NEGOTIATION
+          .commissionRate,
+      driverGrossFare:
+        grossFare,
+      platformCommission,
+      driverNetFare,
+      commissionApplied:
+        true,
+      driverSettlement:
+        settlement,
+      paymentSettlementStatus:
+        "settled",
+      paymentSettledAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP,
+      status:
+        "completed",
+      completedAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP
+    });
+
+  /*
+   * Release the driver/passenger active-request locks even if either app
+   * closes immediately after completion.
+   */
+  await admin.database()
+    .ref(
+      `taxis/${driverId}/currentRequest`
+    )
+    .transaction(
+      current =>
+        String(
+          current ||
+          ""
+        ) ===
+          String(
+            requestId
+          )
+          ? null
+          : undefined
+    )
+    .catch(
+      () => {}
+    );
+
+  await admin.database()
+    .ref(
+      `commuters/${passengerId}/currentRequest`
+    )
+    .transaction(
+      current =>
+        String(
+          current ||
+          ""
+        ) ===
+          String(
+            requestId
+          )
+          ? null
+          : undefined
+    )
+    .catch(
+      () => {}
+    );
+
+  return settlement;
+}
+
+
 exports.settleTripPayment =
   onRequest(
     {
@@ -11616,18 +12033,26 @@ exports.settleTripPayment =
           });
         }
 
-        await admin.database()
-          .ref(
-            `requests/${requestId}`
-          )
-          .update({
-            paymentSettlementStatus:
-              "settled",
-            paymentSettledAt:
-              admin.database
-                .ServerValue
-                .TIMESTAMP
-          });
+        const protectedGoSettlement =
+          await settleProtectedGoFinancials(
+            requestId,
+            trip
+          );
+
+        if (!protectedGoSettlement) {
+          await admin.database()
+            .ref(
+              `requests/${requestId}`
+            )
+            .update({
+              paymentSettlementStatus:
+                "settled",
+              paymentSettledAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+        }
 
         return response
           .status(200)
@@ -11636,6 +12061,12 @@ exports.settleTripPayment =
               true,
             settled:
               true,
+            serverCompleted:
+              Boolean(
+                protectedGoSettlement
+              ),
+            settlement:
+              protectedGoSettlement,
             payments:
               results
           });
@@ -12896,6 +13327,63 @@ exports.releaseCancelledGoTripPayment =
 
         if (!passengerId) {
           return null;
+        }
+
+        /*
+         * Negotiated Go reserves a real driver before payment. Cancellation
+         * must release that reservation server-side so an offline driver does
+         * not remain blocked on a trip that no longer exists.
+         */
+        if (
+          trip.taxiId
+        ) {
+          await admin.database()
+            .ref(
+              `taxis/${trip.taxiId}/currentRequest`
+            )
+            .transaction(
+              current =>
+                String(
+                  current ||
+                  ""
+                ) ===
+                  String(
+                    requestId
+                  )
+                  ? null
+                  : undefined
+            )
+            .catch(
+              () => {}
+            );
+        }
+
+        const agreementRef =
+          admin.database()
+            .ref(
+              goFareAgreementPath(
+                requestId
+              )
+            );
+
+        const agreement =
+          (
+            await agreementRef
+              .once(
+                "value"
+              )
+          ).val();
+
+        if (agreement) {
+          await agreementRef
+            .update({
+              status:
+                "cancelled",
+              cancelledAt:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
         }
 
         try {
