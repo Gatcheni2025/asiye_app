@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: asiye-secure-functions-deploy
+  cancel-in-progress: true
+
 # Redeploy after tracking-host compatibility fix.
 
 # Fresh runs read repository secrets when queued.
@@ -46,6 +50,9 @@ jobs:
           node --check functions/index.js
           node --check functions/club-pool-security.js
           node --check functions/trip-share-security.js
+
+      - name: Test protected Go financial lifecycle
+        run: node --test test/go-fare-negotiation.test.cjs test/go-fare-settlement-lifecycle.test.cjs
 
       - name: Verify Firebase deployment secret
         shell: bash
