@@ -30,6 +30,126 @@ ASIYE_DRIVER.requests = {
         null,
 
 
+    async postNegotiation(
+        endpoint,
+        body
+    ) {
+
+        const user =
+            firebase.auth()
+                .currentUser;
+
+
+        if (!user) {
+            throw new Error(
+                'Please sign in again before negotiating this fare.'
+            );
+        }
+
+
+        const token =
+            await user.getIdToken(
+                true
+            );
+
+
+        const response =
+            await fetch(
+                `https://us-central1-asiye-80386.cloudfunctions.net/${endpoint}`,
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${token}`,
+
+                        'X-Firebase-Auth':
+                            `Bearer ${token}`,
+
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify(
+                            body ||
+                            {}
+                        )
+                }
+            );
+
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+
+        if (!response.ok) {
+            throw new Error(
+                payload.error ||
+                'Fare negotiation could not be completed.'
+            );
+        }
+
+
+        return payload;
+    },
+
+
+    async counterFare(
+        amount,
+        requestId = null
+    ) {
+
+        const id =
+            requestId ||
+            this.activeRequest
+                ?.requestId ||
+            this.activeRequest
+                ?.key;
+
+
+        if (!id) {
+            throw new Error(
+                'Missing ride request.'
+            );
+        }
+
+
+        const result =
+            await this.postNegotiation(
+                'counterGoFare',
+                {
+                    requestId:
+                        id,
+
+                    amount:
+                        Math.round(
+                            Number(
+                                amount
+                            )
+                        )
+                }
+            );
+
+
+        ASIYE_DRIVER.ui
+            ?.toast?.(
+                `Counter R${Number(
+                    result.counterFare ||
+                    amount
+                ).toFixed(0)} sent to the passenger.`
+            );
+
+
+        return result;
+    },
+
+
     /* ========================================================
        START REQUEST SYSTEM
        ======================================================== */
@@ -174,6 +294,82 @@ ASIYE_DRIVER.requests = {
                                     }
                                 }
                             )
+                        );
+
+
+                        return;
+                    }
+
+
+                    /*
+                     * Fare negotiation assignment.
+                     * The passenger may have accepted a driver counter after
+                     * the original request overlay closed. This notification
+                     * moves the now-reserved driver into the live trip state.
+                     */
+                    if (
+                        notification.type ===
+                            'go_fare_agreed_driver' &&
+                        requestId
+                    ) {
+
+                        const requestSnapshot =
+                            await firebase
+                                .database()
+                                .ref(
+                                    `requests/${requestId}`
+                                )
+                                .once(
+                                    'value'
+                                );
+
+
+                        const assigned =
+                            requestSnapshot.val();
+
+
+                        if (
+                            assigned &&
+                            assigned.fareStatus ===
+                                'agreed'
+                        ) {
+
+                            assigned.requestId =
+                                requestId;
+
+
+                            this.activeRequest =
+                                assigned;
+
+
+                            ASIYE_DRIVER.state
+                                .incomingRequest =
+                                null;
+
+
+                            ASIYE_DRIVER.ui
+                                ?.closeIncomingRequest?.();
+
+
+                            ASIYE_DRIVER.trip
+                                ?.start?.(
+                                    requestId
+                                );
+
+
+                            ASIYE_DRIVER.ui
+                                ?.toast?.(
+                                    `Fare R${Number(
+                                        assigned.agreedFare ||
+                                        notification.agreedFare ||
+                                        0
+                                    ).toFixed(0)} agreed. Waiting for passenger payment confirmation.`
+                                );
+                        }
+
+
+                        await this.removeNotification(
+                            snapshot.key
                         );
 
 
@@ -698,6 +894,105 @@ ASIYE_DRIVER.requests = {
                     driverId
             }
         );
+
+
+        const isProtectedGo =
+            freshRequest.type !==
+                'club' &&
+            freshRequest.type !==
+                'delivery' &&
+            String(
+                freshRequest.rideType ||
+                'go'
+            ) ===
+                'go' &&
+            freshRequest.negotiationEnabled ===
+                true;
+
+
+        if (
+            isProtectedGo &&
+            freshRequest.fareStatus ===
+                'passenger_offer'
+        ) {
+
+            const result =
+                await this.postNegotiation(
+                    'acceptGoFareOffer',
+                    {
+                        requestId:
+                            id
+                    }
+                );
+
+
+            const updatedSnapshot =
+                await requestRef.once(
+                    'value'
+                );
+
+
+            const updated =
+                updatedSnapshot.val() ||
+                {
+                    ...freshRequest,
+                    fareStatus:
+                        'agreed',
+                    agreedFare:
+                        result.agreedFare,
+                    status:
+                        result.status
+                };
+
+
+            updated.requestId =
+                id;
+
+
+            this.activeRequest =
+                updated;
+
+
+            ASIYE_DRIVER.state
+                .incomingRequest =
+                null;
+
+
+            await this.removeNotification(
+                this.activeNotificationKey
+            );
+
+
+            ASIYE_DRIVER.trip
+                ?.start?.(
+                    id
+                );
+
+
+            ASIYE_DRIVER.ui
+                ?.toast?.(
+                    `Fare R${Number(
+                        result.agreedFare ||
+                        updated.agreedFare ||
+                        0
+                    ).toFixed(0)} accepted. Waiting for passenger payment confirmation.`
+                );
+
+
+            return result;
+        }
+
+
+        if (
+            isProtectedGo &&
+            freshRequest.fareStatus ===
+                'driver_counter'
+        ) {
+
+            throw new Error(
+                'Your counter is waiting for the passenger. You cannot accept the original offer at the same time.'
+            );
+        }
 
 
         const freshIsClub =
