@@ -260,6 +260,123 @@ ASIYE_DRIVER.trip = {
 
 
     /* ========================================================
+       GO — FARE AGREED, WAITING FOR PASSENGER PAYMENT
+       ======================================================== */
+
+    renderNegotiatedPaymentWaiting(
+        request
+    ) {
+
+        const container =
+            document.getElementById(
+                'activeTripContent'
+            );
+
+
+        if (!container) {
+            return;
+        }
+
+
+        const agreedFare =
+            Number(
+                request.agreedFare ||
+                request.finalAmount ||
+                0
+            );
+
+
+        const driverNet =
+            Number(
+                request.driverNetFare ||
+                (
+                    agreedFare *
+                    (
+                        1 -
+                        Number(
+                            request.commissionRate ||
+                            0.20
+                        )
+                    )
+                )
+            );
+
+
+        const paymentMethod =
+            String(
+                request.paymentMethod ||
+                'cash'
+            )
+                .toLowerCase();
+
+
+        container.innerHTML = `
+            <div class="driver-payment-wait-card">
+
+                <div class="driver-dialog-kicker">
+                    Asiye Go · Fare agreed
+                </div>
+
+                <h2 class="driver-title">
+                    R${agreedFare.toFixed(0)} agreed
+                </h2>
+
+                <div class="driver-subtitle">
+                    You are reserved for this passenger.
+                    ${
+                        paymentMethod === 'card'
+                            ? 'Waiting for Paystack payment and the passenger safety-share step.'
+                            : paymentMethod === 'wallet'
+                                ? 'Waiting for the agreed fare to be reserved from the passenger wallet and the safety-share step.'
+                                : 'Confirming the cash fare and passenger safety-share step.'
+                    }
+                </div>
+
+                <div class="driver-request-meta" style="margin-top:16px;">
+                    <div>
+                        <span>Passenger fare</span>
+                        <strong>
+                            R${agreedFare.toFixed(2)}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>You receive</span>
+                        <strong>
+                            R${driverNet.toFixed(2)}
+                        </strong>
+                    </div>
+
+                    <div>
+                        <span>Payment</span>
+                        <strong>
+                            ${paymentMethod.toUpperCase()}
+                        </strong>
+                    </div>
+                </div>
+
+                <div class="driver-payment-wait-note">
+                    Do not start pickup yet. Asiye will unlock navigation
+                    automatically when payment readiness, the pickup PIN and
+                    live sharing are confirmed.
+                </div>
+
+            </div>
+        `;
+
+
+        document
+            .getElementById(
+                'activeTripSheet'
+            )
+            ?.classList
+            .add(
+                'open'
+            );
+    },
+
+
+    /* ========================================================
        GO — ACCEPTED
        ======================================================== */
 
