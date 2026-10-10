@@ -5711,6 +5711,10 @@ async function reserveGoNegotiatedDriver({
               commercial.platformCommission,
             driverNetFare:
               commercial.driverNetFare,
+            paymentMethod:
+              normaliseRidePaymentMethod(
+                trip.paymentMethod
+              ),
             currency:
               "ZAR",
             createdAt:
@@ -10661,7 +10665,13 @@ async function prepareTripPaymentServer(
         agreement.commissionRate
       ) !==
         ASIYE_GO_NEGOTIATION
-          .commissionRate
+          .commissionRate ||
+      normaliseRidePaymentMethod(
+        agreement.paymentMethod
+      ) !==
+        normaliseRidePaymentMethod(
+          method
+        )
     ) {
       const error =
         new Error(
@@ -11543,6 +11553,23 @@ async function settleProtectedGoFinancials(
       payment.status ||
       ""
     );
+
+  if (
+    normaliseRidePaymentMethod(
+      agreement.paymentMethod
+    ) !==
+      method
+  ) {
+    const error =
+      new Error(
+        "The selected payment method does not match the protected Go agreement."
+      );
+
+    error.code =
+      "settlement/payment-method-mismatch";
+
+    throw error;
+  }
 
   const paymentReady =
     method === "cash"
