@@ -1879,6 +1879,26 @@ exports.notifyDriversOfClubAreaBooking =
             request
           );
 
+        await change.after.ref.parent.update({
+          driverSearchStatus:
+            candidates.length
+              ? "driver_found_waiting_passengers"
+              : "searching_for_driver",
+          driverFoundCount:
+            candidates.length,
+          nearestDriverDistanceKm:
+            candidates.length
+              ? Number(
+                  candidates[0].distanceKm ||
+                  0
+                )
+              : null,
+          driverSearchUpdatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
         await Promise.all(
           candidates.map(
             async candidate => {
@@ -1982,6 +2002,26 @@ exports.notifyDriversWhenClubReady = functions
         request,
         8
       );
+
+    await change.after.ref.parent.update({
+      driverSearchStatus:
+        selected.length
+          ? "driver_found_waiting_acceptance"
+          : "searching_for_driver",
+      driverFoundCount:
+        selected.length,
+      nearestDriverDistanceKm:
+        selected.length
+          ? Number(
+              selected[0].distanceKm ||
+              0
+            )
+          : null,
+      driverSearchUpdatedAt:
+        admin.database
+          .ServerValue
+          .TIMESTAMP
+    });
 
     const pickupTime =
       clubPickupTimeLabel(
@@ -5319,6 +5359,31 @@ exports.dispatchGoRideRequest =
           ] =
             false;
 
+          updates[
+            `requests/${requestId}/driverSearchStatus`
+          ] =
+            "driver_found_waiting_acceptance";
+
+          updates[
+            `requests/${requestId}/driverFoundCount`
+          ] =
+            candidates.length;
+
+          updates[
+            `requests/${requestId}/nearestDriverDistanceKm`
+          ] =
+            Number(
+              candidates[0]?.distanceKm ||
+              0
+            );
+
+          updates[
+            `requests/${requestId}/driverSearchUpdatedAt`
+          ] =
+            admin.database
+              .ServerValue
+              .TIMESTAMP;
+
           await admin.database()
             .ref()
             .update(
@@ -5357,6 +5422,17 @@ exports.dispatchGoRideRequest =
                 selected.driverId,
               [`requests/${requestId}/driverBusy`]:
                 true,
+              [`requests/${requestId}/driverSearchStatus`]:
+                "driver_found_busy",
+              [`requests/${requestId}/driverFoundCount`]:
+                1,
+              [`requests/${requestId}/nearestDriverDistanceKm`]:
+                Number(
+                  selected.distanceKm ||
+                  0
+                ),
+              [`requests/${requestId}/driverSearchUpdatedAt`]:
+                now,
               [`requests/${requestId}/queuedAt`]:
                 now,
               [`taxis/${selected.driverId}/bookingQueue/${requestId}`]:
@@ -5410,6 +5486,16 @@ exports.dispatchGoRideRequest =
             false,
           driverDispatchCount:
             0,
+          driverSearchStatus:
+            "searching_for_driver",
+          driverFoundCount:
+            0,
+          nearestDriverDistanceKm:
+            null,
+          driverSearchUpdatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP,
           driverDispatchAt:
             admin.database
               .ServerValue
