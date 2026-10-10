@@ -276,6 +276,12 @@ ASIYE.payments = {
     _negotiatedPaymentActive:
         false,
 
+    _prepareRequestId:
+        null,
+
+    _preparePromise:
+        null,
+
     async post(
         endpoint,
         body = {}
@@ -343,59 +349,121 @@ ASIYE.payments = {
     },
 
     async prepare(requestId) {
-        const result =
-            await this.post(
-                'prepareTripPayment',
-                {
-                    requestId
+
+        if (!requestId) {
+            throw new Error(
+                'Missing trip payment reference.'
+            );
+        }
+
+
+        /*
+         * The request listener and payment screen can render in the same
+         * event cycle. Reuse the same server/payment promise so only one
+         * Paystack checkout is opened for a negotiated fare.
+         */
+        if (
+            this._preparePromise &&
+            this._prepareRequestId ===
+                requestId
+        ) {
+
+            return this._preparePromise;
+        }
+
+
+        const run =
+            (async () => {
+
+                const result =
+                    await this.post(
+                        'prepareTripPayment',
+                        {
+                            requestId
+                        }
+                    );
+
+
+                if (
+                    result.method ===
+                        'wallet' &&
+                    result.ready ===
+                        true
+                ) {
+                    await ASIYE.wallet
+                        ?.refresh?.()
+                        .catch(
+                            () => {}
+                        );
                 }
-            );
 
-        if (
-            result.method ===
-                'wallet' &&
-            result.ready ===
-                true
-        ) {
-            await ASIYE.wallet
-                ?.refresh?.()
-                .catch(
-                    () => {}
-                );
+
+                if (
+                    result.method ===
+                        'card' &&
+                    result.authorizationUrl &&
+                    result.reference
+                ) {
+
+                    localStorage.setItem(
+                        'pendingTripCardPayment',
+                        JSON.stringify({
+                            requestId,
+                            reference:
+                                result.reference
+                        })
+                    );
+
+
+                    this.openingReference =
+                        result.reference;
+
+
+                    window.AsiyePages
+                        ?.openExternalPayment?.(
+                            result.authorizationUrl
+                        );
+
+
+                    return {
+                        ...result,
+                        paymentPending:
+                            true
+                    };
+                }
+
+
+                return result;
+            })();
+
+
+        this._prepareRequestId =
+            requestId;
+
+        this._preparePromise =
+            run;
+
+
+        try {
+
+            return await run;
+
+
+        } finally {
+
+            if (
+                this._preparePromise ===
+                    run
+            ) {
+                this._preparePromise =
+                    null;
+
+                this._prepareRequestId =
+                    null;
+            }
         }
-
-        if (
-            result.method ===
-                'card' &&
-            result.authorizationUrl &&
-            result.reference
-        ) {
-            localStorage.setItem(
-                'pendingTripCardPayment',
-                JSON.stringify({
-                    requestId,
-                    reference:
-                        result.reference
-                })
-            );
-
-            this.openingReference =
-                result.reference;
-
-            window.AsiyePages
-                ?.openExternalPayment?.(
-                    result.authorizationUrl
-                );
-
-            return {
-                ...result,
-                paymentPending:
-                    true
-            };
-        }
-
-        return result;
     },
+
 
     // Paystack may return to the app before its webhook is delivered. When
     // the WebView resumes, verify the saved wallet reference server-to-server
