@@ -1552,6 +1552,86 @@ ASIYE.ui = {
                 );
 
 
+        const searchStatus =
+            String(
+                request.driverSearchStatus ||
+                ''
+            );
+
+
+        const driverFoundCount =
+            Number(
+                request.driverFoundCount ||
+                0
+            );
+
+
+        const driverFound =
+            driverFoundCount > 0 ||
+            searchStatus.startsWith(
+                'driver_found'
+            );
+
+
+        const passengersReady =
+            progress.ready;
+
+
+        const paymentsReady =
+            request.paymentsReady ===
+                true;
+
+
+        const fullRequestSent =
+            passengersReady &&
+            paymentsReady &&
+            searchStatus ===
+                'driver_found_waiting_acceptance';
+
+
+        const distanceKm =
+            Number(
+                request.nearestDriverDistanceKm ||
+                0
+            );
+
+
+        const remainingText =
+            progress.remaining === 1
+                ? '1 more passenger'
+                : `${progress.remaining} more passengers`;
+
+
+        const headline =
+            driverFound
+                ? 'Driver found'
+                : passengersReady
+                    ? 'Passengers ready — finding a driver'
+                    : 'Finding drivers and passengers';
+
+
+        const primaryMessage =
+            fullRequestSent
+                ? 'Your Work group is complete. The full request has been sent to nearby drivers and we are waiting for one to accept.'
+                : passengersReady && !paymentsReady
+                    ? 'All passengers are matched. We are completing the group payment and safety checks before the driver receives the full trip.'
+                    : driverFound
+                        ? `A nearby driver is available. We are waiting for ${remainingText} before the driver can receive and accept the full trip.`
+                        : `We are searching for a nearby driver while matching ${remainingText}. You do not need to restart the booking.`;
+
+
+        const driverDetail =
+            driverFound
+                ? (
+                    distanceKm > 0
+                        ? `Available driver found about ${distanceKm.toFixed(1)} km from the pickup area.`
+                        : driverFoundCount > 1
+                            ? `${driverFoundCount} nearby drivers are available around the pickup area.`
+                            : 'A nearby driver is available around the pickup area.'
+                )
+                : 'Asiye is checking active drivers near the pickup area.';
+
+
         container.innerHTML = `
 
             <div class="club-waiting-header">
@@ -1572,16 +1652,12 @@ ASIYE.ui = {
                     </div>
 
                     <h2 class="home-title">
-
-                        ${
-                            progress.ready
-                            ?
-                            'Your Club is ready'
-                            :
-                            'Building your Club'
-                        }
-
+                        ${headline}
                     </h2>
+
+                    <div class="home-greeting">
+                        ${ASIYE.ui.escape(primaryMessage)}
+                    </div>
 
                 </div>
 
@@ -1615,22 +1691,81 @@ ASIYE.ui = {
             <div class="club-progress-copy">
 
                 ${
-                    progress.ready
-
+                    passengersReady
                     ?
-
-                    'All passengers are confirmed.'
-
+                    'All required passengers are confirmed.'
                     :
-
-                    `${progress.remaining}
-                     seat${
-                        progress.remaining === 1
-                        ? ''
-                        : 's'
-                     }
-                     remaining`
+                    `${remainingText} needed before the full driver request is released.`
                 }
+
+            </div>
+
+
+            <div class="asiye-request-activity asiye-work-activity">
+
+                <div class="asiye-request-step done">
+                    <span><i class="fas fa-check"></i></span>
+                    <div>
+                        <strong>Your Work booking is active</strong>
+                        <small>Asiye is matching the group and checking nearby drivers.</small>
+                    </div>
+                </div>
+
+                <div class="asiye-request-step ${driverFound ? 'done' : 'active'}">
+                    <span>
+                        <i class="fas fa-${driverFound ? 'check' : 'location-crosshairs'}"></i>
+                    </span>
+                    <div>
+                        <strong>
+                            ${driverFound ? 'Driver found' : 'Searching for a driver'}
+                        </strong>
+                        <small>
+                            ${ASIYE.ui.escape(driverDetail)}
+                        </small>
+                    </div>
+                </div>
+
+                <div class="asiye-request-step ${passengersReady ? 'done' : 'active'}">
+                    <span>
+                        <i class="fas fa-${passengersReady ? 'check' : 'users'}"></i>
+                    </span>
+                    <div>
+                        <strong>
+                            Passengers ${progress.confirmed}/${progress.capacity}
+                        </strong>
+                        <small>
+                            ${
+                                passengersReady
+                                ? 'Your Work passenger group is complete.'
+                                : `Waiting for ${remainingText}. Driver details stay private until the group is ready.`
+                            }
+                        </small>
+                    </div>
+                </div>
+
+                <div class="asiye-request-step ${fullRequestSent ? 'active' : ''}">
+                    <span><i class="fas fa-car-side"></i></span>
+                    <div>
+                        <strong>
+                            ${
+                                fullRequestSent
+                                ? 'Waiting for driver to accept'
+                                : passengersReady && !paymentsReady
+                                    ? 'Completing payment checks'
+                                    : 'Driver acceptance comes next'
+                            }
+                        </strong>
+                        <small>
+                            ${
+                                fullRequestSent
+                                ? 'The full trip is now visible to eligible nearby drivers.'
+                                : passengersReady && !paymentsReady
+                                    ? 'The full request is released only after every passenger is payment-ready.'
+                                    : 'The driver receives full trip details only when the passenger group is complete.'
+                            }
+                        </small>
+                    </div>
+                </div>
 
             </div>
 
@@ -1638,85 +1773,42 @@ ASIYE.ui = {
             <div class="club-summary-grid">
 
                 <div>
-
-                    <span>
-                        Your seat
-                    </span>
-
+                    <span>Your seat</span>
                     <strong>
                         R${
                             request.pricePerPassenger ||
                             0
                         }
                     </strong>
-
                 </div>
 
-            </div>
-
-
-            <div class="club-driver-rule">
-
-                <img src="../data/car.svg" alt="" class="asiye-ride-image">
-
                 <div>
-
+                    <span>Group status</span>
                     <strong>
-
                         ${
-                            progress.ready
-
-                            ?
-
-                            'Finding your Club driver'
-
-                            :
-
-                            'Driver collection has not started'
+                            passengersReady
+                            ? 'Ready'
+                            : `${progress.confirmed}/${progress.capacity}`
                         }
-
                     </strong>
-
-                    <p>
-
-                        ${
-                            progress.ready
-
-                            ?
-
-                            'Your Club is complete. We are now preparing collection.'
-
-                            :
-
-                            `Collection begins once all ${progress.capacity} passengers are confirmed.`
-                        }
-
-                    </p>
-
                 </div>
 
             </div>
 
 
             ${
-                !progress.ready
-
+                !fullRequestSent
                 ?
-
                 `
-
                 <button
                     class="secondary-button"
                     id="cancelClubRide"
                     style="margin-top:12px;"
                 >
-                    Cancel Club
+                    Cancel Work booking
                 </button>
-
                 `
-
                 :
-
                 ''
             }
 
