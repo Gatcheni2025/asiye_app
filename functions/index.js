@@ -1943,6 +1943,122 @@ exports.notifyDriversOfClubAreaBooking =
     );
 
 /*
+ * While an Asiye Work pool is still forming, refresh nearby-driver
+ * availability whenever another passenger joins. The notification key is
+ * stable, so this does not create duplicate detailed requests. Drivers still
+ * receive area-only awareness with no requestId or trip details.
+ */
+exports.refreshDriversWhileClubPooling =
+  functions.database
+    .ref(
+      "/requests/{requestId}/passengerCount"
+    )
+    .onUpdate(
+      async (
+        change,
+        context
+      ) => {
+        if (
+          change.before.val() ===
+            change.after.val()
+        ) {
+          return null;
+        }
+
+        const requestId =
+          context.params.requestId;
+
+        const request =
+          (
+            await change.after.ref.parent
+              .once("value")
+          ).val();
+
+        if (
+          !request ||
+          request.type !==
+            "club" ||
+          request.poolReady ===
+            true ||
+          request.taxiId
+        ) {
+          return null;
+        }
+
+        const candidates =
+          await nearbyWorkDrivers(
+            request,
+            8
+          );
+
+        const requiredPassengers =
+          clubRequiredPassengerCount(
+            request
+          );
+
+        const passengerCount =
+          Math.min(
+            activeClubPassengerCount(
+              request
+            ),
+            requiredPassengers
+          );
+
+        await change.after.ref.parent.update({
+          driverSearchStatus:
+            candidates.length
+              ? "driver_found_waiting_passengers"
+              : "searching_for_driver",
+          driverFoundCount:
+            candidates.length,
+          nearestDriverDistanceKm:
+            candidates.length
+              ? Number(
+                  candidates[0].distanceKm ||
+                  0
+                )
+              : null,
+          driverSearchUpdatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
+        await Promise.all(
+          candidates.map(
+            async candidate => {
+              await admin.database()
+                .ref(
+                  `/notifications/taxis/${candidate.driverId}/work-area-${requestId}`
+                )
+                .set({
+                  type:
+                    "club_area_alert",
+                  title:
+                    "Asiye Work · Area booking",
+                  message:
+                    `A shared Work booking is forming near you. ${passengerCount}/${requiredPassengers} passengers are ready. Full trip details unlock only when the group is complete.`,
+                  serviceName:
+                    "Asiye Work",
+                  requiredPassengers,
+                  passengerCount,
+                  privacyLevel:
+                    "area_only",
+                  timestamp:
+                    admin.database
+                      .ServerValue
+                      .TIMESTAMP
+                });
+            }
+          )
+        );
+
+        return null;
+      }
+    );
+
+
+/*
  * Stage 2: every required passenger has joined and every required payment /
  * post-payment safety step is ready. Only now may a driver receive requestId
  * and detailed trip information, and only now can the booking be accepted.
