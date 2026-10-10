@@ -3,7 +3,7 @@ name: Android Release
 on:
   workflow_dispatch:
   push:
-    branches: [main, security-payments-phase5, release/11.0.59-329-build, release/11.0.60-330-work-final]
+    branches: [main, security-payments-phase5, release/11.0.59-329-build, release/11.0.60-330-work-final, feature/11.0.61-331-pricing-search]
     paths:
       - "lib/**"
       - "assets/**"
@@ -83,7 +83,7 @@ jobs:
 
       - name: Test authentication
         run: |
-          node --test test/login-otp.test.cjs test/native-auth-session.test.cjs test/card-payout-passenger.test.cjs test/card-booking-sequence.test.cjs test/club-work-readiness.test.cjs
+          node --test test/login-otp.test.cjs test/native-auth-session.test.cjs test/card-payout-passenger.test.cjs test/card-booking-sequence.test.cjs test/club-work-readiness.test.cjs test/request-search-awareness.test.cjs test/go-fare-negotiation.test.cjs
 
       - name: Build release APK
         run: flutter build apk --release
