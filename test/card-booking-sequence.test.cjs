@@ -144,7 +144,7 @@ test('Negotiated card finalizer creates PIN/share then server activates reserved
     );
 });
 
-test('Paystack return finalizes Go safety before clearing pending payment', () => {
+test('Paystack return serializes safety finalization before clearing pending payment', () => {
     const start =
         wallet.indexOf(
             'async handleCardReturn(reference)'
@@ -161,23 +161,48 @@ test('Paystack return finalizes Go safety before clearing pending payment', () =
     const block =
         wallet.slice(start, end);
 
+    const cardSection =
+        block.indexOf(
+            'ASIYE GO CARD:'
+        );
+
+    const lock =
+        block.indexOf(
+            'this._cardSafetyFinalizeActive =',
+            cardSection
+        );
+
     const goFinalizer =
         block.indexOf(
-            '.finalizePaidCardBooking'
+            'await ASIYE.booking',
+            lock
         );
+
     const markerClear =
         block.indexOf(
-            "localStorage.removeItem(\n                'pendingTripCardPayment'",
+            "'pendingTripCardPayment'",
             goFinalizer
         );
 
+    const unlock =
+        block.indexOf(
+            'this._cardSafetyFinalizeActive =',
+            markerClear
+        );
+
+    assert.ok(cardSection >= 0);
+    assert.ok(lock > cardSection);
     assert.ok(
-        goFinalizer >= 0,
-        'Verified Go payment must call the safety finalizer.'
+        goFinalizer > lock,
+        'Safety finalization must run only after the single-flight lock is acquired.'
     );
     assert.ok(
         markerClear > goFinalizer,
         'Pending payment must remain available until safety finalization succeeds.'
+    );
+    assert.ok(
+        unlock > markerClear,
+        'Safety lock must be released after finalization and marker cleanup.'
     );
 });
 
