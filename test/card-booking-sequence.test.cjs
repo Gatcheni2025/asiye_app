@@ -10,83 +10,101 @@ const wallet = fs.readFileSync(
     'assets/passenger-v2/js/wallet.js',
     'utf8'
 );
-const app = fs.readFileSync(
-    'assets/passenger-v2/js/app.js',
+const ride = fs.readFileSync(
+    'assets/passenger-v2/js/ride-controller.js',
     'utf8'
 );
 
-test('Go card booking defers PIN and live-share until after Paystack', () => {
+test('Go card booking negotiates before Paystack, PIN and live-share', () => {
     const createStart =
         booking.indexOf('async createGoRide()');
-    const finalizerStart =
-        booking.indexOf('async finalizePaidCardBooking');
+    const legacyStart =
+        booking.indexOf(
+            'Legacy fixed-fare payment flow',
+            createStart
+        );
 
     assert.ok(createStart >= 0);
-    assert.ok(finalizerStart > createStart);
+    assert.ok(legacyStart > createStart);
 
-    const createBlock =
+    const protectedBlock =
         booking.slice(
             createStart,
-            finalizerStart
+            legacyStart
         );
 
     assert.match(
-        createBlock,
+        protectedBlock,
         /const\s+isCardPayment\s*=\s*paymentMethod\s*===\s*['"]card['"]/
     );
 
     assert.match(
-        createBlock,
-        /const\s+pickupPin\s*=\s*isCardPayment\s*\?\s*null\s*:\s*await\s+this\.requirePassengerPin\(\)/
-    );
-
-    const cardGate =
-        createBlock.indexOf(
-            'if (isCardPayment)'
-        );
-    const firstLiveShare =
-        createBlock.indexOf(
-            'await this.createLiveShareUrl'
-        );
-
-    assert.ok(
-        cardGate >= 0,
-        'Card gate is required.'
-    );
-    assert.ok(
-        firstLiveShare > cardGate,
-        'Non-card live-share code must appear after the card-first return path.'
+        protectedBlock,
+        /const\s+pickupPin\s*=\s*null/
     );
 
     assert.match(
-        createBlock,
-        /await\s+ASIYE\.payments\s*\.prepare\s*\(\s*requestId\s*\)/
+        protectedBlock,
+        /fareStatus:\s*['"]passenger_offer['"]/
     );
 
     assert.match(
-        createBlock,
-        /paymentPending\s*:\s*true/
+        protectedBlock,
+        /paymentStatus:\s*['"]negotiation_pending['"]/
+    );
+
+    const offer =
+        protectedBlock.indexOf(
+            '.submitOffer('
+        );
+    const dispatch =
+        protectedBlock.indexOf(
+            'await this.notifyGoDrivers'
+        );
+    const result =
+        protectedBlock.indexOf(
+            'return requestId'
+        );
+
+    assert.ok(offer >= 0);
+    assert.ok(dispatch > offer);
+    assert.ok(result > dispatch);
+
+    assert.equal(
+        protectedBlock.includes(
+            'ASIYE.payments\n                        .prepare'
+        ),
+        false,
+        'Card must not open Paystack before fare agreement.'
+    );
+
+    assert.equal(
+        protectedBlock.includes(
+            'requireTripShare({'
+        ),
+        false,
+        'Safety sharing must wait until fare/payment agreement.'
     );
 });
 
-test('Verified Go card return generates PIN, shares trip, then dispatches', () => {
-    const finalizerStart =
+test('Negotiated card finalizer creates PIN/share then server activates reserved driver', () => {
+    const start =
         booking.indexOf(
-            'async finalizePaidCardBooking'
+            'async finalizeNegotiatedGoBooking'
         );
-    const finalizerEnd =
+    const end =
         booking.indexOf(
-            'FIND + NOTIFY GO DRIVERS',
-            finalizerStart
+            'Final card-booking gate',
+            start
         );
 
-    assert.ok(finalizerStart >= 0);
-    assert.ok(finalizerEnd > finalizerStart);
+    assert.ok(start >= 0);
+    assert.ok(end > start);
 
     const block =
         booking.slice(
-            finalizerStart,
-            finalizerEnd
+            start,
+            end
         );
 
     const pin =
@@ -101,24 +119,27 @@ test('Verified Go card return generates PIN, shares trip, then dispatches', () =
         block.indexOf(
             'await this.requireTripShare'
         );
-    const pending =
+    const finalize =
         block.indexOf(
-            "status:\n                'pending'"
+            "'finalizeNegotiatedGoBooking'"
         );
-    const dispatch =
+    const rideStart =
         block.indexOf(
-            'await this.notifyGoDrivers'
+            'await ASIYE.ride'
         );
 
     assert.ok(pin >= 0);
     assert.ok(live > pin);
     assert.ok(share > live);
-    assert.ok(pending > share);
-    assert.ok(dispatch > pending);
+    assert.ok(finalize > share);
+    assert.ok(rideStart > finalize);
 
-    assert.match(
-        block,
-        /paymentStatus[\s\S]*held[\s\S]*captured/
+    assert.equal(
+        block.includes(
+            'notifyGoDrivers'
+        ),
+        false,
+        'The agreed driver is already reserved; payment finalization must not broadcast again.'
     );
 });
 
@@ -159,13 +180,24 @@ test('Paystack return finalizes Go safety before clearing pending payment', () =
     );
 });
 
-test('Passenger UI explains payment-first card booking sequence', () => {
+test('Passenger UI explains agreed-fare card payment and reserved driver state', () => {
     assert.match(
-        app,
-        /After payment, Asiye will create your trip PIN/
+        ride,
+        /Fare agreed/
     );
+
     assert.match(
-        app,
-        /share the live trip with a loved one/
+        ride,
+        /Driver reserved/
+    );
+
+    assert.match(
+        ride,
+        /Complete Paystack payment/
+    );
+
+    assert.match(
+        ride,
+        /pickup PIN and live-share link/
     );
 });
