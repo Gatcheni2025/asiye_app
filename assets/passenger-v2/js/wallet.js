@@ -639,21 +639,42 @@ ASIYE.payments = {
             }
 
 
-            await ASIYE.booking
-                .finalizePaidCardBooking(
-                    pending.requestId,
-                    request
+            if (
+                this._cardSafetyFinalizeActive
+            ) {
+                return false;
+            }
+
+
+            this._cardSafetyFinalizeActive =
+                true;
+
+
+            try {
+
+                await ASIYE.booking
+                    .finalizePaidCardBooking(
+                        pending.requestId,
+                        request
+                    );
+
+
+                localStorage.removeItem(
+                    'pendingTripCardPayment'
                 );
 
+                this.openingReference =
+                    null;
 
-            localStorage.removeItem(
-                'pendingTripCardPayment'
-            );
 
-            this.openingReference =
-                null;
+                return true;
 
-            return true;
+
+            } finally {
+
+                this._cardSafetyFinalizeActive =
+                    false;
+            }
         }
 
 
