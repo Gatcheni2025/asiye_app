@@ -4,12 +4,19 @@ on:
   push:
     branches:
       - security-compatibility-phase4
+      - feature/11.0.61-331-pricing-search
     paths:
+      - 'database.rules.json'
+      - 'test/security/**'
       - '.github/workflows/deploy_hardened_database_rules.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: asiye-database-rules-deploy
+  cancel-in-progress: true
 
 jobs:
   deploy-and-validate:
