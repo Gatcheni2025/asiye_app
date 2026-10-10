@@ -67,9 +67,37 @@ jobs:
         with:
           credentials_json: ${{ env.FIREBASE_CREDS }}
 
-      - name: Deploy Work privacy and protected Go negotiation functions
-        run: >
-          npx --yes firebase-tools@latest deploy
-          --project asiye-80386
-          --only "functions:createTripShareToken,functions:getTripShare,functions:joinClubPoolSecure,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:notifyDriversOfClubAreaBooking,functions:refreshDriversWhileClubPooling,functions:notifyDriversWhenClubReady,functions:dispatchGoRideRequest,functions:notifyPassengerOnGoBookingCreated,functions:submitGoFareOffer,functions:counterGoFare,functions:acceptGoFareOffer,functions:acceptGoFareCounter,functions:declineGoFareCounter,functions:finalizeNegotiatedGoBooking,functions:prepareTripPayment,functions:verifyTripCardPayment,functions:settleTripPayment,functions:releaseTripPayment,functions:releaseCancelledGoTripPayment,functions:disburseCompletedCardTrips"
-          --non-interactive
+      - name: Deploy protected Go and Work functions sequentially
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FUNCTIONS=(
+            createTripShareToken
+            getTripShare
+            joinClubPoolSecure
+            refreshClubPaymentReadinessAfterSafetyShare
+            notifyDriversOfClubAreaBooking
+            refreshDriversWhileClubPooling
+            notifyDriversWhenClubReady
+            dispatchGoRideRequest
+            notifyPassengerOnGoBookingCreated
+            submitGoFareOffer
+            counterGoFare
+            acceptGoFareOffer
+            acceptGoFareCounter
+            declineGoFareCounter
+            finalizeNegotiatedGoBooking
+            prepareTripPayment
+            verifyTripCardPayment
+            settleTripPayment
+            releaseTripPayment
+            releaseCancelledGoTripPayment
+            disburseCompletedCardTrips
+          )
+
+          for FN in "${FUNCTIONS[@]}"; do
+            echo "Deploying function: $FN"
+            npx --yes firebase-tools@latest deploy               --project asiye-80386               --only "functions:$FN"               --non-interactive
+            sleep 3
+          done
