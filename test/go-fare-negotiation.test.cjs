@@ -408,6 +408,32 @@ test('Cash, Wallet and Card all use the post-agreement payment gate', () => {
   );
 });
 
+test('Negotiated payment preparation is single-flight per request', () => {
+  assert.ok(
+    walletSource.includes(
+      '_prepareRequestId'
+    )
+  );
+
+  assert.ok(
+    walletSource.includes(
+      '_preparePromise'
+    )
+  );
+
+  assert.ok(
+    walletSource.includes(
+      'this._prepareRequestId ==='
+    )
+  );
+
+  assert.ok(
+    walletSource.includes(
+      'this._preparePromise ==='
+    )
+  );
+});
+
 test('Safety and payment must finish before the reserved driver starts pickup', () => {
   assert.ok(
     bookingSource.includes(
