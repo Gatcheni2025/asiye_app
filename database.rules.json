@@ -86,7 +86,67 @@
             }
           }
         },
-        ".validate": "(!newData.child('driverAuthUid').exists() || (newData.child('taxiId').exists() && (root.child('taxis').child(newData.child('taxiId').val()).child('authUid').val() === newData.child('driverAuthUid').val() || root.child('taxis').child(newData.child('taxiId').val()).child('userUid').val() === newData.child('driverAuthUid').val() || (root.child('taxis').child(newData.child('taxiId').val()).exists() && newData.child('taxiId').val() === newData.child('driverAuthUid').val())))) && (!newData.child('status').exists() || (!data.exists() && (newData.child('commuterId').val() === auth.uid || root.child('commuters').child(newData.child('commuterId').val()).child('authUid').val() === auth.uid) && (newData.child('status').val() === 'share_required' || newData.child('status').val() === 'pending' || newData.child('status').val() === 'pooling')) || (data.exists() && newData.child('status').val() === data.child('status').val()) || root.child('admins').child(auth.uid).exists() || (data.exists() && (data.child('commuterId').val() === auth.uid || root.child('commuters').child(data.child('commuterId').val()).child('authUid').val() === auth.uid) && (newData.child('status').val() === 'share_required' || newData.child('status').val() === 'pending' || newData.child('status').val() === 'searching' || newData.child('status').val() === 'driver_busy' || newData.child('status').val() === 'cancelled_by_commuter' || newData.child('status').val() === 'pooling')) || (data.exists() && (data.child('driverAuthUid').val() === auth.uid || (data.child('taxiId').exists() && (data.child('taxiId').val() === auth.uid || root.child('taxis').child(data.child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(data.child('taxiId').val()).child('userUid').val() === auth.uid)) || (newData.child('taxiId').exists() && (newData.child('taxiId').val() === auth.uid || root.child('taxis').child(newData.child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(newData.child('taxiId').val()).child('userUid').val() === auth.uid))) && (newData.child('status').val() === 'accepted' || newData.child('status').val() === 'driver_waiting' || newData.child('status').val() === 'pool_ready' || newData.child('status').val() === 'waiting_members' || newData.child('status').val() === 'driver_on_way' || newData.child('status').val() === 'arrived' || newData.child('status').val() === 'passenger_onboard' || newData.child('status').val() === 'in_transit' || newData.child('status').val() === 'collecting_passengers' || newData.child('status').val() === 'all_onboard' || newData.child('status').val() === 'completed' || newData.child('status').val() === 'cancelled_by_driver')))"
+        ".validate": "(!newData.child('driverAuthUid').exists() || (newData.child('taxiId').exists() && (root.child('taxis').child(newData.child('taxiId').val()).child('authUid').val() === newData.child('driverAuthUid').val() || root.child('taxis').child(newData.child('taxiId').val()).child('userUid').val() === newData.child('driverAuthUid').val() || (root.child('taxis').child(newData.child('taxiId').val()).exists() && newData.child('taxiId').val() === newData.child('driverAuthUid').val())))) && (!newData.child('status').exists() || (!data.exists() && (newData.child('commuterId').val() === auth.uid || root.child('commuters').child(newData.child('commuterId').val()).child('authUid').val() === auth.uid) && (newData.child('status').val() === 'share_required' || newData.child('status').val() === 'pending' || newData.child('status').val() === 'pooling')) || (data.exists() && newData.child('status').val() === data.child('status').val()) || root.child('admins').child(auth.uid).exists() || (data.exists() && (data.child('commuterId').val() === auth.uid || root.child('commuters').child(data.child('commuterId').val()).child('authUid').val() === auth.uid) && (newData.child('status').val() === 'share_required' || newData.child('status').val() === 'pending' || newData.child('status').val() === 'searching' || newData.child('status').val() === 'driver_busy' || newData.child('status').val() === 'cancelled_by_commuter' || newData.child('status').val() === 'pooling')) || (data.exists() && (data.child('driverAuthUid').val() === auth.uid || (data.child('taxiId').exists() && (data.child('taxiId').val() === auth.uid || root.child('taxis').child(data.child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(data.child('taxiId').val()).child('userUid').val() === auth.uid)) || (newData.child('taxiId').exists() && (newData.child('taxiId').val() === auth.uid || root.child('taxis').child(newData.child('taxiId').val()).child('authUid').val() === auth.uid || root.child('taxis').child(newData.child('taxiId').val()).child('userUid').val() === auth.uid))) && (newData.child('status').val() === 'accepted' || newData.child('status').val() === 'driver_waiting' || newData.child('status').val() === 'pool_ready' || newData.child('status').val() === 'waiting_members' || newData.child('status').val() === 'driver_on_way' || newData.child('status').val() === 'arrived' || newData.child('status').val() === 'passenger_onboard' || newData.child('status').val() === 'in_transit' || newData.child('status').val() === 'collecting_passengers' || newData.child('status').val() === 'all_onboard' || newData.child('status').val() === 'completed' || newData.child('status').val() === 'cancelled_by_driver')))",
+        "negotiationEnabled": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "fareStatus": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "marketReferenceFare": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "suggestedFare": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "minimumFareOffer": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "maximumFareOffer": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "passengerOffer": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "driverCounterFare": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "agreedFare": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "commissionRate": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "platformCommission": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "driverNetFare": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "paymentMethod": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "paymentStatus": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "paymentsReady": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "driverSettlement": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "paymentSettlementStatus": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "driverGrossFare": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "commissionApplied": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || !data.parent().exists() || data.parent().child('negotiationEnabled').val() !== true || newData.val() === data.val()"
+        },
+        "status": {
+          ".validate": "root.child('admins').child(auth.uid).exists() || (data.parent().child('negotiationEnabled').val() !== true && newData.parent().child('negotiationEnabled').val() !== true) || newData.val() === data.val() || (data.val() !== 'completed' && newData.val() !== 'completed') || (newData.val() === 'completed' && newData.parent().child('driverSettlement').child('source').val() === 'server_protected_go' && newData.parent().child('paymentSettlementStatus').val() === 'settled')"
+        }
       }
     },
     "notifications": {
@@ -569,6 +629,10 @@
     },
     "driverPayoutQueues": {
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
+      ".write": false
+    },
+    "goFareAgreements": {
+      ".read": false,
       ".write": false
     }
   }
