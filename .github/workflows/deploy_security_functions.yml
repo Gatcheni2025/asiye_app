@@ -50,6 +50,7 @@ jobs:
           node --check functions/index.js
           node --check functions/club-pool-security.js
           node --check functions/trip-share-security.js
+          node --check functions/production-go-negotiation-validation.js
 
       - name: Test protected Go financial lifecycle
         run: node --test test/go-fare-negotiation.test.cjs test/go-fare-settlement-lifecycle.test.cjs
@@ -97,3 +98,6 @@ jobs:
             npx --yes firebase-tools@latest deploy               --project asiye-80386               --only "functions:$FN"               --non-interactive
             sleep 3
           done
+
+      - name: Run isolated production negotiated Go lifecycle
+        run: node functions/production-go-negotiation-validation.js
