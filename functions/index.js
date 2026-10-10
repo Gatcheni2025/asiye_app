@@ -5062,6 +5062,1663 @@ exports.submitAccountDeletionRequest = onRequest(
 
 
 // =================================================================
+// --- PROTECTED ASIYE GO FARE NEGOTIATION ---
+// =================================================================
+
+const ASIYE_GO_NEGOTIATION = Object.freeze({
+  market: Object.freeze({
+    baseFare: 12,
+    perKm: 8.25,
+    perMinute: 0.90,
+    bookingFee: 5,
+    minimumFare: 30
+  }),
+  suggestedRatio: 0.90,
+  minimumRatio: 0.85,
+  maximumRatio: 0.95,
+  commissionRate: 0.20,
+  maxDriverCounters: 2
+});
+
+function goMoney(value) {
+  const number = Number(value || 0);
+  return Math.round(number * 100) / 100;
+}
+
+function goMarketReference(trip) {
+  const market = ASIYE_GO_NEGOTIATION.market;
+
+  const storedDistance = Math.max(
+    0,
+    Number(trip?.routeDistanceKm || 0) || 0
+  );
+
+  const pickupLat = Number(
+    trip?.commuterLocation?.latitude ??
+    trip?.pickupLatitude
+  );
+
+  const pickupLng = Number(
+    trip?.commuterLocation?.longitude ??
+    trip?.pickupLongitude
+  );
+
+  const destinationLat = Number(
+    trip?.destinationCoords?.latitude ??
+    trip?.destinationLatitude
+  );
+
+  const destinationLng = Number(
+    trip?.destinationCoords?.longitude ??
+    trip?.destinationLongitude
+  );
+
+  const straightLineDistance =
+    [
+      pickupLat,
+      pickupLng,
+      destinationLat,
+      destinationLng
+    ].every(Number.isFinite)
+      ? haversineKm(
+          pickupLat,
+          pickupLng,
+          destinationLat,
+          destinationLng
+        )
+      : 0;
+
+  /*
+   * Never price below the straight-line geographic distance even if a
+   * modified client tries to under-report the route distance.
+   */
+  const protectedDistance =
+    Math.max(
+      storedDistance,
+      Number.isFinite(straightLineDistance)
+        ? straightLineDistance
+        : 0
+    );
+
+  const storedMinutes = Math.max(
+    0,
+    Number(trip?.routeDurationMinutes || 0) || 0
+  );
+
+  const marketFare = Math.max(
+    market.minimumFare,
+    market.baseFare +
+      (protectedDistance * market.perKm) +
+      (storedMinutes * market.perMinute) +
+      market.bookingFee
+  );
+
+  return Math.round(marketFare);
+}
+
+function goNegotiationPricing(trip) {
+  const marketReference =
+    goMarketReference(trip);
+
+  const minimumFareOffer =
+    Math.max(
+      1,
+      Math.ceil(
+        marketReference *
+        ASIYE_GO_NEGOTIATION.minimumRatio
+      )
+    );
+
+  const maximumFareOffer =
+    Math.max(
+      minimumFareOffer,
+      Math.floor(
+        marketReference *
+        ASIYE_GO_NEGOTIATION.maximumRatio
+      )
+    );
+
+  const suggestedFare =
+    Math.min(
+      maximumFareOffer,
+      Math.max(
+        minimumFareOffer,
+        Math.round(
+          marketReference *
+          ASIYE_GO_NEGOTIATION.suggestedRatio
+        )
+      )
+    );
+
+  const commissionRate =
+    ASIYE_GO_NEGOTIATION.commissionRate;
+
+  return {
+    marketReferenceFare:
+      marketReference,
+    suggestedFare,
+    minimumFareOffer,
+    maximumFareOffer,
+    commissionRate,
+    driverMinimumNet:
+      goMoney(
+        minimumFareOffer *
+        (1 - commissionRate)
+      ),
+    minimumAsiyeCommission:
+      goMoney(
+        minimumFareOffer *
+        commissionRate
+      )
+  };
+}
+
+function validGoNegotiatedAmount(amount, pricing) {
+  const value = Number(amount);
+
+  return (
+    Number.isFinite(value) &&
+    value >= pricing.minimumFareOffer &&
+    value <= pricing.maximumFareOffer
+  );
+}
+
+function isGoNegotiationTrip(trip) {
+  return Boolean(
+    trip &&
+    trip.type !== "club" &&
+    trip.type !== "delivery" &&
+    String(trip.rideType || "go") === "go"
+  );
+}
+
+function goCommercialPatch(amount, pricing) {
+  const fare =
+    Math.round(Number(amount));
+
+  const platformCommission =
+    goMoney(
+      fare *
+      pricing.commissionRate
+    );
+
+  const driverNetFare =
+    goMoney(
+      fare -
+      platformCommission
+    );
+
+  return {
+    marketReferenceFare:
+      pricing.marketReferenceFare,
+    suggestedFare:
+      pricing.suggestedFare,
+    minimumFareOffer:
+      pricing.minimumFareOffer,
+    maximumFareOffer:
+      pricing.maximumFareOffer,
+    commissionRate:
+      pricing.commissionRate,
+    finalAmount:
+      fare,
+    platformCommission,
+    driverNetFare
+  };
+}
+
+async function resolveTaxiForAuthUid(uid) {
+  const safeUid =
+    String(uid || "").trim();
+
+  if (!safeUid) {
+    return null;
+  }
+
+  const direct =
+    await admin.database()
+      .ref(`taxis/${safeUid}`)
+      .once("value");
+
+  if (direct.exists()) {
+    return {
+      id:
+        safeUid,
+      data:
+        direct.val() || {}
+    };
+  }
+
+  for (
+    const field
+    of [
+      "authUid",
+      "userUid"
+    ]
+  ) {
+    const snapshot =
+      await admin.database()
+        .ref("taxis")
+        .orderByChild(field)
+        .equalTo(safeUid)
+        .limitToFirst(1)
+        .once("value");
+
+    let match = null;
+
+    snapshot.forEach(child => {
+      if (!match) {
+        match = {
+          id:
+            child.key,
+          data:
+            child.val() || {}
+        };
+      }
+    });
+
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+}
+
+async function goPassengerOwnsTrip(decoded, trip) {
+  if (!decoded?.uid || !trip) {
+    return false;
+  }
+
+  if (
+    String(trip.commuterId || "") ===
+    String(decoded.uid)
+  ) {
+    return true;
+  }
+
+  const passenger =
+    await resolvePassengerForWallet(
+      decoded
+    );
+
+  return (
+    passenger &&
+    String(trip.commuterId || "") ===
+      String(passenger.id || "")
+  );
+}
+
+function goDriverDetails(driver) {
+  const data =
+    driver?.data || {};
+
+  const driverName =
+    [
+      data.name,
+      data.surname
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    data.fullName ||
+    data.driverName ||
+    "Asiye Driver";
+
+  return {
+    driverName,
+    driverPhone:
+      data.phone ||
+      data.phoneNumber ||
+      "",
+    driverRating:
+      Number(data.rating || 5),
+    vehicleInfo:
+      [
+        data.vehicleColor ||
+          data.color ||
+          "",
+        data.vehicleMake ||
+          data.make ||
+          "",
+        data.vehicleModel ||
+          data.model ||
+          ""
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim(),
+    vehicleMake:
+      data.vehicleMake ||
+      data.make ||
+      "",
+    vehicleModel:
+      data.vehicleModel ||
+      data.model ||
+      "",
+    vehicleColor:
+      data.vehicleColor ||
+      data.color ||
+      "",
+    vehicleYear:
+      Number(
+        data.vehicleYear ||
+        data.vehicle?.year ||
+        data.year ||
+        0
+      ),
+    vehicleReg:
+      data.vehicleReg ||
+      data.registration ||
+      data.taxiRegistrationNumber ||
+      data.registrationNumber ||
+      "",
+    driverProfileImageUrl:
+      data.profileImageUrl ||
+      data.profile_picture_url ||
+      data.profilePhotoUrl ||
+      "",
+    driverVehiclePhoto:
+      data.vehiclePhoto ||
+      data.carPhoto ||
+      ""
+  };
+}
+
+async function reserveGoNegotiatedDriver({
+  requestId,
+  driver,
+  driverAuthUid,
+  amount,
+  expectedFareStatuses
+}) {
+  const requestRef =
+    admin.database()
+      .ref(
+        `requests/${requestId}`
+      );
+
+  const taxiCurrentRef =
+    admin.database()
+      .ref(
+        `taxis/${driver.id}/currentRequest`
+      );
+
+  const lock =
+    await taxiCurrentRef.transaction(
+      current => {
+        if (
+          current === null ||
+          current === undefined ||
+          current === "" ||
+          current === requestId
+        ) {
+          return requestId;
+        }
+
+        return;
+      }
+    );
+
+  if (!lock.committed) {
+    const error =
+      new Error(
+        "This driver is completing another booking."
+      );
+
+    error.code =
+      "negotiation/driver-busy";
+
+    throw error;
+  }
+
+  let committed = false;
+
+  try {
+    const transaction =
+      await requestRef.transaction(
+        current => {
+          if (
+            !current ||
+            !isGoNegotiationTrip(current)
+          ) {
+            return;
+          }
+
+          if (
+            current.taxiId &&
+            current.taxiId !==
+              driver.id
+          ) {
+            return;
+          }
+
+          if (
+            !expectedFareStatuses.includes(
+              String(
+                current.fareStatus ||
+                ""
+              )
+            )
+          ) {
+            return;
+          }
+
+          if (
+            String(
+              current.status ||
+              ""
+            ).startsWith(
+              "cancelled"
+            ) ||
+            current.status ===
+              "completed"
+          ) {
+            return;
+          }
+
+          const pricing =
+            goNegotiationPricing(
+              current
+            );
+
+          if (
+            !validGoNegotiatedAmount(
+              amount,
+              pricing
+            )
+          ) {
+            return;
+          }
+
+          const commercial =
+            goCommercialPatch(
+              amount,
+              pricing
+            );
+
+          const driverPatch =
+            goDriverDetails(
+              driver
+            );
+
+          return {
+            ...current,
+            ...commercial,
+            ...driverPatch,
+
+            taxiId:
+              driver.id,
+
+            driverAuthUid:
+              driverAuthUid ||
+              driver.data?.authUid ||
+              driver.data?.userUid ||
+              driver.id,
+
+            agreedFare:
+              commercial.finalAmount,
+
+            passengerOffer:
+              Number(
+                current.passengerOffer ||
+                commercial.finalAmount
+              ),
+
+            fareStatus:
+              "agreed",
+
+            fareAgreedAt:
+              Date.now(),
+
+            negotiationDriverId:
+              driver.id,
+
+            status:
+              "payment_required",
+
+            paymentStatus:
+              "payment_required",
+
+            paymentsReady:
+              false,
+
+            queuedTaxiId:
+              null,
+
+            queuedAt:
+              null,
+
+            driverBusy:
+              false
+          };
+        },
+        undefined,
+        false
+      );
+
+    if (!transaction.committed) {
+      const error =
+        new Error(
+          "This fare can no longer be accepted."
+        );
+
+      error.code =
+        "negotiation/not-available";
+
+      throw error;
+    }
+
+    committed = true;
+
+    const trip =
+      transaction.snapshot.val() || {};
+
+    if (trip.commuterId) {
+      await admin.database()
+        .ref(
+          `notifications/commuters/${trip.commuterId}`
+        )
+        .push({
+          type:
+            "go_fare_agreed",
+
+          title:
+            "Fare agreed",
+
+          message:
+            `${trip.driverName || "Your driver"} agreed to R${money(trip.agreedFare)}. Complete ${String(trip.paymentMethod || "cash").toUpperCase()} payment readiness to continue.`,
+
+          requestId,
+
+          agreedFare:
+            Number(
+              trip.agreedFare ||
+              0
+            ),
+
+          driverName:
+            trip.driverName ||
+            "Your driver",
+
+          timestamp:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+    }
+
+    return trip;
+
+  } finally {
+    if (!committed) {
+      await taxiCurrentRef
+        .transaction(
+          current =>
+            current === requestId
+              ? null
+              : undefined
+        )
+        .catch(
+          () => {}
+        );
+    }
+  }
+}
+
+async function loadGoNegotiationRequest(requestId) {
+  const safeId =
+    String(requestId || "").trim();
+
+  if (
+    !/^[A-Za-z0-9_-]{1,160}$/.test(
+      safeId
+    )
+  ) {
+    const error =
+      new Error(
+        "Ride reference is invalid."
+      );
+
+    error.code =
+      "negotiation/invalid-request";
+
+    throw error;
+  }
+
+  const ref =
+    admin.database()
+      .ref(
+        `requests/${safeId}`
+      );
+
+  const snapshot =
+    await ref.once(
+      "value"
+    );
+
+  const trip =
+    snapshot.val();
+
+  if (
+    !trip ||
+    !isGoNegotiationTrip(
+      trip
+    )
+  ) {
+    const error =
+      new Error(
+        "Asiye Go request was not found."
+      );
+
+    error.code =
+      "negotiation/not-found";
+
+    throw error;
+  }
+
+  return {
+    requestId:
+      safeId,
+    ref,
+    trip
+  };
+}
+
+exports.submitGoFareOffer =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Sign in again before making a fare offer."
+            });
+        }
+
+        const context =
+          await loadGoNegotiationRequest(
+            request.body?.requestId
+          );
+
+        if (
+          !await goPassengerOwnsTrip(
+            decoded,
+            context.trip
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "This Go request does not belong to you."
+            });
+        }
+
+        if (
+          context.trip.taxiId ||
+          context.trip.fareStatus ===
+            "agreed"
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "The fare is already agreed."
+            });
+        }
+
+        const pricing =
+          goNegotiationPricing(
+            context.trip
+          );
+
+        const amount =
+          Math.round(
+            Number(
+              request.body?.amount
+            )
+          );
+
+        if (
+          !validGoNegotiatedAmount(
+            amount,
+            pricing
+          )
+        ) {
+          return response
+            .status(422)
+            .json({
+              error:
+                `Your offer must be between R${pricing.minimumFareOffer} and R${pricing.maximumFareOffer}.`,
+              ...pricing
+            });
+        }
+
+        const commercial =
+          goCommercialPatch(
+            amount,
+            pricing
+          );
+
+        const patch = {
+          ...commercial,
+          passengerOffer:
+            amount,
+          agreedFare:
+            null,
+          driverCounterFare:
+            null,
+          fareStatus:
+            "passenger_offer",
+          negotiationEnabled:
+            true,
+          negotiationRound:
+            Math.max(
+              1,
+              Number(
+                context.trip.negotiationRound ||
+                1
+              )
+            ),
+          paymentStatus:
+            "negotiation_pending",
+          paymentsReady:
+            false,
+          status:
+            [
+              "pending",
+              "searching",
+              "driver_busy"
+            ].includes(
+              String(
+                context.trip.status ||
+                ""
+              )
+            )
+              ? context.trip.status
+              : "pending",
+          fareOfferUpdatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        };
+
+        await context.ref.update(
+          patch
+        );
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId:
+              context.requestId,
+            pricing:
+              patch
+          });
+
+      } catch (error) {
+        console.error(
+          "Submit Go fare offer failed",
+          error?.message ||
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to protect this fare offer."
+          });
+      }
+    }
+  );
+
+exports.counterGoFare =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Driver authentication is required."
+            });
+        }
+
+        const driver =
+          await resolveTaxiForAuthUid(
+            decoded.uid
+          );
+
+        if (!driver) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "Driver profile could not be verified."
+            });
+        }
+
+        const context =
+          await loadGoNegotiationRequest(
+            request.body?.requestId
+          );
+
+        if (context.trip.taxiId) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "Another driver already accepted this ride."
+            });
+        }
+
+        const notification =
+          await admin.database()
+            .ref(
+              `notifications/taxis/${driver.id}/${context.requestId}`
+            )
+            .once(
+              "value"
+            );
+
+        if (!notification.exists()) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "This fare request is not assigned to your driver search."
+            });
+        }
+
+        const pricing =
+          goNegotiationPricing(
+            context.trip
+          );
+
+        const passengerOffer =
+          Math.round(
+            Number(
+              context.trip.passengerOffer ||
+              pricing.suggestedFare
+            )
+          );
+
+        const amount =
+          Math.round(
+            Number(
+              request.body?.amount
+            )
+          );
+
+        const counterCount =
+          Number(
+            context.trip.driverCounterCount ||
+            0
+          );
+
+        if (
+          counterCount >=
+          ASIYE_GO_NEGOTIATION
+            .maxDriverCounters
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "The maximum number of driver counters has been reached."
+            });
+        }
+
+        if (
+          !validGoNegotiatedAmount(
+            amount,
+            pricing
+          ) ||
+          amount <
+            passengerOffer
+        ) {
+          return response
+            .status(422)
+            .json({
+              error:
+                `Counter between R${passengerOffer} and R${pricing.maximumFareOffer}.`,
+              minimumCounter:
+                passengerOffer,
+              maximumCounter:
+                pricing.maximumFareOffer
+            });
+        }
+
+        const commercial =
+          goCommercialPatch(
+            amount,
+            pricing
+          );
+
+        await context.ref.update({
+          driverCounterFare:
+            amount,
+          negotiationDriverId:
+            driver.id,
+          negotiationDriverName:
+            goDriverDetails(driver)
+              .driverName,
+          fareStatus:
+            "driver_counter",
+          driverCounterCount:
+            counterCount + 1,
+          negotiationRound:
+            Number(
+              context.trip.negotiationRound ||
+              1
+            ) + 1,
+          counterPlatformCommission:
+            commercial.platformCommission,
+          counterDriverNetFare:
+            commercial.driverNetFare,
+          counterExpiresAt:
+            Date.now() +
+            (60 * 1000),
+          fareCounterUpdatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
+        if (context.trip.commuterId) {
+          await admin.database()
+            .ref(
+              `notifications/commuters/${context.trip.commuterId}`
+            )
+            .push({
+              type:
+                "go_fare_counter",
+              title:
+                "Driver counter offer",
+              message:
+                `${goDriverDetails(driver).driverName} countered R${amount}. Your protected range ends at R${pricing.maximumFareOffer}.`,
+              requestId:
+                context.requestId,
+              counterFare:
+                amount,
+              driverName:
+                goDriverDetails(driver)
+                  .driverName,
+              timestamp:
+                admin.database
+                  .ServerValue
+                  .TIMESTAMP
+            });
+        }
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId:
+              context.requestId,
+            counterFare:
+              amount,
+            driverReceives:
+              commercial.driverNetFare,
+            asiyeCommission:
+              commercial.platformCommission,
+            maximumFareOffer:
+              pricing.maximumFareOffer
+          });
+
+      } catch (error) {
+        console.error(
+          "Driver Go fare counter failed",
+          error?.message ||
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to send this driver counter."
+          });
+      }
+    }
+  );
+
+exports.acceptGoFareOffer =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Driver authentication is required."
+            });
+        }
+
+        const driver =
+          await resolveTaxiForAuthUid(
+            decoded.uid
+          );
+
+        if (!driver) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "Driver profile could not be verified."
+            });
+        }
+
+        const context =
+          await loadGoNegotiationRequest(
+            request.body?.requestId
+          );
+
+        const notification =
+          await admin.database()
+            .ref(
+              `notifications/taxis/${driver.id}/${context.requestId}`
+            )
+            .once(
+              "value"
+            );
+
+        if (!notification.exists()) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "This ride is no longer assigned to your search."
+            });
+        }
+
+        const pricing =
+          goNegotiationPricing(
+            context.trip
+          );
+
+        const amount =
+          Math.round(
+            Number(
+              context.trip.passengerOffer ||
+              context.trip.finalAmount ||
+              pricing.suggestedFare
+            )
+          );
+
+        if (
+          !validGoNegotiatedAmount(
+            amount,
+            pricing
+          )
+        ) {
+          return response
+            .status(422)
+            .json({
+              error:
+                "The passenger offer is outside the protected range."
+            });
+        }
+
+        const trip =
+          await reserveGoNegotiatedDriver({
+            requestId:
+              context.requestId,
+            driver,
+            driverAuthUid:
+              decoded.uid,
+            amount,
+            expectedFareStatuses: [
+              "passenger_offer"
+            ]
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId:
+              context.requestId,
+            status:
+              trip.status,
+            agreedFare:
+              trip.agreedFare,
+            driverNetFare:
+              trip.driverNetFare,
+            platformCommission:
+              trip.platformCommission
+          });
+
+      } catch (error) {
+        const status =
+          error?.code ===
+            "negotiation/driver-busy"
+            ? 409
+            : error?.code ===
+                "negotiation/not-available"
+              ? 409
+              : 500;
+
+        console.error(
+          "Accept Go fare offer failed",
+          error?.message ||
+          error
+        );
+
+        return response
+          .status(status)
+          .json({
+            error:
+              error?.message ||
+              "Unable to accept this fare."
+          });
+      }
+    }
+  );
+
+exports.acceptGoFareCounter =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Passenger authentication is required."
+            });
+        }
+
+        const context =
+          await loadGoNegotiationRequest(
+            request.body?.requestId
+          );
+
+        if (
+          !await goPassengerOwnsTrip(
+            decoded,
+            context.trip
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "This Go request does not belong to you."
+            });
+        }
+
+        if (
+          context.trip.fareStatus !==
+            "driver_counter" ||
+          !context.trip.negotiationDriverId
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "There is no active driver counter to accept."
+            });
+        }
+
+        if (
+          Number(
+            context.trip.counterExpiresAt ||
+            0
+          ) &&
+          Date.now() >
+            Number(
+              context.trip.counterExpiresAt
+            )
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "This driver counter expired. Keep searching for another driver."
+            });
+        }
+
+        const driverSnapshot =
+          await admin.database()
+            .ref(
+              `taxis/${context.trip.negotiationDriverId}`
+            )
+            .once(
+              "value"
+            );
+
+        if (!driverSnapshot.exists()) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "The countering driver is no longer available."
+            });
+        }
+
+        const driver = {
+          id:
+            context.trip.negotiationDriverId,
+          data:
+            driverSnapshot.val() || {}
+        };
+
+        const pricing =
+          goNegotiationPricing(
+            context.trip
+          );
+
+        const amount =
+          Math.round(
+            Number(
+              context.trip.driverCounterFare
+            )
+          );
+
+        if (
+          !validGoNegotiatedAmount(
+            amount,
+            pricing
+          )
+        ) {
+          return response
+            .status(422)
+            .json({
+              error:
+                "The driver counter is outside the protected range."
+            });
+        }
+
+        const trip =
+          await reserveGoNegotiatedDriver({
+            requestId:
+              context.requestId,
+            driver,
+            driverAuthUid:
+              driver.data?.authUid ||
+              driver.data?.userUid ||
+              driver.id,
+            amount,
+            expectedFareStatuses: [
+              "driver_counter"
+            ]
+          });
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId:
+              context.requestId,
+            status:
+              trip.status,
+            agreedFare:
+              trip.agreedFare,
+            driverNetFare:
+              trip.driverNetFare,
+            platformCommission:
+              trip.platformCommission
+          });
+
+      } catch (error) {
+        const status =
+          error?.code ===
+            "negotiation/driver-busy"
+            ? 409
+            : error?.code ===
+                "negotiation/not-available"
+              ? 409
+              : 500;
+
+        console.error(
+          "Accept Go fare counter failed",
+          error?.message ||
+          error
+        );
+
+        return response
+          .status(status)
+          .json({
+            error:
+              error?.message ||
+              "Unable to accept this driver counter."
+          });
+      }
+    }
+  );
+
+exports.declineGoFareCounter =
+  onRequest(
+    {
+      region:
+        "us-central1",
+      invoker:
+        "public"
+    },
+    async (
+      request,
+      response
+    ) => {
+      walletSmsCors(
+        request,
+        response
+      );
+
+      if (
+        request.method ===
+        "OPTIONS"
+      ) {
+        return response
+          .status(204)
+          .send("");
+      }
+
+      if (
+        request.method !==
+        "POST"
+      ) {
+        return response
+          .status(405)
+          .json({
+            error:
+              "POST required."
+          });
+      }
+
+      try {
+        const decoded =
+          await verifiedRequestUser(
+            request
+          );
+
+        if (!decoded) {
+          return response
+            .status(401)
+            .json({
+              error:
+                "Passenger authentication is required."
+            });
+        }
+
+        const context =
+          await loadGoNegotiationRequest(
+            request.body?.requestId
+          );
+
+        if (
+          !await goPassengerOwnsTrip(
+            decoded,
+            context.trip
+          )
+        ) {
+          return response
+            .status(403)
+            .json({
+              error:
+                "This Go request does not belong to you."
+            });
+        }
+
+        const driverId =
+          String(
+            context.trip.negotiationDriverId ||
+            ""
+          );
+
+        if (
+          context.trip.fareStatus !==
+            "driver_counter" ||
+          !driverId
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "There is no active driver counter."
+            });
+        }
+
+        await context.ref.update({
+          fareStatus:
+            "passenger_offer",
+          driverCounterFare:
+            null,
+          counterPlatformCommission:
+            null,
+          counterDriverNetFare:
+            null,
+          counterExpiresAt:
+            null,
+          negotiationDriverId:
+            null,
+          negotiationDriverName:
+            null,
+          status:
+            "searching",
+          [
+            `fareCounterDeclinedDrivers/${driverId}`
+          ]:
+            true,
+          fareCounterUpdatedAt:
+            admin.database
+              .ServerValue
+              .TIMESTAMP
+        });
+
+        await admin.database()
+          .ref(
+            `notifications/taxis/${driverId}/${context.requestId}`
+          )
+          .remove()
+          .catch(
+            () => {}
+          );
+
+        return response
+          .status(200)
+          .json({
+            ok:
+              true,
+            requestId:
+              context.requestId,
+            fareStatus:
+              "passenger_offer"
+          });
+
+      } catch (error) {
+        console.error(
+          "Decline Go fare counter failed",
+          error?.message ||
+          error
+        );
+
+        return response
+          .status(500)
+          .json({
+            error:
+              error?.message ||
+              "Unable to keep your original fare offer."
+          });
+      }
+    }
+  );
+
+
+// =================================================================
 // --- SERVER-SIDE ASIYE GO DRIVER DISPATCH ---
 // =================================================================
 // The passenger client must not write into another driver's taxi profile.
@@ -5295,6 +6952,15 @@ exports.dispatchGoRideRequest =
             if (
               taxi.isOnline !==
               true
+            ) {
+              return;
+            }
+
+            if (
+              trip.fareCounterDeclinedDrivers?.[
+                child.key
+              ] ===
+                true
             ) {
               return;
             }
