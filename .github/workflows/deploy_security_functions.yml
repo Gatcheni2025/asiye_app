@@ -6,6 +6,7 @@ on:
     branches:
       - security-compatibility-phase4
       - release/11.0.60-330-work-final
+      - feature/11.0.61-331-pricing-search
     paths:
       - 'functions/index.js'
       - 'functions/club-pool-security.js'
@@ -59,9 +60,9 @@ jobs:
         with:
           credentials_json: ${{ env.FIREBASE_CREDS }}
 
-      - name: Deploy Work privacy and secure trip functions
+      - name: Deploy Work privacy and protected Go negotiation functions
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
-          --only "functions:createTripShareToken,functions:getTripShare,functions:joinClubPoolSecure,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:notifyDriversOfClubAreaBooking,functions:notifyDriversWhenClubReady"
+          --only "functions:createTripShareToken,functions:getTripShare,functions:joinClubPoolSecure,functions:refreshClubPaymentReadinessAfterSafetyShare,functions:notifyDriversOfClubAreaBooking,functions:refreshDriversWhileClubPooling,functions:notifyDriversWhenClubReady,functions:dispatchGoRideRequest,functions:notifyPassengerOnGoBookingCreated,functions:submitGoFareOffer,functions:counterGoFare,functions:acceptGoFareOffer,functions:acceptGoFareCounter,functions:declineGoFareCounter,functions:finalizeNegotiatedGoBooking,functions:prepareTripPayment,functions:verifyTripCardPayment"
           --non-interactive
