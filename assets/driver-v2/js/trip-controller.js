@@ -144,6 +144,23 @@ ASIYE_DRIVER.trip = {
         switch (status) {
 
 
+            case 'payment_required':
+
+                if (
+                    request.negotiationEnabled ===
+                        true &&
+                    request.fareStatus ===
+                        'agreed'
+                ) {
+
+                    this.renderNegotiatedPaymentWaiting(
+                        request
+                    );
+                }
+
+                break;
+
+
             case 'accepted':
 
                 this.renderAccepted(
@@ -302,6 +319,25 @@ ASIYE_DRIVER.trip = {
         ) {
 
             return await this.startClubCollection();
+        }
+
+
+        if (
+            this.request.negotiationEnabled ===
+                true &&
+            (
+                this.request.fareStatus !==
+                    'agreed' ||
+                this.request.paymentsReady !==
+                    true ||
+                this.request.status !==
+                    'accepted'
+            )
+        ) {
+
+            throw new Error(
+                'Wait for the passenger payment, pickup PIN and safety share before starting pickup.'
+            );
         }
 
 
