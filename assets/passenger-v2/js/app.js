@@ -1924,15 +1924,13 @@ ASIYE.ui = {
 
         const expiresAt =
             Number(
-                request.workWaitExpiresAt ||
-                (
-                    startedAt
-                        ? startedAt +
-                            30 *
-                            60 *
-                            1000
-                        : 0
-                )
+                startedAt
+                    ? startedAt +
+                        30 *
+                        60 *
+                        1000
+                    : request.workWaitExpiresAt ||
+                        0
             );
 
 
