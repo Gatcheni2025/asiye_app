@@ -54,6 +54,7 @@
  const info={
    overview:['Overview','A live snapshot of recent operational records. Figures are not lifetime totals.',''],
    enrollments:['Driver approvals','Review new drivers, identities, vehicles and supporting evidence.','driverEnrollments'],
+   driverUpdates:['Driver updates','Review changes submitted by existing drivers before they can receive new ride requests.','taxis'],
    drivers:['Drivers','View verification, vehicle and on-platform state.','taxis'],
    passengers:['Passengers','Profile details, identity and account status.','commuters'],
    bookings:['Ride bookings','Review ride requests and operational status.','requests'],
@@ -198,6 +199,10 @@
        records={[key]:list};
        items=latest(refs(list),view==='enrollments'||view==='documents'?'submittedAt':view==='bookings'?'createdAt':'updatedAt');
        if(view==='bookings') items=items.filter(row=>row.type!=='delivery');
+       if(view==='driverUpdates') items=items.filter(row=>
+         String(row.vehicleApprovalStatus||'').toLowerCase()==='pending' &&
+         row.vehiclePending && typeof row.vehiclePending==='object'
+       );
        render();
      }
      $('lastRefreshed').textContent='Refreshed '+new Date().toLocaleTimeString('en-ZA');
@@ -220,11 +225,16 @@
    const en=refs(data.driverEnrollments);
    const pay=refs(data.walletPayments),tickets=refs(data.support_chats);
    const pending=en.filter(r=>r.status==='pending');
+   const pendingDriverUpdates=drivers.filter(r=>
+     String(r.vehicleApprovalStatus||'').toLowerCase()==='pending' &&
+     r.vehiclePending && typeof r.vehiclePending==='object'
+   );
    const outstanding=tickets.filter(r=>!['closed','resolved'].includes(r.status));
    const completed=rides.filter(r=>r.status==='completed');
    const balance=passengers.reduce((sum,r)=>sum+Number(r.walletBalance??r.credits??0),0);
    const cards=[
-     ['Pending approvals',pending.length,'Recent enrollment sample'],
+     ['Pending approvals',pending.length,'New driver applications'],
+     ['Driver updates',pendingDriverUpdates.length,'Existing drivers awaiting vehicle review'],
      ['Ride bookings',rides.length,'Most recent requests'],
      ['Passenger profiles',passengers.length,'Most recent profiles'],
      ['Driver profiles',drivers.length,'Most recent profiles'],
@@ -238,6 +248,7 @@
    const panel=el('div','overview-list');
    for(const [label,count,link] of [
      ['New driver applications',pending.length,'enrollments'],
+     ['Driver updates awaiting approval',pendingDriverUpdates.length,'driverUpdates'],
      ['Open support chats',outstanding.length,'support'],
      ['Recent wallet payments',pay.length,'payments'],
      ['Completed ride requests',completed.length,'bookings']
@@ -251,6 +262,7 @@
  }
  const columns={
    enrollments:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Vehicle',r=>[r.vehicleMake,r.vehicleModel].filter(Boolean).join(' ')],['Submitted',r=>fmtDate(r.submittedAt)],['Status',r=>r.status]],
+   driverUpdates:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Current vehicle',r=>[r.vehicle?.make||r.vehicleMake,r.vehicle?.model||r.vehicleModel].filter(Boolean).join(' ')],['New vehicle',r=>[r.vehiclePending?.make,r.vehiclePending?.model].filter(Boolean).join(' ')],['Submitted',r=>fmtDate(r.vehicleSubmittedAt||r.vehiclePending?.submittedAt)],['Status',r=>'awaiting approval']],
    drivers:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Car registration',r=>r.vehicleReg||r.taxiRegistrationNumber],['Vehicle review',r=>r.vehicleApprovalStatus||(r.vehicleApproved===true?'approved':'legacy')],['Online',r=>r.isOnline?'Online':'Offline'],['Verification',r=>r.verificationStatus]],
    passengers:[['Passenger',r=>r.name],['Phone',r=>r.phone],['Account',r=>r.isActive===false?'Suspended':'Active'],['Wallet',r=>money(r.walletBalance??r.credits)]],
    bookings:[['Booking',r=>r.id],['Passenger',r=>r.commuterId],['Driver',r=>r.taxiId||r.driverAuthUid],['Fare',r=>money(r.finalAmount??r.agreedFare??r.calculatedPrice)],['Status',r=>r.status]],
@@ -284,7 +296,7 @@
      const tr=el('tr');
      for(const [label,get] of columns[view]||[]){
        const cell=el('td');const val=get(record);
-       if(/Status|Verification|Account|Online/.test(label))cell.append(chip(val));
+       if(/Status|Verification|Account|Online|Vehicle review/.test(label))cell.append(chip(val));
        else{
          cell.append(el('div','row-primary',shorten(val,70)));
          if(label==='Driver' || label==='Passenger')cell.append(el('div','row-secondary',shorten(record.id,28)));
@@ -301,6 +313,70 @@
    row.append(el('div','key',key),el('div','val',value==null||value===''?'—':String(value)));
    root.append(row);
  };
+ function vehicleValue(record,key){
+   const vehicle=record?.vehicle||{};
+   const aliases={
+     type:[vehicle.type,record?.vehicleType,record?.carCategory],
+     make:[vehicle.make,record?.vehicleMake,record?.make],
+     model:[vehicle.model,record?.vehicleModel,record?.model],
+     colour:[vehicle.colour,vehicle.color,record?.vehicleColor,record?.color],
+     registration:[vehicle.registration,record?.vehicleReg,record?.taxiRegistrationNumber,record?.registration],
+     year:[vehicle.year,record?.vehicleYear,record?.year],
+     seats:[vehicle.seats,record?.vehicleSeats,record?.seats]
+   };
+   return (aliases[key]||[]).find(value=>value!==undefined&&value!==null&&String(value).trim()!=='') ?? '';
+ }
+ function vehicleComparison(row){
+   const section=el('section','vehicle-review-card');
+   const heading=el('div','vehicle-review-heading');
+   const text=el('div');
+   text.append(el('p','eyebrow','DRIVER UPDATE'));
+   text.append(el('h3','','Compare approved vs submitted vehicle'));
+   text.append(el('p','muted tiny','Approve only after the latest car photo and all changed vehicle details have been checked.'));
+   heading.append(text,chip('awaiting approval'));
+   section.append(heading);
+
+   const grid=el('div','vehicle-compare');
+   const current=el('div','vehicle-column');
+   const pending=el('div','vehicle-column pending');
+   current.append(el('h4','','Currently approved'));
+   pending.append(el('h4','','New submission'));
+
+   const fields=[
+     ['Type','type'],['Make','make'],['Model','model'],['Colour','colour'],
+     ['Registration','registration'],['Year','year'],['Passenger seats','seats']
+   ];
+   for(const [label,key] of fields){
+     const oldValue=vehicleValue(row,key);
+     const newValue=row.vehiclePending?.[key] ?? (key==='colour'?row.vehiclePending?.color:'');
+     const changed=String(oldValue??'').trim().toLowerCase()!==String(newValue??'').trim().toLowerCase();
+     const oldLine=el('div','compare-line'+(changed?' changed':''));
+     oldLine.append(el('span','compare-key',label),el('strong','',oldValue||'—'));
+     current.append(oldLine);
+     const newLine=el('div','compare-line'+(changed?' changed':''));
+     newLine.append(el('span','compare-key',label),el('strong','',newValue||'—'));
+     pending.append(newLine);
+   }
+   grid.append(current,pending);
+   section.append(grid);
+
+   const submitted=Number(row.vehicleSubmittedAt||row.vehiclePending?.submittedAt||0);
+   if(submitted) section.append(el('p','tiny muted','Submitted '+fmtDate(submitted)));
+
+   const photo=safeUrl(row.vehiclePhoto||row.documents?.CAR_FRONT||'');
+   if(photo){
+     const preview=el('div','vehicle-photo-review');
+     preview.append(el('span','compare-key','Latest submitted car photo'));
+     const img=document.createElement('img');
+     img.src=photo;img.alt='Latest submitted driver vehicle';img.loading='lazy';img.referrerPolicy='no-referrer';
+     preview.append(img);
+     const link=el('a','','Open full image ↗');link.href=photo;link.target='_blank';link.rel='noopener noreferrer';
+     preview.append(link);
+     section.append(preview);
+   }
+   return section;
+ }
+
  function showDrawer(title,subtitle,body,actions=[]){
    $('drawerTitle').textContent=title;$('drawerEyebrow').textContent=subtitle;
    $('drawerBody').replaceChildren(body);
@@ -393,25 +469,17 @@
        await changed({action:'updateSupport',id,status:'resolved',note:'Resolved from Operations Desk'},'Ticket resolved.');
      }]);
    }
-   if(view==='drivers'&&String(row.vehicleApprovalStatus||'').toLowerCase()==='pending'&&row.vehiclePending){
-     const pending=row.vehiclePending||{};
-     body.append(el('p','note','Driver identity is verified, but the latest vehicle changes are still pending review. This driver will not receive actionable ride requests until the current vehicle is approved and the driver goes online again.'));
-     const vehicleSummary=el('section','doc-list');
-     vehicleSummary.append(el('h3','','Pending vehicle review'));
-     for(const [label,value] of [
-       ['Type',pending.type],['Make',pending.make],['Model',pending.model],
-       ['Colour',pending.colour||pending.color],['Registration',pending.registration],
-       ['Year',pending.year],['Passenger seats',pending.seats]
-     ]) addLine(vehicleSummary,label,value);
-     body.append(vehicleSummary);
-     actions.push(['Approve current vehicle',async()=>{
-       if(!ask('Approve the pending vehicle for '+(row.fullName||row.name||id)+'? The driver will still need to switch Online before receiving requests.'))return;
-       await changed({action:'reviewVehicle',id,decision:'approved'},'Vehicle approved. Driver can go online and receive requests.');
+   if(['drivers','driverUpdates'].includes(view)&&String(row.vehicleApprovalStatus||'').toLowerCase()==='pending'&&row.vehiclePending){
+     body.append(el('p','notice','This verified driver changed vehicle information. Ride requests stay blocked until Admin approves the latest submission.'));
+     body.append(vehicleComparison(row));
+     actions.push(['Approve update',async()=>{
+       if(!ask('Approve the latest vehicle update for '+(row.fullName||row.name||id)+'? Check every changed field and the latest car photo first.'))return;
+       await changed({action:'reviewVehicle',id,decision:'approved'},'Driver vehicle update approved. The driver must switch Online again before receiving requests.');
      },'primary']);
-     actions.push(['Request vehicle changes',async()=>{
-       const reason=required('What must the driver correct?');
+     actions.push(['Request changes',async()=>{
+       const reason=required('What must the driver correct before approval?');
        if(!reason||reason.length<5)throw Error('Enter a clear review reason.');
-       await changed({action:'reviewVehicle',id,decision:'changes_requested',reason},'Vehicle changes requested.');
+       await changed({action:'reviewVehicle',id,decision:'changes_requested',reason},'Driver notified that vehicle changes are required.');
      },'soft danger']);
    }
    if(view==='passengers'||(view==='wallets'&&row._accountType==='passenger')){
