@@ -1,6 +1,14 @@
 name: Deploy Asiye Operations Console
 
 on:
+  push:
+    branches:
+      - feature/11.0.61-331-pricing-search
+    paths:
+      - 'functions/index.js'
+      - 'functions/admin-operations.js'
+      - 'test/admin-portal.test.cjs'
+      - '.github/workflows/deploy_admin_console.yml'
   workflow_dispatch:
     inputs:
       publish_firebase_hosting:
@@ -57,7 +65,7 @@ jobs:
           --only "functions:adminWhoAmI,functions:adminFetchData,functions:adminManagePlatform,functions:reviewDriverEnrollment,functions:adminOperations"
           --non-interactive
       - name: Deploy separate admin page on Firebase Hosting
-        if: ${{ inputs.publish_firebase_hosting }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_firebase_hosting }}
         run: >
           npx --yes firebase-tools@latest deploy
           --project asiye-80386
