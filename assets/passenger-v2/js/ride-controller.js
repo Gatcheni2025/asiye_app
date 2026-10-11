@@ -816,29 +816,6 @@ ASIYE.ride = {
             'A nearby driver';
 
 
-        const asiyeCommission =
-            Number(
-                request.counterPlatformCommission ||
-                (
-                    counterFare *
-                    Number(
-                        request.commissionRate ||
-                        0.20
-                    )
-                )
-            );
-
-
-        const driverReceives =
-            Number(
-                request.counterDriverNetFare ||
-                (
-                    counterFare -
-                    asiyeCommission
-                )
-            );
-
-
         container.innerHTML = `
             <div class="asiye-row">
                 <div class="asiye-status-icon">
@@ -881,22 +858,6 @@ ASIYE.ride = {
                     <span>Maximum allowed</span>
                     <strong>
                         R${maximum.toFixed(0)}
-                    </strong>
-                </div>
-            </div>
-
-            <div class="go-counter-protection">
-                <div>
-                    <span>Driver receives</span>
-                    <strong>
-                        R${driverReceives.toFixed(2)}
-                    </strong>
-                </div>
-
-                <div>
-                    <span>Asiye fee</span>
-                    <strong>
-                        R${asiyeCommission.toFixed(2)}
                     </strong>
                 </div>
             </div>

@@ -199,25 +199,11 @@ ASIYE.goNegotiation = {
                     </strong>
                 </div>
 
-                <div>
-                    <span>Driver receives</span>
-                    <strong id="goFareDriverAmount">
-                        R0.00
-                    </strong>
-                </div>
-
-                <div>
-                    <span>Asiye fee</span>
-                    <strong id="goFareAsiyeAmount">
-                        R0.00
-                    </strong>
-                </div>
             </div>
 
             <p class="go-fare-protection-note">
-                The passenger offer cannot go below the protected
-                driver earnings floor, and a driver counter cannot
-                exceed the Asiye Go ceiling.
+                Choose a fare within the displayed range. Any driver
+                counteroffer must stay within this range.
             </p>
 
             <div
@@ -498,14 +484,6 @@ ASIYE.goNegotiation = {
         }
 
 
-        const breakdown =
-            ASIYE.pricing
-                .goBreakdown(
-                    safe,
-                    this.prices
-                );
-
-
         ASIYE.state.booking
             .goNegotiation
             .offer =
@@ -517,38 +495,9 @@ ASIYE.goNegotiation = {
                 'goFarePassengerAmount'
             );
 
-        const driver =
-            document.getElementById(
-                'goFareDriverAmount'
-            );
-
-        const asiye =
-            document.getElementById(
-                'goFareAsiyeAmount'
-            );
-
-
         if (passenger) {
             passenger.textContent =
                 `R${safe.toFixed(0)}`;
-        }
-
-
-        if (driver) {
-            driver.textContent =
-                `R${this.money(
-                    breakdown
-                        .driverReceives
-                )}`;
-        }
-
-
-        if (asiye) {
-            asiye.textContent =
-                `R${this.money(
-                    breakdown
-                        .asiyeCommission
-                )}`;
         }
 
 

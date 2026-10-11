@@ -234,7 +234,7 @@ test('expired Work pools reject additional passengers', () => {
   );
 });
 
-test('passenger Work screen displays the countdown and negotiated split', () => {
+test('passenger Work screen displays the countdown and passenger fares', () => {
   const source = fs.readFileSync(
     'assets/passenger-v2/js/app.js',
     'utf8'
@@ -245,7 +245,8 @@ test('passenger Work screen displays the countdown and negotiated split', () => 
   assert.match(source, /setInterval\(/);
   assert.match(source, /1000/);
   assert.match(source, /Negotiate with a driver/);
-  assert.match(source, /Driver receives/);
+  assert.match(source, /Each passenger/);
+  assert.doesNotMatch(source, /<span>Driver receives<\/span>|<span>Asiye fee<\/span>/);
   assert.match(source, /submitEarlyDepartureOffer/);
 });
 

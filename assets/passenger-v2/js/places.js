@@ -10,6 +10,15 @@ ASIYE.places = {
     autocompleteService: null,
     placesService: null,
     searchTimer: null,
+    selectionHandler: null,
+    selectionVersion: 0,
+
+    setSelectionHandler(handler) {
+        clearTimeout(this.searchTimer);
+        this.activeQuery = '';
+        this.selectionVersion++;
+        this.selectionHandler = handler;
+    },
 
     init() {
 
@@ -227,6 +236,12 @@ ASIYE.places = {
 
         if (!container) return;
 
+        if ((!results || !results.length) && !this.selectionHandler && ASIYE.state.ui.sheet === 'destination-search' && !this.activeQuery) {
+            container.innerHTML = ASIYE.savedPlaces.shortcuts();
+            ASIYE.savedPlaces.bindShortcuts(container);
+            return;
+        }
+
 
         if (
             !Array.isArray(results) ||
@@ -334,6 +349,8 @@ ASIYE.places = {
 
     resolvePlaceDetails(place) {
 
+        const version = this.selectionVersion;
+
         if (Number.isFinite(place?.latitude) && Number.isFinite(place?.longitude)) return this.selectDestination(place);
 
         if (
@@ -361,6 +378,8 @@ ASIYE.places = {
                     result,
                     status
                 ) => {
+
+                    if (version !== this.selectionVersion) return;
 
                     if (
                         status !==
@@ -416,6 +435,9 @@ ASIYE.places = {
 
     async selectDestination(place) {
 
+        if (this.selectionHandler) return this.selectionHandler(place);
+        const version = this.selectionVersion;
+
         ASIYE.setDestination(
             place
         );
@@ -434,11 +456,14 @@ ASIYE.places = {
             await this.calculateRoute();
 
 
-        if (!route) {
+        if (!route || version !== this.selectionVersion) {
 
             return;
         }
 
+
+        try { ASIYE.savedPlaces?.remember(place); }
+        catch (error) { ASIYE.ui.toast(error.message); }
 
         ASIYE.ui
             .renderRideSelection();
@@ -532,6 +557,8 @@ ASIYE.places = {
 
             const route =
                 data.routes?.[0];
+
+            if (ASIYE.state.destination !== destination) return null;
 
 
             if (!route) {

@@ -14,6 +14,8 @@ ASIYE.ui = {
 
     renderHome() {
 
+        ASIYE.places?.setSelectionHandler(null);
+
         const container =
             document.getElementById('sheetContent');
 
@@ -330,6 +332,8 @@ ASIYE.ui = {
 
     renderDestinationSearch() {
 
+        ASIYE.places.setSelectionHandler(null);
+
         const container =
             document.getElementById('sheetContent');
 
@@ -417,29 +421,13 @@ ASIYE.ui = {
 
             <div id="destinationSuggestions">
 
-                ${this.placeRow(
-                    'home',
-                    'Home',
-                    'Set your home address'
-                )}
-
-
-                ${this.placeRow(
-                    'work',
-                    'Work',
-                    'Set your work address'
-                )}
-
-
-                ${this.placeRow(
-                    'recent',
-                    'Recent places',
-                    'Your recent destinations'
-                )}
+                ${ASIYE.savedPlaces.shortcuts()}
 
             </div>
 
         `;
+
+        ASIYE.savedPlaces.bindShortcuts(container);
 
 
         document
@@ -516,7 +504,7 @@ ASIYE.ui = {
 
         return `
 
-            <button class="place-row">
+            <button type="button" class="place-row" data-place-shortcut="${this.escape(icon)}">
 
                 <div class="place-icon">
 
@@ -2112,14 +2100,6 @@ ASIYE.ui = {
                                 formatMoney(perPassenger) +
                             '</strong></div>' +
                         '</div>' +
-                        '<div class="club-summary-grid" style="margin-top:8px;">' +
-                            '<div><span>Driver receives</span><strong id="workOfferDriverNet">' +
-                                formatMoney(total * 0.80) +
-                            '</strong></div>' +
-                            '<div><span>Asiye fee</span><strong id="workOfferAsiyeFee">' +
-                                formatMoney(total * 0.20) +
-                            '</strong></div>' +
-                        '</div>' +
                         '<button id="sendWorkEarlyOffer" class="primary-button" style="margin-top:12px;">' +
                             buttonLabel +
                         '</button>' +
@@ -2153,11 +2133,7 @@ ASIYE.ui = {
                             workOfferTotal:
                                 value,
                             workOfferPerPassenger:
-                                per,
-                            workOfferDriverNet:
-                                value * 0.80,
-                            workOfferAsiyeFee:
-                                value * 0.20
+                                per
                         };
 
 

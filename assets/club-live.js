@@ -168,7 +168,7 @@
           ? `<section><h3>Negotiate with your driver</h3><p>Recommendation: ${price(recommended)} for the group. Every passenger must agree before the driver accepts.</p>
         <label>Group offer <input data-club-offer type="number" step="0.01" min="${minimum}" max="${recommended}" value="${Number(n?.offerTotalFare || recommended)}"></label>
         <p>${price(minimum)} – ${price(recommended)} total · ${n?.approvedCount || 0}/${members.length} approvals</p>
-        ${n?.offerTotalFare ? `<p>Proposed rate: <strong>${price(n.offerTotalFare)}</strong> · ${price(n.offerPerPassenger)} each<br>Driver receives ${price(n.offerTotalFare * 0.8)} · Asiye ${price(n.offerTotalFare * 0.2)}</p>` : ""}
+        ${n?.offerTotalFare ? `<p>Proposed rate: <strong>${price(n.offerTotalFare)}</strong> · ${price(n.offerPerPassenger)} each</p>` : ""}
         <button class="primary-button" data-club-negotiate>${n?.passengerApprovals?.[ASIYE.state.userId] ? "Update offer" : "Agree and send offer"}</button></section>`
           : ""
       }

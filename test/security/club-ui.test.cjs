@@ -154,6 +154,7 @@ test("timeout displays passenger offer, driver accept and counter with revision-
     buyer.w.ClubLive.renderPassenger(p);
     driver.w.ClubLive.renderDriver(p);
     assert.ok(buyer.w.document.querySelector("[data-club-negotiate]"));
+    assert.doesNotMatch(buyer.w.document.getElementById("sheetContent").textContent, /Driver receives|Asiye R\d/);
     driver.w.document.querySelector("[data-club-accept-fare]").click();
     await new Promise((r) => setImmediate(r));
     assert.deepEqual(driver.calls[0].body, {
