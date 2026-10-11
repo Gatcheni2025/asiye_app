@@ -1692,6 +1692,11 @@ ASIYE.ui = {
             </div>
 
 
+            <div id="workCountdownPanel"></div>
+
+            <div id="workNegotiationPanel"></div>
+
+
             <div class="club-progress-track">
 
                 <div
@@ -1832,6 +1837,12 @@ ASIYE.ui = {
         `;
 
 
+        this.bindWorkTimeoutPanel(
+            request,
+            progress
+        );
+
+
         document
             .getElementById(
                 'cancelClubRide'
@@ -1844,6 +1855,660 @@ ASIYE.ui = {
                         ?.cancelCurrentRide?.();
                 }
             );
+    },
+
+
+
+    /* ========================================================
+       ASIYE WORK — 30 MINUTE TIMER + EARLY-DEPARTURE OFFER
+       ======================================================== */
+
+    bindWorkTimeoutPanel(
+        request,
+        progress
+    ) {
+
+        if (this.workCountdownTimer) {
+            clearInterval(
+                this.workCountdownTimer
+            );
+            this.workCountdownTimer =
+                null;
+        }
+
+
+        const countdownPanel =
+            document.getElementById(
+                'workCountdownPanel'
+            );
+
+
+        const negotiationPanel =
+            document.getElementById(
+                'workNegotiationPanel'
+            );
+
+
+        if (
+            !countdownPanel ||
+            !negotiationPanel ||
+            !request ||
+            !progress
+        ) {
+            return;
+        }
+
+
+        const startedAt =
+            Number(
+                request.workWaitStartedAt ||
+                request.createdAt ||
+                0
+            );
+
+
+        const expiresAt =
+            Number(
+                request.workWaitExpiresAt ||
+                (
+                    startedAt
+                        ? startedAt +
+                            30 *
+                            60 *
+                            1000
+                        : 0
+                )
+            );
+
+
+        const negotiation =
+            request.workNegotiation ||
+            {};
+
+
+        const negotiationStatus =
+            String(
+                negotiation.status ||
+                ''
+            );
+
+
+        const earlyDeparture =
+            request.earlyDepartureNegotiated ===
+                true;
+
+
+        const activePassengers =
+            Object.values(
+                request.passengers ||
+                {}
+            )
+            .filter(
+                passenger =>
+                    !String(
+                        passenger?.status ||
+                        ''
+                    )
+                    .includes(
+                        'cancelled'
+                    )
+            );
+
+
+        const passengerCount =
+            activePassengers.length ||
+            Number(
+                request.passengerCount ||
+                progress.confirmed ||
+                1
+            );
+
+
+        const currentPassengerTotal =
+            activePassengers
+                .reduce(
+                    (
+                        total,
+                        passenger
+                    ) =>
+                        total +
+                        Number(
+                            passenger?.price ||
+                            request.pricePerPassenger ||
+                            0
+                        ),
+                    0
+                );
+
+
+        const recommended =
+            Number(
+                negotiation.recommendedTotalFare ||
+                request.originalWorkTargetFare ||
+                request.totalPoolFare ||
+                request.driverGrossFare ||
+                0
+            );
+
+
+        const minimum =
+            Number(
+                negotiation.minimumTotalFare ||
+                Math.max(
+                    currentPassengerTotal,
+                    recommended *
+                        0.90
+                )
+            );
+
+
+        const maximum =
+            Number(
+                negotiation.maximumTotalFare ||
+                recommended
+            );
+
+
+        const offer =
+            Number(
+                negotiation.offerTotalFare ||
+                recommended
+            );
+
+
+        const approvals =
+            negotiation.passengerApprovals ||
+            {};
+
+
+        const approvedCount =
+            Number(
+                negotiation.approvedCount ||
+                Object.values(
+                    approvals
+                )
+                .filter(Boolean)
+                .length
+            );
+
+
+        const approvalsNeeded =
+            Number(
+                negotiation.approvalsNeeded ||
+                negotiation.passengerCount ||
+                passengerCount
+            );
+
+
+        const myApproved =
+            approvals[
+                ASIYE.state.userId
+            ] ===
+                true;
+
+
+        const formatMoney =
+            value =>
+                'R' +
+                Number(
+                    value ||
+                    0
+                )
+                .toFixed(
+                    2
+                );
+
+
+        const offerPanel =
+            (
+                total,
+                buttonLabel
+            ) => {
+
+                const perPassenger =
+                    passengerCount > 0
+                        ? total /
+                            passengerCount
+                        : 0;
+
+
+                negotiationPanel.innerHTML =
+                    '<section style="margin-top:14px;padding:16px;border:1px solid #e6e6e6;border-radius:18px;background:#fff;">' +
+                        '<div class="home-kicker">Early departure</div>' +
+                        '<h3 style="margin:5px 0 6px;font-size:18px;">Negotiate with a driver</h3>' +
+                        '<p style="margin:0 0 12px;color:#666;font-size:11px;line-height:1.5;">' +
+                            'Recommendation: keep the normal Work trip value and share the missing-seat amount between the passengers currently in the group.' +
+                        '</p>' +
+                        '<input id="workOfferSlider" type="range" min="' +
+                            Math.round(minimum) +
+                            '" max="' +
+                            Math.max(
+                                Math.round(minimum),
+                                Math.round(maximum)
+                            ) +
+                            '" value="' +
+                            Math.round(total) +
+                            '" step="1" style="width:100%;">' +
+                        '<div class="club-summary-grid" style="margin-top:12px;">' +
+                            '<div><span>Group offer</span><strong id="workOfferTotal">' +
+                                formatMoney(total) +
+                            '</strong></div>' +
+                            '<div><span>Each passenger</span><strong id="workOfferPerPassenger">' +
+                                formatMoney(perPassenger) +
+                            '</strong></div>' +
+                        '</div>' +
+                        '<div class="club-summary-grid" style="margin-top:8px;">' +
+                            '<div><span>Driver receives</span><strong id="workOfferDriverNet">' +
+                                formatMoney(total * 0.80) +
+                            '</strong></div>' +
+                            '<div><span>Asiye fee</span><strong id="workOfferAsiyeFee">' +
+                                formatMoney(total * 0.20) +
+                            '</strong></div>' +
+                        '</div>' +
+                        '<button id="sendWorkEarlyOffer" class="primary-button" style="margin-top:12px;">' +
+                            buttonLabel +
+                        '</button>' +
+                    '</section>';
+
+
+                const slider =
+                    document.getElementById(
+                        'workOfferSlider'
+                    );
+
+
+                const refresh =
+                    () => {
+
+                        const value =
+                            Number(
+                                slider?.value ||
+                                total
+                            );
+
+
+                        const per =
+                            passengerCount > 0
+                                ? value /
+                                    passengerCount
+                                : 0;
+
+
+                        const values = {
+                            workOfferTotal:
+                                value,
+                            workOfferPerPassenger:
+                                per,
+                            workOfferDriverNet:
+                                value * 0.80,
+                            workOfferAsiyeFee:
+                                value * 0.20
+                        };
+
+
+                        Object.entries(
+                            values
+                        )
+                        .forEach(
+                            (
+                                [
+                                    id,
+                                    amount
+                                ]
+                            ) => {
+
+                                const node =
+                                    document.getElementById(
+                                        id
+                                    );
+
+
+                                if (node) {
+                                    node.textContent =
+                                        formatMoney(
+                                            amount
+                                        );
+                                }
+                            }
+                        );
+                    };
+
+
+                slider
+                    ?.addEventListener(
+                        'input',
+                        refresh
+                    );
+
+
+                refresh();
+
+
+                document
+                    .getElementById(
+                        'sendWorkEarlyOffer'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        async event => {
+
+                            const button =
+                                event.currentTarget;
+
+
+                            button.disabled =
+                                true;
+
+
+                            button.textContent =
+                                'Saving agreement...';
+
+
+                            try {
+
+                                const result =
+                                    await ASIYE.club
+                                        .submitEarlyDepartureOffer(
+                                            request.requestId ||
+                                            ASIYE.state.booking.requestId,
+                                            Number(
+                                                slider?.value ||
+                                                total
+                                            )
+                                        );
+
+
+                                ASIYE.ui.toast(
+                                    result.status ===
+                                        'driver_offer'
+                                        ? 'All current passengers agreed. Nearby drivers can now accept the Work offer.'
+                                        : 'Your agreement was saved. Waiting for the other current passengers.'
+                                );
+
+
+                            } catch (error) {
+
+                                button.disabled =
+                                    false;
+
+
+                                button.textContent =
+                                    buttonLabel;
+
+
+                                ASIYE.ui.toast(
+                                    error.message ||
+                                    'Unable to save the Work offer.'
+                                );
+                            }
+                        }
+                    );
+            };
+
+
+        const showCountdown =
+            () => {
+
+                const left =
+                    Math.max(
+                        0,
+                        expiresAt -
+                        Date.now()
+                    );
+
+
+                const totalSeconds =
+                    Math.floor(
+                        left /
+                        1000
+                    );
+
+
+                const minutes =
+                    Math.floor(
+                        totalSeconds /
+                        60
+                    );
+
+
+                const seconds =
+                    totalSeconds %
+                    60;
+
+
+                countdownPanel.innerHTML =
+                    '<div style="margin:14px 0 4px;padding:14px 16px;border-radius:16px;background:#111;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:12px;">' +
+                        '<div>' +
+                            '<div style="font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;opacity:.65;">Work matching time</div>' +
+                            '<strong style="display:block;margin-top:4px;font-size:14px;">Waiting for the group</strong>' +
+                        '</div>' +
+                        '<strong style="font-size:22px;letter-spacing:.04em;">' +
+                            String(minutes).padStart(
+                                2,
+                                '0'
+                            ) +
+                            ':' +
+                            String(seconds).padStart(
+                                2,
+                                '0'
+                            ) +
+                        '</strong>' +
+                    '</div>';
+
+
+                return left;
+            };
+
+
+        if (
+            !progress.ready &&
+            !earlyDeparture &&
+            !negotiationStatus
+        ) {
+
+            const firstLeft =
+                showCountdown();
+
+
+            if (
+                firstLeft > 0
+            ) {
+
+                this.workCountdownTimer =
+                    setInterval(
+                        () => {
+
+                            const left =
+                                showCountdown();
+
+
+                            if (
+                                left <= 0
+                            ) {
+
+                                clearInterval(
+                                    this.workCountdownTimer
+                                );
+
+
+                                this.workCountdownTimer =
+                                    null;
+
+
+                                this.bindWorkTimeoutPanel(
+                                    request,
+                                    progress
+                                );
+                            }
+                        },
+                        1000
+                    );
+
+
+                return;
+            }
+
+
+            countdownPanel.innerHTML =
+                '<div style="margin:14px 0 4px;padding:14px 16px;border-radius:16px;background:#111;color:#fff;">' +
+                    '<div style="font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;opacity:.65;">Work matching time</div>' +
+                    '<strong style="display:block;margin-top:4px;font-size:15px;">00:00 · Negotiation unlocked</strong>' +
+                '</div>';
+
+
+            document
+                .querySelector(
+                    '#sheetContent .home-title'
+                )
+                ?.replaceChildren(
+                    document.createTextNode(
+                        '30-minute wait reached'
+                    )
+                );
+
+
+            offerPanel(
+                recommended,
+                'Agree & send Work offer'
+            );
+
+
+            return;
+        }
+
+
+        countdownPanel.innerHTML =
+            '';
+
+
+        if (
+            negotiationStatus ===
+                'collecting_passenger_approvals'
+        ) {
+
+            const perPassenger =
+                passengerCount > 0
+                    ? offer /
+                        passengerCount
+                    : 0;
+
+
+            negotiationPanel.innerHTML =
+                '<section style="margin-top:14px;padding:16px;border:1px solid #e6e6e6;border-radius:18px;background:#fff;">' +
+                    '<div class="home-kicker">Group approval</div>' +
+                    '<h3 style="margin:5px 0 6px;font-size:18px;">' +
+                        formatMoney(offer) +
+                        ' early-departure offer' +
+                    '</h3>' +
+                    '<p style="margin:0;color:#666;font-size:11px;line-height:1.5;">' +
+                        formatMoney(perPassenger) +
+                        ' per current passenger · ' +
+                        approvedCount +
+                        '/' +
+                        approvalsNeeded +
+                        ' agreed.' +
+                    '</p>' +
+                    (
+                        myApproved
+                            ? '<div style="margin-top:12px;padding:11px 12px;border-radius:13px;background:#f4f7f5;font-size:11px;font-weight:800;">✓ You agreed. Waiting for the other current passengers.</div>'
+                            : '<button id="approveExistingWorkOffer" class="primary-button" style="margin-top:12px;">I agree to ' +
+                                formatMoney(perPassenger) +
+                                '</button>'
+                    ) +
+                '</section>';
+
+
+            document
+                .getElementById(
+                    'approveExistingWorkOffer'
+                )
+                ?.addEventListener(
+                    'click',
+                    async event => {
+
+                        const button =
+                            event.currentTarget;
+
+
+                        button.disabled =
+                            true;
+
+
+                        button.textContent =
+                            'Saving agreement...';
+
+
+                        try {
+
+                            await ASIYE.club
+                                .submitEarlyDepartureOffer(
+                                    request.requestId ||
+                                    ASIYE.state.booking.requestId,
+                                    offer
+                                );
+
+
+                            ASIYE.ui.toast(
+                                'Your agreement was saved.'
+                            );
+
+
+                        } catch (error) {
+
+                            button.disabled =
+                                false;
+
+
+                            ASIYE.ui.toast(
+                                error.message ||
+                                'Unable to save your agreement.'
+                            );
+                        }
+                    }
+                );
+
+
+            return;
+        }
+
+
+        if (earlyDeparture) {
+
+            const myPassenger =
+                request.passengers?.[
+                    ASIYE.state.userId
+                ] ||
+                {};
+
+
+            negotiationPanel.innerHTML =
+                '<section style="margin-top:14px;padding:16px;border:1px solid #dbe8df;border-radius:18px;background:#f6faf7;">' +
+                    '<div class="home-kicker">30-minute Work offer</div>' +
+                    '<h3 style="margin:5px 0 6px;font-size:18px;">Current group agreed</h3>' +
+                    '<p style="margin:0;color:#56645b;font-size:11px;line-height:1.5;">' +
+                        'Your updated seat fare is ' +
+                        formatMoney(
+                            myPassenger.price ||
+                            request.pricePerPassenger ||
+                            0
+                        ) +
+                        '. ' +
+                        (
+                            request.paymentsReady ===
+                                true
+                                ? 'Nearby drivers can now accept the negotiated Work trip.'
+                                : 'Asiye is completing payment readiness before releasing the offer to drivers.'
+                        ) +
+                    '</p>' +
+                '</section>';
+
+
+            return;
+        }
+
+
+        negotiationPanel.innerHTML =
+            '';
     },
 
 
