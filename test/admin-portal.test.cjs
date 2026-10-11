@@ -119,5 +119,13 @@ test('admin cannot rewrite protected negotiated fare or settled status',()=>{
  assert.match(block,/protectedNegotiated/);
  assert.match(block,/protectedSettlement/);
  assert.match(block,/Protected negotiated fare, payment method and settlement amounts cannot be edited from Admin/);
- assert.match(block,/server-settled negotiated trip is financially final/);
+ assert.match(block,/protected negotiated trip must follow the live trip state machine/i);
+
+ const assignStart=src.indexOf('if (action === "assignDriver")');
+ const cancelStart=src.indexOf('if (action === "cancelRequest")');
+ const assignBlock=src.slice(assignStart,cancelStart);
+ const cancelBlock=src.slice(cancelStart,src.indexOf('if (action === "reviewPayout")',cancelStart));
+ assert.match(assignBlock,/Admin cannot replace the agreed driver/);
+ assert.match(cancelBlock,/already financially settled/);
+ assert.match(cancelBlock,/refund\/reconciliation case/);
 });
