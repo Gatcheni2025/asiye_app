@@ -3370,14 +3370,16 @@ exports.adminManagePlatform = functions.https.onCall(
       }
 
       if (
-        protectedSettlement &&
+        protectedNegotiated &&
         "status" in source &&
         String(source.status || "") !==
           String(request.status || "")
       ) {
         throw new functions.https.HttpsError(
           "failed-precondition",
-          "A server-settled negotiated trip is financially final and its status cannot be rewritten from Admin."
+          protectedSettlement
+            ? "A server-settled negotiated trip is financially final and its status cannot be rewritten from Admin."
+            : "A protected negotiated trip must follow the live trip state machine. Use the dedicated Admin cancellation action when cancellation is required."
         );
       }
 
@@ -3578,6 +3580,16 @@ exports.adminManagePlatform = functions.https.onCall(
         throw new functions.https.HttpsError(
           "not-found",
           "Driver was not found."
+        );
+      }
+
+      if (
+        request.negotiationEnabled === true &&
+        request.fareStatus === "agreed"
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This negotiated fare already has a protected driver agreement. Admin cannot replace the agreed driver."
         );
       }
 
@@ -3829,6 +3841,23 @@ exports.adminManagePlatform = functions.https.onCall(
         throw new functions.https.HttpsError(
           "not-found",
           "Booking was not found."
+        );
+      }
+
+      if (
+        request.negotiationEnabled === true &&
+        (
+          request.driverSettlement?.source ===
+            "server_protected_go" ||
+          request.paymentSettlementStatus ===
+            "settled" ||
+          request.status ===
+            "completed"
+        )
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This negotiated trip is already financially settled. Create a refund/reconciliation case instead of cancelling it."
         );
       }
 
