@@ -1,0 +1,61 @@
+name: Deploy Go Fare Acceptance Hotfix
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/11.0.61-331-pricing-search
+    paths:
+      - 'functions/index.js'
+      - 'test/go-fare-negotiation.test.cjs'
+      - '.github/workflows/deploy_go_accept_hotfix.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asiye-go-accept-hotfix
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy and verify acceptGoFareOffer
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Validate acceptance code
+        run: |
+          node --check functions/index.js
+          node --test test/go-fare-negotiation.test.cjs test/go-fare-settlement-lifecycle.test.cjs
+
+      - name: Verify Firebase secret
+        shell: bash
+        run: test -n "$FIREBASE_CREDS" || (echo "::error::Missing Firebase service-account secret" && exit 1)
+
+      - name: Authenticate to Firebase
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Deploy acceptGoFareOffer
+        run: |
+          npx --yes firebase-tools@latest deploy \
+            --project asiye-80386 \
+            --only functions:acceptGoFareOffer \
+            --non-interactive
+
+      - name: Verify production negotiated Go acceptance
+        run: node functions/production-go-negotiation-validation.js

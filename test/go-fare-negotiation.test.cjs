@@ -536,3 +536,32 @@ test('negotiated Go driver acceptance is idempotent under duplicate taps', () =>
     'driver active request state must receive both request id and request data'
   );
 });
+
+
+test('Go fare acceptance does not abort on the RTDB transaction initial-null pass', () => {
+  const start = functionsSource.indexOf(
+    'async function reserveGoNegotiatedDriver'
+  );
+  const block = functionsSource.slice(start, start + 12000);
+
+  assert.ok(
+    block.includes(
+      'current === null'
+    ),
+    'request transaction must recognize Firebase initial-null callbacks'
+  );
+
+  assert.ok(
+    block.includes(
+      'return null;'
+    ),
+    'initial null must be returned as a value so Firebase can retry with server state'
+  );
+
+  assert.ok(
+    block.includes(
+      'trip.fareStatus !==\n        "agreed"'
+    ),
+    'a null no-op transaction must never be treated as a successful acceptance'
+  );
+});

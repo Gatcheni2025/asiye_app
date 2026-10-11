@@ -5834,6 +5834,20 @@ async function reserveGoNegotiatedDriver({
     const transaction =
       await requestRef.transaction(
         current => {
+          /*
+           * IMPORTANT — RTDB transactions can invoke the update callback
+           * with a local null value before the current server value has been
+           * synchronized. Returning undefined here aborts the transaction
+           * immediately. Returning null keeps the transaction alive; if the
+           * server actually contains this request Firebase retries the
+           * callback with the authoritative request object.
+           */
+          if (
+            current === null
+          ) {
+            return null;
+          }
+
           if (
             !current ||
             !isGoNegotiationTrip(current)
@@ -6009,7 +6023,35 @@ async function reserveGoNegotiatedDriver({
     }
 
     const trip =
-      transaction.snapshot.val() || {};
+      transaction.snapshot.val();
+
+    /*
+     * If the request genuinely disappeared, a null -> null transaction can
+     * commit successfully. Never interpret that no-op as a fare acceptance.
+     */
+    if (
+      !trip ||
+      !isGoNegotiationTrip(
+        trip
+      ) ||
+      String(
+        trip.taxiId ||
+        ""
+      ) !==
+        String(driver.id) ||
+      trip.fareStatus !==
+        "agreed"
+    ) {
+      const error =
+        new Error(
+          "This fare can no longer be accepted."
+        );
+
+      error.code =
+        "negotiation/not-available";
+
+      throw error;
+    }
 
     const agreementRef =
       admin.database()
