@@ -2313,6 +2313,284 @@ exports.refreshDriversWhileClubPooling =
  * post-payment safety step is ready. Only now may a driver receive requestId
  * and detailed trip information, and only now can the booking be accepted.
  */
+// =================================================================
+// --- ASIYE WORK: 30-MINUTE EARLY-DEPARTURE NEGOTIATION ---
+// =================================================================
+const ASIYE_WORK_WAIT_MS = 30 * 60 * 1000;
+
+function workFareMoney(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount)
+    ? Math.max(0, Math.round(amount * 100) / 100)
+    : 0;
+}
+
+function activeWorkPassengerEntries(request) {
+  return Object.entries(request?.passengers || {})
+    .filter(([, passenger]) => activeClubPassenger(passenger));
+}
+
+function workTimeoutPricing(request) {
+  const active = activeWorkPassengerEntries(request);
+  const requiredPassengers = clubRequiredPassengerCount(request);
+  const currentPassengerTotal = workFareMoney(
+    active.reduce((sum, [, passenger]) =>
+      sum + Number(passenger?.price || request?.pricePerPassenger || 0), 0)
+  );
+  const normalTripTotal = workFareMoney(
+    request?.originalWorkTargetFare ||
+    request?.totalPoolFare ||
+    request?.driverGrossFare ||
+    (Number(request?.pricePerPassenger || 0) * requiredPassengers)
+  );
+  const recommendedTotalFare = Math.max(currentPassengerTotal, normalTripTotal);
+  const minimumTotalFare = Math.max(
+    currentPassengerTotal,
+    workFareMoney(recommendedTotalFare * 0.90)
+  );
+  return {
+    active,
+    passengerCount: active.length,
+    requiredPassengers,
+    currentPassengerTotal,
+    recommendedTotalFare,
+    minimumTotalFare,
+    maximumTotalFare: recommendedTotalFare,
+    recommendedPerPassenger: active.length
+      ? workFareMoney(recommendedTotalFare / active.length)
+      : 0
+  };
+}
+
+async function workPassengerForRequest(decoded, trip) {
+  if (!decoded?.uid || !trip || trip.type !== 'club') return null;
+  const passenger = await resolvePassengerForWallet(decoded);
+  const passengerId = String(passenger?.id || decoded.uid || '');
+  const member = trip.passengers?.[passengerId];
+  if (!member || !activeClubPassenger(member)) return null;
+  return { id: passengerId, data: passenger?.data || {} };
+}
+
+exports.submitWorkEarlyDepartureOffer = onRequest(
+  { region: 'us-central1', invoker: 'public' },
+  async (request, response) => {
+    walletSmsCors(request, response);
+    if (request.method === 'OPTIONS') return response.status(204).send('');
+    if (request.method !== 'POST') return response.status(405).json({error: 'POST required.'});
+
+    try {
+      const decoded = await verifiedRequestUser(request);
+      if (!decoded) {
+        return response.status(401).json({error: 'Passenger sign-in is required.'});
+      }
+
+      const requestId = String(request.body?.requestId || '').trim();
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(requestId)) {
+        return response.status(400).json({error: 'Work booking reference is invalid.'});
+      }
+
+      const requestRef = admin.database().ref('requests/' + requestId);
+      const snapshot = await requestRef.once('value');
+      const trip = snapshot.val();
+      if (!trip || trip.type !== 'club') {
+        return response.status(404).json({error: 'Asiye Work booking was not found.'});
+      }
+
+      const participant = await workPassengerForRequest(decoded, trip);
+      if (!participant) {
+        return response.status(403).json({error: 'Only current passengers can negotiate this Work booking.'});
+      }
+
+      if (trip.taxiId) {
+        return response.status(409).json({error: 'A driver is already assigned to this Work booking.'});
+      }
+
+      const pricing = workTimeoutPricing(trip);
+      if (pricing.passengerCount >= pricing.requiredPassengers || trip.poolReady === true) {
+        return response.status(409).json({error: 'The Work group is already ready to continue normally.'});
+      }
+
+      const startedAt = Number(trip.workWaitStartedAt || trip.createdAt || 0);
+      const expiresAt = startedAt > 0 ? startedAt + ASIYE_WORK_WAIT_MS : 0;
+      const remainingMs = expiresAt > 0 ? expiresAt - Date.now() : ASIYE_WORK_WAIT_MS;
+      if (remainingMs > 0) {
+        return response.status(409).json({
+          error: 'The 30-minute Asiye Work matching period is still running.',
+          code: 'work/wait-active',
+          remainingSeconds: Math.ceil(remainingMs / 1000)
+        });
+      }
+
+      const existing = trip.workNegotiation || {};
+      const requestedAmount = request.body?.amount;
+      const offerTotalFare = workFareMoney(
+        requestedAmount == null || requestedAmount === ''
+          ? (existing.offerTotalFare || pricing.recommendedTotalFare)
+          : requestedAmount
+      );
+
+      if (
+        offerTotalFare < pricing.minimumTotalFare - 0.001 ||
+        offerTotalFare > pricing.maximumTotalFare + 0.001
+      ) {
+        return response.status(422).json({
+          error: 'Choose a Work offer between R' + pricing.minimumTotalFare.toFixed(2) +
+            ' and R' + pricing.maximumTotalFare.toFixed(2) + '.',
+          minimumTotalFare: pricing.minimumTotalFare,
+          recommendedTotalFare: pricing.recommendedTotalFare,
+          maximumTotalFare: pricing.maximumTotalFare
+        });
+      }
+
+      if (
+        existing.offerTotalFare &&
+        Math.abs(workFareMoney(existing.offerTotalFare) - offerTotalFare) > 0.01
+      ) {
+        return response.status(409).json({
+          error: 'Another passenger has already proposed R' +
+            workFareMoney(existing.offerTotalFare).toFixed(2) +
+            '. Agree to that same offer.',
+          offerTotalFare: workFareMoney(existing.offerTotalFare)
+        });
+      }
+
+      const activeIds = pricing.active.map(([id]) => id).sort();
+      const approvals = {};
+      for (const id of activeIds) {
+        if (existing.passengerApprovals?.[id] === true) approvals[id] = true;
+      }
+      approvals[participant.id] = true;
+      const approvedCount = activeIds.filter(id => approvals[id] === true).length;
+      const allApproved = approvedCount === activeIds.length;
+
+      if (!allApproved) {
+        const negotiation = {
+          status: 'collecting_passenger_approvals',
+          passengerCount: pricing.passengerCount,
+          originalRequiredPassengers: pricing.requiredPassengers,
+          minimumTotalFare: pricing.minimumTotalFare,
+          recommendedTotalFare: pricing.recommendedTotalFare,
+          maximumTotalFare: pricing.maximumTotalFare,
+          offerTotalFare,
+          offerPerPassenger: workFareMoney(offerTotalFare / activeIds.length),
+          passengerApprovals: approvals,
+          approvedCount,
+          approvalsNeeded: activeIds.length,
+          proposedAt: existing.proposedAt || Date.now(),
+          lastApprovedAt: Date.now()
+        };
+
+        await requestRef.update({
+          status: 'work_negotiation',
+          workWaitMinutes: 30,
+          workWaitExpiresAt: expiresAt,
+          workNegotiation: negotiation
+        });
+
+        for (const id of activeIds) {
+          if (approvals[id] === true) continue;
+          await admin.database().ref('notifications/commuters/' + id).push({
+            type: 'work_timeout_offer_approval',
+            title: 'Agree to leave with fewer passengers?',
+            message: 'Your Work group proposes R' +
+              workFareMoney(offerTotalFare / activeIds.length).toFixed(2) +
+              ' per passenger so a driver can leave now.',
+            requestId,
+            offerTotalFare,
+            timestamp: admin.database.ServerValue.TIMESTAMP
+          });
+        }
+
+        return response.status(200).json({
+          ok: true,
+          requestId,
+          status: negotiation.status,
+          negotiation
+        });
+      }
+
+      const totalCents = Math.round(offerTotalFare * 100);
+      const baseCents = Math.floor(totalCents / activeIds.length);
+      let remainder = totalCents - baseCents * activeIds.length;
+      const updates = {
+        status: 'pool_ready',
+        poolReady: true,
+        paymentsReady: false,
+        paymentStatus: 'waiting_pool',
+        earlyDepartureNegotiated: true,
+        effectiveRequiredPassengers: activeIds.length,
+        requiredPassengers: activeIds.length,
+        minimumPassengers: activeIds.length,
+        remainingSeats: 0,
+        originalWorkTargetFare: pricing.recommendedTotalFare,
+        totalPoolFare: offerTotalFare,
+        driverGrossFare: offerTotalFare,
+        platformCommission: workFareMoney(offerTotalFare * 0.20),
+        driverNetFare: workFareMoney(offerTotalFare * 0.80),
+        workWaitMinutes: 30,
+        workWaitExpiresAt: expiresAt,
+        workNegotiation: {
+          status: 'driver_offer',
+          passengerCount: activeIds.length,
+          originalRequiredPassengers: pricing.requiredPassengers,
+          minimumTotalFare: pricing.minimumTotalFare,
+          recommendedTotalFare: pricing.recommendedTotalFare,
+          maximumTotalFare: pricing.maximumTotalFare,
+          offerTotalFare,
+          offerPerPassenger: workFareMoney(offerTotalFare / activeIds.length),
+          passengerApprovals: approvals,
+          approvedCount,
+          approvalsNeeded: activeIds.length,
+          proposedAt: existing.proposedAt || Date.now(),
+          allPassengersApprovedAt: Date.now()
+        }
+      };
+
+      for (const id of activeIds) {
+        const cents = baseCents + (remainder > 0 ? 1 : 0);
+        if (remainder > 0) remainder -= 1;
+        updates['passengers/' + id + '/price'] = cents / 100;
+        updates['passengers/' + id + '/negotiatedWorkFare'] = true;
+        updates['passengers/' + id + '/workFareAgreedAt'] = admin.database.ServerValue.TIMESTAMP;
+      }
+
+      await requestRef.update(updates);
+      const latest = (await requestRef.once('value')).val();
+      const paymentSummary = await prepareClubPoolPayments(requestId, latest);
+
+      for (const id of activeIds) {
+        await admin.database().ref('notifications/commuters/' + id).push({
+          type: 'work_timeout_offer_sent',
+          title: 'Work early-departure offer ready',
+          message: 'All current passengers agreed. Nearby drivers can now accept the R' +
+            offerTotalFare.toFixed(2) + ' Work offer.',
+          requestId,
+          offerTotalFare,
+          timestamp: admin.database.ServerValue.TIMESTAMP
+        });
+      }
+
+      return response.status(200).json({
+        ok: true,
+        requestId,
+        status: 'driver_offer',
+        offerTotalFare,
+        driverReceives: workFareMoney(offerTotalFare * 0.80),
+        asiyeFee: workFareMoney(offerTotalFare * 0.20),
+        approvedCount,
+        approvalsNeeded: activeIds.length,
+        paymentSummary
+      });
+
+    } catch (error) {
+      console.error('Submit Work early-departure offer failed', error);
+      return response.status(500).json({
+        error: error?.message || 'Unable to negotiate this Work booking.'
+      });
+    }
+  }
+);
+
 exports.notifyDriversWhenClubReady = functions
   .runWith({
     secrets: [
