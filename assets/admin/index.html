@@ -9,7 +9,7 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com; style-src 'self'; img-src 'self' data: https://firebasestorage.googleapis.com; font-src 'self'; connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.firebaseio.com wss://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
 <title>Asiye Operations | Secure Admin</title>
 <link rel="icon" href="/favicon.ico">
-<link rel="stylesheet" href="/admin/console.css?v=1">
+<link rel="stylesheet" href="/admin/console.css?v=2">
 </head>
 <body>
 <div id="boot" class="boot"><div class="boot-logo">ASIYE<span>●</span></div><p>Connecting to your secure operations desk…</p></div>
@@ -36,6 +36,7 @@
    <nav id="navigation" aria-label="Operations sections">
      <button class="nav active" data-view="overview"><span class="nav-icon">◫</span>Overview</button>
      <button class="nav" data-view="enrollments"><span class="nav-icon">✓</span>Driver approvals</button>
+     <button class="nav" data-view="driverUpdates"><span class="nav-icon">↻</span>Driver updates</button>
      <button class="nav" data-view="drivers"><span class="nav-icon">↗</span>Drivers</button>
      <button class="nav" data-view="passengers"><span class="nav-icon">♙</span>Passengers</button>
      <button class="nav" data-view="bookings"><span class="nav-icon">⇄</span>Ride bookings</button>
@@ -76,6 +77,6 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-functions.js"></script>
-<script src="/admin/console.js?v=1" defer></script>
+<script src="/admin/console.js?v=2" defer></script>
 </body>
 </html>
