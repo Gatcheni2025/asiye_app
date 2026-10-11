@@ -436,6 +436,18 @@ ASIYE_DRIVER.requests = {
                         !this.isDriverAvailable()
                     ) {
 
+                        /*
+                         * Do not leave an actionable notification stranded
+                         * while this driver is offline, not broadcasting or
+                         * awaiting vehicle approval. Removing it lets a later
+                         * server dispatch recreate the same request key once
+                         * the driver genuinely becomes available.
+                         */
+                        await this.removeNotification(
+                            snapshot.key
+                        );
+
+
                         return;
                     }
 
@@ -586,7 +598,8 @@ ASIYE_DRIVER.requests = {
 
 
         if (
-            driver.isOnline !== true
+            driver.isOnline !== true ||
+            driver.isBroadcasting !== true
         ) {
 
             return false;
