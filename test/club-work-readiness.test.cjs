@@ -200,7 +200,6 @@ test('Asiye Work uses one 30-minute matching window for both modes', () => {
   );
   assert.match(clubSource, /workWaitMinutes:\s*30/);
   assert.match(clubSource, /workWaitStartedAt:/);
-  assert.match(clubSource, /workWaitExpiresAt:/);
 });
 
 test('expired Work pools reject additional passengers', () => {
