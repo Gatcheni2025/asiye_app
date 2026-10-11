@@ -24,7 +24,7 @@ ASIYE.club = {
                 10,
 
             maxWaitMinutes:
-                20
+                30
         },
 
 
@@ -43,7 +43,7 @@ ASIYE.club = {
                 15,
 
             maxWaitMinutes:
-                25
+                30
         }
     },
 
@@ -328,6 +328,30 @@ ASIYE.club = {
                 ].includes(
                     pool.status
                 )
+            ) {
+
+                return;
+            }
+
+
+            const workWaitStartedAt =
+
+                Number(
+                    pool.workWaitStartedAt ||
+                    pool.createdAt ||
+                    0
+                );
+
+
+            if (
+                workWaitStartedAt > 0 &&
+                Date.now() >=
+                    workWaitStartedAt +
+                    (
+                        30 *
+                        60 *
+                        1000
+                    )
             ) {
 
                 return;
@@ -1012,6 +1036,23 @@ ASIYE.club = {
                     passenger
             },
 
+            workWaitMinutes:
+                30,
+
+            workWaitStartedAt:
+                firebase
+                    .database
+                    .ServerValue
+                    .TIMESTAMP,
+
+            workWaitExpiresAt:
+                Date.now() +
+                (
+                    30 *
+                    60 *
+                    1000
+                ),
+
             createdAt:
                 firebase
                     .database
@@ -1222,6 +1263,102 @@ ASIYE.club = {
 
 
         return requestId;
+    },
+
+
+    /* ========================================================
+       30-MINUTE WORK EARLY-DEPARTURE OFFER
+       ======================================================== */
+
+    async submitEarlyDepartureOffer(
+        requestId,
+        amount
+    ) {
+
+        this.ensureFirebase();
+
+
+        const authUser =
+            firebase.auth()
+                .currentUser;
+
+
+        if (!authUser) {
+
+            throw new Error(
+                'Please sign in again before negotiating your Work booking.'
+            );
+        }
+
+
+        const token =
+            await authUser.getIdToken(
+                true
+            );
+
+
+        const response =
+            await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/submitWorkEarlyDepartureOffer',
+                {
+                    method:
+                        'POST',
+
+                    headers: {
+                        'Authorization':
+                            `Bearer ${token}`,
+                        'X-Firebase-Auth':
+                            `Bearer ${token}`,
+                        'Content-Type':
+                            'application/json'
+                    },
+
+                    body:
+                        JSON.stringify({
+                            requestId,
+                            amount:
+                                Number(
+                                    amount
+                                )
+                        })
+                }
+            );
+
+
+        const payload =
+            await response
+                .json()
+                .catch(
+                    () => ({})
+                );
+
+
+        if (!response.ok) {
+
+            const error =
+                new Error(
+                    payload.error ||
+                    'Unable to send the Work early-departure offer.'
+                );
+
+
+            error.code =
+                payload.code ||
+                '';
+
+
+            error.remainingSeconds =
+                Number(
+                    payload.remainingSeconds ||
+                    0
+                );
+
+
+            throw error;
+        }
+
+
+        return payload;
     },
 
 
