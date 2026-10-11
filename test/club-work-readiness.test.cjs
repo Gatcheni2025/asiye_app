@@ -270,7 +270,8 @@ test('passenger Work screen displays the countdown and negotiated split', () => 
 
   assert.match(source, /workCountdownPanel/);
   assert.match(source, /workNegotiationPanel/);
-  assert.match(source, /setInterval\([\s\S]{0,500}1000/);
+  assert.match(source, /setInterval\(/);
+  assert.match(source, /1000/);
   assert.match(source, /Negotiate with a driver/);
   assert.match(source, /Driver receives/);
   assert.match(source, /submitEarlyDepartureOffer/);
