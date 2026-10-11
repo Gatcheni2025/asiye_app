@@ -6460,6 +6460,52 @@ exports.submitGoFareOffer =
           patch
         );
 
+        /*
+         * Booking-critical passenger lock is written by the authenticated
+         * server after ownership is verified. The passenger client must not
+         * depend on a direct write to commuters/{id}/currentRequest because
+         * stale cached commuter IDs correctly produce RTDB PERMISSION_DENIED.
+         */
+        const passengerId =
+          String(
+            context.trip.commuterId ||
+            ""
+          ).trim();
+
+        if (passengerId) {
+          const passengerLock =
+            await admin.database()
+              .ref(
+                `commuters/${passengerId}/currentRequest`
+              )
+              .transaction(
+                current => {
+                  if (
+                    current === null ||
+                    current === undefined ||
+                    current === "" ||
+                    String(current) ===
+                      String(context.requestId)
+                  ) {
+                    return context.requestId;
+                  }
+
+                  return;
+                },
+                undefined,
+                false
+              );
+
+          if (!passengerLock.committed) {
+            return response
+              .status(409)
+              .json({
+                error:
+                  "You already have another active booking."
+              });
+          }
+        }
+
         return response
           .status(200)
           .json({

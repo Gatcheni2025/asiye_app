@@ -589,15 +589,12 @@ ASIYE.booking = {
             }
 
 
-            await firebase
-                .database()
-                .ref(
-                    `commuters/${uid}`
-                )
-                .update({
-                    currentRequest:
-                        requestId
-                });
+            /*
+             * submitGoFareOffer now locks commuters/{id}/currentRequest
+             * server-side after verifying the Firebase ID token and request
+             * ownership. Do not repeat that booking-critical write from the
+             * WebView client.
+             */
 
 
             ASIYE.state.booking

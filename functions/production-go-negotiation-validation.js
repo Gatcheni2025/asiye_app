@@ -261,6 +261,18 @@ async function validate(tokens) {
   );
   record('Server recomputed 85–95% fare corridor', 'R101–R112, suggested R106');
 
+  const passengerCurrentRequest = (
+    await db.ref(
+      `commuters/${passengerId}/currentRequest`
+    ).once('value')
+  ).val();
+
+  assert(
+    passengerCurrentRequest === requestId,
+    `Server did not lock passenger currentRequest after protected fare submission: ${passengerCurrentRequest}`
+  );
+  record('Server locked passenger currentRequest after authenticated fare validation');
+
   const dispatch = await functionPost(
     'dispatchGoRideRequest',
     passengerToken,

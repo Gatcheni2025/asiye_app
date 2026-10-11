@@ -589,3 +589,25 @@ test('negotiated Go finalization survives the RTDB initial-null transaction pass
     'finalization must verify the authoritative committed booking state'
   );
 });
+
+
+test('protected Go fare submission owns passenger currentRequest on the server', () => {
+  const start = functionsSource.indexOf(
+    'exports.submitGoFareOffer'
+  );
+  const block = functionsSource.slice(start, start + 14000);
+
+  assert.ok(
+    block.includes(
+      'commuters/${passengerId}/currentRequest'
+    ),
+    'server must own the passenger booking lock'
+  );
+
+  assert.ok(
+    block.includes(
+      'You already have another active booking.'
+    ),
+    'server must not silently overwrite another active passenger booking'
+  );
+});
