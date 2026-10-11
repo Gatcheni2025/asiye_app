@@ -129,3 +129,22 @@ test('admin cannot rewrite protected negotiated fare or settled status',()=>{
  assert.match(cancelBlock,/already financially settled/);
  assert.match(cancelBlock,/refund\/reconciliation case/);
 });
+
+
+test('driver updates are visible and reviewable from Admin',()=>{
+ const html=root('assets/admin/index.html');
+ const consoleSource=root('assets/admin/console.js');
+ const backend=root('functions/index.js');
+
+ assert.match(html,/data-view="driverUpdates"/);
+ assert.match(consoleSource,/Driver updates awaiting approval/);
+ assert.match(consoleSource,/vehicleApprovalStatus/);
+ assert.match(consoleSource,/vehiclePending/);
+ assert.match(consoleSource,/Compare approved vs submitted vehicle/);
+ assert.match(consoleSource,/Approve update/);
+ assert.match(consoleSource,/Request changes/);
+ assert.match(consoleSource,/reviewVehicle/);
+ assert.match(backend,/if \(action === "reviewVehicle"\)/);
+ assert.match(backend,/vehicleApprovalStatus: decision/);
+ assert.match(backend,/vehicleApproved: decision === "approved"/);
+});
