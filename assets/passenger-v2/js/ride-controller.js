@@ -358,6 +358,8 @@ ASIYE.ride = {
 
             case 'waiting_members':
 
+            case 'work_negotiation':
+
                 ASIYE.ui
                     .renderClubWaiting(
                         request
