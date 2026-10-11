@@ -107,6 +107,13 @@ function isJoinableClubRequest(request) {
 }
 
 function canIssueTripShare(request, passengerId, authUid) {
+  if (request?.clubSecurityVersion === 2) {
+    const member = request.passengers?.[passengerId];
+    return !!(member && member.authUid === authUid && member.arrivedAt &&
+      !String(member.status || '').includes('cancelled') &&
+      !ENDED_STATUSES.has(request.status));
+  }
+
   return (
     isTripShareParticipant(request, passengerId, authUid) ||
     isJoinableClubRequest(request)

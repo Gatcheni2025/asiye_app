@@ -1811,6 +1811,12 @@ ASIYE.booking = {
         }
 
 
+        if (request.clubSecurityVersion === 2) {
+            await window.ClubLive.post('clubDriverActionSecure', {requestId, action:'cancelPassenger'});
+            this.clearLocalRide();
+            return true;
+        }
+
         const passengerStatus =
             request.type ===
                 'club' &&

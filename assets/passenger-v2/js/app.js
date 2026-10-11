@@ -1546,6 +1546,8 @@ ASIYE.ui = {
        ======================================================== */
 
     renderClubWaiting(request) {
+        if (request.clubSecurityVersion === 2) return window.ClubLive.renderPassenger(request);
+
 
         const container =
             document.getElementById(

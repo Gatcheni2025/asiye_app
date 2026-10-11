@@ -130,6 +130,8 @@ ASIYE_DRIVER.trip = {
     handleState(
         request
     ) {
+        if (request.clubSecurityVersion === 2 && ['pooling','driver_waiting','pool_ready','work_negotiation'].includes(request.status)) { window.ClubLive.renderDriver(request); return; }
+
 
         const status =
             request.status;
@@ -912,6 +914,8 @@ ASIYE_DRIVER.trip = {
        ======================================================== */
 
     async startClubCollection() {
+        if (this.request?.clubSecurityVersion === 2) { await window.ClubLive.driverAction('collect'); await this.navigateToNextClubPassenger(); return; }
+
 
         if (
             !this.request ||
@@ -1159,6 +1163,9 @@ ASIYE_DRIVER.trip = {
             next.id;
 
 
+        if (req.clubSecurityVersion === 2) {
+            await window.ClubLive.driverAction('onWay', {passengerId:next.id});
+        } else {
         await firebase
             .database()
             .ref(
@@ -1177,6 +1184,8 @@ ASIYE_DRIVER.trip = {
                         .TIMESTAMP
             });
 
+
+        }
 
         await this.notifyPassenger(
 
@@ -1250,6 +1259,8 @@ ASIYE_DRIVER.trip = {
        ======================================================== */
 
     async markClubPassengerArrived() {
+        if (this.request?.clubSecurityVersion === 2) { await window.ClubLive.driverAction('arrive', {passengerId:this.currentPassengerId}); ASIYE_DRIVER.ui.showPassengerPin({isClub:true,passengerId:this.currentPassengerId,passengerName:this.request.passengers[this.currentPassengerId]?.name}); return; }
+
 
         const passengerId =
             this.currentPassengerId;
@@ -1354,6 +1365,8 @@ ASIYE_DRIVER.trip = {
         passengerId,
         enteredPin
     ) {
+        if (this.request?.clubSecurityVersion === 2) { try { await window.ClubLive.driverAction('verifyPin', {passengerId, pin:enteredPin}); this.currentPassengerId=null; this.request=(await this.requestRef.once('value')).val(); await this.navigateToNextClubPassenger(this.request); return true; } catch(e) { ASIYE_DRIVER.ui.toast(e.message,'danger'); return false; } }
+
 
         if (
             !passengerId ||
@@ -1500,6 +1513,8 @@ ASIYE_DRIVER.trip = {
        ======================================================== */
 
     async markAllOnboard() {
+        if (this.request?.clubSecurityVersion === 2) return this.startClubTrip();
+
 
         await this.requestRef.update({
 
@@ -1520,6 +1535,8 @@ ASIYE_DRIVER.trip = {
 
 
     async startClubTrip() {
+        if (this.request?.clubSecurityVersion === 2) return window.ClubLive.driverAction('start');
+
 
         const freshSnapshot =
 
@@ -1748,6 +1765,8 @@ ASIYE_DRIVER.trip = {
        ======================================================== */
 
     async completeTrip() {
+        if (this.request?.clubSecurityVersion === 2) { await this.settleSelectedPayments(); await window.ClubLive.driverAction('complete'); await this.releaseDriver(); return; }
+
 
         if (
             !this.requestId ||
@@ -2178,6 +2197,8 @@ ASIYE_DRIVER.trip = {
     async cancelTrip(
         reason = ''
     ) {
+        if (this.request?.clubSecurityVersion === 2) { await window.ClubLive.driverAction('cancelDriver'); await this.releaseDriver(); return true; }
+
 
         if (
             !this.requestId ||

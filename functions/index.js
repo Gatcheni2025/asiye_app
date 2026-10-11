@@ -2109,6 +2109,7 @@ exports.notifyDriversOfClubAreaBooking =
 
         if (
           !request ||
+          request.clubSecurityVersion === 2 ||
           request.type !==
             "club" ||
           request.poolReady ===
@@ -2226,6 +2227,7 @@ exports.refreshDriversWhileClubPooling =
 
         if (
           !request ||
+          request.clubSecurityVersion === 2 ||
           request.type !==
             "club" ||
           request.poolReady ===
@@ -2371,225 +2373,7 @@ async function workPassengerForRequest(decoded, trip) {
   return { id: passengerId, data: passenger?.data || {} };
 }
 
-exports.submitWorkEarlyDepartureOffer = onRequest(
-  { region: 'us-central1', invoker: 'public' },
-  async (request, response) => {
-    walletSmsCors(request, response);
-    if (request.method === 'OPTIONS') return response.status(204).send('');
-    if (request.method !== 'POST') return response.status(405).json({error: 'POST required.'});
-
-    try {
-      const decoded = await verifiedRequestUser(request);
-      if (!decoded) {
-        return response.status(401).json({error: 'Passenger sign-in is required.'});
-      }
-
-      const requestId = String(request.body?.requestId || '').trim();
-      if (!/^[A-Za-z0-9_-]{1,160}$/.test(requestId)) {
-        return response.status(400).json({error: 'Work booking reference is invalid.'});
-      }
-
-      const requestRef = admin.database().ref('requests/' + requestId);
-      const snapshot = await requestRef.once('value');
-      const trip = snapshot.val();
-      if (!trip || trip.type !== 'club') {
-        return response.status(404).json({error: 'Asiye Work booking was not found.'});
-      }
-
-      const participant = await workPassengerForRequest(decoded, trip);
-      if (!participant) {
-        return response.status(403).json({error: 'Only current passengers can negotiate this Work booking.'});
-      }
-
-      if (trip.taxiId) {
-        return response.status(409).json({error: 'A driver is already assigned to this Work booking.'});
-      }
-
-      const pricing = workTimeoutPricing(trip);
-      if (pricing.passengerCount >= pricing.requiredPassengers || trip.poolReady === true) {
-        return response.status(409).json({error: 'The Work group is already ready to continue normally.'});
-      }
-
-      const startedAt = Number(trip.workWaitStartedAt || trip.createdAt || 0);
-      const expiresAt = startedAt > 0 ? startedAt + ASIYE_WORK_WAIT_MS : 0;
-      const remainingMs = expiresAt > 0 ? expiresAt - Date.now() : ASIYE_WORK_WAIT_MS;
-      if (remainingMs > 0) {
-        return response.status(409).json({
-          error: 'The 30-minute Asiye Work matching period is still running.',
-          code: 'work/wait-active',
-          remainingSeconds: Math.ceil(remainingMs / 1000)
-        });
-      }
-
-      const existing = trip.workNegotiation || {};
-      const requestedAmount = request.body?.amount;
-      const offerTotalFare = workFareMoney(
-        requestedAmount == null || requestedAmount === ''
-          ? (existing.offerTotalFare || pricing.recommendedTotalFare)
-          : requestedAmount
-      );
-
-      if (
-        offerTotalFare < pricing.minimumTotalFare - 0.001 ||
-        offerTotalFare > pricing.maximumTotalFare + 0.001
-      ) {
-        return response.status(422).json({
-          error: 'Choose a Work offer between R' + pricing.minimumTotalFare.toFixed(2) +
-            ' and R' + pricing.maximumTotalFare.toFixed(2) + '.',
-          minimumTotalFare: pricing.minimumTotalFare,
-          recommendedTotalFare: pricing.recommendedTotalFare,
-          maximumTotalFare: pricing.maximumTotalFare
-        });
-      }
-
-      if (
-        existing.offerTotalFare &&
-        Math.abs(workFareMoney(existing.offerTotalFare) - offerTotalFare) > 0.01
-      ) {
-        return response.status(409).json({
-          error: 'Another passenger has already proposed R' +
-            workFareMoney(existing.offerTotalFare).toFixed(2) +
-            '. Agree to that same offer.',
-          offerTotalFare: workFareMoney(existing.offerTotalFare)
-        });
-      }
-
-      const activeIds = pricing.active.map(([id]) => id).sort();
-      const approvals = {};
-      for (const id of activeIds) {
-        if (existing.passengerApprovals?.[id] === true) approvals[id] = true;
-      }
-      approvals[participant.id] = true;
-      const approvedCount = activeIds.filter(id => approvals[id] === true).length;
-      const allApproved = approvedCount === activeIds.length;
-
-      if (!allApproved) {
-        const negotiation = {
-          status: 'collecting_passenger_approvals',
-          passengerCount: pricing.passengerCount,
-          originalRequiredPassengers: pricing.requiredPassengers,
-          minimumTotalFare: pricing.minimumTotalFare,
-          recommendedTotalFare: pricing.recommendedTotalFare,
-          maximumTotalFare: pricing.maximumTotalFare,
-          offerTotalFare,
-          offerPerPassenger: workFareMoney(offerTotalFare / activeIds.length),
-          passengerApprovals: approvals,
-          approvedCount,
-          approvalsNeeded: activeIds.length,
-          proposedAt: existing.proposedAt || Date.now(),
-          lastApprovedAt: Date.now()
-        };
-
-        await requestRef.update({
-          status: 'work_negotiation',
-          workWaitMinutes: 30,
-          workWaitExpiresAt: expiresAt,
-          workNegotiation: negotiation
-        });
-
-        for (const id of activeIds) {
-          if (approvals[id] === true) continue;
-          await admin.database().ref('notifications/commuters/' + id).push({
-            type: 'work_timeout_offer_approval',
-            title: 'Agree to leave with fewer passengers?',
-            message: 'Your Work group proposes R' +
-              workFareMoney(offerTotalFare / activeIds.length).toFixed(2) +
-              ' per passenger so a driver can leave now.',
-            requestId,
-            offerTotalFare,
-            timestamp: admin.database.ServerValue.TIMESTAMP
-          });
-        }
-
-        return response.status(200).json({
-          ok: true,
-          requestId,
-          status: negotiation.status,
-          negotiation
-        });
-      }
-
-      const totalCents = Math.round(offerTotalFare * 100);
-      const baseCents = Math.floor(totalCents / activeIds.length);
-      let remainder = totalCents - baseCents * activeIds.length;
-      const updates = {
-        status: 'pool_ready',
-        poolReady: true,
-        paymentsReady: false,
-        paymentStatus: 'waiting_pool',
-        earlyDepartureNegotiated: true,
-        effectiveRequiredPassengers: activeIds.length,
-        requiredPassengers: activeIds.length,
-        minimumPassengers: activeIds.length,
-        remainingSeats: 0,
-        originalWorkTargetFare: pricing.recommendedTotalFare,
-        totalPoolFare: offerTotalFare,
-        driverGrossFare: offerTotalFare,
-        platformCommission: workFareMoney(offerTotalFare * 0.20),
-        driverNetFare: workFareMoney(offerTotalFare * 0.80),
-        workWaitMinutes: 30,
-        workWaitExpiresAt: expiresAt,
-        workNegotiation: {
-          status: 'driver_offer',
-          passengerCount: activeIds.length,
-          originalRequiredPassengers: pricing.requiredPassengers,
-          minimumTotalFare: pricing.minimumTotalFare,
-          recommendedTotalFare: pricing.recommendedTotalFare,
-          maximumTotalFare: pricing.maximumTotalFare,
-          offerTotalFare,
-          offerPerPassenger: workFareMoney(offerTotalFare / activeIds.length),
-          passengerApprovals: approvals,
-          approvedCount,
-          approvalsNeeded: activeIds.length,
-          proposedAt: existing.proposedAt || Date.now(),
-          allPassengersApprovedAt: Date.now()
-        }
-      };
-
-      for (const id of activeIds) {
-        const cents = baseCents + (remainder > 0 ? 1 : 0);
-        if (remainder > 0) remainder -= 1;
-        updates['passengers/' + id + '/price'] = cents / 100;
-        updates['passengers/' + id + '/negotiatedWorkFare'] = true;
-        updates['passengers/' + id + '/workFareAgreedAt'] = admin.database.ServerValue.TIMESTAMP;
-      }
-
-      await requestRef.update(updates);
-      const latest = (await requestRef.once('value')).val();
-      const paymentSummary = await prepareClubPoolPayments(requestId, latest);
-
-      for (const id of activeIds) {
-        await admin.database().ref('notifications/commuters/' + id).push({
-          type: 'work_timeout_offer_sent',
-          title: 'Work early-departure offer ready',
-          message: 'All current passengers agreed. Nearby drivers can now accept the R' +
-            offerTotalFare.toFixed(2) + ' Work offer.',
-          requestId,
-          offerTotalFare,
-          timestamp: admin.database.ServerValue.TIMESTAMP
-        });
-      }
-
-      return response.status(200).json({
-        ok: true,
-        requestId,
-        status: 'driver_offer',
-        offerTotalFare,
-        driverReceives: workFareMoney(offerTotalFare * 0.80),
-        asiyeFee: workFareMoney(offerTotalFare * 0.20),
-        approvedCount,
-        approvalsNeeded: activeIds.length,
-        paymentSummary
-      });
-
-    } catch (error) {
-      console.error('Submit Work early-departure offer failed', error);
-      return response.status(500).json({
-        error: error?.message || 'Unable to negotiate this Work booking.'
-      });
-    }
-  }
-);
+// submitWorkEarlyDepartureOffer is registered by the server-owned Club lifecycle below.
 
 exports.notifyDriversWhenClubReady = functions
   .runWith({
@@ -2611,6 +2395,7 @@ exports.notifyDriversWhenClubReady = functions
 
     if (
       !request ||
+      request.clubSecurityVersion === 2 ||
       request.type !== "club" ||
       request.taxiId ||
       request.poolReady !== true ||
@@ -3845,6 +3630,8 @@ exports.adminManagePlatform = functions.https.onCall(
         );
       }
 
+      if (request.clubSecurityVersion === 2) throw new functions.https.HttpsError('failed-precondition', 'Secure Club bookings must use the Club lifecycle; direct fare, driver and state edits are blocked.');
+
       const source =
         data?.patch || {};
 
@@ -4087,6 +3874,8 @@ exports.adminManagePlatform = functions.https.onCall(
           "Booking was not found."
         );
       }
+
+      if (request.clubSecurityVersion === 2) throw new functions.https.HttpsError('failed-precondition', 'Secure Club driver reservations cannot be replaced through generic admin assignment.');
 
       if (!driver) {
         throw new functions.https.HttpsError(
@@ -11042,6 +10831,7 @@ async function refreshClubPaymentsReady(
         }
 
         if (
+          trip.clubSecurityVersion !== 2 &&
           method ===
             "card"
         ) {
@@ -11077,9 +10867,9 @@ async function refreshClubPaymentsReady(
           ? "held"
           : "payment_required",
       status:
-        ready
-          ? "pool_ready"
-          : "payment_required"
+        trip.clubSecurityVersion === 2
+          ? (trip.status === "collecting_passengers" || trip.status === "in_transit" ? trip.status : ready ? "pool_ready" : "driver_waiting")
+          : ready ? "pool_ready" : "payment_required"
     });
 
   return {
@@ -12883,6 +12673,10 @@ exports.settleTripPayment =
             });
         }
 
+        if (trip.clubSecurityVersion === 2 && !['in_transit', 'completed'].includes(trip.status)) {
+          return response.status(409).json({error:'Secure Club payments can only be settled after verified departure.'});
+        }
+
         const passengers =
           trip.type ===
             "club"
@@ -14542,373 +14336,7 @@ exports.refreshClubPaymentReadinessAfterSafetyShare =
 // the Admin SDK so a passenger cannot rewrite another passenger or trip state.
 const { applyClubJoin } = require("./club-pool-security");
 
-exports.joinClubPoolSecure = onRequest(
-  {
-    region: "us-central1"
-  },
-  async (request, response) => {
-    walletSmsCors(request, response);
-
-    if (request.method === "OPTIONS") {
-      return response.status(204).send("");
-    }
-
-    if (request.method !== "POST") {
-      return response.status(405).json({ error: "POST required." });
-    }
-
-    try {
-      const match = (request.get("authorization") || "").match(/^Bearer (.+)$/);
-      if (!match) {
-        return response.status(401).json({
-          error: "Sign in again before joining this Club ride."
-        });
-      }
-
-      const decoded = await admin.auth().verifyIdToken(match[1]);
-      const poolId = String(request.body?.poolId || "").trim();
-
-      if (!/^[A-Za-z0-9_-]{1,128}$/.test(poolId)) {
-        return response.status(400).json({ error: "Invalid Club pool." });
-      }
-
-      const passenger = await resolvePassengerForWallet(decoded);
-      const passengerId = String(passenger?.id || decoded.uid);
-      const profile = passenger?.data || {};
-      const paymentMethod =
-        normaliseRidePaymentMethod(
-          request.body?.paymentMethod
-        );
-      const pin = String(request.body?.pickupPin || "").trim();
-
-      if (
-        paymentMethod !== "card" &&
-        !/^\d{4}$/.test(pin)
-      ) {
-        return response.status(400).json({
-          error: "A valid 4-digit trip PIN is required."
-        });
-      }
-
-      const details = {
-        name:
-          profile.name ||
-          profile.firstName ||
-          decoded.name ||
-          "Passenger",
-        phone:
-          profile.phone ||
-          profile.phoneNumber ||
-          decoded.phone_number ||
-          "",
-        profileImageUrl:
-          profile.profile_picture_url ||
-          profile.profileImageUrl ||
-          profile.photoURL ||
-          "",
-        pickupPin: pin,
-        pickupAddress: request.body?.pickupAddress,
-        pickupLat: request.body?.pickupLat,
-        pickupLng: request.body?.pickupLng,
-        destination: request.body?.destination,
-        destinationLat: request.body?.destinationLat,
-        destinationLng: request.body?.destinationLng,
-        departureTime: request.body?.departureTime,
-        paymentMethod
-      };
-
-      /*
-       * Use an RTDB ETag conditional write instead of the Admin SDK
-       * transaction helper here. In Cloud Functions the Admin transaction
-       * callback can begin with a local null cache value even when this pool
-       * already exists, which caused valid Club joins to abort as
-       * "Club pool was not found."
-       *
-       * ETag + If-Match keeps the join atomic without ever treating an empty
-       * local cache as the authoritative server state. If another passenger
-       * joins at the same time, the 412 response causes us to reload and
-       * recompute capacity/pricing before retrying.
-       */
-      const firebaseConfig =
-        (() => {
-          try {
-            return JSON.parse(
-              process.env.FIREBASE_CONFIG ||
-              "{}"
-            );
-          } catch (_) {
-            return {};
-          }
-        })();
-
-      const databaseURL =
-        String(
-          firebaseConfig.databaseURL ||
-          "https://asiye-80386-default-rtdb.firebaseio.com"
-        )
-        .replace(/\\\/$/, "");
-
-      const credential =
-        admin.app().options.credential;
-
-      if (
-        !credential ||
-        typeof credential.getAccessToken !==
-          "function"
-      ) {
-        throw new Error(
-          "Firebase Admin credential is unavailable."
-        );
-      }
-
-      const access =
-        await credential.getAccessToken();
-
-      const accessToken =
-        access?.access_token;
-
-      if (!accessToken) {
-        throw new Error(
-          "Firebase Admin access token is unavailable."
-        );
-      }
-
-      const poolUrl =
-        `${databaseURL}/requests/${encodeURIComponent(poolId)}.json`;
-
-      let saved = null;
-      let joinError = null;
-
-      for (
-        let attempt = 0;
-        attempt < 5;
-        attempt += 1
-      ) {
-        const readResponse =
-          await fetch(
-            poolUrl,
-            {
-              method:
-                "GET",
-              headers: {
-                Authorization:
-                  `Bearer ${accessToken}`,
-                "X-Firebase-ETag":
-                  "true",
-                "Cache-Control":
-                  "no-cache"
-              }
-            }
-          );
-
-        if (!readResponse.ok) {
-          throw new Error(
-            `Unable to load Club pool (${readResponse.status}).`
-          );
-        }
-
-        const current =
-          await readResponse.json();
-
-        const etag =
-          readResponse.headers.get(
-            "etag"
-          );
-
-        if (
-          !current ||
-          current.type !== "club"
-        ) {
-          joinError =
-            new Error(
-              "Club pool was not found."
-            );
-          joinError.code =
-            "club/not-found";
-          break;
-        }
-
-        let next;
-
-        try {
-          next =
-            applyClubJoin(
-              current,
-              passengerId,
-              details,
-              Date.now()
-            ).pool;
-        } catch (error) {
-          joinError =
-            error;
-          break;
-        }
-
-        if (!etag) {
-          throw new Error(
-            "Club pool version token is unavailable."
-          );
-        }
-
-        const writeResponse =
-          await fetch(
-            poolUrl,
-            {
-              method:
-                "PUT",
-              headers: {
-                Authorization:
-                  `Bearer ${accessToken}`,
-                "Content-Type":
-                  "application/json",
-                "If-Match":
-                  etag
-              },
-              body:
-                JSON.stringify(
-                  next
-                )
-            }
-          );
-
-        if (
-          writeResponse.status ===
-          412
-        ) {
-          continue;
-        }
-
-        if (!writeResponse.ok) {
-          throw new Error(
-            `Unable to save Club join (${writeResponse.status}).`
-          );
-        }
-
-        saved =
-          await writeResponse.json();
-
-        break;
-      }
-
-      if (!saved) {
-        const status =
-          joinError?.code ===
-            "club/full"
-            ? 409
-            : joinError?.code ===
-                "club/not-found"
-              ? 404
-              : 409;
-
-        return response.status(status).json({
-          error:
-            joinError?.message ||
-            "The Club ride changed while you were joining. Please try again."
-        });
-      }
-
-      await admin.database()
-        .ref(`commuters/${passengerId}`)
-        .update({
-          currentRequest: poolId
-        });
-
-      const shareToken =
-        validTripShareToken(
-          request.body?.shareToken
-        );
-
-      if (shareToken) {
-        const tokenRef =
-          admin.database()
-            .ref(
-              `tripShareTokens/${shareToken}`
-            );
-
-        const tokenSnapshot =
-          await tokenRef
-            .once("value");
-
-        const share =
-          tokenSnapshot.val();
-
-        if (
-          share &&
-          share.requestId === poolId &&
-          share.issuedToUid === decoded.uid &&
-          String(
-            share.passengerId ||
-            ""
-          ) === passengerId
-        ) {
-          await tokenRef.update({
-            active:
-              true,
-            activatedAt:
-              admin.database
-                .ServerValue
-                .TIMESTAMP
-          });
-        }
-      }
-
-      let paymentSummary = {
-        ready:
-          false
-      };
-
-      if (
-        saved.poolReady ===
-          true
-      ) {
-        paymentSummary =
-          await prepareClubPoolPayments(
-            poolId,
-            saved
-          );
-      }
-
-      const latestPassenger =
-        (
-          await admin.database()
-            .ref(
-              `requests/${poolId}/passengers/${passengerId}`
-            )
-            .once(
-              "value"
-            )
-        ).val() || {};
-
-      return response.status(200).json({
-        ok: true,
-        poolId,
-        passengerId,
-        passengerCount: Number(saved.passengerCount || 0),
-        status:
-          paymentSummary.ready
-            ? "pool_ready"
-            : saved.poolReady === true
-              ? "payment_required"
-              : saved.status || "pooling",
-        paymentsReady:
-          paymentSummary.ready ===
-          true,
-        passengerPaymentStatus:
-          latestPassenger.paymentStatus ||
-          "waiting_pool"
-      });
-    } catch (error) {
-      console.error("Secure Club join failed", {
-        code: error?.code || "unknown",
-        message: error?.message || String(error)
-      });
-
-      return response.status(401).json({
-        error: "Unable to verify or join this Club ride."
-      });
-    }
-  }
-);
+// joinClubPoolSecure is registered by the server-owned Club lifecycle below.
 
 
 // =================================================================
@@ -15434,4 +14862,28 @@ exports.getTripShare = onRequest(
         });
     }
   }
+);
+
+
+// v337 Club lifecycle: all commercial and pickup transitions are server-owned.
+const { registerClubLifecycle } = require('./club-lifecycle');
+const secureClub = registerClubLifecycle({
+  admin, onRequest, cors: walletSmsCors, verifyUser: verifiedRequestUser,
+  resolvePassenger: resolvePassengerForWallet, nearbyDrivers: nearbyWorkDrivers,
+  driverEligible: driverProfileCanReceiveRequests, marketFare: goMarketReference,
+  preparePayments: prepareClubPoolPayments, paymentPath: tripPaymentPath,
+  distanceKm: haversineKm
+});
+exports.createClubBookingSecure = secureClub.create;
+exports.joinClubPoolSecure = secureClub.join;
+exports.getClubPickupPin = secureClub.getPin;
+exports.submitWorkEarlyDepartureOffer = secureClub.submitOffer;
+exports.clubDriverActionSecure = secureClub.action;
+exports.synchronizeClubBooking = functions.database.ref('/requests/{requestId}').onWrite(async (change, context) => {
+  if (change.after.val()?.clubSecurityVersion !== 2) return null;
+  await secureClub.sync(context.params.requestId);
+  return null;
+});
+exports.expireClubWaiting = require('firebase-functions/v2/scheduler').onSchedule(
+  { schedule: 'every 1 minutes', region: 'us-central1' }, () => secureClub.expireDue()
 );

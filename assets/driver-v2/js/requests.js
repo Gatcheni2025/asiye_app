@@ -233,6 +233,16 @@ ASIYE_DRIVER.requests = {
                         notification.requestKey;
 
 
+                    if (notification.type === 'club_waiting_sync' && requestId) {
+                        const assigned = (await firebase.database().ref(`requests/${requestId}`).once('value')).val();
+                        if (assigned?.clubSecurityVersion === 2 && assigned.taxiId === ASIYE_DRIVER.state.driverId) {
+                            ASIYE_DRIVER.trip.start(requestId);
+                            ASIYE_DRIVER.ui?.toast?.(notification.message, 'club');
+                        }
+                        await this.removeNotification(snapshot.key);
+                        return;
+                    }
+
                     /*
                      * Privacy-safe Asiye Work area alert.
                      *

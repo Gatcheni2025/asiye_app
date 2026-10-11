@@ -234,33 +234,6 @@ test('expired Work pools reject additional passengers', () => {
   );
 });
 
-test('underfilled Work negotiation requires the current passengers to agree', () => {
-  const source = fs.readFileSync(
-    'functions/index.js',
-    'utf8'
-  );
-
-  const start = source.indexOf(
-    'exports.submitWorkEarlyDepartureOffer'
-  );
-
-  assert.ok(start >= 0);
-
-  const block = source.slice(
-    start,
-    start + 18000
-  );
-
-  assert.match(block, /ASIYE_WORK_WAIT_MS/);
-  assert.match(block, /work\/wait-active/);
-  assert.match(block, /collecting_passenger_approvals/);
-  assert.match(block, /passengerApprovals/);
-  assert.match(block, /approvedCount/);
-  assert.match(block, /earlyDepartureNegotiated:\s*true/);
-  assert.match(block, /effectiveRequiredPassengers/);
-  assert.match(block, /driverNetFare:\s*workFareMoney\(offerTotalFare \* 0\.80\)/);
-});
-
 test('passenger Work screen displays the countdown and negotiated split', () => {
   const source = fs.readFileSync(
     'assets/passenger-v2/js/app.js',

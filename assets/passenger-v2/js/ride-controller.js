@@ -1514,6 +1514,9 @@ ASIYE.ride = {
 
         const capacity =
             Number(
+                request.effectiveRequiredPassengers ||
+                request.requiredPassengers ||
+                request.minimumPassengers ||
                 request.capacity ||
                 request.maxCapacity ||
                 4
@@ -1772,6 +1775,7 @@ ASIYE.ride = {
                 }
             });
         });
+        if (request.clubSecurityVersion === 2) window.ClubLive.enhancePickup(request, container, arrived);
         ASIYE.map?.resize();
     },
 
