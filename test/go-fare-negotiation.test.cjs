@@ -565,3 +565,27 @@ test('Go fare acceptance does not abort on the RTDB transaction initial-null pas
     'a null no-op transaction must never be treated as a successful acceptance'
   );
 });
+
+
+test('negotiated Go finalization survives the RTDB initial-null transaction pass', () => {
+  const start = functionsSource.indexOf(
+    'exports.finalizeNegotiatedGoBooking'
+  );
+  const block = functionsSource.slice(start, start + 15000);
+
+  assert.ok(start >= 0);
+
+  assert.ok(
+    block.includes(
+      'current === null'
+    ),
+    'finalization must recognize Firebase initial-null callbacks'
+  );
+
+  assert.ok(
+    block.includes(
+      'finalized.negotiatedBookingFinalized !=='
+    ),
+    'finalization must verify the authoritative committed booking state'
+  );
+});

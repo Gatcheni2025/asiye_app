@@ -1,4 +1,4 @@
-name: Deploy Go Fare Acceptance Hotfix
+name: Deploy Go Booking Transaction Hotfix
 
 on:
   workflow_dispatch:
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy and verify acceptGoFareOffer
+    name: Deploy and verify negotiated Go booking
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
@@ -50,12 +50,18 @@ jobs:
         with:
           credentials_json: ${{ env.FIREBASE_CREDS }}
 
-      - name: Deploy acceptGoFareOffer
+      - name: Deploy negotiated Go transaction functions
+        shell: bash
         run: |
-          npx --yes firebase-tools@latest deploy \
-            --project asiye-80386 \
-            --only functions:acceptGoFareOffer \
-            --non-interactive
+          set -euo pipefail
+          for FN in acceptGoFareOffer finalizeNegotiatedGoBooking; do
+            echo "Deploying function: $FN"
+            npx --yes firebase-tools@latest deploy \
+              --project asiye-80386 \
+              --only "functions:$FN" \
+              --non-interactive
+            sleep 3
+          done
 
-      - name: Verify production negotiated Go acceptance
+      - name: Verify production negotiated Go lifecycle
         run: node functions/production-go-negotiation-validation.js

@@ -7535,6 +7535,19 @@ exports.finalizeNegotiatedGoBooking =
         const transaction =
           await requestRef.transaction(
             current => {
+              /*
+               * Firebase RTDB may first invoke this callback with a local
+               * null before it has synchronized the server value. Returning
+               * undefined at that point aborts the transaction and produced
+               * the false "trip can no longer be activated" error seen after
+               * a successful negotiated-fare acceptance.
+               */
+              if (
+                current === null
+              ) {
+                return null;
+              }
+
               if (
                 !current ||
                 current.fareStatus !==
@@ -7587,8 +7600,30 @@ exports.finalizeNegotiatedGoBooking =
         }
 
         const finalized =
-          transaction.snapshot.val() ||
-          {};
+          transaction.snapshot.val();
+
+        /*
+         * A genuinely missing request can commit a null -> null no-op.
+         * Verify the authoritative post-transaction state before notifying
+         * the driver or telling the passenger the trip is active.
+         */
+        if (
+          !finalized ||
+          finalized.fareStatus !==
+            "agreed" ||
+          !finalized.taxiId ||
+          finalized.status !==
+            "accepted" ||
+          finalized.negotiatedBookingFinalized !==
+            true
+        ) {
+          return response
+            .status(409)
+            .json({
+              error:
+                "This negotiated trip can no longer be activated."
+            });
+        }
 
         await admin.database()
           .ref(
