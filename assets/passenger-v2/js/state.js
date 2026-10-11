@@ -131,7 +131,7 @@ ASIYE.state = {
                 10,
 
             maxWaitMinutes:
-                20,
+                30,
 
             poolId:
                 null,
