@@ -575,10 +575,21 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         NavigationDelegate(
           onWebResourceError: (error) {
             debugPrint("WebView Error: ${error.description}");
+            _loadingTimeoutTimer?.cancel();
             if (mounted) setState(() => _isLoading = false);
           },
           onPageStarted: (url) async {
             if (mounted) setState(() => _isLoading = true);
+
+            _loadingTimeoutTimer?.cancel();
+            _loadingTimeoutTimer = Timer(
+              const Duration(seconds: 15),
+              () {
+                if (mounted && _isLoading) {
+                  setState(() => _isLoading = false);
+                }
+              },
+            );
 
             // 🚨 CRITICAL FIX: Track Navigation to sync SharedPreferences
             final prefs = await SharedPreferences.getInstance();
@@ -600,6 +611,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             // JavaScript has restored authentication, profile, map and any
             // active trip, then explicitly sends hidePreloader.
             if (!waitsForAppReady && mounted) {
+              _loadingTimeoutTimer?.cancel();
               setState(() => _isLoading = false);
             }
 
@@ -1115,6 +1127,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             await _stopNavigationVoice();
           }
           else if (action == 'hidePreloader') {
+            _loadingTimeoutTimer?.cancel();
             if (mounted) setState(() => _isLoading = false);
           }
           else if (action == 'captureFacePhoto') {
