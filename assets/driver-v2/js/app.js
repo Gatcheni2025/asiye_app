@@ -1199,6 +1199,12 @@ ASIYE_DRIVER.ui = {
             'delivery';
 
 
+        const isEarlyWork =
+            isClub &&
+            request.earlyDepartureNegotiated ===
+                true;
+
+
         typeBadge.textContent =
 
             isClub
@@ -1341,7 +1347,11 @@ ASIYE_DRIVER.ui = {
 
                 ${
                     isClub
-                    ? 'New Asiye Work request'
+                    ? (
+                        isEarlyWork
+                            ? '30-minute Work negotiated offer'
+                            : 'New Asiye Work request'
+                    )
                     : isDelivery
                         ? 'New delivery request'
                         : 'New ride request'
@@ -1355,7 +1365,11 @@ ASIYE_DRIVER.ui = {
                 ${
                     isClub
 
-                    ? `${passengerCount} of ${capacity} passengers confirmed`
+                    ? (
+                        isEarlyWork
+                            ? `${passengerCount} passengers agreed to leave now`
+                            : `${passengerCount} of ${capacity} passengers confirmed`
+                    )
 
                     : this.escape(
                         isDelivery
@@ -1545,6 +1559,21 @@ ASIYE_DRIVER.ui = {
             }
 
 
+            ${isEarlyWork ? `
+                <div class="driver-club-wait-card" style="margin-top:14px;">
+                    <i class="fas fa-handshake"></i>
+                    <div>
+                        <strong>30-minute Work recommendation</strong>
+                        <p>
+                            The group did not fill in time. Current passengers agreed to this early-departure fare.
+                            Recommended: accept if this trip works for you.
+                            Your estimated net is R${driverNetFare.toFixed(2)}.
+                        </p>
+                    </div>
+                </div>
+            ` : ''}
+
+
             <div class="driver-request-price">
 
                 <span>
@@ -1591,7 +1620,11 @@ ASIYE_DRIVER.ui = {
             true;
 
 
-        this.startRequestTimer();
+        this.startRequestTimer(
+            isEarlyWork
+                ? 45
+                : 20
+        );
     },
 
 
@@ -1624,13 +1657,21 @@ ASIYE_DRIVER.ui = {
        REQUEST TIMER
        ======================================================== */
 
-    startRequestTimer() {
+    startRequestTimer(
+        seconds = 20
+    ) {
 
         this.stopRequestTimer();
 
 
         this.requestSeconds =
-            20;
+            Math.max(
+                10,
+                Number(
+                    seconds ||
+                    20
+                )
+            );
 
 
         const timer =
@@ -2147,10 +2188,18 @@ ASIYE_DRIVER.ui = {
         const capacity =
 
             Number(
+                request.effectiveRequiredPassengers ||
+                request.requiredPassengers ||
+                request.minimumPassengers ||
                 request.capacity ||
                 request.maxCapacity ||
                 4
             );
+
+
+        const earlyDeparture =
+            request.earlyDepartureNegotiated ===
+                true;
 
 
         container.innerHTML = `
@@ -2175,8 +2224,10 @@ ASIYE_DRIVER.ui = {
 
                     <div class="driver-subtitle">
 
-                        All ${capacity}
-                        passengers are confirmed.
+                        ${earlyDeparture
+                            ? `${capacity} current passengers agreed to leave after the 30-minute Work wait.`
+                            : `All ${capacity} required passengers are confirmed.`
+                        }
 
                     </div>
 
