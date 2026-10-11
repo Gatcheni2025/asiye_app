@@ -4326,6 +4326,8 @@ exports.adminManagePlatform = functions.https.onCall(
         vehicleReviewReason: decision === "approved" ? "" : reason,
         vehicleReviewedAt: now,
         vehicleReviewedBy: actor.uid,
+        vehicleUpdateReviewedAt: now,
+        vehicleUpdateReviewedBy: actor.uid,
         isOnline: false,
         isBroadcasting: false
       };
@@ -4341,6 +4343,18 @@ exports.adminManagePlatform = functions.https.onCall(
           vehicleYear: vehicle.year,
           vehicleSeats: vehicle.seats,
           seats: vehicle.seats,
+          vehicleApprovedAt: now,
+          vehicleApprovedBy: actor.uid,
+          vehicleApprovedSnapshot: {
+            ...vehicle,
+            vehiclePhoto:
+              String(
+                driver.vehiclePhoto ||
+                ""
+              ),
+            approvedAt: now,
+            approvedBy: actor.uid
+          },
           vehiclePending: null
         });
       } else {
