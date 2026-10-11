@@ -1,4 +1,4 @@
-/* Asiye Operations Console v1. Server-side callable authorization is
+/* Asiye Operations Console v2. Server-side callable authorization is
    mandatory; never read or write privileged RTDB collections from browser. */
 (() => {
  'use strict';
@@ -197,7 +197,16 @@
        const key=info[view][2];const list=await fetchResource(key);
        if(currentToken!==token)return;
        records={[key]:list};
-       items=latest(refs(list),view==='enrollments'||view==='documents'?'submittedAt':view==='bookings'?'createdAt':'updatedAt');
+       items=latest(
+         refs(list),
+         view==='enrollments'||view==='documents'
+           ?'submittedAt'
+           :view==='driverUpdates'
+             ?'vehicleSubmittedAt'
+             :view==='bookings'
+               ?'createdAt'
+               :'updatedAt'
+       );
        if(view==='bookings') items=items.filter(row=>row.type!=='delivery');
        if(view==='driverUpdates') items=items.filter(row=>
          String(row.vehicleApprovalStatus||'').toLowerCase()==='pending' &&
