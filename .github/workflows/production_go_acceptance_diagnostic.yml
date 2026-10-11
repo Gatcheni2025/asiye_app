@@ -1,0 +1,45 @@
+name: Production Go Acceptance Diagnostic
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/11.0.61-331-pricing-search
+    paths:
+      - 'functions/production-go-negotiation-validation.js'
+      - '.github/workflows/production_go_acceptance_diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Exercise production Go acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install function dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Verify Firebase deployment secret
+        shell: bash
+        run: |
+          test -n "$FIREBASE_CREDS" || (echo "::error::Missing Firebase service-account secret" && exit 1)
+
+      - name: Authenticate to Firebase project
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Run isolated production negotiated Go lifecycle
+        run: node functions/production-go-negotiation-validation.js
