@@ -562,7 +562,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       return; 
     }
 
-    _loadingTimeoutTimer = Timer(const Duration(seconds: 5), () {
+    _loadingTimeoutTimer = Timer(const Duration(seconds: 15), () {
       if (mounted && _isLoading) {
         setState(() => _isLoading = false);
       }
@@ -591,7 +591,17 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             }
           },
           onPageFinished: (url) async {
-            if (mounted) setState(() => _isLoading = false);
+            final waitsForAppReady =
+                url.contains('/passenger-v2/index.html') ||
+                url.contains('/driver-v2/index.html') ||
+                url.contains('taxi.html');
+
+            // Dashboards remain covered by the native preloader until their
+            // JavaScript has restored authentication, profile, map and any
+            // active trip, then explicitly sends hidePreloader.
+            if (!waitsForAppReady && mounted) {
+              setState(() => _isLoading = false);
+            }
 
             final prefs = await SharedPreferences.getInstance();
 
