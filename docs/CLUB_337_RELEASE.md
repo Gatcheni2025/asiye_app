@@ -1,6 +1,6 @@
 # Asiye 11.0.67 (337): secure Club booking
 
-Status: implemented and locally verified; production deployment, signed Android builds and physical-device acceptance remain release gates. Do not publish automatically.
+Status: implemented; targeted tests, signed Android APK/AAB builds and APK signature verification passed. Staging/live-provider acceptance and production deployment remain release gates. Do not publish automatically.
 
 ## Behavior
 
@@ -20,7 +20,9 @@ Status: implemented and locally verified; production deployment, signed Android 
 - Database emulator/security/UI suite: 67 tests passed, including actual HTTP handler tests against RTDB, concurrent joins and approvals, private PIN authorization, direct-write denial, lock release, idempotent completion and matching rendered countdowns.
 - Modified JavaScript parses, all Firebase Functions exports load with a test project configuration, and git diff whitespace checks pass.
 - The broad root suite has six failures also reproduced on the original branch: two old v1 enrollment assumptions, one build-328 admin-title assumption and three trip-chat harness tests. These remain tracked release-readiness issues; this change does not claim a green full suite.
-- Emulator payment providers are stubbed. These tests do not prove live Paystack charges/refunds, FCM delivery, physical GPS, native app lifecycle or successful signed APK/AAB packaging.
+- Firebase Security Validation passed on source commit `5ace48aa9dd53e7c6691f5fb35a5934ee7927f79` ([run](https://github.com/Gatcheni2025/asiye_app/actions/runs/38170798019)).
+- Signed APK and AAB builds, APK signature verification and artifact uploads passed on the same source commit ([Android Release run, attempt 2](https://github.com/Gatcheni2025/asiye_app/actions/runs/38170798003)). The first attempt failed downloading an existing Android Gradle plugin; retry passed without a source change. Artifacts: `asiye-11.0.67-337-apk` and `asiye-11.0.67-337-aab`.
+- Emulator payment providers are stubbed. These tests do not prove live Paystack charges/refunds, FCM delivery, physical GPS or native app lifecycle. Signed packaging success does not replace device acceptance.
 
 ## Deployment and acceptance order
 
@@ -28,6 +30,6 @@ Status: implemented and locally verified; production deployment, signed Android 
 2. In a staging Firebase project, deploy the new `createClubBookingSecure`, `joinClubPoolSecure`, `getClubPickupPin`, `submitWorkEarlyDepartureOffer`, `clubDriverActionSecure`, `synchronizeClubBooking` and `expireClubWaiting` functions. Enable Cloud Scheduler and verify the scheduled job is running. Existing approved vehicle and known seat-count requirements still apply.
 3. Deploy the affected bundled handlers with the same code: `prepareTripPayment`, `verifyTripCardPayment`, `settleTripPayment`, `paystackWebhook`, `createTripShareToken`, `notifyDriversOfClubAreaBooking`, `refreshDriversWhileClubPooling`, `notifyDriversWhenClubReady`, `refreshClubPaymentReadinessAfterSafetyShare` and `adminManagePlatform`. Retain/test existing cancellation-release and FCM notification functions. Keep existing Paystack secrets/provider settings. Do not perform an unrelated full production deployment.
 4. Deploy reviewed RTDB rules and assets in staging. Verify private `clubPrivate` denies all client access; the passenger PIN endpoint works; driver GPS updates remain permitted; request type/secure state/fare/reservation writes are denied. Admin generic booking edit/reassignment cannot bypass the lifecycle.
-5. Build signed APK and AAB from this exact branch. Android Release and Firebase Security Validation now trigger on pushes to this branch. Build artifacts are for testing; no Play publication is configured by this change.
+5. Use the signed APK/AAB artifacts from source commit `5ace48aa9dd53e7c6691f5fb35a5934ee7927f79` for staging acceptance. Rebuild and rerun checks if application/backend/rules source changes. Android Release and Firebase Security Validation now trigger on relevant pushes to this branch. Build artifacts are for testing; no Play publication is configured by this change.
 6. Test separate physical passenger and driver devices: one booking, concurrent joins, all routes/counts, early driver acceptance, restart/resume, background timeout alert, actual 30-minute expiry, passenger approvals, driver counter/reaccept, rejected stale offer, Cash/Wallet/Card amounts and payment return, stale/far GPS arrival denial, wrong/correct PIN, all passengers boarding, departure, completion, cancellation/refund and repeated callbacks.
 7. Only deploy to production/publish after the source, backend/rules, signed builds and physical-device acceptance have passed. No production deployment was performed by this implementation.
