@@ -1718,6 +1718,247 @@ function activeClubPassengerCount(request) {
     .length;
 }
 
+function driverProfileCanReceiveRequests(
+  taxi,
+  {
+    requiredSeats = 0
+  } = {}
+) {
+  const driver =
+    taxi || {};
+
+  const approvalStatus =
+    String(
+      driver.vehicleApprovalStatus ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const verified =
+    String(
+      driver.verificationStatus ||
+      ""
+    )
+      .toLowerCase() ===
+        "verified" ||
+    driver.isVerified ===
+      true ||
+    driver.provisionalActivation ===
+      true;
+
+  if (!verified) {
+    return false;
+  }
+
+  const explicitPending =
+    driver.vehicleApproved ===
+      false ||
+    [
+      "pending",
+      "rejected",
+      "changes_requested",
+      "not_submitted"
+    ].includes(
+      approvalStatus
+    );
+
+  if (explicitPending) {
+    return false;
+  }
+
+  const hasExplicitApprovalState =
+    Object.prototype
+      .hasOwnProperty
+      .call(
+        driver,
+        "vehicleApproved"
+      ) ||
+    Boolean(
+      approvalStatus
+    );
+
+  const explicitlyApproved =
+    driver.vehicleApproved ===
+      true ||
+    approvalStatus ===
+      "approved";
+
+  /*
+   * Compatibility for verified drivers created before the explicit
+   * vehicle-review fields existed. Never grandfather a v2 enrollment
+   * or a profile that is explicitly pending/rejected.
+   */
+  const legacyApproved =
+    !hasExplicitApprovalState &&
+    Number(
+      driver.enrollmentVersion ||
+      0
+    ) < 2 &&
+    verified;
+
+  if (
+    !explicitlyApproved &&
+    !legacyApproved
+  ) {
+    return false;
+  }
+
+  const vehicle =
+    driver.vehicle ||
+    {};
+
+  const vehicleType =
+    String(
+      vehicle.type ||
+      driver.vehicleType ||
+      driver.carCategory ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const registration =
+    String(
+      vehicle.registration ||
+      driver.vehicleReg ||
+      driver.taxiRegistrationNumber ||
+      driver.registration ||
+      driver.registrationNumber ||
+      ""
+    )
+      .trim();
+
+  const phone =
+    String(
+      driver.phone ||
+      driver.phoneNumber ||
+      ""
+    )
+      .trim();
+
+  const profileImage =
+    String(
+      driver.profileImageUrl ||
+      driver.profile_picture_url ||
+      driver.driverProfileImageUrl ||
+      driver.profilePhotoUrl ||
+      driver.photoURL ||
+      driver.documents?.FACE ||
+      ""
+    )
+      .trim();
+
+  if (
+    !vehicleType ||
+    !registration ||
+    !phone ||
+    !profileImage
+  ) {
+    return false;
+  }
+
+  if (
+    !legacyApproved
+  ) {
+    const make =
+      String(
+        vehicle.make ||
+        driver.vehicleMake ||
+        driver.make ||
+        ""
+      ).trim();
+
+    const model =
+      String(
+        vehicle.model ||
+        driver.vehicleModel ||
+        driver.model ||
+        ""
+      ).trim();
+
+    const colour =
+      String(
+        vehicle.colour ||
+        vehicle.color ||
+        driver.vehicleColor ||
+        driver.color ||
+        ""
+      ).trim();
+
+    const year =
+      Number(
+        vehicle.year ||
+        driver.vehicleYear ||
+        driver.year ||
+        0
+      );
+
+    const seats =
+      Number(
+        vehicle.seats ||
+        driver.vehicleSeats ||
+        driver.seats ||
+        0
+      );
+
+    const vehiclePhoto =
+      String(
+        driver.vehiclePhoto ||
+        driver.carPhoto ||
+        driver.documents?.CAR_FRONT ||
+        driver.documents?.carUrl ||
+        ""
+      ).trim();
+
+    if (
+      !make ||
+      !model ||
+      !colour ||
+      !vehiclePhoto ||
+      !Number.isInteger(year) ||
+      year < 1990 ||
+      !Number.isInteger(seats) ||
+      seats < 1
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    Number(requiredSeats) >
+      0
+  ) {
+    const declaredSeats =
+      Number(
+        vehicle.seats ||
+        driver.vehicleSeats ||
+        driver.seats ||
+        driver.capacity ||
+        0
+      );
+
+    /*
+     * Work bookings need a known physical passenger capacity. Legacy
+     * drivers can still receive Go requests, but Work is not offered
+     * until the seat count is present and sufficient.
+     */
+    if (
+      !Number.isInteger(
+        declaredSeats
+      ) ||
+      declaredSeats <
+        Number(
+          requiredSeats
+        )
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 async function nearbyWorkDrivers(
   request,
   limit = 8
@@ -1760,8 +2001,16 @@ async function nearbyWorkDrivers(
 
     if (
       taxi.isOnline !== true ||
+      taxi.isBroadcasting !== true ||
       taxi.currentRequest ||
-      taxi.isFull === true
+      taxi.isFull === true ||
+      !driverProfileCanReceiveRequests(
+        taxi,
+        {
+          requiredSeats:
+            requiredVehicleSeats
+        }
+      )
     ) {
       return;
     }
@@ -1774,21 +2023,6 @@ async function nearbyWorkDrivers(
     if (
       !Number.isFinite(lat) ||
       !Number.isFinite(lng)
-    ) {
-      return;
-    }
-
-    const declaredSeats =
-      Number(
-        taxi.capacity ||
-        taxi.seats ||
-        0
-      );
-
-    if (
-      Number.isFinite(declaredSeats) &&
-      declaredSeats > 0 &&
-      declaredSeats < requiredVehicleSeats
     ) {
       return;
     }
@@ -7538,7 +7772,10 @@ exports.dispatchGoRideRequest =
 
             if (
               taxi.isOnline !==
-              true
+                true ||
+              !driverProfileCanReceiveRequests(
+                taxi
+              )
             ) {
               return;
             }
@@ -7623,7 +7860,9 @@ exports.dispatchGoRideRequest =
               );
             } else if (
               taxi.isFull !==
-              true
+                true &&
+              taxi.isBroadcasting ===
+                true
             ) {
               idleDrivers.push(
                 item
