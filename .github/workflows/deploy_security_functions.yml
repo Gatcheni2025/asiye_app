@@ -11,6 +11,7 @@ on:
       - 'functions/index.js'
       - 'functions/club-pool-security.js'
       - 'functions/trip-share-security.js'
+      - 'functions/production-go-negotiation-validation.js'
       - '.github/workflows/deploy_security_functions.yml'
 
 permissions:
