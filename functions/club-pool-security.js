@@ -26,6 +26,27 @@ function applyClubJoin(pool, passengerId, details = {}, joinedAt = Date.now()) {
     return { pool, joined: false };
   }
 
+  const workWaitStartedAt = finiteNumber(
+    pool.workWaitStartedAt ?? pool.createdAt
+  );
+
+  const workWaitMinutes = Math.max(
+    1,
+    finiteNumber(pool.workWaitMinutes) || 30
+  );
+
+  if (
+    workWaitStartedAt &&
+    Number(joinedAt) >=
+      workWaitStartedAt + workWaitMinutes * 60 * 1000
+  ) {
+    const error = new Error(
+      'The 30-minute Asiye Work matching period has ended. The current passengers are deciding whether to negotiate an early departure.'
+    );
+    error.code = 'club/wait-expired';
+    throw error;
+  }
+
   const capacity = Math.max(
     1,
     Number(pool.capacity || pool.maxCapacity || 4) || 4
