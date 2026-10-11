@@ -706,10 +706,31 @@ ASIYE.goNegotiation = {
 
 
         if (!response.ok) {
-            throw new Error(
-                payload.error ||
-                'Fare negotiation could not be completed.'
-            );
+            const error =
+                new Error(
+                    payload.error ||
+                    'Fare negotiation could not be completed.'
+                );
+
+            error.status =
+                response.status;
+
+            error.code =
+                payload.code ||
+                '';
+
+            error.activeRequestId =
+                payload.activeRequestId ||
+                '';
+
+            error.activeStatus =
+                payload.activeStatus ||
+                '';
+
+            error.payload =
+                payload;
+
+            throw error;
         }
 
 

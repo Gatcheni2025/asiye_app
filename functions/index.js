@@ -6473,11 +6473,105 @@ exports.submitGoFareOffer =
           ).trim();
 
         if (passengerId) {
-          const passengerLock =
-            await admin.database()
+          const passengerCurrentRef =
+            admin.database()
               .ref(
                 `commuters/${passengerId}/currentRequest`
-              )
+              );
+
+          const terminalStatuses =
+            new Set([
+              "completed",
+              "cancelled_by_driver",
+              "cancelled_by_admin",
+              "cancelled_by_commuter",
+              "rejected",
+              "expired"
+            ]);
+
+          const currentSnapshot =
+            await passengerCurrentRef
+              .once("value");
+
+          const existingRequestId =
+            String(
+              currentSnapshot.val() ||
+              ""
+            ).trim();
+
+          if (
+            existingRequestId &&
+            existingRequestId !==
+              context.requestId
+          ) {
+            const existingSnapshot =
+              await admin.database()
+                .ref(
+                  `requests/${existingRequestId}`
+                )
+                .once("value");
+
+            const existingTrip =
+              existingSnapshot.val();
+
+            const existingOwnedByPassenger =
+              Boolean(
+                existingTrip &&
+                (
+                  String(
+                    existingTrip.commuterId ||
+                    ""
+                  ) === passengerId ||
+                  existingTrip.passengers?.[
+                    passengerId
+                  ]
+                )
+              );
+
+            const existingIsTerminal =
+              !existingTrip ||
+              terminalStatuses.has(
+                String(
+                  existingTrip?.status ||
+                  ""
+                )
+              ) ||
+              !existingOwnedByPassenger;
+
+            if (existingIsTerminal) {
+              await passengerCurrentRef
+                .transaction(
+                  current =>
+                    String(
+                      current ||
+                      ""
+                    ) === existingRequestId
+                      ? null
+                      : undefined,
+                  undefined,
+                  false
+                );
+            } else {
+              return response
+                .status(409)
+                .json({
+                  error:
+                    "You already have an active booking.",
+                  code:
+                    "booking/active-exists",
+                  activeRequestId:
+                    existingRequestId,
+                  activeStatus:
+                    String(
+                      existingTrip.status ||
+                      "pending"
+                    )
+                });
+            }
+          }
+
+          const passengerLock =
+            await passengerCurrentRef
               .transaction(
                 current => {
                   if (
@@ -6497,11 +6591,42 @@ exports.submitGoFareOffer =
               );
 
           if (!passengerLock.committed) {
+            const activeRequestId =
+              String(
+                passengerLock
+                  .snapshot
+                  .val() ||
+                (
+                  await passengerCurrentRef
+                    .once("value")
+                ).val() ||
+                ""
+              ).trim();
+
+            const activeTrip =
+              activeRequestId
+                ? (
+                    await admin.database()
+                      .ref(
+                        `requests/${activeRequestId}`
+                      )
+                      .once("value")
+                  ).val()
+                : null;
+
             return response
               .status(409)
               .json({
                 error:
-                  "You already have another active booking."
+                  "You already have an active booking.",
+                code:
+                  "booking/active-exists",
+                activeRequestId,
+                activeStatus:
+                  String(
+                    activeTrip?.status ||
+                    "pending"
+                  )
               });
           }
         }

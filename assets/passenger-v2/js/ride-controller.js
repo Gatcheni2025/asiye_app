@@ -2255,43 +2255,68 @@ ASIYE.ride = {
 
     async restore() {
 
-        const requestId =
-
-            localStorage.getItem(
-                'currentRequestId'
-            );
+        const commuterId =
+            ASIYE.state.userId;
 
 
-        if (!requestId) {
+        const localRequestId =
+            String(
+                localStorage.getItem(
+                    'currentRequestId'
+                ) ||
+                ''
+            ).trim();
 
-            return false;
+
+        let serverRequestId =
+            '';
+
+
+        if (commuterId) {
+
+            const currentSnapshot =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${commuterId}/currentRequest`
+                    )
+                    .once(
+                        'value'
+                    )
+                    .catch(
+                        () => null
+                    );
+
+
+            serverRequestId =
+                String(
+                    currentSnapshot?.val?.() ||
+                    ''
+                ).trim();
         }
 
 
-        const snap =
-
-            await firebase
-                .database()
-                .ref(
-                    `requests/${requestId}`
-                )
-                .once(
-                    'value'
-                );
-
-
-        const request =
-            snap.val();
-
-
-        if (!request) {
-
-            localStorage.removeItem(
-                'currentRequestId'
+        /*
+         * Server currentRequest is authoritative. The local ID is retained as
+         * a recovery fallback for bookings created by older app builds.
+         */
+        const candidates =
+            [
+                serverRequestId,
+                localRequestId
+            ]
+            .filter(
+                (
+                    value,
+                    index,
+                    values
+                ) =>
+                    value &&
+                    values.indexOf(
+                        value
+                    ) === index
             );
-
-            return false;
-        }
 
 
         const terminal = [
@@ -2300,30 +2325,168 @@ ASIYE.ride = {
             'cancelled_by_driver',
             'cancelled_by_admin',
             'cancelled_by_commuter',
-            'rejected'
+            'rejected',
+            'expired'
         ];
 
 
-        if (
-            terminal.includes(
-                request.status
-            )
+        for (
+            const requestId
+            of candidates
         ) {
 
-            localStorage.removeItem(
-                'currentRequestId'
+            const snap =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `requests/${requestId}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            const request =
+                snap.val();
+
+
+            const ownsRequest =
+                Boolean(
+                    request &&
+                    commuterId &&
+                    (
+                        String(
+                            request.commuterId ||
+                            ''
+                        ) ===
+                            String(
+                                commuterId
+                            ) ||
+                        request.passengers?.[
+                            commuterId
+                        ]
+                    )
+                );
+
+
+            const stale =
+                !request ||
+                !ownsRequest ||
+                terminal.includes(
+                    String(
+                        request?.status ||
+                        ''
+                    )
+                );
+
+
+            if (stale) {
+
+                if (
+                    localRequestId ===
+                        requestId
+                ) {
+                    localStorage.removeItem(
+                        'currentRequestId'
+                    );
+                }
+
+
+                if (
+                    commuterId &&
+                    serverRequestId ===
+                        requestId
+                ) {
+
+                    await firebase
+                        .database()
+                        .ref(
+                            `commuters/${commuterId}/currentRequest`
+                        )
+                        .transaction(
+                            current =>
+                                String(
+                                    current ||
+                                    ''
+                                ) ===
+                                    String(
+                                        requestId
+                                    )
+                                    ? null
+                                    : undefined
+                        )
+                        .catch(
+                            () => {}
+                        );
+                }
+
+
+                continue;
+            }
+
+
+            request.requestId =
+                requestId;
+
+
+            ASIYE.state.booking
+                .requestId =
+                requestId;
+
+
+            ASIYE.state.booking
+                .request =
+                request;
+
+
+            localStorage.setItem(
+                'currentRequestId',
+                requestId
             );
 
-            return false;
+
+            /*
+             * Older app builds may have a valid local request but no server
+             * lock. Repair that lock so both passenger and backend agree.
+             */
+            if (
+                commuterId &&
+                serverRequestId !==
+                    requestId
+            ) {
+
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${commuterId}/currentRequest`
+                    )
+                    .transaction(
+                        current =>
+                            !current ||
+                            String(current) ===
+                                String(
+                                    requestId
+                                )
+                                ? requestId
+                                : undefined
+                    )
+                    .catch(
+                        () => {}
+                    );
+            }
+
+
+            await this.start(
+                requestId
+            );
+
+
+            return true;
         }
 
 
-        await this.start(
-            requestId
-        );
-
-
-        return true;
+        return false;
     }
 
 };

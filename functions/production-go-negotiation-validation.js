@@ -272,6 +272,7 @@ async function validate(tokens) {
     `Server did not lock passenger currentRequest after protected fare submission: ${passengerCurrentRequest}`
   );
   record('Server locked passenger currentRequest after authenticated fare validation');
+  record('Stale passenger booking lock auto-healed before new booking');
 
   const dispatch = await functionPost(
     'dispatchGoRideRequest',

@@ -630,15 +630,89 @@ ASIYE.booking = {
                 );
 
 
+            const activeRequestId =
+                String(
+                    error?.activeRequestId ||
+                    ''
+                ).trim();
+
+
+            if (activeRequestId) {
+
+                localStorage.setItem(
+                    'currentRequestId',
+                    activeRequestId
+                );
+
+
+                ASIYE.state.booking
+                    .requestId =
+                    activeRequestId;
+
+
+                const activeSnapshot =
+                    await firebase
+                        .database()
+                        .ref(
+                            `requests/${activeRequestId}`
+                        )
+                        .once(
+                            'value'
+                        );
+
+
+                const activeRequest =
+                    activeSnapshot.val();
+
+
+                if (activeRequest) {
+
+                    activeRequest.requestId =
+                        activeRequestId;
+
+
+                    ASIYE.state.booking
+                        .request =
+                        activeRequest;
+
+
+                    await ASIYE.ride
+                        ?.start?.(
+                            activeRequestId
+                        );
+
+
+                    ASIYE.ui?.toast?.(
+                        'Your active booking has been restored.'
+                    );
+
+
+                    return activeRequestId;
+                }
+            }
+
+
+            /*
+             * Only clear the server lock if it belongs to the draft that just
+             * failed. Never erase a different active booking.
+             */
             await firebase
                 .database()
                 .ref(
-                    `commuters/${uid}`
+                    `commuters/${uid}/currentRequest`
                 )
-                .update({
-                    currentRequest:
-                        null
-                })
+                .transaction(
+                    current =>
+                        String(
+                            current ||
+                            ''
+                        ) ===
+                            String(
+                                requestId
+                            )
+                            ? null
+                            : undefined
+                )
                 .catch(
                     () => {}
                 );
@@ -1737,6 +1811,43 @@ ASIYE.booking = {
         }
 
 
+        const passengerStatus =
+            request.type ===
+                'club' &&
+            request.passengers &&
+            ASIYE.state.userId
+                ? String(
+                    request.passengers[
+                        ASIYE.state.userId
+                    ]?.status ||
+                    request.status ||
+                    ''
+                )
+                : String(
+                    request.status ||
+                    ''
+                );
+
+
+        if (
+            [
+                'passenger_onboard',
+                'all_onboard',
+                'in_transit',
+                'completed'
+            ].includes(
+                passengerStatus
+            )
+        ) {
+
+            ASIYE.ui?.toast?.(
+                'This trip has already started and can no longer be cancelled from the booking screen.'
+            );
+
+            return false;
+        }
+
+
         /*
          * CLUB:
          * cancel only this passenger,
@@ -1957,16 +2068,28 @@ ASIYE.booking = {
         await firebase
             .database()
             .ref(
-                `commuters/${ASIYE.state.userId}`
+                `commuters/${ASIYE.state.userId}/currentRequest`
             )
-            .update({
-
-                currentRequest:
-                    null
-            });
+            .transaction(
+                current =>
+                    String(
+                        current ||
+                        ''
+                    ) ===
+                        String(
+                            requestId
+                        )
+                        ? null
+                        : undefined
+            )
+            .catch(
+                () => {}
+            );
 
 
         this.clearLocalRide();
+
+        return true;
     },
 
 

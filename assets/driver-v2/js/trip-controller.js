@@ -2184,7 +2184,31 @@ ASIYE_DRIVER.trip = {
             !this.request
         ) {
 
-            return;
+            return false;
+        }
+
+
+        if (
+            [
+                'passenger_onboard',
+                'all_onboard',
+                'in_transit',
+                'completed'
+            ].includes(
+                String(
+                    this.request.status ||
+                    ''
+                )
+            )
+        ) {
+
+            ASIYE_DRIVER.ui
+                ?.toast?.(
+                    'This trip has already started and can no longer be cancelled.',
+                    'danger'
+                );
+
+            return false;
         }
 
 
@@ -2278,6 +2302,8 @@ ASIYE_DRIVER.trip = {
 
 
         await this.releaseDriver();
+
+        return true;
     },
 
 
