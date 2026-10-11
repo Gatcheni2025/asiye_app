@@ -251,7 +251,7 @@
  }
  const columns={
    enrollments:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Vehicle',r=>[r.vehicleMake,r.vehicleModel].filter(Boolean).join(' ')],['Submitted',r=>fmtDate(r.submittedAt)],['Status',r=>r.status]],
-   drivers:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Car registration',r=>r.vehicleReg||r.taxiRegistrationNumber],['Wallet',r=>money(r.walletBalance)],['Online',r=>r.isOnline?'Online':'Offline'],['Verification',r=>r.verificationStatus]],
+   drivers:[['Driver',r=>r.fullName||r.name],['Phone',r=>r.phone],['Car registration',r=>r.vehicleReg||r.taxiRegistrationNumber],['Vehicle review',r=>r.vehicleApprovalStatus||(r.vehicleApproved===true?'approved':'legacy')],['Online',r=>r.isOnline?'Online':'Offline'],['Verification',r=>r.verificationStatus]],
    passengers:[['Passenger',r=>r.name],['Phone',r=>r.phone],['Account',r=>r.isActive===false?'Suspended':'Active'],['Wallet',r=>money(r.walletBalance??r.credits)]],
    bookings:[['Booking',r=>r.id],['Passenger',r=>r.commuterId],['Driver',r=>r.taxiId||r.driverAuthUid],['Fare',r=>money(r.finalAmount??r.agreedFare??r.calculatedPrice)],['Status',r=>r.status]],
    parcels:[['Delivery',r=>r.id],['Sender',r=>r.commuterId||r.senderId],['Driver',r=>r.taxiId],['Amount',r=>money(r.finalAmount??r.agreedFare??r.calculatedPrice)],['Status',r=>r.status]],
@@ -392,6 +392,27 @@
        if(!ask('Mark this conversation resolved?'))return;
        await changed({action:'updateSupport',id,status:'resolved',note:'Resolved from Operations Desk'},'Ticket resolved.');
      }]);
+   }
+   if(view==='drivers'&&String(row.vehicleApprovalStatus||'').toLowerCase()==='pending'&&row.vehiclePending){
+     const pending=row.vehiclePending||{};
+     body.append(el('p','note','Driver identity is verified, but the latest vehicle changes are still pending review. This driver will not receive actionable ride requests until the current vehicle is approved and the driver goes online again.'));
+     const vehicleSummary=el('section','doc-list');
+     vehicleSummary.append(el('h3','','Pending vehicle review'));
+     for(const [label,value] of [
+       ['Type',pending.type],['Make',pending.make],['Model',pending.model],
+       ['Colour',pending.colour||pending.color],['Registration',pending.registration],
+       ['Year',pending.year],['Passenger seats',pending.seats]
+     ]) addLine(vehicleSummary,label,value);
+     body.append(vehicleSummary);
+     actions.push(['Approve current vehicle',async()=>{
+       if(!ask('Approve the pending vehicle for '+(row.fullName||row.name||id)+'? The driver will still need to switch Online before receiving requests.'))return;
+       await changed({action:'reviewVehicle',id,decision:'approved'},'Vehicle approved. Driver can go online and receive requests.');
+     },'primary']);
+     actions.push(['Request vehicle changes',async()=>{
+       const reason=required('What must the driver correct?');
+       if(!reason||reason.length<5)throw Error('Enter a clear review reason.');
+       await changed({action:'reviewVehicle',id,decision:'changes_requested',reason},'Vehicle changes requested.');
+     },'soft danger']);
    }
    if(view==='passengers'||(view==='wallets'&&row._accountType==='passenger')){
      actions.push(['Edit account',async()=>{
