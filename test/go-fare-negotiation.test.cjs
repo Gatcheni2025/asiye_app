@@ -606,7 +606,7 @@ test('protected Go fare submission owns passenger currentRequest on the server',
 
   assert.ok(
     block.includes(
-      'You already have another active booking.'
+      'You already have an active booking.'
     ),
     'server must not silently overwrite another active passenger booking'
   );
