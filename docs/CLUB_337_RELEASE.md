@@ -1,6 +1,16 @@
 # Asiye 11.0.67 (337): secure Club booking
 
-Status: implemented; targeted tests, signed Android APK/AAB builds and APK signature verification passed. Staging/live-provider acceptance and production deployment remain release gates. Do not publish automatically.
+Status: implemented and matching production Club backend/rules deployed on 11 October 2026. Targeted tests, signed Android APK/AAB builds, APK signature verification, security emulator tests and live API reachability checks passed. Physical-device and live-provider acceptance remain release gates. Do not publish automatically.
+
+## 11 October production incident repair
+
+The installed 11.0.67 (337) APK returned "Failed to fetch" because `createClubBookingSecure`, `getClubPickupPin` and `clubDriverActionSecure` returned HTTP 404. Booking failed before a server deadline could be created, so the passenger remained on the confirmation screen without a countdown.
+
+- Scoped backend deployment succeeded from source `fe5205c59633c387d1838a479b7b878531b8eb7f`: [deployment run](https://github.com/Gatcheni2025/asiye_app/actions/runs/38173800382). The repair adds deployment and reachability checks; application, Functions and rules source were not changed by this repair commit.
+- The workflow deployed 18 named Functions, including the shared state synchronization trigger and one-minute expiry scheduler, plus the matching Realtime Database rules. Booking creation was enabled last. Hosting was not redeployed, and no Play publication or live customer booking/payment test was performed.
+- All 28 lifecycle/deployment-check tests and all 67 security emulator/UI tests passed before deployment.
+- All five Club HTTP endpoints passed OPTIONS/CORS checks and rejected unauthenticated POST requests with HTTP 401, for both the Android appassets origin and Firebase web origin. These checks create no customer accounts or bookings.
+- Reopen the existing 11.0.67 (337) APK and perform a new controlled Club booking on passenger and driver devices. Verify the countdown starts after successful booking, both devices show the same count/routes/deadline, and the underfilled group enters negotiation after 30 minutes. Live FCM delivery, actual payment providers and physical GPS/PIN departure still require device acceptance.
 
 ## Behavior
 
@@ -32,4 +42,4 @@ Status: implemented; targeted tests, signed Android APK/AAB builds and APK signa
 4. Deploy reviewed RTDB rules and assets in staging. Verify private `clubPrivate` denies all client access; the passenger PIN endpoint works; driver GPS updates remain permitted; request type/secure state/fare/reservation writes are denied. Admin generic booking edit/reassignment cannot bypass the lifecycle.
 5. Use the signed APK/AAB artifacts from source commit `5ace48aa9dd53e7c6691f5fb35a5934ee7927f79` for staging acceptance. Rebuild and rerun checks if application/backend/rules source changes. Android Release and Firebase Security Validation now trigger on relevant pushes to this branch. Build artifacts are for testing; no Play publication is configured by this change.
 6. Test separate physical passenger and driver devices: one booking, concurrent joins, all routes/counts, early driver acceptance, restart/resume, background timeout alert, actual 30-minute expiry, passenger approvals, driver counter/reaccept, rejected stale offer, Cash/Wallet/Card amounts and payment return, stale/far GPS arrival denial, wrong/correct PIN, all passengers boarding, departure, completion, cancellation/refund and repeated callbacks.
-7. Only deploy to production/publish after the source, backend/rules, signed builds and physical-device acceptance have passed. No production deployment was performed by this implementation.
+7. Only deploy to production/publish after the source, backend/rules, signed builds and physical-device acceptance have passed. The initial implementation did not deploy production; the scoped 11 October incident repair above has now deployed the matching Club backend and rules. Play publication remains blocked on device/live-provider acceptance.
