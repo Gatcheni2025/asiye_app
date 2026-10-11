@@ -147,4 +147,6 @@ test('driver updates are visible and reviewable from Admin',()=>{
  assert.match(backend,/if \(action === "reviewVehicle"\)/);
  assert.match(backend,/vehicleApprovalStatus: decision/);
  assert.match(backend,/vehicleApproved: decision === "approved"/);
+ assert.match(backend,/vehicleApprovedSnapshot/);
+ assert.match(backend,/vehicleUpdateReviewedAt/);
 });
