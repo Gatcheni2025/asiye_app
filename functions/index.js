@@ -3336,6 +3336,51 @@ exports.adminManagePlatform = functions.https.onCall(
       const source =
         data?.patch || {};
 
+      const protectedNegotiated =
+        request.negotiationEnabled === true &&
+        request.fareStatus === "agreed";
+
+      const protectedSettlement =
+        request.driverSettlement?.source ===
+          "server_protected_go" ||
+        request.paymentSettlementStatus ===
+          "settled";
+
+      if (
+        protectedNegotiated &&
+        [
+          "finalAmount",
+          "agreedFare",
+          "calculatedPrice",
+          "paymentMethod"
+        ].some(
+          field =>
+            Object.prototype
+              .hasOwnProperty
+              .call(
+                source,
+                field
+              )
+        )
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Protected negotiated fare, payment method and settlement amounts cannot be edited from Admin. Cancel the booking or open a refund/reconciliation case instead."
+        );
+      }
+
+      if (
+        protectedSettlement &&
+        "status" in source &&
+        String(source.status || "") !==
+          String(request.status || "")
+      ) {
+        throw new functions.https.HttpsError(
+          "failed-precondition",
+          "A server-settled negotiated trip is financially final and its status cannot be rewritten from Admin."
+        );
+      }
+
       const patch = {};
 
       if ("status" in source) {
@@ -4837,6 +4882,8 @@ exports.adminFetchData = functions.https.onCall(
       "withdrawals",
       "payout_requests",
       "driverCardPayouts",
+      "driverPayoutAccounts",
+      "goFareAgreements",
       "refundCases",
       "adminInvitations",
       "adminAudit"
