@@ -14,6 +14,14 @@ const passengerUiSource = fs.readFileSync(
   'assets/passenger-v2/js/app.js',
   'utf8'
 );
+const driverRequestSource = fs.readFileSync(
+  'assets/driver-v2/js/requests.js',
+  'utf8'
+);
+const driverAppSource = fs.readFileSync(
+  'assets/driver-v2/js/app.js',
+  'utf8'
+);
 
 test('Go dispatch writes real driver search state for passenger UI', () => {
   const start = functionsSource.indexOf(
@@ -180,4 +188,60 @@ test('Work area notification still exposes no request details', () => {
       `area-only Work alert must not expose ${forbidden}`
     );
   }
+});
+
+
+test('Go dispatch only targets drivers who can actually open the request', () => {
+  const helperStart = functionsSource.indexOf(
+    'function driverProfileCanReceiveRequests'
+  );
+  const dispatchStart = functionsSource.indexOf(
+    'exports.dispatchGoRideRequest'
+  );
+  assert.ok(helperStart >= 0);
+  assert.ok(dispatchStart > helperStart);
+
+  const helper = functionsSource.slice(
+    helperStart,
+    dispatchStart
+  );
+
+  assert.match(helper, /vehicleApproved ===[\s\S]*false/);
+  assert.match(helper, /'pending'|"pending"/);
+  assert.match(helper, /legacyApproved/);
+  assert.match(helper, /enrollmentVersion/);
+
+  const dispatch = functionsSource.slice(
+    dispatchStart,
+    dispatchStart + 24000
+  );
+  assert.match(dispatch, /driverProfileCanReceiveRequests/);
+  assert.match(dispatch, /taxi\.isBroadcasting ===/);
+});
+
+test('driver popup gate matches server dispatch and clears stranded notifications', () => {
+  assert.match(
+    driverRequestSource,
+    /driver\.isOnline !== true \|\|[\s\S]*driver\.isBroadcasting !== true/
+  );
+  assert.match(
+    driverRequestSource,
+    /await this\.removeNotification\([\s\S]*snapshot\.key/
+  );
+  assert.match(driverAppSource, /legacyApproved/);
+  assert.match(driverAppSource, /explicitPending/);
+});
+
+test('Work dispatch requires approved driver and known seat capacity', () => {
+  const workStart = functionsSource.indexOf(
+    'async function nearbyWorkDrivers'
+  );
+  const workEnd = functionsSource.indexOf(
+    'exports.notifyDriversOfClubAreaBooking',
+    workStart
+  );
+  const work = functionsSource.slice(workStart, workEnd);
+  assert.match(work, /isBroadcasting/);
+  assert.match(work, /driverProfileCanReceiveRequests/);
+  assert.match(work, /requiredSeats/);
 });
