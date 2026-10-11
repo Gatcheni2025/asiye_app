@@ -24,7 +24,7 @@ ASIYE.club = {
                 10,
 
             maxWaitMinutes:
-                20
+                30
         },
 
 
@@ -43,7 +43,7 @@ ASIYE.club = {
                 15,
 
             maxWaitMinutes:
-                25
+                30
         }
     },
 
