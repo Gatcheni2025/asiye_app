@@ -5841,6 +5841,49 @@ async function reserveGoNegotiatedDriver({
             return;
           }
 
+          /*
+           * Idempotent retry protection:
+           * two accept taps / duplicate notifications may reach the server
+           * almost together. If this exact driver already owns the same
+           * agreed fare, return the current booking instead of aborting the
+           * transaction and reporting "fare can no longer be accepted".
+           */
+          const sameDriverReservation =
+            String(
+              current.taxiId ||
+              ""
+            ) ===
+              String(driver.id) &&
+            current.fareStatus ===
+              "agreed" &&
+            Math.abs(
+              goMoney(
+                current.agreedFare ||
+                current.finalAmount ||
+                0
+              ) -
+              goMoney(amount)
+            ) <=
+              0.01 &&
+            [
+              "payment_required",
+              "accepted",
+              "driver_on_way",
+              "arrived",
+              "passenger_onboard",
+              "all_onboard",
+              "in_transit"
+            ].includes(
+              String(
+                current.status ||
+                ""
+              )
+            );
+
+          if (sameDriverReservation) {
+            return current;
+          }
+
           if (
             current.taxiId &&
             current.taxiId !==
@@ -6740,7 +6783,24 @@ exports.acceptGoFareOffer =
               "value"
             );
 
-        if (!notification.exists()) {
+        const alreadyReservedForDriver =
+          String(
+            context.trip.taxiId ||
+            ""
+          ) ===
+            String(driver.id) &&
+          context.trip.fareStatus ===
+            "agreed";
+
+        /*
+         * The original search notification is removed after a successful
+         * accept. A retry from the same driver must therefore be allowed
+         * when the server already shows that driver as the reservation owner.
+         */
+        if (
+          !notification.exists() &&
+          !alreadyReservedForDriver
+        ) {
           return response
             .status(403)
             .json({

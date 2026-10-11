@@ -943,6 +943,40 @@ ASIYE_DRIVER.requests = {
         if (
             isProtectedGo &&
             freshRequest.fareStatus ===
+                'agreed' &&
+            freshRequest.taxiId &&
+            validDriverIds.has(
+                freshRequest.taxiId
+            )
+        ) {
+
+            const resumed =
+                await this.reconcileAcceptance(
+                    id
+                );
+
+            if (resumed) {
+                return {
+                    ok:
+                        true,
+                    requestId:
+                        id,
+                    status:
+                        resumed.status,
+                    agreedFare:
+                        resumed.agreedFare ||
+                        resumed.finalAmount ||
+                        0,
+                    resumed:
+                        true
+                };
+            }
+        }
+
+
+        if (
+            isProtectedGo &&
+            freshRequest.fareStatus ===
                 'passenger_offer'
         ) {
 
@@ -2090,6 +2124,7 @@ ASIYE_DRIVER.requests = {
             ) {
 
                 ASIYE_DRIVER.setActiveRequest(
+                    id,
                     accepted
                 );
             }
@@ -2244,6 +2279,401 @@ ASIYE_DRIVER.requests = {
 
 
     /* ========================================================
+       RECONCILE ACCEPTANCE
+
+       Server state is authoritative. This repairs the two failure modes that
+       can otherwise leave the driver and passenger on different screens:
+       - request belongs to this driver but currentRequest was lost;
+       - currentRequest points to this request but the request was never owned.
+       ======================================================== */
+
+    async reconcileAcceptance(
+        requestId = null
+    ) {
+
+        const driverId =
+            ASIYE_DRIVER.state
+                ?.driverId;
+
+
+        const authUid =
+
+            firebase.auth()
+                .currentUser
+                ?.uid ||
+
+            localStorage.getItem(
+                'authUid'
+            );
+
+
+        const id =
+
+            requestId ||
+
+            ASIYE_DRIVER.state
+                ?.incomingRequest
+                ?.requestId ||
+
+            ASIYE_DRIVER.state
+                ?.incomingRequest
+                ?.key ||
+
+            ASIYE_DRIVER.state
+                ?.activeRequest
+                ?.requestId ||
+
+            ASIYE_DRIVER.state
+                ?.activeRequest
+                ?.key ||
+
+            localStorage.getItem(
+                'currentRequestId'
+            );
+
+
+        if (
+            !driverId ||
+            !id
+        ) {
+
+            return null;
+        }
+
+
+        const taxiRef =
+
+            firebase
+                .database()
+                .ref(
+                    `taxis/${driverId}`
+                );
+
+
+        const currentRequestRef =
+
+            taxiRef.child(
+                'currentRequest'
+            );
+
+
+        const requestRef =
+
+            firebase
+                .database()
+                .ref(
+                    `requests/${id}`
+                );
+
+
+        try {
+
+            const [
+                taxiSnapshot,
+                requestSnapshot
+            ] =
+
+                await Promise.all([
+                    taxiRef.once(
+                        'value'
+                    ),
+                    requestRef.once(
+                        'value'
+                    )
+                ]);
+
+
+            const liveDriver =
+                taxiSnapshot.val() ||
+                {};
+
+
+            const request =
+                requestSnapshot.val();
+
+
+            const validDriverIds =
+
+                new Set(
+                    [
+                        driverId,
+                        authUid,
+                        liveDriver.authUid,
+                        liveDriver.userUid
+                    ]
+                    .filter(Boolean)
+                    .map(String)
+                );
+
+
+            const terminalStatuses = [
+
+                'completed',
+                'cancelled_by_driver',
+                'cancelled_by_commuter',
+                'cancelled_by_admin',
+                'rejected'
+            ];
+
+
+            const ownedByDriver =
+
+                Boolean(
+                    request &&
+                    request.taxiId &&
+                    validDriverIds.has(
+                        String(
+                            request.taxiId
+                        )
+                    ) &&
+                    !terminalStatuses.includes(
+                        String(
+                            request.status ||
+                            ''
+                        )
+                    )
+                );
+
+
+            if (ownedByDriver) {
+
+                /*
+                 * The request is the source of truth. If an earlier racing
+                 * accept cleared the taxi lock, restore it safely.
+                 */
+
+                const lock =
+
+                    await currentRequestRef
+                        .transaction(
+                            current => {
+
+                                if (
+                                    current === null ||
+                                    current === undefined ||
+                                    current === '' ||
+                                    current === id
+                                ) {
+
+                                    return id;
+                                }
+
+
+                                return;
+                            }
+                        );
+
+
+                if (
+                    !lock.committed
+                ) {
+
+                    return null;
+                }
+
+
+                const accepted = {
+                    key:
+                        id,
+                    requestId:
+                        id,
+                    ...request
+                };
+
+
+                if (
+                    ASIYE_DRIVER.state
+                        .driver
+                ) {
+
+                    ASIYE_DRIVER.state
+                        .driver
+                        .currentRequest =
+                        id;
+                }
+
+
+                if (
+                    ASIYE_DRIVER.state
+                        .availability
+                ) {
+
+                    ASIYE_DRIVER.state
+                        .availability
+                        .currentRequest =
+                        id;
+
+                    ASIYE_DRIVER.state
+                        .availability
+                        .isBroadcasting =
+                        false;
+                }
+
+
+                ASIYE_DRIVER.state
+                    .incomingRequest =
+                    null;
+
+
+                ASIYE_DRIVER.state
+                    .activeRequest =
+                    accepted;
+
+
+                if (
+                    typeof ASIYE_DRIVER
+                        .setActiveRequest ===
+                        'function'
+                ) {
+
+                    ASIYE_DRIVER
+                        .setActiveRequest(
+                            id,
+                            accepted
+                        );
+                }
+
+
+                localStorage.setItem(
+                    'currentRequestId',
+                    id
+                );
+
+
+                ASIYE_DRIVER.trip
+                    ?.start?.(
+                        id
+                    );
+
+
+                ASIYE_DRIVER.ui
+                    ?.updateTopStatus?.();
+
+
+                return accepted;
+            }
+
+
+            /*
+             * No valid server-side assignment exists. Release only this stale
+             * request lock; never disturb a different active trip.
+             */
+
+            await currentRequestRef
+                .transaction(
+                    current =>
+                        current === id
+                            ? null
+                            : undefined
+                )
+                .catch(
+                    () => {}
+                );
+
+
+            if (
+                ASIYE_DRIVER.state
+                    .driver
+                    ?.currentRequest ===
+                id
+            ) {
+
+                ASIYE_DRIVER.state
+                    .driver
+                    .currentRequest =
+                    null;
+
+                ASIYE_DRIVER.state
+                    .driver
+                    .isFull =
+                    false;
+
+                ASIYE_DRIVER.state
+                    .driver
+                    .isBroadcasting =
+                    true;
+            }
+
+
+            if (
+                ASIYE_DRIVER.state
+                    .availability
+                    ?.currentRequest ===
+                id
+            ) {
+
+                ASIYE_DRIVER.state
+                    .availability
+                    .currentRequest =
+                    null;
+
+                ASIYE_DRIVER.state
+                    .availability
+                    .isFull =
+                    false;
+
+                ASIYE_DRIVER.state
+                    .availability
+                    .passengerCount =
+                    0;
+
+                ASIYE_DRIVER.state
+                    .availability
+                    .isBroadcasting =
+                    true;
+            }
+
+
+            if (
+                localStorage.getItem(
+                    'currentRequestId'
+                ) === id
+            ) {
+
+                localStorage.removeItem(
+                    'currentRequestId'
+                );
+            }
+
+
+            if (
+                ASIYE_DRIVER.state
+                    .activeRequest
+                    ?.key === id ||
+                ASIYE_DRIVER.state
+                    .activeRequest
+                    ?.requestId === id
+            ) {
+
+                ASIYE_DRIVER
+                    .setActiveRequest?.(
+                        null,
+                        null
+                    );
+            }
+
+
+            ASIYE_DRIVER.ui
+                ?.updateTopStatus?.();
+
+
+            return null;
+
+
+        } catch (error) {
+
+            console.warn(
+                'Driver acceptance reconciliation failed:',
+                error
+            );
+
+
+            return null;
+        }
+    },
+
+
+    /* ========================================================
        DECLINE
        ======================================================== */
 
@@ -2341,6 +2771,12 @@ ASIYE_DRIVER.requests = {
                 driver;
 
 
+            ASIYE_DRIVER
+                .syncDriverAvailability?.(
+                    driver
+                );
+
+
             const requestId =
 
                 driver.currentRequest ||
@@ -2356,73 +2792,25 @@ ASIYE_DRIVER.requests = {
             }
 
 
-            const requestSnapshot =
+            /*
+             * Do not trust currentRequest/localStorage by itself.
+             * Confirm that the request still belongs to this driver; the
+             * reconciliation routine repairs a missing lock or clears a stale
+             * one and resumes the authoritative trip.
+             */
 
-                await firebase
-                    .database()
-                    .ref(
-                        `requests/${requestId}`
-                    )
-                    .once(
-                        'value'
+            const restored =
+
+                await this
+                    .reconcileAcceptance(
+                        requestId
                     );
 
 
-            const request =
-                requestSnapshot.val();
+            if (!restored) {
 
-
-            if (!request) {
-
-                await this.clearDriverRequest();
-
-                return;
-            }
-
-
-            const terminalStatuses = [
-
-                'completed',
-
-                'cancelled_by_driver',
-
-                'cancelled_by_commuter',
-
-                'cancelled_by_admin',
-
-                'rejected'
-            ];
-
-
-            if (
-                terminalStatuses.includes(
-                    request.status
-                )
-            ) {
-
-                await this.clearDriverRequest();
-
-                return;
-            }
-
-
-            ASIYE_DRIVER.state
-                .activeRequest =
-                {
-                    key:
-                        requestId,
-
-                    ...request
-                };
-
-
-            if (
-                ASIYE_DRIVER.trip
-            ) {
-
-                ASIYE_DRIVER.trip.start(
-                    requestId
-                );
+                ASIYE_DRIVER.ui
+                    ?.renderDashboard?.();
             }
 
 
@@ -2489,6 +2877,46 @@ ASIYE_DRIVER.requests = {
                 .driver.isBroadcasting =
                 true;
         }
+
+
+        if (
+            ASIYE_DRIVER.state.availability
+        ) {
+
+            ASIYE_DRIVER.state
+                .availability
+                .currentRequest =
+                null;
+
+
+            ASIYE_DRIVER.state
+                .availability
+                .isFull =
+                false;
+
+
+            ASIYE_DRIVER.state
+                .availability
+                .passengerCount =
+                0;
+
+
+            ASIYE_DRIVER.state
+                .availability
+                .isBroadcasting =
+                true;
+        }
+
+
+        ASIYE_DRIVER
+            .setActiveRequest?.(
+                null,
+                null
+            );
+
+
+        ASIYE_DRIVER.ui
+            ?.updateTopStatus?.();
 
 
         localStorage.removeItem(

@@ -4841,6 +4841,28 @@ document.addEventListener(
                         );
 
 
+                        const recovered =
+
+                            await ASIYE_DRIVER.requests
+                                ?.reconcileAcceptance?.();
+
+
+                        if (recovered) {
+
+                            ASIYE_DRIVER.ui
+                                .closeIncomingRequest();
+
+
+                            ASIYE_DRIVER.ui.toast(
+                                'Booking accepted. Resuming your current trip.',
+                                'success'
+                            );
+
+
+                            return;
+                        }
+
+
                         ASIYE_DRIVER.ui.toast(
                             error.message ||
                             'Could not accept booking.',

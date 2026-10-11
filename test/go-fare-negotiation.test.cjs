@@ -505,3 +505,34 @@ test('Passenger and driver negotiation clients call server APIs rather than writ
     false
   );
 });
+
+
+test('negotiated Go driver acceptance is idempotent under duplicate taps', () => {
+  assert.ok(
+    functionsSource.includes(
+      'const sameDriverReservation ='
+    ),
+    'server must treat the same driver + same agreed fare as an idempotent retry'
+  );
+
+  assert.ok(
+    functionsSource.includes(
+      'const alreadyReservedForDriver ='
+    ),
+    'server must allow the reservation owner to retry after the search notification is removed'
+  );
+
+  assert.ok(
+    driverRequestsSource.includes(
+      'async reconcileAcceptance('
+    ),
+    'driver client must reconcile request ownership after an accept race'
+  );
+
+  assert.ok(
+    driverRequestsSource.includes(
+      'setActiveRequest(\n                    id,\n                    accepted'
+    ),
+    'driver active request state must receive both request id and request data'
+  );
+});
