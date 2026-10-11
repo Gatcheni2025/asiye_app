@@ -2087,18 +2087,54 @@ document.addEventListener(
                 );
 
 
-        /*
-         * If the stored commuter ID is stale,
-         * fall back to Firebase Auth UID.
-         */
+        let commuter =
+            commuterSnapshot.val() || {};
 
+
+        const ownsProfile =
+            (
+                id,
+                data
+            ) =>
+                Boolean(
+                    id &&
+                    (
+                        id ===
+                            authUser.uid ||
+                        String(
+                            data?.authUid ||
+                            ''
+                        ) ===
+                            authUser.uid
+                    )
+                );
+
+
+        /*
+         * Never trust a cached commuterId merely because that database
+         * record still exists. Shared/test devices can retain another
+         * passenger's commuterId in localStorage. Booking with that stale
+         * identity is correctly rejected by RTDB as PERMISSION_DENIED.
+         */
         if (
-            !commuterSnapshot.exists() &&
-            commuterId !== authUser.uid
+            !commuterSnapshot.exists() ||
+            !ownsProfile(
+                commuterId,
+                commuter
+            )
         ) {
 
             console.warn(
-                'Stored commuterId is stale. Falling back to Auth UID.'
+                'Stored commuterId does not belong to the signed-in passenger. Resolving the authenticated profile.'
+            );
+
+
+            localStorage.removeItem(
+                'commuterId'
+            );
+
+            localStorage.removeItem(
+                'userId'
             );
 
 
@@ -2116,11 +2152,96 @@ document.addEventListener(
                     .once(
                         'value'
                     );
+
+
+            commuter =
+                commuterSnapshot.val() || {};
+
+
+            if (
+                !commuterSnapshot.exists() ||
+                !ownsProfile(
+                    commuterId,
+                    commuter
+                )
+            ) {
+
+                const linkedSnapshot =
+
+                    await firebase
+                        .database()
+                        .ref(
+                            'commuters'
+                        )
+                        .orderByChild(
+                            'authUid'
+                        )
+                        .equalTo(
+                            authUser.uid
+                        )
+                        .limitToFirst(
+                            1
+                        )
+                        .once(
+                            'value'
+                        );
+
+
+                let linked =
+                    null;
+
+
+                linkedSnapshot
+                    .forEach(
+                        child => {
+
+                            if (!linked) {
+
+                                linked = {
+                                    id:
+                                        child.key,
+                                    data:
+                                        child.val() ||
+                                        {}
+                                };
+                            }
+                        }
+                    );
+
+
+                if (linked) {
+
+                    commuterId =
+                        linked.id;
+
+                    commuter =
+                        linked.data;
+
+                } else {
+
+                    console.error(
+                        'No passenger profile owned by the authenticated Firebase user could be resolved.'
+                    );
+
+
+                    localStorage.removeItem(
+                        'commuterId'
+                    );
+
+                    localStorage.removeItem(
+                        'userId'
+                    );
+
+
+                    window.location.replace(
+                        './login.html'
+                    );
+
+
+                    return;
+                }
+            }
         }
-
-
-        const commuter =
-            commuterSnapshot.val() || {};
 
         // Phone sign-up is not finished until a full name AND a saved face
         // image exist. A user navigating directly to index.html must also be

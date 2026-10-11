@@ -7,6 +7,170 @@ window.ASIYE = window.ASIYE || {};
 
 ASIYE.booking = {
 
+    async resolvePassengerForBooking() {
+
+        const authUser =
+            firebase.auth()
+                .currentUser;
+
+
+        if (!authUser) {
+
+            throw new Error(
+                'Please sign in again before booking.'
+            );
+        }
+
+
+        let commuterId =
+            String(
+                ASIYE.state.userId ||
+                ''
+            ).trim();
+
+
+        let commuter =
+            ASIYE.state.user || {};
+
+
+        const owned =
+            commuterId &&
+            (
+                commuterId ===
+                    authUser.uid ||
+                String(
+                    commuter.authUid ||
+                    ''
+                ) ===
+                    authUser.uid
+            );
+
+
+        if (!owned) {
+
+            const direct =
+
+                await firebase
+                    .database()
+                    .ref(
+                        `commuters/${authUser.uid}`
+                    )
+                    .once(
+                        'value'
+                    );
+
+
+            if (direct.exists()) {
+
+                commuterId =
+                    authUser.uid;
+
+                commuter =
+                    direct.val() || {};
+
+            } else {
+
+                const linked =
+
+                    await firebase
+                        .database()
+                        .ref(
+                            'commuters'
+                        )
+                        .orderByChild(
+                            'authUid'
+                        )
+                        .equalTo(
+                            authUser.uid
+                        )
+                        .limitToFirst(
+                            1
+                        )
+                        .once(
+                            'value'
+                        );
+
+
+                commuterId =
+                    '';
+
+                commuter =
+                    {};
+
+
+                linked.forEach(
+                    child => {
+
+                        if (!commuterId) {
+
+                            commuterId =
+                                child.key;
+
+                            commuter =
+                                child.val() ||
+                                {};
+                        }
+                    }
+                );
+            }
+        }
+
+
+        const verifiedOwner =
+            commuterId &&
+            (
+                commuterId ===
+                    authUser.uid ||
+                String(
+                    commuter.authUid ||
+                    ''
+                ) ===
+                    authUser.uid
+            );
+
+
+        if (!verifiedOwner) {
+
+            localStorage.removeItem(
+                'commuterId'
+            );
+
+            localStorage.removeItem(
+                'userId'
+            );
+
+
+            throw new Error(
+                'Your passenger session is out of date. Sign in again before booking.'
+            );
+        }
+
+
+        ASIYE.setUser(
+            commuterId,
+            commuter
+        );
+
+
+        localStorage.setItem(
+            'commuterId',
+            commuterId
+        );
+
+        localStorage.setItem(
+            'userId',
+            commuterId
+        );
+
+
+        return {
+            id:
+                commuterId,
+            data:
+                commuter
+        };
+    },
+
     async create() {
 
         const type =
@@ -56,20 +220,17 @@ ASIYE.booking = {
 
     async createGoRide() {
 
+        const passenger =
+            await this
+                .resolvePassengerForBooking();
+
+
         const uid =
-            ASIYE.state.userId;
-
-
-        if (!uid) {
-
-            throw new Error(
-                'Passenger is not logged in.'
-            );
-        }
+            passenger.id;
 
 
         const user =
-            ASIYE.state.user || {};
+            passenger.data || {};
 
 
         const pickup =
