@@ -182,3 +182,112 @@ test('driver app refuses to load or accept a forming Work request', () => {
   assert.match(source, /status !==\s*['"]pool_ready['"]/);
   assert.match(source, /This Asiye Work group is still forming/);
 });
+
+
+test('Asiye Work uses one 30-minute matching window for both modes', () => {
+  const clubSource = fs.readFileSync(
+    'assets/passenger-v2/js/club.js',
+    'utf8'
+  );
+
+  assert.match(
+    clubSource,
+    /name:\s*['"]Asiye Work 3['"][\s\S]{0,260}maxWaitMinutes:\s*30/
+  );
+  assert.match(
+    clubSource,
+    /name:\s*['"]Asiye Work 4['"][\s\S]{0,260}maxWaitMinutes:\s*30/
+  );
+  assert.match(clubSource, /workWaitMinutes:\s*30/);
+  assert.match(clubSource, /workWaitStartedAt:/);
+  assert.match(clubSource, /workWaitExpiresAt:/);
+});
+
+test('expired Work pools reject additional passengers', () => {
+  const pool = {
+    type: 'club',
+    clubMode: 'club4',
+    capacity: 4,
+    minimumPassengers: 3,
+    workWaitMinutes: 30,
+    workWaitStartedAt: 1000,
+    marketReferenceFare: 300,
+    passengers: {
+      p1: passenger('p1')
+    },
+    passengerCount: 1,
+    status: 'pooling',
+    poolReady: false
+  };
+
+  assert.throws(
+    () => applyClubJoin(
+      pool,
+      'p2',
+      {
+        name: 'Passenger 2',
+        paymentMethod: 'cash',
+        pickupPin: '1234'
+      },
+      1000 + 30 * 60 * 1000
+    ),
+    /30-minute Asiye Work matching period has ended/
+  );
+});
+
+test('underfilled Work negotiation requires the current passengers to agree', () => {
+  const source = fs.readFileSync(
+    'functions/index.js',
+    'utf8'
+  );
+
+  const start = source.indexOf(
+    'exports.submitWorkEarlyDepartureOffer'
+  );
+
+  assert.ok(start >= 0);
+
+  const block = source.slice(
+    start,
+    start + 18000
+  );
+
+  assert.match(block, /ASIYE_WORK_WAIT_MS/);
+  assert.match(block, /work\/wait-active/);
+  assert.match(block, /collecting_passenger_approvals/);
+  assert.match(block, /passengerApprovals/);
+  assert.match(block, /approvedCount/);
+  assert.match(block, /earlyDepartureNegotiated:\s*true/);
+  assert.match(block, /effectiveRequiredPassengers/);
+  assert.match(block, /driverNetFare:\s*workFareMoney\(offerTotalFare \* 0\.80\)/);
+});
+
+test('passenger Work screen displays the countdown and negotiated split', () => {
+  const source = fs.readFileSync(
+    'assets/passenger-v2/js/app.js',
+    'utf8'
+  );
+
+  assert.match(source, /workCountdownPanel/);
+  assert.match(source, /workNegotiationPanel/);
+  assert.match(source, /setInterval\([\s\S]{0,500}1000/);
+  assert.match(source, /Negotiate with a driver/);
+  assert.match(source, /Driver receives/);
+  assert.match(source, /submitEarlyDepartureOffer/);
+});
+
+test('driver sees the negotiated Work recommendation and can start the smaller group', () => {
+  const appSource = fs.readFileSync(
+    'assets/driver-v2/js/app.js',
+    'utf8'
+  );
+  const tripSource = fs.readFileSync(
+    'assets/driver-v2/js/trip-controller.js',
+    'utf8'
+  );
+
+  assert.match(appSource, /30-minute Work negotiated offer/);
+  assert.match(appSource, /Recommended: accept if this trip works for you/);
+  assert.match(appSource, /earlyDepartureNegotiated/);
+  assert.match(tripSource, /effectiveRequiredPassengers/);
+});
