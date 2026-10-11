@@ -1,6 +1,13 @@
 name: Asiye Admin Server Upload Package
 
 on:
+  push:
+    branches:
+      - feature/11.0.61-331-pricing-search
+    paths:
+      - "assets/admin/**"
+      - "test/admin-portal.test.cjs"
+      - ".github/workflows/admin_server_bundle.yml"
   pull_request:
     branches: [security-payments-phase5]
     paths:
