@@ -816,14 +816,93 @@ ASIYE_DRIVER.ui = {
             '';
 
 
-        const approved =
-            driver.vehicleApproved ===
-                true ||
+        const approvalStatus =
             String(
                 driver.vehicleApprovalStatus ||
                 ''
-            ).toLowerCase() ===
+            )
+                .trim()
+                .toLowerCase();
+
+
+        const explicitPending =
+            driver.vehicleApproved ===
+                false ||
+            [
+                'pending',
+                'rejected',
+                'changes_requested',
+                'not_submitted'
+            ].includes(
+                approvalStatus
+            );
+
+
+        if (
+            explicitPending
+        ) {
+
+            return false;
+        }
+
+
+        const hasExplicitApprovalState =
+            Object.prototype
+                .hasOwnProperty
+                .call(
+                    driver,
+                    'vehicleApproved'
+                ) ||
+            Boolean(
+                approvalStatus
+            );
+
+
+        const approved =
+            driver.vehicleApproved ===
+                true ||
+            approvalStatus ===
                 'approved';
+
+
+        const verified =
+            String(
+                driver.verificationStatus ||
+                ''
+            ).toLowerCase() ===
+                'verified' ||
+            driver.isVerified ===
+                true ||
+            driver.provisionalActivation ===
+                true;
+
+
+        /*
+         * Older verified drivers were approved before the separate
+         * vehicleApproved / vehicleApprovalStatus fields existed.
+         * Keep them operational, but never bypass an explicit pending or
+         * rejected vehicle review and never grandfather v2 enrollments.
+         */
+        const legacyApproved =
+            !hasExplicitApprovalState &&
+            Number(
+                driver.enrollmentVersion ||
+                0
+            ) < 2 &&
+            verified;
+
+
+        if (
+            legacyApproved
+        ) {
+
+            return Boolean(
+                type &&
+                registration &&
+                phone &&
+                profileImage
+            );
+        }
 
 
         return Boolean(
