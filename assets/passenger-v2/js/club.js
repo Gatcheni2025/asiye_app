@@ -1045,14 +1045,6 @@ ASIYE.club = {
                     .ServerValue
                     .TIMESTAMP,
 
-            workWaitExpiresAt:
-                Date.now() +
-                (
-                    30 *
-                    60 *
-                    1000
-                ),
-
             createdAt:
                 firebase
                     .database
