@@ -1599,6 +1599,13 @@ ASIYE.ui = {
                 true;
 
 
+        const driverAccepted =
+
+            Boolean(
+                request.taxiId
+            );
+
+
         const fullRequestSent =
             passengersReady &&
             paymentsReady &&
@@ -1620,16 +1627,20 @@ ASIYE.ui = {
 
 
         const headline =
-            driverFound
-                ? 'Driver found'
-                : passengersReady
-                    ? 'Passengers ready — finding a driver'
-                    : 'Finding drivers and passengers';
+            driverAccepted
+                ? 'Driver accepted — preparing collection'
+                : driverFound
+                    ? 'Driver found'
+                    : passengersReady
+                        ? 'Passengers ready — finding a driver'
+                        : 'Finding drivers and passengers';
 
 
         const primaryMessage =
-            fullRequestSent
-                ? 'Your Work group is complete. The full request has been sent to nearby drivers and we are waiting for one to accept.'
+            driverAccepted
+                ? `${request.driverName || 'Your driver'} accepted your Work trip. The booking stays active while the driver prepares to start collection.`
+                : fullRequestSent
+                    ? 'Your Work group is complete. The full request has been sent to nearby drivers and we are waiting for one to accept.'
                 : passengersReady && !paymentsReady
                     ? 'All passengers are matched. We are completing the group payment and safety checks before the driver receives the full trip.'
                     : driverFound
@@ -1765,23 +1776,27 @@ ASIYE.ui = {
                     </div>
                 </div>
 
-                <div class="asiye-request-step ${fullRequestSent ? 'active' : ''}">
+                <div class="asiye-request-step ${driverAccepted ? 'done' : fullRequestSent ? 'active' : ''}">
                     <span><i class="fas fa-car-side"></i></span>
                     <div>
                         <strong>
                             ${
-                                fullRequestSent
-                                ? 'Waiting for driver to accept'
-                                : passengersReady && !paymentsReady
+                                driverAccepted
+                                ? 'Driver accepted — preparing collection'
+                                : fullRequestSent
+                                    ? 'Waiting for driver to accept'
+                                    : passengersReady && !paymentsReady
                                     ? 'Completing payment checks'
                                     : 'Driver acceptance comes next'
                             }
                         </strong>
                         <small>
                             ${
-                                fullRequestSent
-                                ? 'The full trip is now visible to eligible nearby drivers.'
-                                : passengersReady && !paymentsReady
+                                driverAccepted
+                                ? 'The assigned driver can now start the passenger collection sequence.'
+                                : fullRequestSent
+                                    ? 'The full trip is now visible to eligible nearby drivers.'
+                                    : passengersReady && !paymentsReady
                                     ? 'The full request is released only after every passenger is payment-ready.'
                                     : 'The driver receives full trip details only when the passenger group is complete.'
                             }
