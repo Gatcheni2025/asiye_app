@@ -3126,5 +3126,80 @@ document.addEventListener(
         console.log(
             '✅ Asiye Passenger V2 started'
         );
+
+
+        /*
+         * Passenger dashboard is fully initialized only after auth/profile,
+         * active-trip restore and the first map frame are ready. Native
+         * Flutter keeps its preloader above the WebView until this signal.
+         */
+        let readySignalled =
+            false;
+
+
+        const signalReady =
+            () => {
+
+                if (readySignalled) {
+                    return;
+                }
+
+
+                readySignalled =
+                    true;
+
+
+                window.AsiyeNativeBridge
+                    ?.notify?.(
+                        'hidePreloader'
+                    );
+            };
+
+
+        const mapInstance =
+            ASIYE.map?.instance;
+
+
+        if (
+            mapInstance?.loaded?.()
+        ) {
+
+            requestAnimationFrame(
+                () =>
+                    requestAnimationFrame(
+                        signalReady
+                    )
+            );
+
+        } else if (
+            mapInstance?.once
+        ) {
+
+            mapInstance.once(
+                'load',
+                () =>
+                    requestAnimationFrame(
+                        () =>
+                            requestAnimationFrame(
+                                signalReady
+                            )
+                    )
+            );
+
+
+            setTimeout(
+                signalReady,
+                3500
+            );
+
+        } else {
+
+            requestAnimationFrame(
+                () =>
+                    requestAnimationFrame(
+                        signalReady
+                    )
+            );
+        }
     }
 );
