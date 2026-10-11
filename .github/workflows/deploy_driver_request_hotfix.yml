@@ -1,0 +1,72 @@
+name: Deploy Driver Request Eligibility Hotfix
+
+on:
+  push:
+    branches:
+      - feature/11.0.61-331-pricing-search
+    paths:
+      - '.github/workflows/deploy_driver_request_hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asiye-driver-request-hotfix
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate request eligibility
+        run: |
+          node --check functions/index.js
+          node --check assets/driver-v2/js/app.js
+          node --check assets/driver-v2/js/requests.js
+          node --test test/request-search-awareness.test.cjs
+
+      - name: Install Firebase dependencies
+        working-directory: functions
+        run: npm install --no-audit --no-fund
+
+      - name: Verify Firebase credentials
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Missing Firebase service account secret."
+            exit 1
+          fi
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+
+      - name: Deploy driver request routing functions sequentially
+        shell: bash
+        run: |
+          set -euo pipefail
+          FUNCTIONS=(
+            dispatchGoRideRequest
+            notifyDriversOfClubAreaBooking
+            refreshDriversWhileClubPooling
+            notifyDriversWhenClubReady
+          )
+          for FN in "${FUNCTIONS[@]}"; do
+            echo "Deploying $FN"
+            npx --yes firebase-tools@latest deploy \
+              --project asiye-80386 \
+              --only "functions:$FN" \
+              --non-interactive
+            sleep 3
+          done
