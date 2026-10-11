@@ -2790,6 +2790,12 @@ ASIYE_DRIVER.trip = {
 
             Number(
 
+                request.effectiveRequiredPassengers ||
+
+                request.requiredPassengers ||
+
+                request.minimumPassengers ||
+
                 request.capacity ||
 
                 request.maxCapacity ||
@@ -2797,8 +2803,8 @@ ASIYE_DRIVER.trip = {
                 (
                     request.clubMode ===
                     'club7'
-                    ? 7
-                    : 4
+                    ? 4
+                    : 3
                 )
             );
 
