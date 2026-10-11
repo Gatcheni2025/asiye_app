@@ -257,3 +257,39 @@ test('20/80 card split preserves Asiye and driver shares', () => {
   assert.equal(split.asiyeShare, 20);
   assert.equal(split.driverShare, 80);
 });
+
+
+test('protected Go settlement survives RTDB initial-null passes for earnings and lock release', () => {
+  const start = functionsSource.indexOf(
+    'async function settleProtectedGoFinancials'
+  );
+  const block = functionsSource.slice(start, start + 18000);
+
+  assert.ok(
+    block.includes(
+      'const driverEarningsResult ='
+    ),
+    'driver accounting transaction result must be verified'
+  );
+
+  assert.ok(
+    block.includes(
+      'driver === null'
+    ),
+    'driver earnings transaction must survive Firebase initial-null state'
+  );
+
+  assert.ok(
+    block.includes(
+      'settlement/driver-accounting-failed'
+    ),
+    'settlement must fail rather than completing with missing driver earnings'
+  );
+
+  assert.ok(
+    block.includes(
+      'prevents a completed driver from remaining stuck "On trip"'
+    ),
+    'completed-trip driver lock release must handle initial-null callbacks'
+  );
+});

@@ -12079,17 +12079,29 @@ async function settleProtectedGoFinancials(
    * share becomes commission debt. Card and Wallet are platform-controlled
    * funds, so the platform share is already retained and no debt is added.
    */
-  await admin.database()
-    .ref(
-      `taxis/${driverId}`
-    )
-    .transaction(
-      driver => {
-        if (!driver) {
-          return;
-        }
+  const driverEarningsResult =
+    await admin.database()
+      .ref(
+        `taxis/${driverId}`
+      )
+      .transaction(
+        driver => {
+          /*
+           * As with the request transactions above, Admin RTDB can begin
+           * with a local null. Keep the transaction alive so it retries with
+           * the real driver profile instead of silently skipping earnings.
+           */
+          if (
+            driver === null
+          ) {
+            return null;
+          }
 
-        const applied = {
+          if (!driver) {
+            return;
+          }
+
+          const applied = {
           ...(
             driver
               .earningsAppliedTrips ||
@@ -12174,14 +12186,38 @@ async function settleProtectedGoFinancials(
         driver.lastTripCommission =
           platformCommission;
 
-        driver.lastTripNet =
-          driverNetFare;
+          driver.lastTripNet =
+            driverNetFare;
 
-        return driver;
-      },
-      undefined,
-      false
-    );
+          return driver;
+        },
+        undefined,
+        false
+      );
+
+  const settledDriver =
+    driverEarningsResult
+      .snapshot
+      .val();
+
+  if (
+    !driverEarningsResult.committed ||
+    !settledDriver ||
+    !settledDriver
+      .earningsAppliedTrips?.[
+        requestId
+      ]
+  ) {
+    const error =
+      new Error(
+        "Driver earnings could not be committed for this completed trip."
+      );
+
+    error.code =
+      "settlement/driver-accounting-failed";
+
+    throw error;
+  }
 
   const settlement = {
     settlementId:
@@ -12245,16 +12281,29 @@ async function settleProtectedGoFinancials(
       `taxis/${driverId}/currentRequest`
     )
     .transaction(
-      current =>
-        String(
-          current ||
-          ""
-        ) ===
-          String(
-            requestId
-          )
-          ? null
-          : undefined
+      current => {
+        /*
+         * A first-pass null is not proof that the server lock is empty.
+         * Returning null lets Firebase synchronize and retry. This is what
+         * prevents a completed driver from remaining stuck "On trip".
+         */
+        if (
+          current === null
+        ) {
+          return null;
+        }
+
+        if (
+          String(current) ===
+            String(requestId)
+        ) {
+          return null;
+        }
+
+        return;
+      },
+      undefined,
+      false
     )
     .catch(
       () => {}
@@ -12265,16 +12314,24 @@ async function settleProtectedGoFinancials(
       `commuters/${passengerId}/currentRequest`
     )
     .transaction(
-      current =>
-        String(
-          current ||
-          ""
-        ) ===
-          String(
-            requestId
-          )
-          ? null
-          : undefined
+      current => {
+        if (
+          current === null
+        ) {
+          return null;
+        }
+
+        if (
+          String(current) ===
+            String(requestId)
+        ) {
+          return null;
+        }
+
+        return;
+      },
+      undefined,
+      false
     )
     .catch(
       () => {}

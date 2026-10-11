@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for FN in acceptGoFareOffer finalizeNegotiatedGoBooking; do
+          for FN in acceptGoFareOffer finalizeNegotiatedGoBooking settleTripPayment; do
             echo "Deploying function: $FN"
             npx --yes firebase-tools@latest deploy \
               --project asiye-80386 \
