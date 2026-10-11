@@ -53,6 +53,8 @@ test('admin fetch is allowlisted and accessible only after admin authorization',
  assert.match(read,/await requireAsiyeAdmin\(context\)/);
  assert.match(read,/"refundCases"/);
  assert.match(read,/"adminInvitations"/);
+ assert.match(read,/"driverPayoutAccounts"/);
+ assert.match(read,/"goFareAgreements"/);
  const op=src.slice(src.indexOf('exports.adminOperations ='),src.indexOf('exports.adminFetchData ='));
  assert.match(op,/await requireAsiyeAdmin\(context\)/);
 });
@@ -105,4 +107,17 @@ test('details action identifiers always use server Firebase collection keys',()=
  const src=root('assets/admin/console.js');
  assert.match(src,/\.map\(\(\[id,record\]\)=>\(\{\.\.\.record,id\}\)\)/);
  assert.doesNotMatch(src,/\.map\(\(\[id,record\]\)=>\(\{id,\.\.\.record\}\)\)/);
+});
+
+
+test('admin cannot rewrite protected negotiated fare or settled status',()=>{
+ const src=root('functions/index.js');
+ const start=src.indexOf('if (action === "updateRequest")');
+ const end=src.indexOf('if (action === "assignDriver")',start);
+ const block=src.slice(start,end);
+ assert.ok(start>=0&&end>start);
+ assert.match(block,/protectedNegotiated/);
+ assert.match(block,/protectedSettlement/);
+ assert.match(block,/Protected negotiated fare, payment method and settlement amounts cannot be edited from Admin/);
+ assert.match(block,/server-settled negotiated trip is financially final/);
 });
