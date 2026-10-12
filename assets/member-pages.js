@@ -264,7 +264,7 @@
                 return await new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
                         pendingTripShare = null;
-                        reject(new Error('Share was not completed. Please share the trip to continue.'));
+                        reject(new Error('Sharing timed out. Return to Asiye; the driver can still verify your PIN.'));
                     }, 120000);
 
                     pendingTripShare = {
@@ -291,7 +291,7 @@
     window.onNativeTripShareResult = result => {
         if (!pendingTripShare) return;
         if (result?.shared) pendingTripShare.resolve(true);
-        else pendingTripShare.reject(new Error('Share your trip with a loved one to continue.'));
+        else pendingTripShare.reject(new Error(result?.error || 'Sharing was not confirmed. You can still start your trip using the pickup PIN.'));
     };
 
     const normaliseContactPhone = value => {

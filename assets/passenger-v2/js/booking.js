@@ -2038,7 +2038,7 @@ ASIYE.booking = {
 
         if (!window.AsiyeTripShare) {
             throw new Error(
-                'Trip sharing is required before booking. Update the Asiye app and try again.'
+                'Live trip sharing is unavailable. Please update the Asiye app to share your location.'
             );
         }
 
@@ -2047,10 +2047,10 @@ ASIYE.booking = {
             this.liveTrackingUrl(requestId);
 
         const text =
-            `I'm booking ${service} with Asiye. Pickup: ${pickupAddress || 'Current location'}. Destination: ${destination || 'Not available'}. Safety PIN: ${pickupPin}. Follow my trip live: ${trackingUrl}. Please keep these trip details until I arrive safely.`;
+            `I'm taking ${service} with Asiye. Pickup: ${pickupAddress || 'Current location'}. Destination: ${destination || 'Not available'}. Follow my trip live: ${trackingUrl}. Please keep an eye on my journey until I arrive safely.`;
 
         ASIYE.ui?.toast?.(
-            'Share this trip with a loved one to continue.'
+            'Choose someone to track your trip. Return to Asiye to show the driver your pickup PIN.'
         );
 
         await AsiyeTripShare.require(

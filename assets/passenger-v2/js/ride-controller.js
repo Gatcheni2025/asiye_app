@@ -1768,15 +1768,30 @@ ASIYE.ride = {
             });
         });
         if (request.clubSecurityVersion === 2) window.ClubLive.enhancePickup(request, container, arrived);
-        if (arrived && request.goContinuationVersion === 2 && !request.safetyShareCompleted) {
+        if (arrived && request.goContinuationVersion === 2) {
+            const shareArea = document.createElement('div');
+            shareArea.className = 'pickup-live-share';
+            shareArea.style.cssText = 'margin-top:12px;display:grid;gap:8px;';
+            const info = document.createElement('p');
+            info.style.cssText = 'margin:0;font-size:13px;line-height:1.45;';
+            info.textContent = 'You can share your live location with loved ones via WhatsApp. Sharing is optional: your driver can verify your pickup PIN and start the trip without it.';
+            shareArea.append(info);
             const button = document.createElement('button');
+            button.type = 'button';
             button.className = 'primary-button';
-            button.textContent = 'Share trip with loved ones';
-            container.append(button);
+            button.textContent = 'Share live trip with loved ones';
+            shareArea.append(button);
+            container.append(shareArea);
             button.addEventListener('click', async () => {
                 button.disabled = true;
-                try { await ASIYE.booking.completeGoSafetyShare(request); }
-                catch (error) { ASIYE.ui.toast(error.message || 'Unable to share trip.'); button.disabled = false; }
+                try {
+                    await ASIYE.booking.completeGoSafetyShare(request);
+                    ASIYE.ui.toast('Trip link shared. Return to Asiye to show your driver the pickup PIN.');
+                } catch (error) {
+                    ASIYE.ui.toast(error.message || 'Sharing was not completed. You may still start using the pickup PIN.');
+                } finally {
+                    if (button.isConnected) button.disabled = false;
+                }
             });
         }
         ASIYE.map?.resize();
@@ -1859,11 +1874,15 @@ ASIYE.ride = {
         document.getElementById('inTransitChat')?.addEventListener('click', () => AsiyeTripChat.open(request, this.requestId));
         document.getElementById('transitSafety')?.addEventListener('click', () => AsiyePages.open('safety'));
         document.getElementById('transitShare')?.addEventListener('click', async () => {
-            const text = `I'm on an Asiye ride to ${request.destination || request.destinationName || 'my destination'}. Driver: ${request.driverName || 'Not available'}. Vehicle: ${request.vehicleReg || 'Not available'}.`;
             try {
-                if (navigator.share) await navigator.share({ title: 'My Asiye trip', text });
-                else { await navigator.clipboard.writeText(text); ASIYE.ui.toast('Trip details copied.'); }
-            } catch (error) { if (error.name !== 'AbortError') ASIYE.ui.toast('Unable to share trip details.'); }
+                // A server-authorized live tracking URL, not the pickup PIN.
+                const liveTrackingUrl = await ASIYE.booking.createLiveShareUrl(this.requestId);
+                const text = `Follow my Asiye ride live to ${request.destination || request.destinationName || 'my destination'}: ${liveTrackingUrl}`;
+                await AsiyeTripShare.require(text);
+                ASIYE.ui.toast('Live link shared. Return to Asiye to follow your trip.');
+            } catch (error) {
+                if (error.name !== 'AbortError') ASIYE.ui.toast(error.message || 'Unable to share live trip. Please try again.');
+            }
         });
     },
 

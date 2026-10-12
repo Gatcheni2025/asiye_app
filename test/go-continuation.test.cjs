@@ -51,26 +51,30 @@ test('both roles may cancel before arrival, but arrival and departure close canc
   }
   assert.equal(arrived({...trip, arrivedAt: 0}), false);
 });
-test('arrival, sharing and server PIN verification precede departure; wrong PIN attempts persist and lock', () => {
+test('PIN verified after arrival starts trip without mandatory WhatsApp share; wrong attempts lock', () => {
   const e = evidence('cash');
   let trip = activate(base('cash'), e.agreement, e.payment, '4831', 100);
   assert.throws(() => action(trip, 'verifyPin', {pin: '4831'}, e, 101));
   assert.throws(() => action(trip, 'shareComplete', {}, {...e, shareIssued: true}, 101));
   trip = action(trip, 'onWay', {}, e, 102);
   trip = action(trip, 'arrive', {}, e, 103);
-  assert.throws(() => action(trip, 'verifyPin', {pin: '4831'}, e, 104));
+  assert.equal(trip.safetyShareCompleted, false);
+  assert.equal(trip.safetyShareRequired, false);
   assert.throws(() => action(trip, 'shareComplete', {}, e, 104));
-  trip = action(trip, 'shareComplete', {}, {...e, shareIssued: true}, 105);
   const bad = action(trip, 'verifyPin', {pin: '0000'}, e, 106);
   assert.equal(bad.pinAttempts, 1);
   assert.equal(bad.status, 'arrived');
   const started = action(bad, 'verifyPin', {pin: '4831'}, e, 107);
   assert.equal(started.status, 'in_transit');
   assert.equal(started.pinVerifiedAt, 107);
+  assert.equal(started.safetyShareCompleted, false);
   assert.deepEqual(action(started, 'verifyPin', {pin: '4831'}, e, 108), started);
   let locked = trip;
   for (let i = 0; i < 5; i++) locked = action(locked, 'verifyPin', {pin: '0000'}, e, 106 + i);
   assert.throws(() => action(locked, 'verifyPin', {pin: '4831'}, e, 120), /locked/);
+  const shared = action(trip, 'shareComplete', {}, {...e, shareIssued:true}, 105);
+  assert.equal(shared.safetyShareCompleted, true);
+  assert.equal(action(shared, 'verifyPin', {pin:'4831'}, e, 107).status, 'in_transit');
 });
 
 test('cash remains due at pickup; receipt is confirmed only after verified departure and destination arrival', () => {
@@ -82,7 +86,7 @@ test('cash remains due at pickup; receipt is confirmed only after verified depar
   assert.throws(() => action(trip,'collectCash',{cashCollected:true},e,101), /pickup PIN/);
   trip = action(trip,'onWay',{},e,102);
   trip = action(trip,'arrive',{},e,103);
-  trip = action(trip,'shareComplete',{}, {...e, shareIssued:true},104);
+  // Cash payment remains due until verified departure and destination arrival; WhatsApp is optional.
   assert.throws(() => action(trip,'collectCash',{cashCollected:true},e,105), /pickup PIN/);
   trip = action(trip,'verifyPin',{pin:'4831'},e,106);
   assert.equal(trip.pinVerifiedAt,106);
@@ -95,4 +99,24 @@ test('cash remains due at pickup; receipt is confirmed only after verified depar
   assert.equal(collected.pinVerifiedAt,106);
   assert.equal(collected.cashCollectionStatus,'collected');
   assert.deepEqual(action(collected,'collectCash',{cashCollected:true},e,109),collected);
+});
+
+test('sharing is not a protected settlement gate and includes a live tracking URL without the PIN', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const root = path.resolve(__dirname, '..');
+  const functions = fs.readFileSync(path.join(root,'functions/index.js'), 'utf8');
+  const start = functions.indexOf('async function settleProtectedGoFinancials');
+  const settlement = functions.slice(start, start + 1050);
+  assert.ok(start >= 0);
+  assert.match(settlement, /trip\.paymentsReady !== true/);
+  assert.doesNotMatch(settlement, /trip\.safetyShareCompleted !== true/);
+  const booking = fs.readFileSync(path.join(root,'assets/passenger-v2/js/booking.js'), 'utf8');
+  const share = booking.slice(booking.indexOf('    async requireTripShare({'), booking.indexOf('    async createLiveShareUrl('));
+  assert.match(share, /Follow my trip live/);
+  assert.doesNotMatch(share, /Safety PIN: \$\{pickupPin\}/);
+  const ride = fs.readFileSync(path.join(root,'assets/passenger-v2/js/ride-controller.js'), 'utf8');
+  const inTransit = ride.slice(ride.indexOf("document.getElementById('transitShare')"), ride.indexOf('    renderCompleted(request)'));
+  assert.match(inTransit, /createLiveShareUrl\(this\.requestId\)/);
+  assert.match(inTransit, /AsiyeTripShare\.require\(text\)/);
 });

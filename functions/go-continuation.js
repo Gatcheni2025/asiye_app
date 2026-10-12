@@ -27,7 +27,7 @@ function activate(trip, agreement, payment, pin, now) {
     fail('This booking can no longer be activated.');
   return {...trip, status: trip.status === 'payment_required' ? 'accepted' : trip.status,
     pickupPin: trip.negotiatedBookingFinalized === true && /^\d{4}$/.test(String(trip.pickupPin || '')) ? String(trip.pickupPin) : pin,
-    requirePin: true, safetyShareRequired: true,
+    requirePin: true, safetyShareRequired: false, // Sharing is offered, never a PIN gate.
     safetyShareCompleted: trip.safetyShareCompleted === true,
     paymentStatus: payment.status, paymentsReady: true, goContinuationVersion: 2,
     negotiatedBookingFinalized: true, negotiatedBookingFinalizedAt: trip.negotiatedBookingFinalizedAt || now};
@@ -67,10 +67,12 @@ function action(trip, name, body, evidence, now) {
   if (name === 'verifyPin') {
     if (trip.status === 'in_transit' && trip.pinVerifiedAt) return trip;
     if (trip.status !== 'arrived' || !trip.arrivedAt) fail('The driver must arrive before checking the PIN.');
-    if (!trip.safetyShareCompleted) fail('The passenger must share the trip before departure.');
+    // External share sheets may be dismissed or fail to return a callback.
+    // Payment, arrival and verified pickup PIN are mandatory; sharing is not.
     if (Number(trip.pinAttempts || 0) >= 5) fail('PIN attempts are locked. Contact support.', 429);
     const next = {...trip, pinAttempts: Number(trip.pinAttempts || 0) + 1};
-    if (String(body.pin || '').trim() !== String(trip.pickupPin)) return next;
+    const enteredPin = String(body.pin || '').trim();
+    if (!/^\d{4}$/.test(enteredPin) || !/^\d{4}$/.test(String(trip.pickupPin || '')) || enteredPin !== String(trip.pickupPin)) return next;
     return {...next, status: 'in_transit', pinVerifiedAt: now, passengerOnboardAt: now, tripStartedAt: now};
   }
   fail('Unknown booking action.', 400);

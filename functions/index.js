@@ -12249,7 +12249,8 @@ async function settleProtectedGoFinancials(
     !trip.taxiId ||
     trip.negotiatedBookingFinalized !== true ||
     trip.paymentsReady !== true ||
-    trip.safetyShareCompleted !== true ||
+    // Sharing is optional; verified trips must still settle even if WhatsApp
+    // was dismissed or the OS did not report the result of a share.
     ![
       "passenger_onboard",
       "in_transit"
