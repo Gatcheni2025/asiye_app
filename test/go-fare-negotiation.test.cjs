@@ -434,7 +434,7 @@ test('Negotiated payment preparation is single-flight per request', () => {
   );
 });
 
-test('Safety and payment must finish before the reserved driver starts pickup', () => {
+test('Payment unlocks pickup and safety sharing remains required after arrival', () => {
   assert.ok(
     bookingSource.includes(
       'async finalizeNegotiatedGoBooking'
@@ -455,7 +455,7 @@ test('Safety and payment must finish before the reserved driver starts pickup', 
 
   assert.ok(
     functionsSource.includes(
-      'Share the trip with a loved one before the booking is activated.'
+      'goContinuation.activate'
     )
   );
 
@@ -473,7 +473,7 @@ test('Safety and payment must finish before the reserved driver starts pickup', 
 
   assert.ok(
     driverTripSource.includes(
-      'Wait for the passenger payment, pickup PIN and safety share before starting pickup.'
+      'Wait for the confirmed passenger payment before starting pickup.'
     )
   );
 });
@@ -569,7 +569,7 @@ test('Go fare acceptance does not abort on the RTDB transaction initial-null pas
 
 test('negotiated Go finalization survives the RTDB initial-null transaction pass', () => {
   const start = functionsSource.indexOf(
-    'exports.finalizeNegotiatedGoBooking'
+    "const goContinuation = require('./go-continuation')"
   );
   const block = functionsSource.slice(start, start + 15000);
 
@@ -584,7 +584,7 @@ test('negotiated Go finalization survives the RTDB initial-null transaction pass
 
   assert.ok(
     block.includes(
-      'finalized.negotiatedBookingFinalized !=='
+      'finalized.negotiatedBookingFinalized !== true'
     ),
     'finalization must verify the authoritative committed booking state'
   );

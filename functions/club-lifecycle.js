@@ -229,10 +229,10 @@ function driverAction(pool, uid, body, evidence, now) {
       return acceptFare(pool, uid, Number(body.revision), now);
     case "cancelDriver":
       if (
-        ["collecting_passengers", "in_transit"].includes(pool.status) &&
-        active(pool).some(([, p]) => p.pinVerifiedAt)
+        ['in_transit', 'completed'].includes(pool.status) ||
+        active(pool).some(([, p]) => p.arrivedAt || p.pinVerifiedAt)
       )
-        fail("A passenger is already onboard; contact support.");
+        fail("The driver has arrived at a pickup; contact support.");
       pool.status = "cancelled_by_driver";
       pool.cancelledAt = now;
       return pool;
@@ -866,11 +866,13 @@ function registerClubLifecycle(deps) {
         if (!p || p.authUid !== user.uid)
           fail("Only this passenger can cancel.", 403);
         if (
+          p.arrivedAt || p.status === 'arrived' ||
+          (current.earlyDepartureNegotiated && active(current).some(([, member]) => member.arrivedAt)) ||
           active(current).some(([, member]) => member.pinVerifiedAt) ||
           current.status === "in_transit" ||
           current.status === "completed"
         )
-          fail("The trip has started. Contact support.");
+          fail("The driver has arrived or the trip has started. Contact support.");
         p.status = "cancelled_by_commuter";
         p.cancelledAt = Date.now();
         current.paymentsReady = false;

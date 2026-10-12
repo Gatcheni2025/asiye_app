@@ -7544,6 +7544,44 @@ exports.declineGoFareCounter =
   );
 
 
+const goContinuation = require('./go-continuation');
+
+async function transactGoContinuation(ref, transform) {
+  await ref.once('value');
+  let failure;
+  const tx = await ref.transaction(current => {
+    failure = null;
+    if (current === null) return null;
+    try { return transform(current); }
+    catch (error) { failure = error; return undefined; }
+  }, undefined, false);
+  if (failure) throw failure;
+  return tx;
+}
+
+
+async function activateNegotiatedGoPayment(requestId) {
+  const ref = admin.database().ref(`requests/${requestId}`);
+  const trip = (await ref.once('value')).val();
+  if (!trip || !isGoNegotiationTrip(trip) || trip.negotiationEnabled !== true ||
+      trip.fareStatus !== 'agreed' || trip.goContinuationRequestedVersion !== 2 || goContinuation.terminal(trip.status)) return null;
+  const agreement = await readGoFareAgreement(requestId);
+  const payment = (await admin.database().ref(tripPaymentPath(requestId, trip.commuterId)).once('value')).val();
+  if (!goContinuation.paymentReady(trip, agreement, payment)) return null;
+  const pin = String(require('node:crypto').randomInt(1000, 10000));
+  const transaction = await transactGoContinuation(ref, current =>
+    goContinuation.activate(current, agreement, payment, pin, Date.now()));
+  const finalized = transaction.snapshot.val();
+  if (!transaction.committed || !finalized || finalized.negotiatedBookingFinalized !== true ||
+      goContinuation.terminal(finalized.status)) return null;
+  if (trip.negotiatedBookingFinalized !== true) await admin.database().ref(`notifications/taxis/${finalized.taxiId}/negotiated-ready-${requestId}`).set({
+    type: 'go_fare_agreed_driver', title: 'Payment ready · start pickup',
+    message: `The R${money(agreement.agreedFare)} fare is ready. Head to pickup; check the PIN after arrival.`,
+    requestId, ready: true, timestamp: admin.database.ServerValue.TIMESTAMP
+  });
+  return finalized;
+}
+
 exports.finalizeNegotiatedGoBooking =
   onRequest(
     {
@@ -7611,6 +7649,22 @@ exports.finalizeNegotiatedGoBooking =
 
         const trip =
           paymentContext.trip;
+
+        // Installed 338 clients retain their existing safety flow. The new
+        // client explicitly opts into server continuation; backend deployment
+        // alone must not switch an older installed driver to new-only actions.
+        if (Number(request.body?.continuationVersion) === 2 && trip.goContinuationRequestedVersion !== 2) {
+          await admin.database().ref(`requests/${requestId}/goContinuationRequestedVersion`).set(2);
+          trip.goContinuationRequestedVersion = 2;
+        }
+        if (trip.goContinuationRequestedVersion === 2) {
+          const continued = await activateNegotiatedGoPayment(requestId);
+          if (!continued) return response.status(409).json({error: 'The agreed payment is not ready for pickup.'});
+          return response.json({ok: true, requestId, status: continued.status,
+            agreedFare: continued.agreedFare, paymentStatus: continued.paymentStatus,
+            paymentsReady: true, taxiId: continued.taxiId});
+        }
+
 
         if (
           !isGoNegotiationTrip(
@@ -7934,6 +7988,68 @@ exports.finalizeNegotiatedGoBooking =
 // The passenger client must not write into another driver's taxi profile.
 // Dispatching via Admin SDK keeps Phase 2 profile rules intact and guarantees
 // the request notification/queue write can reach eligible drivers.
+// Backend continuation also runs when Paystack's signed webhook confirms payment,
+// including when the passenger has closed the app. No sharing-before-arrival gate.
+exports.continueGoAfterPayment = onValueUpdated(
+  {ref: '/tripPayments/{requestId}/{passengerId}', region: 'us-central1'},
+  async event => {
+    const payment = event.data.after.val();
+    if (!payment || !['cash_due', 'held', 'captured'].includes(payment.status)) return;
+    await activateNegotiatedGoPayment(event.params.requestId);
+  });
+
+exports.goTripActionSecure = onRequest(
+  {region: 'us-central1', invoker: 'public'}, async (request, response) => {
+    walletSmsCors(request, response);
+    if (request.method === 'OPTIONS') return response.status(204).send('');
+    if (request.method !== 'POST') return response.status(405).json({error: 'POST required.'});
+    try {
+      const user = await verifiedRequestUser(request);
+      if (!user) return response.status(401).json({error: 'Sign-in required.'});
+      const id = validRequestId(request.body?.requestId);
+      if (!id) return response.status(400).json({error: 'Invalid trip.'});
+      const ref = admin.database().ref(`requests/${id}`);
+      const trip = (await ref.once('value')).val();
+      if (!trip || trip.type === 'club') return response.status(409).json({error: 'Use the Club booking action for this trip.'});
+      const name = String(request.body.action || '');
+      const passenger = await profileOwnedByAuth('commuters', trip.commuterId, user.uid);
+      const driver = trip.taxiId && await profileOwnedByAuth('taxis', trip.taxiId, user.uid);
+      const role = name === 'shareComplete' ? 'passenger' : name === 'cancel' && passenger ? 'passenger' : 'driver';
+      if ((role === 'passenger' && !passenger) || (role === 'driver' && !driver))
+        return response.status(403).json({error: 'This is not your booking.'});
+      const agreement = await readGoFareAgreement(id);
+      const payment = (await admin.database().ref(tripPaymentPath(id, trip.commuterId)).once('value')).val();
+      const issuer = name === 'shareComplete'
+        ? (await admin.database().ref(`tripShareIssuers/${id}/${user.uid}`).once('value')).val() : null;
+      const taxi = driver ? (await admin.database().ref(`taxis/${trip.taxiId}`).once('value')).val() : null;
+      const pickup = trip.commuterLocation || trip.pickupLocation || {};
+      const nearPickup = Boolean(taxi && taxi.currentRequest === id && Number(taxi.lastSeen) > Date.now() - 120000 &&
+        haversineKm(Number(taxi.latitude), Number(taxi.longitude), Number(pickup.latitude), Number(pickup.longitude)) <= 0.3);
+      const evidence = {role, agreement, payment, nearPickup, shareIssued: Boolean(issuer?.token && issuer.expiresAt > Date.now())};
+      const tx = await transactGoContinuation(ref, current => {
+        // Recheck identity within the transaction: assignment can change while reading.
+        if (current.commuterId !== trip.commuterId || current.taxiId !== trip.taxiId) return;
+        return goContinuation.action(current, name, request.body, evidence, Date.now());
+      });
+      const result = tx.snapshot.val();
+      if (!tx.committed || !result) return response.status(409).json({error: 'Booking changed. Refresh and try again.'});
+      if (name === 'cancel') {
+        const locks = [[`commuters/${trip.commuterId}/currentRequest`, id]];
+        if (trip.taxiId) await admin.database().ref(`taxis/${trip.taxiId}`).transaction(taxi => {
+          if (!taxi || taxi.currentRequest !== id) return undefined;
+          return {...taxi, currentRequest: null, isFull: false, passengerCount: 0};
+        });
+        for (const [path, expected] of locks)
+          await admin.database().ref(path).transaction(value => value === expected ? null : undefined);
+        if (trip.type === 'delivery') await admin.database().ref(`delivery_requests/${id}`).update({status: result.status, cancelledAt: result.cancelledAt});
+      }
+      return response.json({ok: true, status: result.status,
+        pinValid: name === 'verifyPin' ? Boolean(result.pinVerifiedAt) : undefined});
+    } catch (error) {
+      return response.status(error.status || 409).json({error: error.message || 'Unable to update booking.'});
+    }
+  });
+
 exports.dispatchGoRideRequest =
   onRequest(
     {
@@ -10750,6 +10866,8 @@ async function markTripPassengerPayment(
       .update(
         patch
       );
+    if (['cash_due', 'held', 'captured'].includes(patch.paymentStatus))
+      await activateNegotiatedGoPayment(requestId);
   }
 }
 
@@ -11601,10 +11719,9 @@ async function recordCardTripPaymentHeld(
           "held",
         paymentsReady:
           true,
-        status:
-          trip.safetyShareCompleted
-            ? "pending"
-            : trip.status
+        ...(trip.negotiationEnabled === true ? {} : {
+          status: trip.safetyShareCompleted ? "pending" : trip.status
+        })
       });
   }
   if (trip.type === "delivery") {

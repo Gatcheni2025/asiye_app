@@ -1111,3 +1111,30 @@ test('v2 enrollment rejects invented phone verification and missing address proo
     ...base, phone: '+27821234567'
   }));
 });
+
+test('server-confirmed Go prevents client PIN, payment, status and cancellation bypasses', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'requests/negotiated-active'), {
+      goContinuationVersion:2, pickupPin:'4831', requirePin:true, safetyShareCompleted:false,
+      negotiatedBookingFinalized:true
+    });
+  });
+  for (const actor of ['passenger-auth', 'driver-auth']) {
+    for (const patch of [{pickupPin:'0000'}, {goContinuationVersion:1}, {status:'driver_on_way'},
+      {status:'arrived',arrivedAt:100}, {status:'in_transit',pinVerifiedAt:100},
+      {safetyShareCompleted:true}, {paymentsReady:true,paymentStatus:'captured'},
+      {status:actor === 'driver-auth' ? 'cancelled_by_driver':'cancelled_by_commuter'},
+      {pickupPin:null}, {goContinuationVersion:null}, {safetyShareCompleted:null}])
+      await assertFails(update(ref(dbFor(actor),'requests/negotiated-active'),patch));
+    await assertFails(set(ref(dbFor(actor),'requests/negotiated-active'),null));
+    await assertSucceeds(get(ref(dbFor(actor),'requests/negotiated-active')));
+  }
+});
+
+test('legacy Go cancellation also closes at driver arrival', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'requests/trip1'), {status:'arrived',arrivedAt:100});
+  });
+  for (const actor of ['passenger-auth','driver-auth'])
+    await assertFails(update(ref(dbFor(actor),'requests/trip1'), {status:actor === 'driver-auth' ? 'cancelled_by_driver':'cancelled_by_commuter'}));
+});

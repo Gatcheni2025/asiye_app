@@ -4700,7 +4700,7 @@ async function (
          * listening for new requests.
          */
 
-        await ASIYE_DRIVER.requests
+        const restoredTrip = await ASIYE_DRIVER.requests
             .restoreActiveRequest();
 
 
@@ -4717,7 +4717,7 @@ async function (
 
             !ASIYE_DRIVER.state
                 .availability
-                .currentRequest
+                .currentRequest && restoredTrip !== null
         ) {
 
             ASIYE_DRIVER.requests

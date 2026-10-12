@@ -272,3 +272,14 @@ test("secure PINs are absent from the shared booking state", () => {
   const p = pool();
   assert.equal(JSON.stringify(p).includes("pickupPin"), false);
 });
+
+test('driver cancellation stops at first Club pickup arrival, including a concurrent arrival', () => {
+  const waiting = pool();
+  driverAction(waiting, 'driver', {action:'cancelDriver'}, {}, 100);
+  assert.equal(waiting.status, 'cancelled_by_driver');
+  const arrived = pool();
+  arrived.status = 'collecting_passengers';
+  arrived.passengers.p0.status = 'arrived';
+  arrived.passengers.p0.arrivedAt = 99;
+  assert.throws(() => driverAction(arrived, 'driver', {action:'cancelDriver'}, {}, 100), /arrived/);
+});

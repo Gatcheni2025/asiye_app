@@ -2298,7 +2298,8 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     async reconcileAcceptance(
-        requestId = null
+        requestId = null,
+        strict = false
     ) {
 
         const driverId =
@@ -2422,7 +2423,8 @@ ASIYE_DRIVER.requests = {
                 'cancelled_by_driver',
                 'cancelled_by_commuter',
                 'cancelled_by_admin',
-                'rejected'
+                'rejected',
+                'expired'
             ];
 
 
@@ -2452,8 +2454,7 @@ ASIYE_DRIVER.requests = {
                  * accept cleared the taxi lock, restore it safely.
                  */
 
-                const lock =
-
+                const lock = liveDriver.currentRequest === id ? {committed: true} :
                     await currentRequestRef
                         .transaction(
                             current => {
@@ -2550,10 +2551,7 @@ ASIYE_DRIVER.requests = {
                 );
 
 
-                ASIYE_DRIVER.trip
-                    ?.start?.(
-                        id
-                    );
+                await ASIYE_DRIVER.trip?.start?.(id, accepted);
 
 
                 ASIYE_DRIVER.ui
@@ -2676,6 +2674,7 @@ ASIYE_DRIVER.requests = {
                 'Driver acceptance reconciliation failed:',
                 error
             );
+            if (strict) throw error;
 
 
             return null;
@@ -2747,92 +2746,30 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     async restoreActiveRequest() {
-
-        const driverId =
-            ASIYE_DRIVER.state
-                ?.driverId;
-
-
-        if (!driverId) return;
-
-
+        const driverId = ASIYE_DRIVER.state?.driverId;
+        if (!driverId) return false;
         try {
-
-            const driverSnapshot =
-
-                await firebase
-                    .database()
-                    .ref(
-                        `taxis/${driverId}`
-                    )
-                    .once(
-                        'value'
-                    );
-
-
-            const driver =
-                driverSnapshot.val();
-
-
-            if (!driver) return;
-
-
-            ASIYE_DRIVER.state.driver =
-                driver;
-
-
-            ASIYE_DRIVER
-                .syncDriverAvailability?.(
-                    driver
-                );
-
-
-            const requestId =
-
-                driver.currentRequest ||
-
-                localStorage.getItem(
-                    'currentRequestId'
-                );
-
-
-            if (!requestId) {
-
-                return;
+            const driver = (await firebase.database().ref(`taxis/${driverId}`).once('value')).val();
+            if (!driver) return false;
+            ASIYE_DRIVER.state.driver = driver;
+            ASIYE_DRIVER.syncDriverAvailability?.(driver);
+            const candidates = [...new Set([driver.currentRequest, localStorage.getItem('currentRequestId')].filter(Boolean))];
+            for (const requestId of candidates) {
+                if (await this.reconcileAcceptance(requestId, true)) return true;
             }
-
-
-            /*
-             * Do not trust currentRequest/localStorage by itself.
-             * Confirm that the request still belongs to this driver; the
-             * reconciliation routine repairs a missing lock or clears a stale
-             * one and resumes the authoritative trip.
-             */
-
-            const restored =
-
-                await this
-                    .reconcileAcceptance(
-                        requestId
-                    );
-
-
-            if (!restored) {
-
-                ASIYE_DRIVER.ui
-                    ?.renderDashboard?.();
-            }
-
-
+            ASIYE_DRIVER.ui?.renderDashboard?.();
+            return false;
         } catch (error) {
-
-            console.error(
-                'Driver restore failed:',
-                error
-            );
+            console.error('Driver restore failed:', error);
+            ASIYE_DRIVER.ui?.openActiveTripSheet?.();
+            const container = document.getElementById('activeTripContent');
+            if (container) {
+                container.innerHTML = '<h2>Reconnect to your booking</h2><p>Your trip could not be checked. Retry to restore it.</p><button class="driver-btn driver-btn-primary" data-restore-retry>Retry</button>';
+                container.querySelector('[data-restore-retry]')?.addEventListener('click', () => this.restoreActiveRequest());
+            }
+            return null;
         }
     },
-
 
     /* ========================================================
        CLEAR DRIVER REQUEST

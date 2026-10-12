@@ -483,10 +483,16 @@ ASIYE.map = {
 
         this.routeGeometry =
             geometry;
+        if (this.instance.isStyleLoaded && !this.instance.isStyleLoaded()) {
+            this.instance.once('load', () => {
+                if (this.routeGeometry === geometry) this.drawRoute(geometry);
+            });
+            return;
+        }
 
 
         const location =
-            ASIYE.state?.location || {};
+            ASIYE.state?.booking?.pickup || ASIYE.state?.location || {};
 
 
         if (
@@ -791,7 +797,7 @@ ASIYE.map = {
         }
 
         const pickup =
-            ASIYE.state?.location || {};
+            ASIYE.state?.booking?.pickup || ASIYE.state?.location || {};
 
         const destination =
             ASIYE.state?.destination || {};

@@ -829,8 +829,8 @@ ASIYE.payments = {
             ) &&
             request.paymentsReady ===
                 true &&
-            request.safetyShareCompleted !==
-                true
+            request.safetyShareCompleted !== true &&
+            (request.negotiationEnabled !== true || request.negotiatedBookingFinalized !== true)
         ) {
             if (
                 this._cardSafetyFinalizeActive

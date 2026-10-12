@@ -13,6 +13,10 @@ ASIYE.ui = {
        ======================================================== */
 
     renderHome() {
+        if (ASIYE.state.booking?.requestId && ASIYE.state.booking?.request) {
+            ASIYE.ride?.handleRequest?.(ASIYE.state.booking.request);
+            return;
+        }
 
         ASIYE.places?.setSelectionHandler(null);
 
@@ -605,7 +609,7 @@ ASIYE.ui = {
                 icon:
                     'fa-wallet',
                 label:
-                    'Wallet',
+                    'Wallet / voucher credit',
                 detail:
                     `R${Number(walletBalance || 0).toFixed(2)} available`
             }
@@ -3014,6 +3018,15 @@ document.addEventListener(
                     'Ride restore failed:',
                     error
                 );
+                restored = true; // Unknown server state is not proof there is no active trip.
+                const container = document.getElementById('sheetContent');
+                if (container) {
+                    container.innerHTML = '<h2>Reconnect to your booking</h2><p>Your saved booking could not be checked. Retry to restore it.</p><button class="primary-button" id="retryActiveBooking">Retry</button>';
+                    container.querySelector('#retryActiveBooking')?.addEventListener('click', async () => {
+                        try { if (!await ASIYE.ride.restore()) ASIYE.ui.renderHome(); }
+                        catch (retryError) { ASIYE.ui.toast(retryError.message || 'Unable to restore booking.'); }
+                    });
+                }
             }
         }
 

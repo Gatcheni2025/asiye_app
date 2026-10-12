@@ -87,61 +87,16 @@ test('Go card booking negotiates before Paystack, PIN and live-share', () => {
     );
 });
 
-test('Negotiated card finalizer creates PIN/share then server activates reserved driver', () => {
-    const start =
-        booking.indexOf(
-            'async finalizeNegotiatedGoBooking'
-        );
-    const end =
-        booking.indexOf(
-            'Final card-booking gate',
-            start
-        );
-
-    assert.ok(start >= 0);
-    assert.ok(end > start);
-
-    const block =
-        booking.slice(
-            start,
-            end
-        );
-
-    const pin =
-        block.indexOf(
-            'this.generatePin()'
-        );
-    const live =
-        block.indexOf(
-            'await this.createLiveShareUrl'
-        );
-    const share =
-        block.indexOf(
-            'await this.requireTripShare'
-        );
-    const finalize =
-        block.indexOf(
-            "'finalizeNegotiatedGoBooking'"
-        );
-    const rideStart =
-        block.indexOf(
-            'await ASIYE.ride',
-            finalize
-        );
-
-    assert.ok(pin >= 0);
-    assert.ok(live > pin);
-    assert.ok(share > live);
-    assert.ok(finalize > share);
-    assert.ok(rideStart > finalize);
-
-    assert.equal(
-        block.includes(
-            'notifyGoDrivers'
-        ),
-        false,
-        'The agreed driver is already reserved; payment finalization must not broadcast again.'
-    );
+test('Negotiated card finalizer asks the server to unlock pickup without pre-arrival sharing', () => {
+    const start = booking.indexOf('async finalizeNegotiatedGoBooking');
+    const end = booking.indexOf('async completeGoSafetyShare', start);
+    const block = booking.slice(start, end);
+    const finalize = block.indexOf("'finalizeNegotiatedGoBooking'");
+    assert.ok(finalize >= 0);
+    assert.ok(block.indexOf('await ASIYE.ride', finalize) > finalize);
+    assert.equal(block.includes('this.generatePin()'), false);
+    assert.equal(block.includes('requireTripShare'), false);
+    assert.equal(block.includes('notifyGoDrivers'), false);
 });
 
 test('Paystack return serializes safety finalization before clearing pending payment', () => {
@@ -224,6 +179,6 @@ test('Passenger UI explains agreed-fare card payment and reserved driver state',
 
     assert.match(
         ride,
-        /pickup PIN and live-share link/
+        /Share the trip after arrival/
     );
 });

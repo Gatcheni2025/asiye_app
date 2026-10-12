@@ -107,6 +107,10 @@ function isJoinableClubRequest(request) {
 }
 
 function canIssueTripShare(request, passengerId, authUid) {
+  if (request?.goContinuationVersion === 2) {
+    return isTripShareParticipant(request, passengerId, authUid) && Boolean(request.arrivedAt) &&
+      !ENDED_STATUSES.has(request.status);
+  }
   if (request?.clubSecurityVersion === 2) {
     const member = request.passengers?.[passengerId];
     return !!(member && member.authUid === authUid && member.arrivedAt &&

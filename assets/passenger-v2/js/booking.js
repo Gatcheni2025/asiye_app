@@ -345,6 +345,8 @@ ASIYE.booking = {
             type:
                 'ehailing',
 
+            goContinuationRequestedVersion: 2,
+
             rideType:
                 'go',
 
@@ -414,6 +416,8 @@ ASIYE.booking = {
 
 
             /* Route */
+
+            ...(route.geometry ? {routeGeometry: route.geometry} : {}),
 
             routeDistanceKm:
                 Number(
@@ -678,7 +682,7 @@ ASIYE.booking = {
 
                     await ASIYE.ride
                         ?.start?.(
-                            activeRequestId
+                            activeRequestId, activeRequest
                         );
 
 
@@ -1080,267 +1084,22 @@ ASIYE.booking = {
      * creates the pickup PIN and live-share link only after the selected
      * payment method is ready, then asks the server to activate the trip.
      */
-    async finalizeNegotiatedGoBooking(
-        requestId,
-        paymentResult = null,
-        restoredRequest = null
-    ) {
-
-        if (!requestId) {
-            throw new Error(
-                'Negotiated ride reference is missing.'
-            );
-        }
-
-
-        const requestRef =
-            firebase
-                .database()
-                .ref(
-                    `requests/${requestId}`
-                );
-
-
-        let request =
-            restoredRequest;
-
-
-        if (!request) {
-            const snapshot =
-                await requestRef
-                    .once(
-                        'value'
-                    );
-
-            request =
-                snapshot.val();
-        }
-
-
-        if (
-            !request ||
-            request.negotiationEnabled !==
-                true ||
-            request.fareStatus !==
-                'agreed' ||
-            !request.taxiId
-        ) {
-
-            throw new Error(
-                'The negotiated fare and driver must be locked before payment can complete.'
-            );
-        }
-
-
-        if (
-            request.negotiatedBookingFinalized ===
-                true &&
-            request.safetyShareCompleted ===
-                true &&
-            request.status ===
-                'accepted'
-        ) {
-
-            ASIYE.state.booking
-                .requestId =
-                requestId;
-
-
-            ASIYE.state.booking
-                .request =
-                request;
-
-
-            localStorage.setItem(
-                'currentRequestId',
-                requestId
-            );
-
-
-            await ASIYE.ride
-                ?.start?.(
-                    requestId
-                );
-
-
-            return request;
-        }
-
-
-        const method =
-            String(
-                request.paymentMethod ||
-                'cash'
-            )
-                .toLowerCase();
-
-
-        const paymentStatus =
-            String(
-                paymentResult?.status ||
-                request.paymentStatus ||
-                ''
-            );
-
-
-        const paymentReady =
-            method ===
-                'cash'
-                ? paymentStatus ===
-                    'cash_due'
-                : [
-                    'held',
-                    'captured'
-                ].includes(
-                    paymentStatus
-                );
-
-
-        if (!paymentReady) {
-            throw new Error(
-                method ===
-                    'card'
-                    ? 'Card payment must be confirmed before the booking can continue.'
-                    : method ===
-                        'wallet'
-                        ? 'Wallet funds must be reserved before the booking can continue.'
-                        : 'The negotiated trip payment is not ready.'
-            );
-        }
-
-
-        const existingPin =
-            String(
-                request.pickupPin ||
-                ''
-            );
-
-
-        const pickupPin =
-            /^\d{4}$/.test(
-                existingPin
-            )
-                ? existingPin
-                : this.generatePin();
-
-
-        await requestRef
-            .update({
-                pickupPin,
-                requirePin:
-                    true,
-                safetyShareRequired:
-                    true,
-                safetyShareCompleted:
-                    false
-            });
-
-
-        const liveTrackingUrl =
-            await this.createLiveShareUrl(
-                requestId
-            );
-
-
-        await this.requireTripShare({
-            requestId,
-            liveTrackingUrl,
-            pickupPin,
-            pickupAddress:
-                request.pickupAddress ||
-                'Current location',
-            destination:
-                request.destination ||
-                request.destinationName ||
-                'Not available',
-            service:
-                'Asiye Go'
-        });
-
-
-        await requestRef
-            .update({
-                pickupPin,
-                safetyShareCompleted:
-                    true,
-                safetyShareAt:
-                    firebase
-                        .database
-                        .ServerValue
-                        .TIMESTAMP
-            });
-
-
-        const finalized =
-            await ASIYE.goNegotiation
-                .post(
-                    'finalizeNegotiatedGoBooking',
-                    {
-                        requestId
-                    }
-                );
-
-
-        const finalSnapshot =
-            await requestRef
-                .once(
-                    'value'
-                );
-
-
-        const finalRequest =
-            finalSnapshot.val() || {
-                ...request,
-                pickupPin,
-                safetyShareCompleted:
-                    true,
-                status:
-                    finalized.status ||
-                    'accepted',
-                paymentsReady:
-                    true,
-                paymentStatus
-            };
-
-
-        finalRequest.requestId =
-            requestId;
-
-
-        ASIYE.state.booking
-            .requestId =
-            requestId;
-
-
-        ASIYE.state.booking
-            .request =
-            finalRequest;
-
-
-        localStorage.setItem(
-            'currentRequestId',
-            requestId
-        );
-
-
-        await ASIYE.ride
-            ?.start?.(
-                requestId
-            );
-
-
-        ASIYE.ui?.toast?.(
-            `Fare R${Number(
-                finalRequest.agreedFare ||
-                request.agreedFare ||
-                0
-            ).toFixed(0)} agreed. Payment ready, PIN created and driver reserved.`
-        );
-
-
-        return finalRequest;
+    async finalizeNegotiatedGoBooking(requestId) {
+        if (!requestId) throw new Error('Negotiated ride reference is missing.');
+        // The server checks the private payment ledger and generates the PIN.
+        // Sharing is offered only after arrival and cannot block driving to pickup.
+        await ASIYE.goNegotiation.post('finalizeNegotiatedGoBooking', {requestId, continuationVersion: 2});
+        await ASIYE.ride.start(requestId);
+        return ASIYE.state.booking.request;
     },
 
+    async completeGoSafetyShare(request) {
+        const requestId = request.requestId || ASIYE.state.booking.requestId;
+        const liveTrackingUrl = await this.createLiveShareUrl(requestId);
+        await this.requireTripShare({requestId, liveTrackingUrl, pickupPin: request.pickupPin,
+            pickupAddress: request.pickupAddress, destination: request.destination || request.destinationName, service: 'Asiye Go'});
+        await ASIYE.goNegotiation.post('goTripActionSecure', {requestId, action: 'shareComplete'});
+    },
 
     /*
      * Final card-booking gate.
@@ -1814,6 +1573,18 @@ ASIYE.booking = {
         if (request.clubSecurityVersion === 2) {
             await window.ClubLive.post('clubDriverActionSecure', {requestId, action:'cancelPassenger'});
             this.clearLocalRide();
+            ASIYE.ride?.stop?.();
+            ASIYE.map?.clearTrip?.();
+            ASIYE.ui.renderHome();
+            return true;
+        }
+
+        if (request.type !== 'club') {
+            await ASIYE.goNegotiation.post('goTripActionSecure', {requestId, action: 'cancel'});
+            this.clearLocalRide();
+            ASIYE.ride?.stop?.();
+            ASIYE.map?.clearTrip?.();
+            ASIYE.ui.renderHome();
             return true;
         }
 
@@ -1837,6 +1608,7 @@ ASIYE.booking = {
 
         if (
             [
+                'arrived',
                 'passenger_onboard',
                 'all_onboard',
                 'in_transit',
@@ -2100,6 +1872,9 @@ ASIYE.booking = {
 
 
     clearLocalRide() {
+        ASIYE.state.booking.pickup = null;
+        ASIYE.state.ui.page = 'home';
+        ASIYE.state.ui.sheet = 'home';
 
         ASIYE.state.booking
             .requestId =

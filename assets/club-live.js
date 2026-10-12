@@ -177,6 +177,8 @@
       ${pool.poolReady && me?.paymentStatus === "payment_required" ? '<button class="primary-button" data-club-pay>Pay accepted fare</button>' : ""}
       ${pool.poolReady && me?.paymentStatus === "wallet_insufficient" ? '<p>Add funds to your Asiye Wallet, then retry payment.</p><button class="primary-button" data-club-pay>Retry wallet payment</button>' : ""}
       <p data-club-feedback role="status"></p><button class="secondary-button" data-club-cancel>Cancel Work booking</button></section>`;
+    if (me?.arrivedAt || ['arrived','passenger_onboard','in_transit','completed'].includes(me?.status))
+      container.querySelector('[data-club-cancel]')?.remove();
     mountCountdown(pool, container.querySelector("[data-club-countdown]"));
     showPin(pool, container.querySelector("[data-club-pin]"));
     button(container, "[data-club-negotiate]", () =>
@@ -207,6 +209,8 @@
       ${pool.poolReady && pool.paymentsReady && pool.driverAcceptedAt ? '<button class="driver-btn driver-btn-primary" data-club-collect>Start passenger collection</button>' : ""}
       ${pool.poolReady && !pool.paymentsReady ? "<p>Waiting for each passenger to complete payment for the accepted fare.</p>" : ""}
       <p data-club-feedback role="status"></p><button class="driver-btn driver-btn-secondary" data-club-cancel>Cancel booking</button>`;
+    if (members.some(([, p]) => p.arrivedAt || p.pinVerifiedAt))
+      container.querySelector('[data-club-cancel]')?.remove();
     mountCountdown(pool, container.querySelector("[data-club-countdown]"));
     button(container, "[data-club-wait]", () => driverAction("acceptWaiting"));
     button(container, "[data-club-accept-fare]", () =>

@@ -58,10 +58,10 @@ ASIYE.ride = {
 
         const targetLat = Number(onboard
             ? (request.destinationLatitude ?? ASIYE.state.destination?.latitude)
-            : (passenger.pickupLatitude ?? request.pickupLatitude ?? ASIYE.state.location?.latitude));
+            : (passenger.pickupLat ?? passenger.pickupLatitude ?? request.commuterLocation?.latitude ?? request.pickupLatitude ?? ASIYE.state.booking?.pickup?.latitude));
         const targetLng = Number(onboard
             ? (request.destinationLongitude ?? ASIYE.state.destination?.longitude)
-            : (passenger.pickupLongitude ?? request.pickupLongitude ?? ASIYE.state.location?.longitude));
+            : (passenger.pickupLng ?? passenger.pickupLongitude ?? request.commuterLocation?.longitude ?? request.pickupLongitude ?? ASIYE.state.booking?.pickup?.longitude));
 
         if (!Number.isFinite(targetLat) || !Number.isFinite(targetLng)) return;
 
@@ -100,87 +100,95 @@ ASIYE.ride = {
        handleRequest().
        ======================================================== */
 
-    async start(requestId) {
-
-        if (!requestId) {
-
-            throw new Error(
-                'Missing request ID.'
-            );
-        }
-
-
-        this.stop();
-
-
-        this.requestId =
-            requestId;
-
-
-        ASIYE.state.booking.requestId =
-            requestId;
-
-
-        localStorage.setItem(
-            'currentRequestId',
-            requestId
-        );
-
-
-        this.requestRef =
-
-            firebase
-                .database()
-                .ref(
-                    `requests/${requestId}`
-                );
-
-
-        this.requestListener =
-
-            this.requestRef.on(
-                'value',
-                snapshot => {
-
-                    const request =
-                        snapshot.val();
-
-
-                    if (!request) {
-
-                        return;
-                    }
-
-
-                    request.requestId =
-                        requestId;
-
-
-                    ASIYE.state.booking.request =
-                        request;
-
-                    window.AsiyeTripChat?.watchTrip?.(request, requestId);
-
-
-                    this.handleRequest(
-                        request
-                    );
-                }
-            );
-
-
-        console.log(
-            '✅ Passenger ride listener started:',
-            requestId
-        );
+    hydrateRequest(request, requestId) {
+        const passenger = this.getPassengerData(request) || {};
+        const coords = request.destinationCoords || {};
+        const pickup = request.commuterLocation || request.pickupLocation || {};
+        const point = (lat, lng) => ({latitude: lat == null ? null : Number(lat), longitude: lng == null ? null : Number(lng)});
+        ASIYE.state.destination = {
+            name: passenger.destinationName || passenger.destination || request.destinationName || request.destination,
+            address: passenger.destination || request.destination || request.destinationName,
+            ...point(passenger.destinationLat ?? request.destinationLatitude ?? coords.latitude,
+                     passenger.destinationLng ?? request.destinationLongitude ?? coords.longitude)
+        };
+        ASIYE.state.booking.pickup = {
+            address: passenger.pickupAddress || request.pickupAddress,
+            ...point(passenger.pickupLat ?? passenger.pickupLatitude ?? pickup.latitude,
+                     passenger.pickupLng ?? passenger.pickupLongitude ?? pickup.longitude)
+        };
+        Object.assign(ASIYE.state.booking, {requestId, request, rideType: request.rideType || request.type,
+            paymentMethod: passenger.paymentMethod || request.paymentMethod || 'cash',
+            fare: Number(passenger.price ?? request.agreedFare ?? request.finalAmount ?? request.calculatedPrice ?? 0)});
+        ASIYE.state.route = {distanceKm: Number(request.routeDistanceKm || 0),
+            durationMinutes: Number(request.routeDurationMinutes || 0), geometry: request.routeGeometry || null};
+        if (request.type === 'club') Object.assign(ASIYE.state.booking.club || (ASIYE.state.booking.club = {}), {
+            poolId: requestId, mode: request.clubMode, capacity: request.requiredPassengers || request.capacity,
+            confirmedPassengers: request.passengerCount, remainingSeats: request.remainingSeats,
+            pricePerPassenger: passenger.price, poolReady: request.poolReady,
+            departureTime: passenger.departureTime || request.departureTime,
+            workWaitExpiresAt: request.workWaitExpiresAt
+        });
+        ASIYE.state.ui.page = 'trip';
+        ASIYE.state.ui.sheet = 'trip';
     },
 
+    async restoreTripRoute(generation) {
+        const pickup = ASIYE.state.booking.pickup;
+        const destination = ASIYE.state.destination;
+        const token = window.ASIYE_CONFIG?.mapboxToken;
+        if (!token || !pickup || !destination ||
+            [pickup.latitude, pickup.longitude, destination.latitude, destination.longitude].some(value => value == null || !Number.isFinite(value))) return;
+        try {
+            const response = await fetch('https://api.mapbox.com/directions/v5/mapbox/driving/' +
+                `${pickup.longitude},${pickup.latitude};${destination.longitude},${destination.latitude}` +
+                `?geometries=geojson&overview=full&access_token=${encodeURIComponent(token)}`);
+            if (!response.ok) return;
+            const geometry = (await response.json()).routes?.[0]?.geometry;
+            if (!geometry || generation !== this._generation || this.lastApproachRouteAt) return;
+            ASIYE.state.route.geometry = geometry;
+            ASIYE.map?.drawRoute?.(geometry);
+            ASIYE.map?.fitActiveTrip?.();
+        } catch (error) { console.warn('Saved trip route could not be drawn:', error); }
+    },
+
+    async start(requestId, restoredRequest = null) {
+        if (!requestId) throw new Error('Missing request ID.');
+        this.stop();
+        const generation = this._generation;
+        this.requestId = requestId;
+        const ref = firebase.database().ref(`requests/${requestId}`);
+        const request = restoredRequest || (await ref.once('value')).val();
+        if (generation !== this._generation) return false;
+        if (!request) throw new Error('Active booking could not be loaded.');
+        request.requestId = requestId;
+        this.hydrateRequest(request, requestId);
+        localStorage.setItem('currentRequestId', requestId);
+        // Paint the saved state before resolving restore; a delayed Firebase
+        // listener must never leave Home visible beneath a restoration toast.
+        this.handleRequest(request);
+        this.requestRef = ref;
+        this.requestListener = ref.on('value', snapshot => {
+            if (generation !== this._generation) return;
+            const live = snapshot.val();
+            if (!live) return;
+            live.requestId = requestId;
+            this.hydrateRequest(live, requestId);
+            window.AsiyeTripChat?.watchTrip?.(live, requestId);
+            this.handleRequest(live);
+        }, error => ASIYE.ui?.toast?.(error.message || 'Unable to refresh your booking.'));
+        if (request.routeGeometry) ASIYE.map?.drawRoute?.(request.routeGeometry);
+        else void this.restoreTripRoute(generation);
+        ASIYE.map?.resize?.();
+        ASIYE.map?.fitActiveTrip?.();
+        return true;
+    },
 
     /* ========================================================
        STOP
        ======================================================== */
 
     stop() {
+        this._generation = (this._generation || 0) + 1;
 
         if (
             this.requestRef &&
@@ -228,10 +236,8 @@ ASIYE.ride = {
 
     handleRequest(request) {
 
-        ASIYE.payments
-            ?.handleTripState?.(
-                request
-            );
+        void ASIYE.payments?.handleTripState?.(request)?.catch?.(error =>
+            ASIYE.ui?.toast?.(error.message || 'Unable to continue payment.'));
 
         let status =
             request.status ||
@@ -426,6 +432,7 @@ ASIYE.ride = {
                 this.renderDriverAssigned(
                     request
                 );
+                this.listenDriver(request.taxiId);
 
                 break;
 
@@ -539,8 +546,32 @@ ASIYE.ride = {
 
                 break;
         }
+        if (!['completed', 'expired', 'rejected'].includes(status) && !String(status).startsWith('cancelled'))
+            this.renderTripSummary(request, status);
     },
 
+    renderTripSummary(request, status) {
+        const container = document.getElementById('sheetContent');
+        if (!container) return;
+        const passenger = this.getPassengerData(request) || {};
+        const escape = value => ASIYE.ui.escape(String(value || ''));
+        const old = container.querySelector('[data-trip-summary]');
+        old?.remove();
+        const summary = document.createElement('section');
+        summary.dataset.tripSummary = 'true';
+        const arrival = Boolean(passenger.arrivedAt || request.arrivedAt || request.tripStartedAt ||
+            ['arrived', 'passenger_onboard', 'all_onboard', 'in_transit'].includes(status));
+        summary.innerHTML = `<p><strong>Pickup:</strong> ${escape(passenger.pickupAddress || request.pickupAddress)}<br>
+            <strong>Destination:</strong> ${escape(passenger.destination || request.destination || request.destinationName)}<br>
+            <strong>Fare:</strong> R${Number(ASIYE.state.booking.fare || 0).toFixed(2)} · ${escape(ASIYE.state.booking.paymentMethod)}</p>
+            ${arrival ? '' : '<button type="button" class="secondary-button" data-trip-cancel>Cancel booking</button>'}`;
+        container.append(summary);
+        summary.querySelector('[data-trip-cancel]')?.addEventListener('click', async event => {
+            event.currentTarget.disabled = true;
+            try { await ASIYE.booking.cancelCurrentRide(); }
+            catch (error) { ASIYE.ui.toast(error.message || 'Cancellation failed.'); event.currentTarget.disabled = false; }
+        });
+    },
 
     renderPaymentRequired(request) {
 
@@ -591,7 +622,7 @@ ASIYE.ride = {
                 : method ===
                     'wallet'
                     ? 'Asiye is reserving the agreed fare from your Wallet. Your driver stays reserved.'
-                    : 'Your cash fare is agreed. Asiye is completing the pickup PIN and safety-share step.';
+                    : 'Your cash fare is agreed. The driver can head to pickup as soon as the booking is confirmed.';
 
 
         container.innerHTML = `
@@ -641,10 +672,10 @@ ASIYE.ride = {
                             <span><i class="fas fa-${method === 'card' ? 'credit-card' : method === 'wallet' ? 'wallet' : 'shield-halved'}"></i></span>
                             <div>
                                 <strong>
-                                    ${method === 'card' ? 'Complete Paystack payment' : method === 'wallet' ? 'Reserve Wallet fare' : 'Complete safety check'}
+                                    ${method === 'card' ? 'Complete Paystack payment' : method === 'wallet' ? 'Reserve Wallet fare' : 'Confirm cash fare'}
                                 </strong>
                                 <small>
-                                    Next Asiye creates your pickup PIN and live-share link.
+                                    Asiye confirms payment and creates your pickup PIN. Share the trip after arrival.
                                 </small>
                             </div>
                         </div>
@@ -653,7 +684,7 @@ ASIYE.ride = {
                             <span><i class="fas fa-car-side"></i></span>
                             <div>
                                 <strong>Driver starts pickup</strong>
-                                <small>Unlocked only after payment readiness, PIN and safety sharing are complete.</small>
+                                <small>Unlocked when payment is ready. The PIN is checked after driver arrival.</small>
                             </div>
                         </div>
                     </div>
@@ -665,7 +696,7 @@ ASIYE.ride = {
 
         if (
             method ===
-                'card'
+                'card' && !['held', 'captured'].includes(request.paymentStatus)
         ) {
             ASIYE.payments
                 ?.prepare?.(
@@ -1737,6 +1768,17 @@ ASIYE.ride = {
             });
         });
         if (request.clubSecurityVersion === 2) window.ClubLive.enhancePickup(request, container, arrived);
+        if (arrived && request.goContinuationVersion === 2 && !request.safetyShareCompleted) {
+            const button = document.createElement('button');
+            button.className = 'primary-button';
+            button.textContent = 'Share trip with loved ones';
+            container.append(button);
+            button.addEventListener('click', async () => {
+                button.disabled = true;
+                try { await ASIYE.booking.completeGoSafetyShare(request); }
+                catch (error) { ASIYE.ui.toast(error.message || 'Unable to share trip.'); button.disabled = false; }
+            });
+        }
         ASIYE.map?.resize();
     },
 
@@ -2251,9 +2293,7 @@ ASIYE.ride = {
                     .once(
                         'value'
                     )
-                    .catch(
-                        () => null
-                    );
+;
 
 
             serverRequestId =
@@ -2340,6 +2380,7 @@ ASIYE.ride = {
             const stale =
                 !request ||
                 !ownsRequest ||
+                (request?.type === 'club' && terminal.includes(String(request.passengers?.[commuterId]?.status || ''))) ||
                 terminal.includes(
                     String(
                         request?.status ||
@@ -2445,7 +2486,7 @@ ASIYE.ride = {
 
 
             await this.start(
-                requestId
+                requestId, request
             );
 
 

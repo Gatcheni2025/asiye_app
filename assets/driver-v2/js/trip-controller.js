@@ -48,80 +48,60 @@ ASIYE_DRIVER.trip = {
        START
        ======================================================== */
 
-    start(
-        requestId
-    ) {
-
-        if (!requestId) {
-
-            return;
-        }
-
-
+    async start(requestId, restoredRequest = null) {
+        if (!requestId) return false;
         this.stop();
-
-
-        this.requestId =
-            requestId;
-
-
-        localStorage.setItem(
-            'currentRequestId',
-            requestId
-        );
-
-
-        this.requestRef =
-
-            firebase
-                .database()
-                .ref(
-                    `requests/${requestId}`
-                );
-
-
-        this.requestListener =
-
-            this.requestRef.on(
-
-                'value',
-
-                snapshot => {
-
-                    const request =
-                        snapshot.val();
-
-
-                    if (!request) {
-
-                        this.cleanup();
-
-                        return;
-                    }
-
-
-                    request.key =
-                        requestId;
-
-
-                    this.request =
-                        request;
-
-
-                    ASIYE_DRIVER.state
-                        .activeRequest =
-                        request;
-
-                    window.AsiyeTripChat?.watchTrip?.(request, requestId);
-
-
-                    this.handleState(
-                        request
-                    );
-                }
-            );
+        const generation = this._generation;
+        this.requestId = requestId;
+        const ref = firebase.database().ref(`requests/${requestId}`);
+        const request = restoredRequest || (await ref.once('value')).val();
+        if (generation !== this._generation) return false;
+        if (!request) return false;
+        const apply = live => {
+            live.key = requestId;
+            live.requestId = requestId;
+            this.request = live;
+            ASIYE_DRIVER.state.activeRequest = live;
+            window.AsiyeTripChat?.watchTrip?.(live, requestId);
+            this.handleState(live);
+            this.renderCancellation(live);
+        };
+        localStorage.setItem('currentRequestId', requestId);
+        apply(request);
+        this.requestRef = ref;
+        this.requestListener = ref.on('value', snapshot => {
+            if (generation !== this._generation) return;
+            const live = snapshot.val();
+            if (!live) { this.cleanup(); return; }
+            apply(live);
+        }, error => ASIYE_DRIVER.ui?.toast?.(error.message || 'Unable to refresh booking.', 'danger'));
+        return true;
     },
 
+    renderCancellation(request) {
+        const container = document.getElementById('activeTripContent');
+        if (!container) return;
+        container.querySelector('[data-trip-cancel]')?.remove();
+        const arrived = request.arrivedAt || request.tripStartedAt ||
+            ['arrived', 'passenger_onboard', 'all_onboard', 'in_transit', 'completed'].includes(request.status) ||
+            Object.values(request.passengers || {}).some(p => p.arrivedAt || p.pinVerifiedAt);
+        if (arrived || String(request.status).startsWith('cancelled') || ['rejected', 'expired'].includes(request.status)) return;
+        if (container.querySelector('[data-club-cancel]')) return;
+        const button = document.createElement('button');
+        button.dataset.tripCancel = 'true';
+        button.className = 'driver-btn driver-btn-secondary';
+        button.textContent = 'Cancel booking';
+        container.append(button);
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            try { await this.cancelTrip(); }
+            catch (error) { ASIYE_DRIVER.ui.toast(error.message || 'Unable to cancel.', 'danger'); button.disabled = false; }
+        });
+    },
+
+    async goAction(action, details = {}) {
+        return ASIYE_DRIVER.requests.postNegotiation('goTripActionSecure', {requestId: this.requestId, action, ...details});
+    },
 
     /* ========================================================
        STATE MACHINE
@@ -327,10 +307,10 @@ ASIYE_DRIVER.trip = {
                     You are reserved for this passenger.
                     ${
                         paymentMethod === 'card'
-                            ? 'Waiting for Paystack payment and the passenger safety-share step.'
+                            ? 'Waiting for confirmed Paystack payment. Pickup unlocks automatically after confirmation.'
                             : paymentMethod === 'wallet'
-                                ? 'Waiting for the agreed fare to be reserved from the passenger wallet and the safety-share step.'
-                                : 'Confirming the cash fare and passenger safety-share step.'
+                                ? 'Waiting for the agreed fare to be reserved from Wallet or voucher credit.'
+                                : 'Confirming the cash fare. Cash is collected for the ride; no card payment is required.'
                     }
                 </div>
 
@@ -359,8 +339,8 @@ ASIYE_DRIVER.trip = {
 
                 <div class="driver-payment-wait-note">
                     Do not start pickup yet. Asiye will unlock navigation
-                    automatically when payment readiness, the pickup PIN and
-                    live sharing are confirmed.
+                    automatically when payment is confirmed. The PIN and live
+                    sharing are checked after arrival, before departure.
                 </div>
 
             </div>
@@ -455,10 +435,16 @@ ASIYE_DRIVER.trip = {
         ) {
 
             throw new Error(
-                'Wait for the passenger payment, pickup PIN and safety share before starting pickup.'
+                'Wait for the confirmed passenger payment before starting pickup.'
             );
         }
 
+
+        if (this.request.goContinuationVersion === 2) {
+            await this.goAction('onWay');
+            await this.startPickupNavigation(this.request);
+            return;
+        }
 
         await this.requestRef.update({
 
@@ -684,6 +670,11 @@ ASIYE_DRIVER.trip = {
         }
 
 
+        if (this.request.goContinuationVersion === 2) {
+            await this.goAction('arrive');
+            return;
+        }
+
         await this.requestRef.update({
 
             status:
@@ -760,6 +751,12 @@ ASIYE_DRIVER.trip = {
     async verifyGoPin(
         enteredPin
     ) {
+        if (this.request?.goContinuationVersion === 2) {
+            const result = await this.goAction('verifyPin', {pin: enteredPin});
+            if (result.pinValid) await this.startDestinationNavigation(this.request);
+            return result.pinValid === true;
+        }
+
 
         if (
             !this.request
@@ -1012,28 +1009,26 @@ ASIYE_DRIVER.trip = {
        CLUB COLLECTION STATE
        ======================================================== */
 
-    async handleClubCollection(
-        request
-    ) {
-
-        /*
-         * If already routing to a passenger,
-         * don't continually restart route.
-         */
-
-        if (
-            this.currentPassengerId
-        ) {
-
+    async handleClubCollection(request) {
+        const members = Object.entries(request.passengers || {});
+        const current = members.find(([, p]) => p.status === 'arrived') ||
+            members.find(([, p]) => p.status === 'driver_on_way');
+        if (current) {
+            const [id, passenger] = current;
+            this.currentPassengerId = id;
+            if (passenger.status === 'arrived') {
+                ASIYE_DRIVER.ui.showPassengerPin({requestId: this.requestId, passengerId: id,
+                    passengerName: passenger.name || passenger.commuterName, isClub: true});
+            } else {
+                await this.startPickupNavigation({...request, commuterId: id,
+                    commuterName: passenger.name || passenger.commuterName, pickupAddress: passenger.pickupAddress,
+                    commuterLocation: {latitude: passenger.pickupLat, longitude: passenger.pickupLng}});
+            }
             return;
         }
-
-
-        await this.navigateToNextClubPassenger(
-            request
-        );
+        this.currentPassengerId = null;
+        await this.navigateToNextClubPassenger(request);
     },
-
 
     /* ========================================================
        FIND NEXT CLOSEST PASSENGER
@@ -2198,6 +2193,13 @@ ASIYE_DRIVER.trip = {
         reason = ''
     ) {
         if (this.request?.clubSecurityVersion === 2) { await window.ClubLive.driverAction('cancelDriver'); await this.releaseDriver(); return true; }
+        if (this.request && this.request.type !== 'club') {
+            await this.goAction('cancel');
+            await this.releaseDriver();
+            this.cleanup();
+            return true;
+        }
+
 
 
         if (
@@ -2211,6 +2213,7 @@ ASIYE_DRIVER.trip = {
 
         if (
             [
+                'arrived',
                 'passenger_onboard',
                 'all_onboard',
                 'in_transit',
@@ -3026,6 +3029,7 @@ ASIYE_DRIVER.trip = {
        ======================================================== */
 
     stop() {
+        this._generation = (this._generation || 0) + 1;
 
         ASIYE_DRIVER.navigator?.stop();
 
