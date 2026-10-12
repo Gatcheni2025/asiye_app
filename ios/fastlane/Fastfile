@@ -28,16 +28,21 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 3. Generate a unique build number for every CI run and rerun.
-    version_line = File.read("../../pubspec.yaml").match(/^version:\s+[^+]+\+(\d+)/)
-    current_build_number = version_line ? version_line[1].to_i : 1
-    run_number = ENV.fetch("GITHUB_RUN_NUMBER", "0").to_i
-    run_attempt = ENV.fetch("GITHUB_RUN_ATTEMPT", "1").to_i
-    build_number = [current_build_number + 1, current_build_number + (run_number * 100) + run_attempt].max
-    UI.message("Building iOS version #{build_number}")
+    # 3. Keep Android's pubspec version (11.0.71+341) while building the
+    # approved iOS marketing version. The workflow supplies an increasing
+    # build number, independently of Android's versionCode.
+    ios_version = ENV.fetch("ASIYE_IOS_MARKETING_VERSION", "")
+    build_string = ENV.fetch("ASIYE_IOS_BUILD_NUMBER", "")
+    unless ios_version.match?(/\A\d+\.\d+\.\d+\z/)
+      UI.user_error!("A three-component iOS version is required.")
+    end
+    unless build_string.match?(/\A[1-9]\d*\z/) && build_string.to_i >= 46523
+      UI.user_error!("The iOS build number must be numeric and >= 46523.")
+    end
+    UI.message("Building Asiye 11.0.71 source as iOS #{ios_version} (#{build_string})")
 
-    # 4. Build Flutter (No Signing)
-    sh("cd ../.. && flutter build ios --release --no-codesign --build-number=#{build_number}")
+    # 4. Build Flutter without signing; archive and sign with Fastlane Match.
+    sh("cd ../.. && flutter build ios --release --no-codesign --build-name=#{ios_version} --build-number=#{build_string}")
 
     # 5. Build and Sign IPA (Workspace)
     ipa_path = build_app(
@@ -75,7 +80,15 @@ platform :ios do
       in_house: false
     )
 
-    # 7. Upload to TestFlight
+    # 7. Check the actual signed IPA's version, bundle ID, build and
+    # export-compliance flag before anything is sent to Apple.
+    sh("python3 ../scripts/verify_asiye_ios_metadata.py --ipa '#{ipa_path}' --version '#{ios_version}' --build '#{build_string}'")
+
+    # This lane runs only via the explicitly confirmed manual upload job.
+    unless ENV["ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED"] == "yes"
+      UI.user_error!("Upload gate is closed; release confirmation is required.")
+    end
+
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,

@@ -1,0 +1,26 @@
+#!/usr/bin/env node
+'use strict';
+const fs = require('node:fs');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const root = path.join(__dirname, '..');
+const file = name => fs.readFileSync(path.join(root, name), 'utf8');
+const pubspec = file('pubspec.yaml');
+assert.match(pubspec, /^version: 11\.0\.71\+341\s*$/m, 'Must build the latest repaired source.');
+const runner = file('ios/Runner/Info.plist');
+const google = file('ios/Runner/GoogleService-Info.plist');
+const tag = (xml, key) => {
+  const escaped = key.replace(/[.*+?^\$\{\}()|[\]\\]/g,'\\$&');
+  const m = xml.match(new RegExp('<key>' + escaped + '</key>\\s*<string>([^<]+)</string>'));
+  assert.ok(m, 'Missing Info.plist entry: ' + key);
+  return m[1];
+};
+assert.equal(tag(google,'BUNDLE_ID'), 'com.asiyeapp.asiye');
+assert.equal(tag(runner,'GIDClientID'), tag(google,'CLIENT_ID'), 'iOS Google Sign In client mismatch.');
+assert.ok(runner.includes('<string>' + tag(google,'REVERSED_CLIENT_ID') + '</string>'), 'iOS Google Sign In URL scheme mismatch.');
+assert.match(runner, /<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\s*\/>/);
+assert.equal(tag(runner,'CFBundleShortVersionString'),'$(FLUTTER_BUILD_NAME)');
+assert.equal(tag(runner,'CFBundleVersion'),'$(FLUTTER_BUILD_NUMBER)');
+assert.ok(file('ios/fastlane/Fastfile').includes('--build-name=#{ios_version}'));
+assert.ok(file('ios/fastlane/Fastfile').includes('ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED'));
+console.log('PASS Asiye 341 source, bundle ID, Google Sign In, export compliance and gated Fastlane version.');

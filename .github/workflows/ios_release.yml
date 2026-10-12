@@ -1,49 +1,160 @@
 name: iOS TestFlight Release
 
+# Repair branch builds are validation-only on push. Never upload automatically.
 on:
   push:
     branches:
-      - main
+      - fix/11.0.67-club-booking-arrival-pin-timer
+    paths:
+      - '.github/workflows/ios_release.yml'
+      - 'ios/**'
+      - 'lib/**'
+      - 'assets/**'
+      - 'scripts/verify_asiye_ios_metadata.py'
+      - 'scripts/ios_release_preflight.cjs'
+      - 'pubspec.yaml'
+      - 'test/**'
   workflow_dispatch:
+    inputs:
+      upload_to_testflight:
+        description: 'Upload validated iOS release to TestFlight? (default no)'
+        required: true
+        type: choice
+        options:
+          - 'no'
+          - 'yes'
+        default: 'no'
+      app_store_version_confirmed:
+        description: 'For upload enter 46522.0.0 only after changing and verifying the App Store Connect draft'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asiye-ios-341-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  ASIYE_IOS_MARKETING_VERSION: '46522.0.0'
+  ASIYE_SOURCE_VERSION: '11.0.71+341'
 
 jobs:
-  build-and-release-ios:
+  preflight:
+    name: Validate latest Asiye 341 iOS source
     runs-on: macos-latest
-
+    outputs:
+      ios_build_number: ${{ steps.version.outputs.ios_build_number }}
     steps:
-      - name: Checkout App Code
-        uses: actions/checkout@v5
-
-      - name: Setup Flutter
+      - name: Checkout selected release branch
+        uses: actions/checkout@v4
+      - name: Require the correct repair branch and source version
+        run: |
+          test "$GITHUB_REF_NAME" = "fix/11.0.67-club-booking-arrival-pin-timer"
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = "$ASIYE_SOURCE_VERSION"
+          node scripts/ios_release_preflight.cjs
+      - name: Calculate a fresh, monotonically increasing iOS build number
+        id: version
+        shell: bash
+        run: |
+          IOS_BUILD_NUMBER=$((46523 + GITHUB_RUN_NUMBER * 100 + GITHUB_RUN_ATTEMPT))
+          echo "ASIYE_IOS_BUILD_NUMBER=$IOS_BUILD_NUMBER" >> "$GITHUB_ENV"
+          echo "ios_build_number=$IOS_BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "Source: $ASIYE_SOURCE_VERSION; iOS: $ASIYE_IOS_MARKETING_VERSION ($IOS_BUILD_NUMBER)"
+      - name: Prepare Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: "3.47.2"
+          flutter-version: '3.47.2'
           channel: stable
           cache: true
-
-      - name: Install Flutter Dependencies
+      - name: Install Flutter dependencies
         run: flutter pub get
+      - name: Check iOS and Fastlane syntax
+        run: |
+          plutil -lint ios/Runner/Info.plist ios/Runner/GoogleService-Info.plist
+          ruby -c ios/fastlane/Fastfile
+          python3 -m py_compile scripts/verify_asiye_ios_metadata.py
+          node --check scripts/ios_release_preflight.cjs
+          node --check assets/passenger-v2/js/booking.js
+          node --check assets/passenger-v2/js/ride-controller.js
+          node --check assets/member-pages.js
+      - name: Run latest trip, pickup PIN, and payment checks
+        run: |
+          node --test test/go-continuation.test.cjs test/club-lifecycle.test.cjs test/card-booking-sequence.test.cjs test/active-booking-recovery.test.cjs test/go-fare-settlement-lifecycle.test.cjs
+      - name: Compile iOS without signing or uploading
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-name="$ASIYE_IOS_MARKETING_VERSION" \
+            --build-number="$ASIYE_IOS_BUILD_NUMBER"
+      - name: Verify built iOS app metadata and export compliance
+        run: |
+          python3 scripts/verify_asiye_ios_metadata.py \
+            --app build/ios/iphoneos/Runner.app \
+            --version "$ASIYE_IOS_MARKETING_VERSION" \
+            --build "$ASIYE_IOS_BUILD_NUMBER"
+      - name: Explain App Store Connect version gate
+        run: |
+          {
+            echo "## Asiye 11.0.71 (341) - iOS preflight"
+            echo ""
+            echo "- Built iOS $ASIYE_IOS_MARKETING_VERSION ($ASIYE_IOS_BUILD_NUMBER)"
+            echo "- iOS bundle: com.asiyeapp.asiye"
+            echo "- Preflight succeeded; **no upload performed** on push."
+            echo "- The screenshot shows a 46522 draft, which does not exactly match 46522.0.0."
+            echo "- Before manual upload, change/confirm App Store Connect draft to exactly 46522.0.0."
+            echo "- Use Run workflow on the repair branch, select upload yes, and enter 46522.0.0."
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Configure Match Git Authentication
+  upload:
+    name: Signed IPA and TestFlight upload (manual approval only)
+    needs: preflight
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_testflight == 'yes' && github.ref_name == 'fix/11.0.67-club-booking-arrival-pin-timer' }}
+    runs-on: macos-latest
+    env:
+      ASIYE_IOS_BUILD_NUMBER: ${{ needs.preflight.outputs.ios_build_number }}
+      ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED: 'yes'
+    steps:
+      - name: Validate explicit App Store Connect version confirmation
+        env:
+          CONFIRMED_VERSION: ${{ inputs.app_store_version_confirmed }}
+        run: |
+          if [ "$CONFIRMED_VERSION" != "$ASIYE_IOS_MARKETING_VERSION" ]; then
+            echo "::error::Apple version is not confirmed. Screenshot draft was 46522; this IPA uses 46522.0.0. Update and check the draft first."
+            exit 1
+          fi
+      - name: Checkout selected release branch
+        uses: actions/checkout@v4
+      - name: Validate exact release source
+        run: |
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = "$ASIYE_SOURCE_VERSION"
+          node scripts/ios_release_preflight.cjs
+      - name: Prepare Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - name: Install Flutter dependencies
+        run: flutter pub get
+      - name: Set up signing access
         shell: bash
         env:
           GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          if [ -z "$GH_PAT" ]; then
-            echo "GH_PAT secret is missing."
-            exit 1
-          fi
-
-          # fastlane match expects HTTP Basic Authorization to be Base64 encoded.
-          # Using x-access-token works for GitHub fine-grained/classic PATs.
+          test -n "$GH_PAT" || { echo "::error::Missing GH_PAT signing secret"; exit 1; }
           MATCH_AUTH="$(printf 'x-access-token:%s' "$GH_PAT" | base64 | tr -d '\n')"
           echo "MATCH_GIT_BASIC_AUTHORIZATION=$MATCH_AUTH" >> "$GITHUB_ENV"
-
-      - name: Build and Upload to TestFlight
-        working-directory: ./ios
+      - name: Sign, validate and upload the matching IPA to TestFlight
+        working-directory: ios
         env:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
-        run: fastlane beta
+        run: |
+          test -n "$MATCH_PASSWORD" || { echo "::error::Missing Match signing password"; exit 1; }
+          test -n "$APP_STORE_CONNECT_KEY_ID" || { echo "::error::Missing App Store Connect API key ID"; exit 1; }
+          test -n "$APP_STORE_CONNECT_ISSUER_ID" || { echo "::error::Missing App Store Connect issuer"; exit 1; }
+          test -n "$APP_STORE_CONNECT_PRIVATE_KEY" || { echo "::error::Missing App Store Connect private key"; exit 1; }
+          fastlane beta
