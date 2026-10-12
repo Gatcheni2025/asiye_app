@@ -41,8 +41,9 @@ cancellation versus arrival, cash continuation, voucher-funded Wallet reservatio
 confirmation with the passenger app closed, wrong PIN and five-attempt lock, post-arrival
 sharing, repeated verification, cancellation release and final settlement on staging/devices.
 
-105 release regression tests and six restoration behavior tests passed locally. The local
-emulator requires Java 21, which is available in CI but not this container. Production deploy,
+105 release regression tests and six restoration behavior tests passed locally. The matching
+GitHub Java 21 emulator check passed all 81 tests, including settlement and continuation
+security protections: https://github.com/Gatcheni2025/asiye_app/actions/runs/38222280553 . Production deploy,
 real-money payment/refund tests, GPS/device acceptance and Play publication have not been
 performed. Check the new commit's Android Release APK/AAB and Firebase Security Validation
 results before release. No automatic production deploy is configured.
