@@ -3097,87 +3097,34 @@ ASIYE_DRIVER.ui = {
 
 
     async verifyPin() {
-
-        const input =
-            document.getElementById(
-                'driverPinInput'
-            );
-
-
-        const error =
-            document.getElementById(
-                'driverPinError'
-            );
-
-
-        if (
-            !input ||
-            !this.pinContext
-        ) {
-
-            return;
-        }
-
-
-        const entered =
-            input.value.trim();
-
-
-        let valid =
-            false;
-
-
-        if (
-            this.pinContext.isClub
-        ) {
-
-            valid =
-
-                await ASIYE_DRIVER.trip
-                    .verifyClubPin(
-
-                        this.pinContext
-                            .passengerId,
-
-                        entered
-                    );
-
-        } else {
-
-            valid =
-
-                await ASIYE_DRIVER.trip
-                    .verifyGoPin(
-                        entered
-                    );
-        }
-
-
-        if (valid) {
-
-            this.closePassengerPin();
-
-
-            this.toast(
-                'Passenger verified.',
-                'success'
-            );
-
-        } else {
-
-            error?.classList.add(
-                'show'
-            );
-
-
-            input.value =
-                '';
-
-
-            input.focus();
+        const input = document.getElementById('driverPinInput');
+        const error = document.getElementById('driverPinError');
+        const button = document.getElementById('verifyDriverPinButton');
+        const context = this.pinContext;
+        if (!input || !context || this._pinCheckActive) return;
+        this._pinCheckActive = true;
+        if (button) button.disabled = true;
+        try {
+            const entered = input.value.trim();
+            const valid = context.isClub
+                ? await ASIYE_DRIVER.trip.verifyClubPin(context.passengerId, entered)
+                : await ASIYE_DRIVER.trip.verifyGoPin(entered);
+            if (valid) {
+                this.closePassengerPin();
+                this.toast('Passenger verified at pickup.', 'success');
+            } else {
+                if (error) { error.textContent = 'Incorrect pickup PIN. Ask the passenger to check their PIN.'; error.classList.add('show'); }
+                input.value = '';
+                input.focus();
+            }
+        } catch (failure) {
+            if (error) { error.textContent = failure.message || 'Pickup PIN could not be checked. Try again.'; error.classList.add('show'); }
+            this.toast(failure.message || 'Unable to verify pickup PIN.', 'danger');
+        } finally {
+            this._pinCheckActive = false;
+            if (button) button.disabled = false;
         }
     },
-
 
     /* ========================================================
        IN TRANSIT

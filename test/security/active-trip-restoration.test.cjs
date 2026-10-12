@@ -114,3 +114,32 @@ test('server-completed dropoff closes the pickup PIN and never repeats client se
     assert.equal(closed,1);
   } finally {dom.window.close();}
 });
+
+test('pickup PIN server errors are visible at pickup and duplicate confirm taps do not add attempts', async () => {
+  const {w,dom} = setup(go);
+  try {
+    const panel = w.document.createElement('section');
+    panel.innerHTML = '<input id="driverPinInput" value="4831"><p id="driverPinError"></p><button id="verifyDriverPinButton"></button>';
+    w.document.body.append(panel);
+    const source = read('assets/driver-v2/js/app.js');
+    const start = source.indexOf('    async verifyPin()');
+    const end = source.indexOf('    /* ========================================================\n       IN TRANSIT',start);
+    const ui = w.eval('({' + source.slice(start,end) + '})');
+    let calls = 0, closed = 0, reject;
+    ui.pinContext = {isClub:false};
+    ui.toast = () => {};
+    ui.closePassengerPin = () => closed++;
+    w.ASIYE_DRIVER = {trip:{verifyGoPin:() => {calls++;return new Promise((resolve,r) => {reject = r;});}}};
+    const pending = ui.verifyPin();
+    await ui.verifyPin();
+    assert.equal(calls,1);
+    reject(new Error('The passenger must share the trip before departure.'));
+    await pending;
+    assert.match(w.document.getElementById('driverPinError').textContent,/share the trip/);
+    assert.equal(w.document.getElementById('verifyDriverPinButton').disabled,false);
+    assert.equal(closed,0);
+    w.ASIYE_DRIVER.trip.verifyGoPin = async () => true;
+    await ui.verifyPin();
+    assert.equal(closed,1);
+  } finally {dom.window.close();}
+});
