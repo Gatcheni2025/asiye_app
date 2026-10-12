@@ -1,0 +1,66 @@
+name: Deploy Asiye 341 trip-share PIN unblock
+
+on:
+  push:
+    branches: [fix/11.0.67-club-booking-arrival-pin-timer]
+    paths: ['.github/workflows/deploy_trip_share_pin_341.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asiye-secure-functions-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/fix/11.0.67-club-booking-arrival-pin-timer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check exact signed app release and Cloud Functions sources
+        run: |
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.71+341'
+          node --check functions/index.js
+          node --check functions/go-continuation.js
+          node --check assets/passenger-v2/js/booking.js
+          node --check assets/passenger-v2/js/ride-controller.js
+          node --check assets/member-pages.js
+      - name: Test arrival, payment, PIN, sharing, and settlement regressions
+        run: |
+          node --test test/go-continuation.test.cjs test/go-fare-settlement-lifecycle.test.cjs test/card-booking-sequence.test.cjs test/active-booking-recovery.test.cjs
+      - name: Validate Firebase deployment credentials
+        run: |
+          if [ -z "$FIREBASE_CREDS" ]; then
+            echo "::error::Missing Firebase service account Actions secret; deployment was not attempted."
+            exit 1
+          fi
+      - name: Install Firebase Functions runtime dependencies
+        run: npm --prefix functions install --no-audit --no-fund
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ env.FIREBASE_CREDS }}
+      - name: Deploy only the Go pickup verification function
+        run: npx --yes firebase-tools@latest deploy --project asiye-80386 --only functions:goTripActionSecure --non-interactive
+      - name: Deploy only the protected final settlement function
+        run: npx --yes firebase-tools@latest deploy --project asiye-80386 --only functions:settleTripPayment --non-interactive
+      - name: Check HTTPS availability of deployed protected endpoints
+        run: |
+          node - <<'JS'
+          const {checkEndpoint} = require('./scripts/club-network-readiness.cjs');
+          (async () => {
+            for (const endpoint of ['goTripActionSecure','settleTripPayment']) {
+              for (const origin of ['https://appassets.androidplatform.net','https://app.asiye.cloud']) {
+                await checkEndpoint(endpoint, origin);
+                console.log('PASS', endpoint, origin);
+              }
+            }
+          })().catch(e => { console.error(e); process.exitCode = 1; });
+          JS
