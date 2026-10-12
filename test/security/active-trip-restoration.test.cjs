@@ -94,3 +94,23 @@ test('driver restoration reopens arrived Club passenger PIN rather than changing
     assert.equal(w.document.querySelector('[data-trip-cancel]'),null);
   } finally {dom.window.close();}
 });
+
+test('server-completed dropoff closes the pickup PIN and never repeats client settlement or PIN verification', async () => {
+  const {w,dom} = setup(go);
+  try {
+    let closed = 0, released = 0, actionName = null;
+    w.ASIYE_DRIVER = {state:{},ui:{closePassengerPin:() => closed++,toast(){}}};
+    w.eval(read('assets/driver-v2/js/trip-controller.js'));
+    const t = w.ASIYE_DRIVER.trip;
+    t.requestId = 'booking-reference-123';
+    t.request = {...go,goContinuationVersion:2,status:'in_transit',pinVerifiedAt:7,tripStartedAt:7};
+    t.goAction = async name => {actionName = name;};
+    t.settleSelectedPayments = async () => ({settled:true,serverCompleted:true});
+    t.releaseDriver = async () => released++;
+    t.verifyGoPin = async () => {throw new Error('PIN requested again at dropoff');};
+    await t.completeTrip();
+    assert.equal(actionName,'collectCash');
+    assert.equal(released,1);
+    assert.equal(closed,1);
+  } finally {dom.window.close();}
+});

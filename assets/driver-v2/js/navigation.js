@@ -17,6 +17,10 @@ ASIYE_DRIVER.navigator = {
         localStorage.getItem('asiyeNavigationVoice') !== 'off',
 
     start(request) {
+        if (request.goContinuationVersion === 2 && (request.status !== 'in_transit' || !request.pinVerifiedAt)) {
+            ASIYE_DRIVER.ui?.toast?.('Verify the passenger PIN at pickup before navigating to the destination.', 'danger');
+            return;
+        }
         const point =
             request.destinationCoords ||
             request.dropoffLocation ||

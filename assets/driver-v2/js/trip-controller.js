@@ -310,7 +310,7 @@ ASIYE_DRIVER.trip = {
                             ? 'Waiting for confirmed Paystack payment. Pickup unlocks automatically after confirmation.'
                             : paymentMethod === 'wallet'
                                 ? 'Waiting for the agreed fare to be reserved from Wallet or voucher credit.'
-                                : 'Confirming the cash fare. Cash is collected for the ride; no card payment is required.'
+                                : 'Cash is due after drop-off. Head to pickup and verify the passenger PIN before driving to the destination.'
                     }
                 </div>
 
@@ -338,14 +338,21 @@ ASIYE_DRIVER.trip = {
                 </div>
 
                 <div class="driver-payment-wait-note">
-                    Do not start pickup yet. Asiye will unlock navigation
-                    automatically when payment is confirmed. The PIN and live
-                    sharing are checked after arrival, before departure.
+                    ${paymentMethod === 'cash'
+                      ? 'No upfront cash confirmation is needed. Verify the passenger PIN at pickup; collect cash after drop-off.'
+                      : 'Pickup unlocks when payment is confirmed. Verify the PIN at pickup before departure.'}
                 </div>
+                ${paymentMethod === 'cash' ? '<button class="driver-btn driver-btn-primary" data-cash-pickup>Start cash pickup</button>' : ''}
 
             </div>
         `;
 
+
+        container.querySelector('[data-cash-pickup]')?.addEventListener('click', async event => {
+            event.currentTarget.disabled = true;
+            try { await this.goAction('cashPickup'); }
+            catch (error) { ASIYE_DRIVER.ui.toast(error.message || 'Unable to start pickup.', 'danger'); event.currentTarget.disabled = false; }
+        });
 
         document
             .getElementById(
@@ -614,7 +621,11 @@ ASIYE_DRIVER.trip = {
        ======================================================== */
 
     async startDestinationNavigation(request) {
-        ASIYE_DRIVER.ui.showInTransit(request);
+        const current = this.requestRef ? (await this.requestRef.once('value')).val() : request;
+        if (current?.goContinuationVersion === 2 && (current.status !== 'in_transit' || !current.pinVerifiedAt))
+            throw new Error('Verify the passenger PIN at pickup before starting destination navigation.');
+        ASIYE_DRIVER.ui.closePassengerPin?.();
+        ASIYE_DRIVER.ui.showInTransit(current || request);
     },
 
 
@@ -1661,6 +1672,12 @@ ASIYE_DRIVER.trip = {
     renderInTransit(
         request
     ) {
+        if (request.goContinuationVersion === 2 && !request.pinVerifiedAt) {
+            ASIYE_DRIVER.ui.toast('Pickup PIN verification is required before destination navigation.', 'danger');
+            return;
+        }
+        ASIYE_DRIVER.ui.closePassengerPin?.();
+
 
         if (
             ASIYE_DRIVER.ui &&
@@ -1751,7 +1768,7 @@ ASIYE_DRIVER.trip = {
             );
         }
 
-        return true;
+        return payload;
     },
 
 
@@ -1777,8 +1794,14 @@ ASIYE_DRIVER.trip = {
 
 
         try {
-            await this
-                .settleSelectedPayments();
+            if (request.goContinuationVersion === 2 && String(request.paymentMethod).toLowerCase() === 'cash')
+                await this.goAction('collectCash', {cashCollected: true});
+            const settlementResult = await this.settleSelectedPayments();
+            if (settlementResult?.serverCompleted === true) {
+                ASIYE_DRIVER.ui.closePassengerPin?.();
+                await this.releaseDriver();
+                return;
+            }
         } catch (error) {
             ASIYE_DRIVER.ui
                 ?.toast?.(
@@ -2169,6 +2192,7 @@ ASIYE_DRIVER.trip = {
     renderCompleted(
         request
     ) {
+        ASIYE_DRIVER.ui.closePassengerPin?.();
 
         if (
             ASIYE_DRIVER.ui &&

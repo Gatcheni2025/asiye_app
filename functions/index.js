@@ -6089,7 +6089,7 @@ async function reserveGoNegotiatedDriver({
       throw error;
     }
 
-    const trip =
+    let trip =
       transaction.snapshot.val();
 
     /*
@@ -6217,6 +6217,17 @@ async function reserveGoNegotiatedDriver({
 
     committed = true;
 
+    // Cash is owed after drop-off, not charged or confirmed before pickup.
+    // Prepare only the deferred ledger and server PIN, then release the driver.
+    // This runs on acceptance even when the passenger app is closed.
+    if (normaliseRidePaymentMethod(trip.paymentMethod) === 'cash' &&
+        trip.goContinuationRequestedVersion === 2) {
+      await prepareTripPaymentServer({requestId, passengerId: trip.commuterId,
+        trip, method: 'cash', amount: Number(trip.agreedFare)});
+      trip = (await requestRef.once('value')).val() || trip;
+    }
+
+
     if (trip.commuterId) {
       await admin.database()
         .ref(
@@ -6230,7 +6241,9 @@ async function reserveGoNegotiatedDriver({
             "Fare agreed",
 
           message:
-            `${trip.driverName || "Your driver"} agreed to R${money(trip.agreedFare)}. Complete ${String(trip.paymentMethod || "cash").toUpperCase()} payment readiness to continue.`,
+            normaliseRidePaymentMethod(trip.paymentMethod) === 'cash'
+              ? `${trip.driverName || "Your driver"} agreed to R${money(trip.agreedFare)}. Cash is due after drop-off. Your driver can head to pickup.`
+              : `${trip.driverName || "Your driver"} agreed to R${money(trip.agreedFare)}. Complete your payment to continue.`,
 
           requestId,
 
@@ -6267,7 +6280,9 @@ async function reserveGoNegotiatedDriver({
         title:
           "Asiye Go fare agreed",
         message:
-          `Fare R${money(trip.agreedFare)} agreed. The passenger is completing payment and safety confirmation.`,
+          normaliseRidePaymentMethod(trip.paymentMethod) === 'cash'
+            ? `Fare R${money(trip.agreedFare)} agreed. Head to pickup; collect cash after drop-off and verify the PIN at pickup.`
+            : `Fare R${money(trip.agreedFare)} agreed. Waiting for confirmed payment before pickup.`,
         requestId,
         agreedFare:
           Number(
@@ -8017,6 +8032,15 @@ exports.goTripActionSecure = onRequest(
       const role = name === 'shareComplete' ? 'passenger' : name === 'cancel' && passenger ? 'passenger' : 'driver';
       if ((role === 'passenger' && !passenger) || (role === 'driver' && !driver))
         return response.status(403).json({error: 'This is not your booking.'});
+      if (name === 'cashPickup') {
+        if (!driver || !['payment_required','accepted','driver_on_way'].includes(trip.status) ||
+            normaliseRidePaymentMethod(trip.paymentMethod) !== 'cash' || trip.fareStatus !== 'agreed')
+          return response.status(409).json({error: 'Only the assigned driver can start an agreed cash pickup.'});
+        await admin.database().ref(`requests/${id}/goContinuationRequestedVersion`).set(2);
+        const context = {...trip, goContinuationRequestedVersion: 2};
+        await prepareTripPaymentServer({requestId: id, passengerId: trip.commuterId,
+          trip: context, method: 'cash', amount: Number(trip.agreedFare)});
+      }
       const agreement = await readGoFareAgreement(id);
       const payment = (await admin.database().ref(tripPaymentPath(id, trip.commuterId)).once('value')).val();
       const issuer = name === 'shareComplete'
@@ -8025,11 +8049,14 @@ exports.goTripActionSecure = onRequest(
       const pickup = trip.commuterLocation || trip.pickupLocation || {};
       const nearPickup = Boolean(taxi && taxi.currentRequest === id && Number(taxi.lastSeen) > Date.now() - 120000 &&
         haversineKm(Number(taxi.latitude), Number(taxi.longitude), Number(pickup.latitude), Number(pickup.longitude)) <= 0.3);
-      const evidence = {role, agreement, payment, nearPickup, shareIssued: Boolean(issuer?.token && issuer.expiresAt > Date.now())};
+      const destination = trip.destinationCoords || trip.dropoffLocation || {};
+      const nearDestination = Boolean(taxi && Number(taxi.lastSeen) > Date.now() - 120000 &&
+        haversineKm(Number(taxi.latitude), Number(taxi.longitude), Number(destination.latitude), Number(destination.longitude)) <= 0.3);
+      const evidence = {role, agreement, payment, nearPickup, nearDestination, shareIssued: Boolean(issuer?.token && issuer.expiresAt > Date.now())};
       const tx = await transactGoContinuation(ref, current => {
         // Recheck identity within the transaction: assignment can change while reading.
         if (current.commuterId !== trip.commuterId || current.taxiId !== trip.taxiId) return;
-        return goContinuation.action(current, name, request.body, evidence, Date.now());
+        return goContinuation.action(current, name === 'cashPickup' ? 'onWay' : name, request.body, evidence, Date.now());
       });
       const result = tx.snapshot.val();
       if (!tx.committed || !result) return response.status(409).json({error: 'Booking changed. Refresh and try again.'});
@@ -12792,6 +12819,11 @@ exports.settleTripPayment =
 
         if (trip.clubSecurityVersion === 2 && !['in_transit', 'completed'].includes(trip.status)) {
           return response.status(409).json({error:'Secure Club payments can only be settled after verified departure.'});
+        }
+
+        if (trip.cashCollectionVersion === 2 && normaliseRidePaymentMethod(trip.paymentMethod) === 'cash') {
+          try { goContinuation.requireCashDropoff(trip); }
+          catch (error) { return response.status(409).json({error: error.message}); }
         }
 
         const passengers =

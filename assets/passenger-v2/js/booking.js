@@ -346,6 +346,7 @@ ASIYE.booking = {
                 'ehailing',
 
             goContinuationRequestedVersion: 2,
+            ...(paymentMethod === 'cash' ? {cashCollectionVersion: 2} : {}),
 
             rideType:
                 'go',

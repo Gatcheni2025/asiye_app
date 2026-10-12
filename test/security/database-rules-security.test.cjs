@@ -1115,7 +1115,7 @@ test('v2 enrollment rejects invented phone verification and missing address proo
 test('server-confirmed Go prevents client PIN, payment, status and cancellation bypasses', async () => {
   await env.withSecurityRulesDisabled(async context => {
     await update(ref(context.database(), 'requests/negotiated-active'), {
-      goContinuationVersion:2, pickupPin:'4831', requirePin:true, safetyShareCompleted:false,
+      goContinuationVersion:2, cashCollectionVersion:2, pickupPin:'4831', requirePin:true, safetyShareCompleted:false,
       negotiatedBookingFinalized:true
     });
   });
@@ -1123,6 +1123,7 @@ test('server-confirmed Go prevents client PIN, payment, status and cancellation 
     for (const patch of [{pickupPin:'0000'}, {goContinuationVersion:1}, {status:'driver_on_way'},
       {status:'arrived',arrivedAt:100}, {status:'in_transit',pinVerifiedAt:100},
       {safetyShareCompleted:true}, {paymentsReady:true,paymentStatus:'captured'},
+      {cashCollectedAt:100,cashCollectionStatus:'collected',dropoffArrivedAt:100}, {cashCollectionVersion:null},
       {status:actor === 'driver-auth' ? 'cancelled_by_driver':'cancelled_by_commuter'},
       {pickupPin:null}, {goContinuationVersion:null}, {safetyShareCompleted:null}])
       await assertFails(update(ref(dbFor(actor),'requests/negotiated-active'),patch));

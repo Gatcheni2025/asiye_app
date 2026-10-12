@@ -1,5 +1,8 @@
-name: Deploy active trip and payment continuation 339
+name: Deploy active trip and payment cash pickup and PIN 340
 on:
+  push:
+    branches: [fix/11.0.67-club-booking-arrival-pin-timer]
+    paths: ['.github/workflows/deploy_active_trip_339.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,7 +27,7 @@ jobs:
           java-version: '21'
       - name: Confirm source and credentials
         run: |
-          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.69+339'
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.70+340'
           test -n "$FIREBASE_CREDS"
       - name: Install dependencies
         run: |
@@ -44,7 +47,22 @@ jobs:
       - name: Deploy matching endpoints, then database protections
         run: |
           set -euo pipefail
-          for FN in goTripActionSecure finalizeNegotiatedGoBooking continueGoAfterPayment prepareTripPayment verifyTripCardPayment paystackWebhook createTripShareToken clubDriverActionSecure; do
+          for FN in goTripActionSecure finalizeNegotiatedGoBooking continueGoAfterPayment createTripShareToken clubDriverActionSecure prepareTripPayment verifyTripCardPayment paystackWebhook acceptGoFareOffer acceptGoFareCounter settleTripPayment; do
             npx --yes firebase-tools@latest deploy --project asiye-80386 --only "functions:$FN" --non-interactive
           done
           npx --yes firebase-tools@latest deploy --project asiye-80386 --only database --non-interactive
+      - name: Verify isolated cash pickup, PIN and dropoff flow
+        working-directory: functions
+        run: node production-cash-pickup-validation.js
+      - name: Check installed-app endpoint access
+        run: |
+          node - <<'JS'
+          const {checkEndpoint} = require('./scripts/club-network-readiness.cjs');
+          (async () => {
+            for (const endpoint of ['goTripActionSecure','prepareTripPayment','finalizeNegotiatedGoBooking','settleTripPayment'])
+              for (const origin of ['https://appassets.androidplatform.net','https://app.asiye.cloud']) {
+                await checkEndpoint(endpoint, origin);
+                console.log(`PASS ${endpoint} ${origin}`);
+              }
+          })().catch(error => {console.error(error.message);process.exitCode=1;});
+          JS

@@ -86,7 +86,7 @@ jobs:
 
       - name: Test authentication
         run: |
-          node --test test/login-otp.test.cjs test/native-auth-session.test.cjs test/card-payout-passenger.test.cjs test/card-booking-sequence.test.cjs test/club-work-readiness.test.cjs test/club-lifecycle.test.cjs test/request-search-awareness.test.cjs test/go-fare-negotiation.test.cjs test/go-fare-settlement-lifecycle.test.cjs test/passenger-booking-identity.test.cjs test/active-booking-recovery.test.cjs test/preloader-readiness.test.cjs test/go-continuation.test.cjs
+          node --test test/login-otp.test.cjs test/native-auth-session.test.cjs test/card-payout-passenger.test.cjs test/card-booking-sequence.test.cjs test/club-work-readiness.test.cjs test/club-lifecycle.test.cjs test/request-search-awareness.test.cjs test/go-fare-negotiation.test.cjs test/go-fare-settlement-lifecycle.test.cjs test/passenger-booking-identity.test.cjs test/active-booking-recovery.test.cjs test/preloader-readiness.test.cjs test/go-continuation.test.cjs test/v2-navigation.test.cjs
 
       - name: Build release APK
         run: flutter build apk --release

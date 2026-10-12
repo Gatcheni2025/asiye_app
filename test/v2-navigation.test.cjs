@@ -144,3 +144,16 @@ test('directions request asks Mapbox for traffic, speed-limit and voice guidance
     assert.match(requestedUrl, /maxspeed/);
     assert.match(requestedUrl, /congestion_numeric/);
 });
+
+test('secure Go destination route cannot start before the pickup PIN was verified', () => {
+    const { context } = setup();
+    let started = false;
+    context.ASIYE_DRIVER.navigator.startTarget = () => {started = true;};
+    const request = {goContinuationVersion:2, status:'accepted', destinationCoords:{latitude:-29.8,longitude:31.0}};
+    context.ASIYE_DRIVER.navigator.start(request);
+    assert.equal(started,false);
+    context.ASIYE_DRIVER.navigator.start({...request,status:'in_transit'});
+    assert.equal(started,false);
+    context.ASIYE_DRIVER.navigator.start({...request,status:'in_transit',pinVerifiedAt:123});
+    assert.equal(started,true);
+});

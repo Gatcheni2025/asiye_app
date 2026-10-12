@@ -72,3 +72,27 @@ test('arrival, sharing and server PIN verification precede departure; wrong PIN 
   for (let i = 0; i < 5; i++) locked = action(locked, 'verifyPin', {pin: '0000'}, e, 106 + i);
   assert.throws(() => action(locked, 'verifyPin', {pin: '4831'}, e, 120), /locked/);
 });
+
+test('cash remains due at pickup; receipt is confirmed only after verified departure and destination arrival', () => {
+  const {requireCashDropoff} = require('../functions/go-continuation');
+  const e = {...evidence('cash'), nearDestination:true};
+  let trip = activate({...base('cash'), cashCollectionVersion:2}, e.agreement, e.payment, '4831', 100);
+  assert.equal(trip.paymentStatus,'cash_due');
+  assert.equal(trip.cashCollectedAt,undefined);
+  assert.throws(() => action(trip,'collectCash',{cashCollected:true},e,101), /pickup PIN/);
+  trip = action(trip,'onWay',{},e,102);
+  trip = action(trip,'arrive',{},e,103);
+  trip = action(trip,'shareComplete',{}, {...e, shareIssued:true},104);
+  assert.throws(() => action(trip,'collectCash',{cashCollected:true},e,105), /pickup PIN/);
+  trip = action(trip,'verifyPin',{pin:'4831'},e,106);
+  assert.equal(trip.pinVerifiedAt,106);
+  assert.throws(() => requireCashDropoff(trip), /after drop-off/);
+  assert.throws(() => action(trip,'collectCash',{cashCollected:true}, {...e,nearDestination:false},107), /destination/);
+  assert.throws(() => action(trip,'collectCash',{},e,107), /destination/);
+  const collected = action(trip,'collectCash',{cashCollected:true},e,108);
+  requireCashDropoff(collected);
+  assert.equal(collected.cashCollectedAt,108);
+  assert.equal(collected.pinVerifiedAt,106);
+  assert.equal(collected.cashCollectionStatus,'collected');
+  assert.deepEqual(action(collected,'collectCash',{cashCollected:true},e,109),collected);
+});

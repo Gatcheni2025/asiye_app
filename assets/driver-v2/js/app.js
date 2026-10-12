@@ -3325,7 +3325,7 @@ ASIYE_DRIVER.ui = {
                         <i class="fas fa-check"></i>
                         ${request.type === 'delivery'
                             ? 'Complete delivery'
-                            : 'Complete trip'}
+                            : request.paymentMethod === 'cash' ? 'Collect cash and finish ride' : 'Complete trip'}
                     </button>
 
                 </div>
@@ -3348,7 +3348,9 @@ ASIYE_DRIVER.ui = {
                             : 'Complete trip',
                         request.type === 'delivery'
                             ? 'Confirm that the parcel has reached the recipient.'
-                            : 'Confirm that you have reached the destination.',
+                            : request.paymentMethod === 'cash'
+                                ? `After drop-off, collect R${Number(request.agreedFare || request.finalAmount || 0).toFixed(2)} cash from the passenger, then finish the ride.`
+                                : 'Confirm that you have reached the destination.',
                         async () => {
                             await ASIYE_DRIVER.trip
                                 .completeTrip();

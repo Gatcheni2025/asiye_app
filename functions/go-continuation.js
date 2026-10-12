@@ -56,6 +56,14 @@ function action(trip, name, body, evidence, now) {
     if (!evidence.nearPickup) fail('Update your live location at pickup before marking arrival.');
     return {...trip, status: 'arrived', arrivedAt: now};
   }
+  if (name === 'collectCash') {
+    if (trip.paymentMethod !== 'cash' || trip.status !== 'in_transit' || !trip.pinVerifiedAt || !trip.tripStartedAt)
+      fail('Verify the pickup PIN and drive to the destination before collecting cash.');
+    if (trip.cashCollectedAt) return trip;
+    if (body.cashCollected !== true || !evidence.nearDestination)
+      fail('Confirm cash collection only after arriving at the destination.');
+    return {...trip, cashCollectedAt: now, cashCollectionStatus: 'collected', dropoffArrivedAt: now};
+  }
   if (name === 'verifyPin') {
     if (trip.status === 'in_transit' && trip.pinVerifiedAt) return trip;
     if (trip.status !== 'arrived' || !trip.arrivedAt) fail('The driver must arrive before checking the PIN.');
@@ -68,4 +76,9 @@ function action(trip, name, body, evidence, now) {
   fail('Unknown booking action.', 400);
 }
 
-module.exports = {terminal, arrived, paymentReady, activate, action};
+function requireCashDropoff(trip) {
+  if (!trip.pinVerifiedAt || !trip.tripStartedAt || !trip.cashCollectedAt || !trip.dropoffArrivedAt ||
+      !['in_transit', 'completed'].includes(trip.status))
+    fail('Cash is collected after drop-off. Confirm collection at destination before completing the ride.');
+}
+module.exports = {terminal, arrived, paymentReady, activate, action, requireCashDropoff};

@@ -622,7 +622,7 @@ ASIYE.ride = {
                 : method ===
                     'wallet'
                     ? 'Asiye is reserving the agreed fare from your Wallet. Your driver stays reserved.'
-                    : 'Your cash fare is agreed. The driver can head to pickup as soon as the booking is confirmed.';
+                    : 'Your fare is agreed. Pay cash to the driver after drop-off. Your driver can head to pickup now.';
 
 
         container.innerHTML = `
@@ -672,10 +672,10 @@ ASIYE.ride = {
                             <span><i class="fas fa-${method === 'card' ? 'credit-card' : method === 'wallet' ? 'wallet' : 'shield-halved'}"></i></span>
                             <div>
                                 <strong>
-                                    ${method === 'card' ? 'Complete Paystack payment' : method === 'wallet' ? 'Reserve Wallet fare' : 'Confirm cash fare'}
+                                    ${method === 'card' ? 'Complete Paystack payment' : method === 'wallet' ? 'Reserve Wallet fare' : 'Cash due after drop-off'}
                                 </strong>
                                 <small>
-                                    Asiye confirms payment and creates your pickup PIN. Share the trip after arrival.
+                                    ${method === 'cash' ? 'No upfront cash payment is required. Your PIN is checked at pickup.' : 'Asiye creates your pickup PIN after payment is ready.'} Share the trip after arrival.
                                 </small>
                             </div>
                         </div>
@@ -684,7 +684,7 @@ ASIYE.ride = {
                             <span><i class="fas fa-car-side"></i></span>
                             <div>
                                 <strong>Driver starts pickup</strong>
-                                <small>Unlocked when payment is ready. The PIN is checked after driver arrival.</small>
+                                <small>${method === 'cash' ? 'Your driver can collect you now. Cash is paid after drop-off.' : 'Unlocked when payment is ready.'} The PIN is checked at pickup.</small>
                             </div>
                         </div>
                     </div>
