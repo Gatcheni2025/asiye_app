@@ -1,4 +1,5 @@
 require 'base64'
+require 'shellwords'
 
 default_platform(:ios)
 
@@ -82,7 +83,14 @@ platform :ios do
 
     # 7. Check the actual signed IPA's version, bundle ID, build and
     # export-compliance flag before anything is sent to Apple.
-    sh("python3 ../scripts/verify_asiye_ios_metadata.py --ipa '#{ipa_path}' --version '#{ios_version}' --build '#{build_string}'")
+    # Fastlane evaluates this file from ios/fastlane, not the repository root.
+    # Resolve the validator from this Fastfile's physical directory so the
+    # signed IPA is verified before any upload occurs.
+    validator = File.expand_path("../../scripts/verify_asiye_ios_metadata.py", __dir__)
+    unless File.file?(validator)
+      UI.user_error!("Missing signed IPA validator at #{validator}")
+    end
+    sh("python3 #{Shellwords.escape(validator)} --ipa #{Shellwords.escape(ipa_path.to_s)} --version #{Shellwords.escape(ios_version)} --build #{Shellwords.escape(build_string)}")
 
     # This lane runs only via the explicitly confirmed manual upload job.
     unless ENV["ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED"] == "yes"

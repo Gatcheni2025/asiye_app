@@ -22,5 +22,10 @@ assert.match(runner, /<key>ITSAppUsesNonExemptEncryption<\/key>\s*<false\s*\/>/)
 assert.equal(tag(runner,'CFBundleShortVersionString'),'$(FLUTTER_BUILD_NAME)');
 assert.equal(tag(runner,'CFBundleVersion'),'$(FLUTTER_BUILD_NUMBER)');
 assert.ok(file('ios/fastlane/Fastfile').includes('--build-name=#{ios_version}'));
-assert.ok(file('ios/fastlane/Fastfile').includes('ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED'));
+const fastfile = file('ios/fastlane/Fastfile');
+assert.ok(fastfile.includes('ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED'));
+assert.ok(fastfile.includes('File.expand_path("../../scripts/verify_asiye_ios_metadata.py", __dir__)'), 'Signed IPA validator must resolve from Fastfile directory.');
+assert.ok(fastfile.includes('Shellwords.escape(validator)'), 'Validator path must be safely quoted.');
+assert.ok(!fastfile.includes('python3 ../scripts/verify_asiye_ios_metadata.py'), 'Incorrect legacy validator path must not return.');
+assert.ok(fs.statSync(path.join(root,'scripts/verify_asiye_ios_metadata.py')).isFile(), 'Signed IPA validator file must exist.');
 console.log('PASS Asiye 341 source, bundle ID, Google Sign In, export compliance and gated Fastlane version.');
