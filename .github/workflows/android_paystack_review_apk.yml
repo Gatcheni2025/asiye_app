@@ -1,0 +1,177 @@
+name: Android 342 Paystack Review APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths:
+      - 'pubspec.yaml'
+      - 'lib/**'
+      - 'android/**'
+      - 'assets/**'
+      - 'functions/**'
+      - 'database.rules.json'
+      - 'test/**'
+      - 'scripts/verify_payment_release_341_lineage.sh'
+      - '.github/workflows/android_paystack_review_apk.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-paystack-review-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validation:
+    name: Payment, booking and Firebase security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify release ancestry and selected review version
+        run: |
+          test "$GITHUB_REF_NAME" = 'fix/paystack-subaccounts-cash-card-no-wallet'
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.72+342'
+          bash scripts/verify_payment_release_341_lineage.sh
+      - name: Check JavaScript syntax
+        run: |
+          find assets -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+          find functions -maxdepth 1 -type f -name '*.js' -print0 | xargs -0 -n1 node --check
+      - name: Paystack failure, duplicate callback, Parcel PIN and booking regressions
+        run: >
+          node --test
+          test/paystack-subaccount-migration.test.cjs
+          test/paystack-card-journey-simulation.test.cjs
+          test/parcel-security.test.cjs
+          test/driver-first-card-booking.test.cjs
+          test/go-continuation.test.cjs
+          test/club-lifecycle.test.cjs
+          test/card-booking-sequence.test.cjs
+          test/go-fare-settlement-lifecycle.test.cjs
+          test/member-pages.test.cjs
+          test/admin-portal.test.cjs
+      - name: Authentication and active booking regressions
+        run: >
+          node --test
+          test/login-otp.test.cjs
+          test/native-auth-session.test.cjs
+          test/card-payout-passenger.test.cjs
+          test/club-work-readiness.test.cjs
+          test/request-search-awareness.test.cjs
+          test/go-fare-negotiation.test.cjs
+          test/passenger-booking-identity.test.cjs
+          test/active-booking-recovery.test.cjs
+          test/preloader-readiness.test.cjs
+          test/v2-navigation.test.cjs
+      - name: Install emulator and handler test dependencies
+        run: |
+          npm --prefix test/security install --no-audit --no-fund
+          npm --prefix functions install --no-audit --no-fund
+      - name: Firebase authorization, exported payment handlers and support form checks
+        working-directory: test/security
+        run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json 'npm test'
+
+  apk:
+    name: Signed Asiye 11.0.72 (342) APK
+    needs: validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.2'
+          channel: stable
+          cache: true
+      - name: Restore existing Asiye release signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          test -n "$KEYSTORE_BASE64" || { echo '::error::Existing release keystore is unavailable.'; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > android/app/asiye-release.jks
+          cat > android/key.properties <<EOF
+          storePassword=$KEYSTORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          storeFile=asiye-release.jks
+          EOF
+      - run: flutter pub get
+      - name: Analyze Flutter compilation errors
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+      - name: Build review APK
+        run: flutter build apk --release
+      - name: Verify signature, Firebase certificate and APK version
+        shell: bash
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+          CERTS=$(keytool -list -v -keystore android/app/asiye-release.jks -alias "$KEY_ALIAS" -storepass "$KEYSTORE_PASSWORD")
+          export RELEASE_SHA1=$(printf '%s\n' "$CERTS" | sed -n 's/.*SHA1: //p' | tr -d ':' | tr '[:upper:]' '[:lower:]')
+          python3 - <<'PY'
+          import json, os
+          data = json.load(open('android/app/google-services.json', encoding='utf-8'))
+          hashes = {oauth['android_info']['certificate_hash'].lower()
+              for client in data.get('client', []) for oauth in client.get('oauth_client', [])
+              if oauth.get('android_info', {}).get('package_name') == 'com.asiyeapp.asiye'
+              and oauth.get('android_info', {}).get('certificate_hash')}
+          actual = os.environ['RELEASE_SHA1']
+          assert actual and actual in hashes, 'Release signing certificate is not registered with Firebase Phone Auth'
+          print('Release signing certificate matches the Firebase configuration.')
+          PY
+          AAPT=$(find "$ANDROID_HOME/build-tools" -name aapt -type f | sort -V | tail -1)
+          APK_PACKAGE=$("$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | sed -n '1p')
+          printf '%s\n' "$APK_PACKAGE"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "name='com.asiyeapp.asiye'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionCode='342'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionName='11.0.72'"
+      - name: Prepare installation download and build details
+        shell: bash
+        run: |
+          mkdir -p review-apk
+          cp build/app/outputs/flutter-apk/app-release.apk review-apk/Asiye-11.0.72-342.apk
+          (
+            cd review-apk
+            sha256sum Asiye-11.0.72-342.apk > SHA256SUMS.txt
+          )
+          cat > review-apk/BUILD-INFO.txt <<EOF
+          Asiye Android 11.0.72 (342) — review APK for installation testing
+          Source commit: $GITHUB_SHA
+          Source branch: $GITHUB_REF_NAME
+          Package: com.asiyeapp.asiye
+          Signed using the existing Asiye release keystore; Firebase certificate checked.
+          Automated payment, booking and Firebase authorization checks passed before build.
+          Paystack responses and identity are simulated in engineering tests.
+          Real provider transactions, refunds, settlements and device testing are not certified by this build.
+          Secure Card and Parcel workflows require the matching reviewed backend and rules.
+          This workflow does not deploy Firebase functions, rules, hosting or mobile stores.
+          Support: admin@asiye.cloud | 031 566 1165
+          EOF
+          cat review-apk/BUILD-INFO.txt >> "$GITHUB_STEP_SUMMARY"
+          cat review-apk/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: asiye-11.0.72-342-review-apk
+          path: review-apk/
+          if-no-files-found: error
+          retention-days: 30
