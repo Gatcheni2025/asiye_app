@@ -936,6 +936,31 @@ ASIYE_DRIVER.requests = {
         );
 
 
+        if (freshRequest.type === 'delivery' &&
+            freshRequest.parcelSecurityVersion === 2) {
+            // Firebase client may not claim or change a secure Parcel.
+            // The backend atomically checks driver identity, active trip
+            // lock, vehicle compliance and the verified Paystack subaccount.
+            const result = await this.postNegotiation(
+                'acceptParcelRequestSecure', {requestId:id,driverId}
+            );
+            const updated = (await requestRef.once('value')).val();
+            if (!updated || updated.taxiId !== driverId) {
+                throw new Error('Server Parcel assignment could not be verified.');
+            }
+            updated.requestId=id;
+            this.activeRequest=updated;
+            ASIYE_DRIVER.state.incomingRequest=null;
+            await this.removeNotification(this.activeNotificationKey);
+            await ASIYE_DRIVER.trip?.start?.(id);
+            ASIYE_DRIVER.ui?.toast?.(
+                updated.paymentMethod === 'card'
+                    ? 'Parcel accepted. Waiting for passenger Paystack payment.'
+                    : 'Parcel accepted. Navigate to the pickup.'
+            );
+            return result;
+        }
+
         const isProtectedGo =
             freshRequest.type !==
                 'club' &&
