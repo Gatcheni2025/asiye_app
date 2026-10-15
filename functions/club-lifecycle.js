@@ -952,7 +952,10 @@ function registerClubLifecycle(deps) {
           "Incorrect PIN. Ask the passenger for their current pickup PIN.",
           422,
         );
-      if (body.action === "acceptFare") await preparePayments(requestId, pool);
+      if (["acceptFare", "acceptWaiting"].includes(body.action) &&
+           pool.poolReady && pool.driverAcceptedAt) {
+         await preparePayments(requestId, pool);
+       }
       if (body.action === "complete") {
         const gross = money(
           active(pool).reduce((sum, [, p]) => sum + Number(p.price), 0),
