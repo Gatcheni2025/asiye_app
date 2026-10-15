@@ -31,6 +31,17 @@ Do not publish another bundle with Android versionCode `341` or reuse Apple buil
   on the page while cash/card works; its prepaid-wallet UI stays hidden.
 - **Anti-loop**: repeated passenger live-trip updates do not reopen Paystack
   if a pending checkout for that request is already stored.
+- **Secure Parcel V2**: authenticated backend creation, driver acceptance,
+  passenger-only PIN retrieval, driver GPS/arrival/PIN checks and completion.
+  PINs live in `parcelPrivate`; clients cannot create or mutate secure trips.
+  Completion and cancellation clean up reservations on the server, including
+  retries after a lost response. The Go action and generic refund endpoints
+  refuse secure Parcel requests.
+- **Durable checkout**: reserve one reference and its callback mapping before
+  calling Paystack. A failed/unknown response retains that reference for
+  verification; retries cannot create another payable checkout. Signed callbacks
+  re-verify with Paystack, preserve captured/refunded state and quarantine late
+  charges on cancelled or reassigned trips for merchant review.
 
 ## Automated evidence (not full sandbox E2E)
 - `test/driver-first-card-booking.test.cjs` executes the actual Parcel
@@ -42,6 +53,13 @@ Do not publish another bundle with Android versionCode `341` or reuse Apple buil
 - GitHub CI: `.github/workflows/paystack-subaccount-migration.yml` and
   Firebase security emulators. A passing source check alone is not payment
   provider approval and does not certify actual bank settlement.
+- `test/security/payment-handlers-emulator.test.cjs` runs the actual exported
+  Firebase handlers with an isolated RTDB namespace, simulated identities and
+  simulated Paystack HTTP. It covers Cash/Card Parcel completion, concurrent
+  driver acceptance/checkout, PIN lockout, GPS, lost API responses, signed and
+  forged callbacks, cancellation races, duplicate refunds, Go checkout and
+  per-passenger Work checkout. This is integration testing against an emulator,
+  not a real Paystack or mobile-device test.
 
 ## Release-blocking acceptance before any production deployment
 1. **Paystack account approved** in writing for per-driver 80/20 subaccount
@@ -50,10 +68,12 @@ Do not publish another bundle with Android versionCode `341` or reuse Apple buil
    cancellations, failure/retry, webhook duplicates, Paystack return after app
    closure, refunds, fee-bearer confirmation and settlement reconciliation.
    Run Go, Work group and Parcel. Verify net shares and bank destinations.
-3. **Parcel pickup security**: migrate remaining legacy client-controlled
-   Parcel pickup/arrival/PIN updates into verified server-side actions; current
-   Parcel uses legacy pickup PIN from the client. Validate OTP/PIN cannot be
-   spoofed by client state changes and stays private until verified at pickup.
+3. **Parcel staging/device acceptance**: secure V2 pickup/arrival/PIN actions are
+   implemented in this branch. Deploy the complete reviewed backend and rules
+   together to an isolated staging project, then verify actual driver/passenger
+   GPS, camera/WebView sessions, private PIN display, pickup, cash collection and
+   completion on devices. Existing legacy Parcel requests need reconciliation;
+   they are not silently converted into server-verified V2 bookings.
 4. **Approved driver and vehicle**: admin must verify insurance/licensing/
    documents, not just driver-provided data. RTDB rules must reject tampering
    with `taxiId`, payment statuses, PIN and settlement destinations.

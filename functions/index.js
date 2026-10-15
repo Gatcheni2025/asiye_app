@@ -8135,6 +8135,7 @@ exports.acceptParcelRequestSecure = onRequest(
       driverLocked=true;
       const now=Date.now();
       const tx=await reqRef.transaction(current=>{
+        if(current===null)return null;
         if(!current||current.type!=="delivery"||current.parcelSecurityVersion!==2||
            current.commuterId!==trip.commuterId ||
            !["pending","searching","driver_busy","accepted","payment_required"].includes(current.status)||
@@ -8161,8 +8162,11 @@ exports.acceptParcelRequestSecure = onRequest(
         return res.status(409).json({error:"Parcel was accepted by another driver or cancelled."});
       requestClaimed=true;
       const accepted=tx.snapshot.val();
-      await driverRef.update({currentRequest:id,isBroadcasting:false,isFull:true,
-        passengerCount:1,updatedAt:now});
+      await driverRef.transaction(current=>{
+        if(current===null)return null;
+        if(current.currentRequest!==id)return;
+        return {...current,isBroadcasting:false,isFull:true,passengerCount:1,updatedAt:now};
+      },undefined,false);
       await db.ref(`delivery_requests/${id}`).update({
         taxiId:driverId,driverAuthUid:user.uid,driverName:accepted.driverName,
         status:accepted.status,paymentStatus:accepted.paymentStatus,acceptedAt:now
@@ -8180,7 +8184,7 @@ exports.acceptParcelRequestSecure = onRequest(
         const ownerSnapshot=await db.ref(`requests/${id}/taxiId`).once("value").catch(()=>null);
         const owner=ownerSnapshot?.val()||null;
         if(owner!==driverId)await db.ref(`taxis/${driverId}/currentRequest`)
-          .transaction(v=>v===id?null:undefined,undefined,false).catch(()=>{});
+          .transaction(v=>v===null||v===id?null:undefined,undefined,false).catch(()=>{});
       }
     }
   }
@@ -8236,7 +8240,7 @@ exports.createParcelRequestSecure = onRequest(
       // Only remove our reservation, never overwrite a different booking.
       if(reserved){
         await admin.database().ref(`commuters/${passengerId}/currentRequest`)
-          .transaction(v=>v===id?null:undefined,undefined,false).catch(()=>{});
+          .transaction(v=>v===null||v===id?null:undefined,undefined,false).catch(()=>{});
       }
       if(id){
         const db=admin.database();
@@ -8278,6 +8282,7 @@ exports.cancelParcelBookingSecure = onRequest(
         return res.status(409).json({error:"Card checkout exists. Contact support for a verified cancellation/refund."});
       const nextStatus=driver?"cancelled_by_driver":"cancelled_by_commuter";
       const tx=await ref.transaction(current=>{
+        if(current===null)return null;
         if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId||current.parcelSecurityVersion!==2)return;
         if(String(current.status||"").startsWith("cancelled"))return current;
         if(
@@ -8292,8 +8297,9 @@ exports.cancelParcelBookingSecure = onRequest(
         status:result.status,cancelledAt:result.cancelledAt||Date.now()
       });
       await db.ref(`commuters/${trip.commuterId}/currentRequest`)
-        .transaction(v=>v===id?null:undefined,undefined,false);
+        .transaction(v=>v===null||v===id?null:undefined,undefined,false);
       if(trip.taxiId)await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+        if(taxi===null)return null;
         if(!taxi||taxi.currentRequest!==id)return undefined;
         return {...taxi,currentRequest:null,isFull:false,isBroadcasting:false,passengerCount:0};
       },undefined,false);
@@ -8366,6 +8372,7 @@ exports.parcelTripActionSecure = onRequest(
           secret.passengerId!==trip.commuterId))
         return res.status(409).json({error:"Pickup PIN is expired or missing."});
       const tx=await ref.transaction(current=>{
+        if(current===null)return null;
         if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId)return;
         return parcelSecurity.action(current,name,req.body?.pin,secret?.pin,
           {driverReserved,ledger,nearPickup,nearDestination},Date.now());
@@ -8382,11 +8389,14 @@ exports.parcelTripActionSecure = onRequest(
       if(name==="complete"){
         const gross=Number(result.finalAmount||0);
         await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+          if(taxi===null)return null;
           if(!taxi)return taxi;
-          const credits=taxi.parcelTripCredits||{};
+          // A scalar marker can be held immutable by RTDB rules while normal
+          // driver fields (GPS/availability) remain editable by its owner.
+          const credits=JSON.parse(taxi.parcelTripCredits||"{}");
           if(credits[id])return taxi;
           return {...taxi,
-            parcelTripCredits:{...credits,[id]:true},
+            parcelTripCredits:JSON.stringify({...credits,[id]:true}),
             totalTrips:Number(taxi.totalTrips||0)+1,
             grossEarnings:Math.round((Number(taxi.grossEarnings||0)+gross)*100)/100,
             totalEarnings:Math.round((Number(taxi.totalEarnings||0)+gross*0.8)*100)/100,
@@ -8397,8 +8407,9 @@ exports.parcelTripActionSecure = onRequest(
         // Retrying a completed action repairs cleanup after a lost response.
         // A newer booking must never lose its reservation.
         await db.ref(`commuters/${trip.commuterId}/currentRequest`)
-          .transaction(v=>v===id?null:undefined,undefined,false);
+          .transaction(v=>v===null||v===id?null:undefined,undefined,false);
         await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+          if(taxi===null)return null;
           if(!taxi||taxi.currentRequest!==id)return undefined;
           return {...taxi,currentRequest:null,isFull:false,passengerCount:0};
         },undefined,false);
@@ -10306,6 +10317,18 @@ const {
 const PAYSTACK_API =
   "https://api.paystack.co";
 
+const PAYSTACK_CALLBACK_URL =
+  "https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn";
+
+function paystackReference() {
+  return `ASIYE-${Date.now().toString(36)}-${paystackCrypto.randomBytes(16).toString("hex")}`;
+}
+
+function paystackFallbackEmail(uid) {
+  const key=paystackCrypto.createHash("sha256").update(String(uid)).digest("hex").slice(0,24);
+  return `payments+${key}@asiye.cloud`;
+}
+
 const {
   splitCardFare, stableTransferReference, isVerifiedCardPayment,
   isPayoutReady, bankInput
@@ -10313,9 +10336,9 @@ const {
 const {PLATFORM_COMMISSION_PERCENT, code:paystackSubaccountCode,
   isVerifiedSubaccount, verifySplit:verifyDriverPaystackSplit} = require("./paystack-subaccount-split");
 
-// Driver card transfers are private server-owned financial records.
-// The passenger card charge stays on Asiye's Paystack account until the
-// driver's identity, trip completion and bank have been confirmed.
+// Historical driver transfer records remain private for reconciliation.
+// New card fares use Paystack subaccounts at checkout; no later Asiye-funded
+// driver transfer is initiated by the new route.
 const driverPayoutPath = (requestId, passengerId) =>
   `driverCardPayouts/${requestId}/${passengerId}`;
 
@@ -10494,12 +10517,11 @@ async function creditPaystackWallet(payment, transaction) {
   return { credited: !!tx.committed, balance: finalCredit.balance };
 }
 // =================================================================
-// --- RIDE PAYMENT HOLDS: CASH / CARD / ASIYE WALLET ---
+// --- CASH / CARD SERVICE PAYMENT STATE; LEGACY WALLET RECONCILIATION ---
 // =================================================================
-// Go reserves non-cash payment immediately after booking.
-// Club waits until the pool is full, then reserves each passenger's
-// Wallet funds and requires each Card passenger to complete Paystack.
-// Reserved funds remain held by Asiye until trip completion.
+// Card checkout follows driver assignment; Club additionally waits for its pool.
+// "held" is an internal paid-awaiting-service state, not a Paystack authorization
+// hold or escrow. Paystack controls direct subaccount bank settlement.
 
 function normaliseRidePaymentMethod(value) {
   const method =
@@ -11584,6 +11606,7 @@ async function initialiseCardTripPayment(
     throw error;
   }
   const initializedTx = await paymentRef.transaction(value => {
+    if (value===null) return null;
     if (!value || value.reference !== reference) return;
     if (!["initializing","initialization_unknown"].includes(value.status)) return value;
     return {...value,status:"initialized",authorizationUrl:data.authorization_url,
@@ -11599,6 +11622,7 @@ async function initialiseCardTripPayment(
     // Acceptance already set payment_required. Never resurrect a cancelled
     // Parcel or overwrite an already verified payment after a slow API call.
     const tx = await admin.database().ref(`requests/${requestId}`).transaction(value => {
+      if (value===null) return null;
       if (!value || value.taxiId !== driverId ||
           !["payment_required","accepted"].includes(value.status)) return;
       return {...value,paymentReference:reference};
@@ -11844,6 +11868,7 @@ async function recordCardTripPaymentHeld(payment, transaction) {
     current.splitDriverId===payment.splitDriverId && current.subaccountCode===payment.subaccountCode;
   async function quarantine(reason) {
     const result=await paymentRef.transaction(current=>{
+      if (current===null) return null;
       if (!matches(current)) return;
       if (["refund_pending","refunded","refund_review"].includes(current.status)) return current;
       return {...current,status:"refund_review",paymentRefundAttention:true,
@@ -11861,6 +11886,7 @@ async function recordCardTripPaymentHeld(payment, transaction) {
     return quarantine("driver_changed_after_checkout");
 
   const settledTx=await paymentRef.transaction(current=>{
+    if (current===null) return null;
     if (!matches(current)) return;
     if (["held","captured","refund_pending","refunded","refund_review"].includes(current.status))
       return current;
@@ -11878,6 +11904,7 @@ async function recordCardTripPaymentHeld(payment, transaction) {
     // The assignment/cancellation check must happen inside the same transaction
     // that unlocks pickup, after provider verification has finished.
     const tx=await requestRef.transaction(current=>{
+      if (current===null) return null;
       if (!current || current.parcelSecurityVersion!==2 || cancelled(current) ||
           current.taxiId!==payment.splitDriverId || current.commuterId!==passengerId) return;
       if (["captured","refund_pending","refunded","refund_review"].includes(current.paymentStatus)) return current;

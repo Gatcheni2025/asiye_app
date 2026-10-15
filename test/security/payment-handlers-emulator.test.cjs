@@ -101,7 +101,9 @@ async function parcel(method='cash'){
   return result.body;
 }
 async function accept(id,driver='driver',uid='driver-auth'){
-  return call('acceptParcelRequestSecure',uid,{requestId:id,driverId:driver});
+  const result=await call('acceptParcelRequestSecure',uid,{requestId:id,driverId:driver});
+  if(result.status!==200)console.log('Acceptance result:',result.body);
+  return result;
 }
 const action=(id,name,pin)=>call('parcelTripActionSecure','driver-auth',{requestId:id,action:name,pin});
 async function webhook(reference,valid=true){
@@ -193,7 +195,7 @@ for(const method of ['cash','card'])test(`${method} Parcel handlers enforce GPS/
   assert.equal((await action(id,'complete')).status,200);
   const driver=await read('taxis/driver');
   assert.equal(driver.totalTrips,1);
-  assert.equal(driver.parcelTripCredits[id],true);
+  assert.equal(JSON.parse(driver.parcelTripCredits)[id],true);
   assert.equal(driver.currentRequest,undefined);
   assert.equal(await read('commuters/sender/currentRequest'),null);
   assert.equal((await read('delivery_requests/'+id)).status,'completed');

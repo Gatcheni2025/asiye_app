@@ -89,7 +89,7 @@ test('driver cannot forge, remove or replace the server Parcel completion credit
  const path='taxis/driver-record/parcelTripCredits';
  await assertFails(set(ref(db('driver-auth'),path),{'parcel-secure':true}));
  await env.withSecurityRulesDisabled(async context=>{
-  await set(ref(context.database(),path),{'parcel-secure':true});
+  await set(ref(context.database(),path),JSON.stringify({'parcel-secure':true}));
  });
  await assertFails(set(ref(db('driver-auth'),path),null));
  await assertFails(set(ref(db('driver-auth'),path),{'another-parcel':true}));
