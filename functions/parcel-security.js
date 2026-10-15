@@ -56,6 +56,7 @@ function paymentReady(trip,ledger){
 }
 function action(trip,name,pin,secret,evidence,now){
   if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)fail("Secure parcel booking required.",409);
+  if(name==="complete" && trip.status==="completed" && trip.completedAt) return trip;
   if(TERMINAL.has(trip.status))fail("Parcel is no longer active.");
   if(!trip.taxiId||!evidence.driverReserved)fail("Driver reservation expired.",403);
   if(!paymentReady(trip,evidence.ledger))fail("Confirmed payment is required before collection.");
@@ -82,6 +83,17 @@ function action(trip,name,pin,secret,evidence,now){
       return {...trip,pinAttempts:attempts};
     return {...trip,pinAttempts:attempts,status:"in_transit",pinVerifiedAt:now,
       passengerOnboardAt:now,tripStartedAt:now};
+  }
+  if(name==="complete"){
+    if(trip.status!=="in_transit"||!trip.pinVerifiedAt||!trip.tripStartedAt)
+      fail("A server-verified pickup PIN is required before completion.");
+    if(!evidence.nearDestination)fail("Fresh driver GPS at destination is required.",403);
+    if(trip.paymentSettlementStatus!=="settled")fail("Settle the trip before completion.");
+    if(trip.paymentMethod==="card"&&evidence.ledger?.status!=="captured")
+      fail("Confirmed Paystack payment has not been settled.");
+    return {...trip,status:"completed",completedAt:now,
+      ...(trip.paymentMethod==="cash"?{cashCollectionStatus:"collected",cashCollectedAt:now}:{}),
+      commissionApplied:true};
   }
   fail("Unsupported Parcel action.",400);
 }
