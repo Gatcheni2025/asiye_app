@@ -1676,12 +1676,47 @@ ASIYE.ride = {
        DRIVER ON WAY
        ======================================================== */
 
+    async retrieveParcelPickupPin(requestId) {
+        if (!requestId || this._parcelPins?.[requestId] ||
+            this._parcelPinPending?.[requestId]) return;
+        this._parcelPinPending = this._parcelPinPending || {};
+        this._parcelPinPending[requestId] = true;
+        try {
+            const currentUser = firebase.auth().currentUser;
+            if (!currentUser) return;
+            const token = await currentUser.getIdToken();
+            const response = await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/getParcelPickupPinSecure',
+                {method:'POST',headers:{Authorization:`Bearer ${token}`,
+                  'Content-Type':'application/json'},body:JSON.stringify({requestId})}
+            );
+            const result = await response.json().catch(()=>({}));
+            if (!response.ok || !/^\\d{4}$/.test(String(result.pickupPin||'')))
+                throw new Error(result.error || 'Could not load your pickup PIN.');
+            this._parcelPins = this._parcelPins || {};
+            this._parcelPins[requestId] = String(result.pickupPin);
+            // Only redraw the PIN panel for the same active trip.
+            const node = document.querySelector('[data-parcel-pin]');
+            if (this.requestId === requestId && node) {
+                node.setAttribute('aria-label','Pickup PIN '+this._parcelPins[requestId]);
+                node.innerHTML=Array.from(this._parcelPins[requestId])
+                    .map(digit=>'<span aria-hidden="true">'+digit+'</span>').join('');
+            }
+        }catch(error){
+            console.warn('Secure Parcel PIN could not be loaded:',error?.message);
+        }finally{
+            delete this._parcelPinPending[requestId];
+        }
+    },
+
     renderPickupCard(request, arrived) {
         const container = document.getElementById('sheetContent');
         if (!container) return;
         const escape = value => ASIYE.ui.escape(value);
         const passenger = this.getPassengerData(request);
-        const pin = String(passenger.pickupPin ?? request.pickupPin ?? '----');
+        const secureParcel = request.type === 'delivery' && request.parcelSecurityVersion === 2;
+        const pin = secureParcel ? String(this._parcelPins?.[request.requestId] || '----')
+            : String(passenger.pickupPin ?? request.pickupPin ?? '----');
         const name = request.driverName || 'Your driver';
         const rating = Number(request.driverRating);
         const phone = String(request.driverPhone || '').replace(/[^\d+]/g, '');
@@ -1740,7 +1775,7 @@ ASIYE.ride = {
                 ` : ''}
                 <div class="pickup-pin">
                     <div class="pickup-pin-heading"><span>${arrived ? 'Give your driver this PIN' : 'Your pickup PIN'}</span>${icon('safety')}</div>
-                    <div class="pickup-pin-digits" aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
+                    <div class="pickup-pin-digits" ${secureParcel ? 'data-parcel-pin' : ''} aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
                     <p>${arrived ? 'Share when you are ready to start your ride.' : 'Share with your driver when they arrive.'}</p>
                 </div>
                 <div class="pickup-actions">
@@ -1796,6 +1831,7 @@ ASIYE.ride = {
             });
         }
         ASIYE.map?.resize();
+        if (secureParcel && pin === '----') void this.retrieveParcelPickupPin(request.requestId);
     },
 
     renderDriverOnWay(request) {
