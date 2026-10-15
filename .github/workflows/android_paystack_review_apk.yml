@@ -23,7 +23,7 @@ concurrency:
 
 env:
   ASIYE_SOURCE_VERSION: '11.0.73+343'
-  ASIYE_IOS_MARKETING_VERSION: '46522.0.0'
+  ASIYE_IOS_MARKETING_VERSION: '46522.0.1'
 
 jobs:
   validation:
