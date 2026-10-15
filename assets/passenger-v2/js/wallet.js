@@ -718,7 +718,7 @@ ASIYE.payments = {
                 );
 
             ASIYE.ui?.toast?.(
-                'Card payment confirmed. Looking for your driver.'
+                'Card payment confirmed. Your assigned driver can proceed to collection.'
             );
 
             return true;
