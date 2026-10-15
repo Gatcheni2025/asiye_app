@@ -12,13 +12,13 @@ ASIYE.pricing = {
      *
      * GO negotiation is deliberately bounded:
      *   suggested fare: 90% of market reference
-     *   minimum offer: 85%
+     *   minimum offer: 65%
      *   maximum driver counter: 95%
      *   Asiye commission: 20%
      *   driver receives: 80%
      *
      * This means the minimum permitted Go fare still pays the driver
-     * 68% of the market-reference value (85% × 80%) while Asiye keeps
+     * 52% of the market-reference value (65% × 80%) while Asiye keeps
      * its full 20% commission.
      */
     rates: {
@@ -32,7 +32,7 @@ ASIYE.pricing = {
 
         go: {
             suggestedRatio: 0.90,
-            minimumRatio: 0.85,
+            minimumRatio: 0.65,
             maximumRatio: 0.95,
             commissionRate: 0.20
         },
