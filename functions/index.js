@@ -8387,8 +8387,7 @@ exports.parcelTripActionSecure = onRequest(
       });
       if(name==="complete"){
         const gross=Number(result.finalAmount||0);
-        await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
-          if(taxi===null)return null;
+        await parcelSecurity.transact(db.ref(`taxis/${trip.taxiId}`),taxi=>{
           if(!taxi)return taxi;
           // A scalar marker can be held immutable by RTDB rules while normal
           // driver fields (GPS/availability) remain editable by its owner.
@@ -8402,7 +8401,7 @@ exports.parcelTripActionSecure = onRequest(
             commissionDebt:Math.round((Number(taxi.commissionDebt||0)+
               (result.paymentMethod==="cash"?gross*0.2:0))*100)/100
           };
-        },undefined,false);
+        });
         // Retrying a completed action repairs cleanup after a lost response.
         // A newer booking must never lose its reservation.
         await db.ref(`commuters/${trip.commuterId}/currentRequest`)
@@ -11599,6 +11598,7 @@ async function initialiseCardTripPayment(
     // The provider may have accepted the request even when its response was
     // lost. Keep the same reference and callback mapping for reconciliation.
     await paymentRef.transaction(value => {
+      if (value===null) return null;
       if (!value || value.reference !== reference || value.status !== "initializing") return;
       return {...value,status:"initialization_unknown",initializationErrorAt:Date.now()};
     }, undefined, false);
@@ -11631,6 +11631,7 @@ async function initialiseCardTripPayment(
     await markTripPassengerPayment(requestId, passengerId, trip,
       {paymentStatus:"payment_required",paymentReference:reference});
     if (trip.type !== "club") await admin.database().ref(`requests/${requestId}`).transaction(value => {
+      if (value===null) return null;
       if (!value || value.taxiId !== driverId ||
           ["held","captured"].includes(value.paymentStatus) ||
           String(value.status || "").startsWith("cancelled") ||
