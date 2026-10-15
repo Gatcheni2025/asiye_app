@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify actual Android 341 and uploaded iOS release ancestry
+        run: bash scripts/verify_payment_release_341_lineage.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
