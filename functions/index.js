@@ -11585,7 +11585,8 @@ async function prepareTripPaymentServer(
 async function recordCardTripPaymentHeld(
   payment,
   transaction
-) {  if (!verifyDriverPaystackSplit(payment,transaction)) {
+) {
+  if (!verifyDriverPaystackSplit(payment, transaction)) {
     throw Error('Paystack card charge is missing a verified driver subaccount split.');
   }
 
@@ -11697,15 +11698,17 @@ async function recordCardTripPaymentHeld(
           "held",
         paymentsReady:
           true,
-        ...(trip.negotiationEnabled === true ? {} : {
-          status: trip.safetyShareCompleted ? "pending" : trip.status
-        })
+        ...(trip.type === "delivery"
+          ? (trip.status === "payment_required" ? {status:"accepted"} : {})
+          : trip.negotiationEnabled === true ? {} : {
+              status: trip.safetyShareCompleted ? "pending" : trip.status
+            })
       });
   }
   if (trip.type === "delivery") {
     await admin.database().ref(`delivery_requests/${requestId}`).update({
       paymentStatus: "held", paymentsReady: true,
-      status: trip.safetyShareCompleted ? "pending" : trip.status
+      ...(trip.status === "payment_required" ? {status:"accepted"} : {})
     });
   }
 
