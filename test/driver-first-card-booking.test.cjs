@@ -94,6 +94,15 @@ test('driver-first parcel acceptance and verified payment preserve driver',()=>{
   assert.match(returnBlock,/!request\.taxiId/);
   assert.doesNotMatch(returnBlock,/notifyGoDrivers/);
 });
+test('driver cannot begin parcel card pickup until payment clears and checkout never loops',()=>{
+  const controller=read('assets/driver-v2/js/trip-controller.js');
+  assert.match(controller,/request\.type === 'delivery'[\s\S]*?request\.paymentMethod === 'card'/);
+  assert.match(controller,/Confirm Paystack payment before collecting this parcel/);
+  const ride=read('assets/passenger-v2/js/ride-controller.js');
+  assert.match(ride,/pendingCard\?\.\(\)\?\.requestId !== request\.requestId/);
+  const pay=read('assets/passenger-v2/js/wallet.js');
+  assert.match(pay,/Card payment confirmed\. Your assigned driver can proceed to collection/);
+});
 test('Work card payment waits for full pool AND accepting driver',()=>{
   const backend=read('functions/index.js');
   assert.match(backend,/trip\.poolReady !== true \|\| !trip\.taxiId \|\| !trip\.driverAcceptedAt/);

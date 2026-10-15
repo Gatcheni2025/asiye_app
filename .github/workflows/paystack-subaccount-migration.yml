@@ -26,6 +26,10 @@ jobs:
           node --check assets/passenger-v2/js/state.js
           node --check assets/passenger-v2/js/club.js
           node --check assets/passenger-v2/js/parcels.js
+          node --check assets/passenger-v2/js/wallet.js
+          node --check assets/passenger-v2/js/ride-controller.js
+          node --check assets/driver-v2/js/requests.js
+          node --check assets/driver-v2/js/trip-controller.js
           node --check assets/member-pages.js
       - name: New Paystack 80/20 and no-wallet regression checks
         run: node --test test/paystack-subaccount-migration.test.cjs
