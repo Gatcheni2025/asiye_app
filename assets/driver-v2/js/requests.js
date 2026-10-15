@@ -1699,19 +1699,13 @@ ASIYE_DRIVER.requests = {
             }
 
 
-            const nextStatus =
-
-                isClub
-
-                ? (
-                    poolReady
-
-                    ? 'pool_ready'
-
-                    : 'driver_waiting'
-                )
-
-                : 'accepted';
+            const needsDriverCardCheckout =
+                !isClub &&
+                claimedRequest.type === 'delivery' &&
+                String(claimedRequest.paymentMethod || 'cash').toLowerCase() === 'card';
+            const nextStatus = isClub
+                ? (poolReady ? 'pool_ready' : 'driver_waiting')
+                : needsDriverCardCheckout ? 'payment_required' : 'accepted';
 
 
             /* ========================================================
@@ -1766,6 +1760,11 @@ ASIYE_DRIVER.requests = {
 
                 status:
                     nextStatus,
+
+                ...(needsDriverCardCheckout ? {
+                    paymentStatus: 'payment_required',
+                    paymentsReady: false
+                } : {}),
 
                 acceptedAt:
 
