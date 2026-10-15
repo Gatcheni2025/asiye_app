@@ -213,17 +213,7 @@ ASIYE.parcels = {
             await ASIYE.booking
                 .requirePassengerPin();
 
-        await ASIYE.booking.requireTripShare({
-            pickupPin,
-            pickupAddress:
-                pickup.address ||
-                'Current location',
-            destination:
-                destination.address ||
-                destination.name,
-            service:
-                'Asiye Parcel'
-        });
+        // Sharing is optional after driver arrival; never block dispatch on WhatsApp.
 
         const requestRef =
             firebase.database()
@@ -241,10 +231,9 @@ ASIYE.parcels = {
                 'delivery',
             carCategory:
                 'go',
-            status: ASIYE.state.booking.paymentMethod === 'card'
-                ? 'payment_required' : 'pending',
+            status: 'pending',
             paymentStatus: ASIYE.state.booking.paymentMethod === 'card'
-                ? 'payment_required' : 'unpaid',
+                ? 'awaiting_driver' : 'cash_due',
 
             commuterId:
                 uid,
@@ -313,9 +302,9 @@ ASIYE.parcels = {
                 true,
             pickupPin,
             safetyShareRequired:
-                true,
+                false,
             safetyShareCompleted:
-                true,
+                false,
             safetyShareAt:
                 firebase.database.ServerValue.TIMESTAMP,
 
@@ -361,24 +350,13 @@ ASIYE.parcels = {
             requestId
         );
 
-        // A parcel paid by card follows the same secure Paystack checkout
-        // as Go. Never dispatch a driver before Paystack confirms payment.
-        if (requestData.paymentMethod === 'card') {
-            if (!ASIYE.payments?.prepare) {
-                throw new Error('Secure parcel card payment is unavailable.');
-            }
-            await ASIYE.payments.prepare(requestId);
-            return requestId;
-        }
-        if (!['cash','card'].includes(requestData.paymentMethod)) {
+        if (!['cash', 'card'].includes(requestData.paymentMethod)) {
             throw new Error('Choose Cash or Card. Wallet is discontinued.');
         }
-
-        await ASIYE.booking.notifyGoDrivers(
-            requestId,
-            requestData
-        );
-
+        // First find an approved driver; only their accepted request may
+        // initialize a Paystack transaction on their verified subaccount.
+        await ASIYE.booking.notifyGoDrivers(requestId, requestData);
+        await ASIYE.ride.start(requestId);
         return requestId;
     }
 };
