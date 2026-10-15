@@ -1,10 +1,24 @@
-# Asiye 11.0.71 (341) → proposed 11.0.72 (342): driver-first payment readiness
+# Asiye 11.0.72 (342): driver-first payment review APK
 
 **Draft engineering state; NOT production release approval.** GitHub payment branch:
 `fix/paystack-subaccounts-cash-card-no-wallet`; draft PR #19. Base includes exact Android release
 SHA `1646a9a9e4c4fa4145331316887ec3b04dbb3db1` and uploaded iOS
 SHA `2b6c424a463c7225ee264ac77aae45f5a2c94759`.
 Do not publish another bundle with Android versionCode `341` or reuse Apple build `93124`.
+
+## Android installation-test APK
+The signed `11.0.72+342` review APK was built from commit
+`bba32240489dad50c11051aa5acb15ffcfec6953` after 152 regression checks and
+105 Firebase/security checks passed. The APK signature, Firebase signing
+certificate, package name and version were verified before upload.
+Build: https://github.com/Gatcheni2025/asiye_app/actions/runs/38723573317
+
+This APK contains both passenger and driver modes. Its configured project
+endpoints are unchanged: building it does not deploy the reviewed functions or
+rules, or create an isolated staging project. Secure Card/Parcel workflows need
+the matching backend. Do not use it for live Card payments before the reviewed
+backend, provider configuration and real payment acceptance have been verified.
+No AAB, mobile-store release or new iOS build is part of this APK workflow.
 
 ## What changed
 - **Go negotiated fare** continues to lock an accepting driver and fare before
@@ -63,7 +77,7 @@ Do not publish another bundle with Android versionCode `341` or reuse Apple buil
 
 ## Release-blocking acceptance before any production deployment
 1. **Paystack account approved** in writing for per-driver 80/20 subaccount
-   settlement (including T+2), and per-driver ZAR bank validation working.
+   settlement under the applicable provider schedule, with per-driver ZAR bank validation working.
 2. **Actual Paystack test charges** for assigned driver, wrong/unverified driver,
    cancellations, failure/retry, webhook duplicates, Paystack return after app
    closure, refunds, fee-bearer confirmation and settlement reconciliation.
@@ -82,10 +96,11 @@ Do not publish another bundle with Android versionCode `341` or reuse Apple buil
 6. **Full app/device matrix**: real Android/Android, Android/iOS and iOS/iOS
    passenger/driver runs, Go Cash/Card, Work pooled Cash/Card per member,
    Parcel Cash/Card, cancellation, poor connection and restart/resume.
-7. **New version metadata**: after E2E verification prepare Android
-   `11.0.72+342` (proposed) and a distinct Apple build newer than `93124`.
+7. **Store version metadata**: `11.0.72+342` is used for the internal Android
+   review APK. Before a store release, finish E2E verification and prepare a
+   distinct Apple build newer than `93124`.
    Confirm App Store Connect marketing version before editing iOS workflow.
-   Build signed APK, AAB and IPA; do not publish untested financial code.
+   Validate the store AAB and IPA; do not publish untested financial code.
 8. **Website/merchant compliance**: update driver-commission marketing copy,
    privacy incl. face scans, refund/cancellation and waiting-fee schedule and
    all registered-company contact details before providing new links to Paystack.
