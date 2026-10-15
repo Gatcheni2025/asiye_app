@@ -34,6 +34,8 @@ jobs:
           node --check assets/member-pages.js
       - name: New Paystack 80/20 and no-wallet regression checks
         run: node --test test/paystack-subaccount-migration.test.cjs
+      - name: Full simulated Go Work Parcel Paystack charge flow
+        run: node --test test/paystack-card-journey-simulation.test.cjs
       - name: Server-secured Parcel PIN and Paystack journey tests
         run: node --test test/parcel-security.test.cjs
       - name: Driver-first Parcel and Work payment regressions
