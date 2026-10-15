@@ -8185,7 +8185,7 @@ exports.parcelTripActionSecure = onRequest(
       const id=String(req.body?.requestId||"");
       if(!parcelSecurity.validId(id))return res.status(400).json({error:"Invalid parcel reference."});
       const name=String(req.body?.action||"");
-      if(!["onWay","arrive","verifyPin"].includes(name))
+      if(!["onWay","arrive","verifyPin","complete"].includes(name))
         return res.status(400).json({error:"Unsupported Parcel action."});
       const db=admin.database(),ref=db.ref(`requests/${id}`);
       const trip=(await ref.once("value")).val();
@@ -8195,10 +8195,14 @@ exports.parcelTripActionSecure = onRequest(
         return res.status(403).json({error:"Only the assigned driver can verify pickup."});
       const taxi=(await db.ref(`taxis/${trip.taxiId}`).once("value")).val();
       const pickup=trip.commuterLocation||{};
-      const nearPickup=Boolean(taxi&&taxi.currentRequest===id&&
-        Number(taxi.lastSeen)>Date.now()-120000&&
+      const locationFresh=Boolean(taxi&&Number(taxi.lastSeen)>Date.now()-120000);
+      const nearPickup=Boolean(locationFresh&&taxi.currentRequest===id&&
         parcelSecurity.distanceKm(Number(taxi.latitude),Number(taxi.longitude),
           Number(pickup.latitude),Number(pickup.longitude))<=0.3);
+      const destination=trip.destinationCoords||{};
+      const nearDestination=Boolean(locationFresh&&taxi.currentRequest===id&&
+        parcelSecurity.distanceKm(Number(taxi.latitude),Number(taxi.longitude),
+          Number(destination.latitude),Number(destination.longitude))<=0.3);
       const driverReserved=!!taxi&&taxi.currentRequest===id;
       const ledger=(await db.ref(tripPaymentPath(id,trip.commuterId)).once("value")).val();
       const secret=name==="verifyPin"?
@@ -8209,7 +8213,7 @@ exports.parcelTripActionSecure = onRequest(
       const tx=await ref.transaction(current=>{
         if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId)return;
         return parcelSecurity.action(current,name,req.body?.pin,secret?.pin,
-          {driverReserved,ledger,nearPickup},Date.now());
+          {driverReserved,ledger,nearPickup,nearDestination},Date.now());
       },undefined,false);
       if(!tx.committed||!tx.snapshot.val())
         return res.status(409).json({error:"Parcel assignment changed. Reopen the booking."});
@@ -8219,6 +8223,22 @@ exports.parcelTripActionSecure = onRequest(
         status:result.status,arrivedAt:result.arrivedAt||null,
         pinVerifiedAt:result.pinVerifiedAt||null,tripStartedAt:result.tripStartedAt||null
       });
+      if(name==="complete"){
+        const gross=Number(result.finalAmount||0);
+        await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+          if(!taxi)return taxi;
+          const credits=taxi.parcelTripCredits||{};
+          if(credits[id])return taxi;
+          return {...taxi,
+            parcelTripCredits:{...credits,[id]:true},
+            totalTrips:Number(taxi.totalTrips||0)+1,
+            grossEarnings:Math.round((Number(taxi.grossEarnings||0)+gross)*100)/100,
+            totalEarnings:Math.round((Number(taxi.totalEarnings||0)+gross*0.8)*100)/100,
+            commissionDebt:Math.round((Number(taxi.commissionDebt||0)+
+              (result.paymentMethod==="cash"?gross*0.2:0))*100)/100
+          };
+        },undefined,false);
+      }
       const verified=name==="verifyPin"?result.status==="in_transit"&&!!result.pinVerifiedAt:undefined;
       return res.status(200).json({ok:true,status:result.status,pinValid:verified,
         attemptsRemaining:name==="verifyPin"?Math.max(0,5-Number(result.pinAttempts||0)):undefined});
@@ -12936,6 +12956,11 @@ exports.settleTripPayment =
 
         if (trip.clubSecurityVersion === 2 && !['in_transit', 'completed'].includes(trip.status)) {
           return response.status(409).json({error:'Secure Club payments can only be settled after verified departure.'});
+        }
+        if (trip.parcelSecurityVersion === 2 &&
+          (!['in_transit','completed'].includes(trip.status) ||
+           !trip.pinVerifiedAt || !trip.tripStartedAt)) {
+          return response.status(409).json({error:'Secure Parcel pickup PIN must be verified before settlement.'});
         }
 
         if (trip.cashCollectionVersion === 2 && normaliseRidePaymentMethod(trip.paymentMethod) === 'cash') {
