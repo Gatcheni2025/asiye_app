@@ -129,10 +129,11 @@ ASIYE_DRIVER.trip = {
             case 'payment_required':
 
                 if (
-                    request.negotiationEnabled ===
-                        true &&
-                    request.fareStatus ===
-                        'agreed'
+                    (request.negotiationEnabled === true &&
+                     request.fareStatus === 'agreed') ||
+                    (request.type === 'delivery' &&
+                     request.paymentMethod === 'card' &&
+                     Boolean(request.taxiId))
                 ) {
 
                     this.renderNegotiatedPaymentWaiting(
@@ -296,7 +297,7 @@ ASIYE_DRIVER.trip = {
             <div class="driver-payment-wait-card">
 
                 <div class="driver-dialog-kicker">
-                    Asiye Go · Fare agreed
+                    ${request.type === 'delivery' ? 'Asiye Parcel · Driver reserved' : 'Asiye Go · Fare agreed'}
                 </div>
 
                 <h2 class="driver-title">
@@ -308,9 +309,7 @@ ASIYE_DRIVER.trip = {
                     ${
                         paymentMethod === 'card'
                             ? 'Waiting for confirmed Paystack payment. Pickup unlocks automatically after confirmation.'
-                            : paymentMethod === 'wallet'
-                                ? 'Waiting for the agreed fare to be reserved from Wallet or voucher credit.'
-                                : 'Cash is due after drop-off. Head to pickup and verify the passenger PIN before driving to the destination.'
+                            : 'Cash is due after drop-off. Head to pickup and verify the passenger PIN before driving to the destination.'
                     }
                 </div>
 
@@ -446,6 +445,13 @@ ASIYE_DRIVER.trip = {
             );
         }
 
+
+        if (this.request.type === 'delivery' &&
+            String(this.request.paymentMethod || 'cash').toLowerCase() === 'card' &&
+            (this.request.paymentsReady !== true ||
+             !['held', 'captured'].includes(String(this.request.paymentStatus || '')))) {
+            throw new Error('Confirm Paystack payment before collecting this parcel.');
+        }
 
         if (this.request.goContinuationVersion === 2) {
             await this.goAction('onWay');
