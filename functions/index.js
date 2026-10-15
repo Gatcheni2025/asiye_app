@@ -8245,6 +8245,56 @@ exports.createParcelRequestSecure = onRequest(
     }
   }
 );
+exports.cancelParcelBookingSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Sign in required."});
+      const id=String(req.body?.requestId||"");
+      if(!parcelSecurity.validId(id))return res.status(400).json({error:"Invalid parcel reference."});
+      const db=admin.database(),ref=db.ref(`requests/${id}`);
+      const trip=(await ref.once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(409).json({error:"Secure Parcel booking required."});
+      const passenger=await profileOwnedByAuth("commuters",trip.commuterId,user.uid);
+      const driver=trip.taxiId&&await profileOwnedByAuth("taxis",trip.taxiId,user.uid);
+      if(!passenger&&!driver)return res.status(403).json({error:"Not your booking."});
+      if(String(trip.status||"").startsWith("cancelled"))
+        return res.status(200).json({ok:true,status:trip.status});
+      if(["arrived","in_transit","completed"].includes(trip.status)||trip.arrivedAt||trip.pinVerifiedAt)
+        return res.status(409).json({error:"Driver has arrived. Contact support to end this Parcel."});
+      const ledger=(await db.ref(tripPaymentPath(id,trip.commuterId)).once("value")).val();
+      if(trip.paymentMethod==="card" && ledger &&
+        ["initialized","held","captured","success"].includes(ledger.status))
+        return res.status(409).json({error:"Card checkout exists. Contact support for a verified cancellation/refund."});
+      const nextStatus=driver?"cancelled_by_driver":"cancelled_by_commuter";
+      const tx=await ref.transaction(current=>{
+        if(!current||current.taxiId!==trip.taxiId||current.parcelSecurityVersion!==2||
+          current.arrivedAt||current.pinVerifiedAt||
+          ["arrived","in_transit","completed"].includes(current.status))return;
+        if(String(current.status||"").startsWith("cancelled"))return current;
+        return {...current,status:nextStatus,cancelledAt:Date.now()};
+      },undefined,false);
+      if(!tx.committed||!tx.snapshot.val())
+        return res.status(409).json({error:"Parcel status changed. Reopen the trip."});
+      const result=tx.snapshot.val();
+      await db.ref(`delivery_requests/${id}`).update({
+        status:result.status,cancelledAt:result.cancelledAt||Date.now()
+      });
+      await db.ref(`commuters/${trip.commuterId}/currentRequest`)
+        .transaction(v=>v===id?null:undefined,undefined,false);
+      if(trip.taxiId)await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+        if(!taxi||taxi.currentRequest!==id)return undefined;
+        return {...taxi,currentRequest:null,isFull:false,isBroadcasting:false,passengerCount:0};
+      },undefined,false);
+      return res.status(200).json({ok:true,status:result.status});
+    }catch(e){return res.status(e.status||409).json({error:e.message||"Unable to cancel Parcel."});}
+  }
+);
 exports.getParcelPickupPinSecure = onRequest(
   {region:"us-central1",invoker:"public"},
   async(req,res)=>{
