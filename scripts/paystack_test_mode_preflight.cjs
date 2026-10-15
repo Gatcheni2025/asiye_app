@@ -22,7 +22,7 @@ async function main(){
  console.log('PASS Test-mode driver subaccount exists, active, 20% Asiye / 80% driver.');
  // is_verified can be false in test mode; never override the production verification gate.
  if(mode==='initialize'){
-  const reference='ASIYE_TEST_'+Date.now().toString(36).toUpperCase();
+  const reference='ASIYE-TEST-'+Date.now().toString(36).toUpperCase();
   const transaction=await api('/transaction/initialize',{
    method:'POST',
    body:JSON.stringify({
@@ -39,7 +39,7 @@ async function main(){
   console.log('Next: complete ONLY with Paystack TEST card, then rerun mode=verify with the reference.');
  }else{
   const reference=String(process.env.PAYSTACK_TEST_PAID_REFERENCE||'').trim();
-  if(!/^ASIYE_TEST_[A-Z0-9]+$/.test(reference))throw Error('Enter the test reference from initialize run.');
+  if(!/^ASIYE-TEST-[A-Z0-9]+$/.test(reference))throw Error('Enter the test reference from initialize run.');
   const transaction=await api('/transaction/verify/'+encodeURIComponent(reference));
   const code=typeof transaction.subaccount==='string'?transaction.subaccount:
     String(transaction.subaccount?.subaccount_code||'');
