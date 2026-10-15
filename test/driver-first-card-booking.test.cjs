@@ -8,62 +8,67 @@ const root = path.resolve(__dirname, '..');
 const read = f => fs.readFileSync(path.join(root,f),'utf8');
 
 async function simulateParcel(paymentMethod) {
-  const events = [];
-  const request = {key:'parcel001', async set(data){events.push(['request',data]);}};
-  const refs = p => p === 'requests'
-    ? {push:()=>request}
-    : {async set(data){events.push([p,data]);},async update(data){events.push([p,data]);}};
-  const database = () => ({ref:refs});
-  database.ServerValue = {TIMESTAMP:12345};
-  const ASIYE = {
+  const events=[];
+  const ASIYE={
     state:{
-      userId:'passenger01', user:{name:'Rider',phone:'0710000000'},
+      userId:'passenger01',user:{name:'Rider',phone:'0710000000'},
       location:{latitude:-29.8,longitude:30.9,address:'Pickup'},
       destination:{latitude:-29.7,longitude:30.8,address:'Drop off',name:'Drop off'},
-      route:{distanceKm:4,durationMinutes:8},
-      booking:{paymentMethod}
+      route:{distanceKm:17,durationMinutes:25},booking:{paymentMethod}
     },
-    pricing:{calculate:()=>({go:100})},
     profile:{ensureRequired:async()=> 'photo'},
     booking:{
-      requirePassengerPin:async()=> '1234',
-      requireTripShare:async()=>{throw Error('Unexpected forced sharing');},
+      requirePassengerPin:()=>{throw Error('Never generate PIN in the passenger WebView');},
       notifyGoDrivers:async(id,data)=>{
         events.push(['dispatch',id]);
         assert.equal(data.taxiId,null);
+        assert.equal(data.parcelSecurityVersion,2);
         assert.equal(data.status,'pending');
       }
     },
     payments:{prepare:async()=>{throw Error('Paystack before driver acceptance');}},
-    ride:{start:async id=>events.push(['ride',id])}
+    ride:{_parcelPins:{},start:async id=>events.push(['ride',id])}
   };
-  const context={window:{ASIYE},ASIYE,firebase:{database},localStorage:{setItem(){}}};
+  const fetch=async(_url,options)=>{
+    events.push(['serverCreate',JSON.parse(options.body)]);
+    const data=JSON.parse(options.body);
+    const request={
+      requestId:'-parcelServerAssigned123',type:'delivery',
+      parcelSecurityVersion:2,status:'pending',taxiId:null,
+      finalAmount:100,paymentMethod:data.paymentMethod,
+      paymentStatus:data.paymentMethod==='card'?'awaiting_driver':'cash_due'
+    };
+    return {ok:true,json:async()=>({requestId:request.requestId,request,pickupPin:'5678'})};
+  };
+  const context={
+    window:{ASIYE},ASIYE,fetch,localStorage:{setItem(){}},
+    firebase:{auth:()=>({currentUser:{getIdToken:async()=> 'firebase-token'}})}
+  };
   vm.runInNewContext(read('assets/passenger-v2/js/parcels.js'),context);
-  let result, error;
-  try {
-    result=await ASIYE.parcels.create({
-      recipientName:'Recipient',recipientPhone:'0790000000',parcelDescription:'Small parcel'
-    });
-  } catch(e){error=e;}
-  return {events,result,error};
+  let result,error;
+  try{result=await ASIYE.parcels.create({
+    recipientName:'Recipient',recipientPhone:'0790000000',parcelDescription:'Small parcel'
+  });}catch(e){error=e;}
+  return {events,result,error,ASIYE};
 }
-test('card parcel dispatches before Paystack and waits for verified assigned driver',async()=>{
-  const {events,result,error}=await simulateParcel('card');
+test('card parcel server-created before dispatch; PIN not stored in public request',async()=>{
+  const {events,result,error,ASIYE}=await simulateParcel('card');
   assert.equal(error,undefined);
-  assert.equal(result,'parcel001');
-  const saved=events.find(e=>e[0]==='request')[1];
-  assert.equal(saved.paymentMethod,'card');
-  assert.equal(saved.paymentStatus,'awaiting_driver');
-  assert.equal(saved.safetyShareCompleted,false);
+  assert.equal(result,'-parcelServerAssigned123');
+  assert.equal(events[0][0],'serverCreate');
+  assert.equal(events[0][1].paymentMethod,'card');
+  assert.equal(events[0][1].pickupPin,undefined);
+  assert.equal(ASIYE.state.booking.request.paymentStatus,'awaiting_driver');
+  assert.equal(ASIYE.ride._parcelPins[result],'5678');
   assert.deepEqual(events.slice(-2).map(e=>e[0]),['dispatch','ride']);
 });
-test('cash parcel remains dispatchable without Paystack checkout',async()=>{
-  const {events,error}=await simulateParcel('cash');
+test('cash parcel remains dispatchable without card checkout',async()=>{
+  const {events,error,ASIYE}=await simulateParcel('cash');
   assert.equal(error,undefined);
-  assert.equal(events.find(e=>e[0]==='request')[1].paymentStatus,'cash_due');
+  assert.equal(ASIYE.state.booking.request.paymentStatus,'cash_due');
   assert.deepEqual(events.slice(-2).map(e=>e[0]),['dispatch','ride']);
 });
-test('retired wallet method fails before saving any parcel request',async()=>{
+test('retired Wallet rejected before any Parcel server request',async()=>{
   const {events,error}=await simulateParcel('wallet');
   assert.match(String(error?.message),/Wallet is discontinued/);
   assert.equal(events.length,0);
