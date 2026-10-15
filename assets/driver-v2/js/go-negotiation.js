@@ -128,7 +128,7 @@ ASIYE_DRIVER.goNegotiation = {
 
         panel.innerHTML = `
             <div class="driver-go-negotiation-title">
-                Protected Asiye Go fare
+                Passenger’s fare offer
             </div>
 
             <div class="driver-go-negotiation-summary">
@@ -170,7 +170,7 @@ ASIYE_DRIVER.goNegotiation = {
                 <strong>
                     R${maximum.toFixed(0)}
                 </strong>.
-                The server will reject anything outside this protected range.
+                Your passenger can accept your counter-offer before payment.
             </div>
 
             <div class="driver-go-counter-row">
@@ -195,7 +195,7 @@ ASIYE_DRIVER.goNegotiation = {
                         ? 'disabled'
                         : ''}
                 >
-                    Counter
+                    Make counter-offer
                 </button>
             </div>
 
@@ -310,7 +310,7 @@ ASIYE_DRIVER.goNegotiation = {
                             false;
 
                         button.textContent =
-                            'Counter';
+                            'Make counter-offer';
                     }
                 }
             );
