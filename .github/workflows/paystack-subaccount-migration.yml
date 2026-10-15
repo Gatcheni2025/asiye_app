@@ -21,6 +21,7 @@ jobs:
         run: |
           node --check functions/index.js
           node --check functions/club-lifecycle.js
+          node --check functions/parcel-security.js
           node --check functions/paystack-subaccount-split.js
           node --check assets/passenger-v2/js/app.js
           node --check assets/passenger-v2/js/state.js
@@ -33,6 +34,8 @@ jobs:
           node --check assets/member-pages.js
       - name: New Paystack 80/20 and no-wallet regression checks
         run: node --test test/paystack-subaccount-migration.test.cjs
+      - name: Server-secured Parcel PIN and Paystack journey tests
+        run: node --test test/parcel-security.test.cjs
       - name: Driver-first Parcel and Work payment regressions
         run: node --test test/driver-first-card-booking.test.cjs
       - name: Existing booking PIN and commission regressions
