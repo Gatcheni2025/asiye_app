@@ -263,7 +263,7 @@ ASIYE.wallet = {
    Negotiated Go: no money is reserved until driver + passenger agree a fare.
    Cash: marks the agreed fare due after negotiation.
    Wallet: reserves the agreed fare after negotiation; Club reserves when full.
-   Card: opens Paystack only after negotiation; funds remain held until completion.
+   Card: opens Paystack after driver/fare agreement; Paystack splits the charge directly.
    ============================================================ */
 
 ASIYE.payments = {
@@ -696,7 +696,7 @@ ASIYE.payments = {
                 );
 
             ASIYE.ui?.toast?.(
-                'Card payment held. Your Club will move once all passenger payments are ready.'
+                'Card payment confirmed. Your Club will move once all passenger payments are ready.'
             );
 
             return true;
