@@ -21,7 +21,7 @@ before(()=>{
   app=admin.initializeApp({projectId,databaseURL:`http://${host}?ns=${projectId}`});
   db=app.database();
   originalVerify=admin.auth().verifyIdToken;
-  admin.auth().verifyIdToken=async token=>({uid:token,email:'emulator@example.test'});
+  admin.auth().verifyIdToken=async token=>({uid:token});
   originalFetch=global.fetch;
   originalSecret=process.env.PAYSTACK_SECRET_KEY;
   process.env.PAYSTACK_SECRET_KEY=secret;
@@ -250,6 +250,12 @@ test('signed webhook re-verifies provider amount, currency, split and failures b
   const {requestId}=await parcel('card');await accept(requestId);
   const checkout=await call('prepareTripPayment','sender-auth',{requestId});
   const reference=checkout.body.reference;
+  const browserReturn=await call('paystackPaymentReturn',null,{},
+    {method:'GET',query:{reference}});
+  assert.equal(browserReturn.status,200);
+  assert.match(browserReturn.body,/asiye:\/\/payment-complete/);
+  assert.doesNotMatch(browserReturn.body,/updating your wallet/i);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'initialized');
   assert.equal((await webhook(reference,false)).status,401);
   assert.equal(verifications.length,0);
   for(const patch of [{amount:1},{currency:'USD'},{status:'failed'},
@@ -292,6 +298,7 @@ test('cancellation during slow checkout stays cancelled; duplicate charge cannot
 
 test('Go agreed fare passes the same checkout and signed provider verification handlers',async()=>{
   const requestId='go-handler-reference-01';
+  await db.ref('commuters/sender/email').remove();
   await db.ref('requests/'+requestId).set({
     requestId,type:'ehailing',rideType:'go',commuterId:'sender',taxiId:'driver',
     status:'payment_required',paymentMethod:'card',agreedFare:100,finalAmount:100,
@@ -305,6 +312,7 @@ test('Go agreed fare passes the same checkout and signed provider verification h
   const checkout=await call('prepareTripPayment','sender-auth',{requestId});
   assert.equal(checkout.status,200,JSON.stringify(checkout.body));
   assert.equal(initializations[0].amount,'10000');
+  assert.match(initializations[0].email,/^[^\s@]+@asiye\.cloud$/);
   assert.equal((await webhook(checkout.body.reference)).status,200);
   assert.equal((await read('requests/'+requestId)).status,'accepted');
   const verified=await call('verifyTripCardPayment','sender-auth',{requestId,reference:checkout.body.reference});

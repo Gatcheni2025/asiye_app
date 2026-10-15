@@ -8371,12 +8371,11 @@ exports.parcelTripActionSecure = onRequest(
       if(name==="verifyPin"&&(!secret||secret.expiresAt<Date.now()||
           secret.passengerId!==trip.commuterId))
         return res.status(409).json({error:"Pickup PIN is expired or missing."});
-      const tx=await ref.transaction(current=>{
-        if(current===null)return null;
+      const tx=await parcelSecurity.transact(ref,current=>{
         if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId)return;
         return parcelSecurity.action(current,name,req.body?.pin,secret?.pin,
           {driverReserved,ledger,nearPickup,nearDestination},Date.now());
-      },undefined,false);
+      });
       if(!tx.committed||!tx.snapshot.val())
         return res.status(409).json({error:"Parcel assignment changed. Reopen the booking."});
       const result=tx.snapshot.val();
@@ -13694,7 +13693,7 @@ p{color:#596170;line-height:1.55}
 <body>
 <main>
 <strong>Payment submitted</strong>
-<p>Your payment has been submitted. Asiye is returning you to the app and will verify the payment before updating your wallet.</p>
+<p>Your payment has been submitted. Asiye is returning you to the app and will verify the payment before confirming your booking.</p>
 <div class="ref">${reference ? "Reference: " + reference : "Payment reference received"}</div>
 <p><a id="backToAsiye" href="asiye://payment-complete?reference=${encodeURIComponent(reference)}" style="display:inline-block;padding:14px 18px;border-radius:14px;background:#111;color:#fff;text-decoration:none;font-weight:700">Return to Asiye</a></p>
 <script>

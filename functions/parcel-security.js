@@ -97,4 +97,18 @@ function action(trip,name,pin,secret,evidence,now){
   }
   fail("Unsupported Parcel action.",400);
 }
-module.exports={createParcelRecord,action,paymentReady,distanceKm,validId,fail};
+// Firebase may re-run the update asynchronously after synchronizing an initial
+// null cache value. Throwing from that retry escapes the request handler and
+// can leave its promise pending, so abort the transaction and rethrow here.
+async function transact(ref,update){
+  let failure;
+  const result=await ref.transaction(current=>{
+    failure=undefined;
+    if(current===null)return null;
+    try{return update(current);}
+    catch(error){failure=error;return undefined;}
+  },undefined,false);
+  if(failure)throw failure;
+  return result;
+}
+module.exports={createParcelRecord,action,paymentReady,distanceKm,validId,fail,transact};
