@@ -89,9 +89,10 @@ test('driver-first parcel acceptance and verified payment preserve driver',()=>{
   assert.match(backend,/verifyDriverPaystackSplit\(payment, transaction\)/);
   const handler=read('assets/passenger-v2/js/wallet.js');
   const from=handler.indexOf('Parcel card payments follow driver acceptance');
-  const to=handler.indexOf('await ASIYE.ride',from);
-  assert.ok(from>0 && to>from);
-  assert.doesNotMatch(handler.slice(from,to),/notifyGoDrivers/);
+  assert.ok(from>0);
+  const returnBlock=handler.slice(from,from+850);
+  assert.match(returnBlock,/!request\.taxiId/);
+  assert.doesNotMatch(returnBlock,/notifyGoDrivers/);
 });
 test('Work card payment waits for full pool AND accepting driver',()=>{
   const backend=read('functions/index.js');
