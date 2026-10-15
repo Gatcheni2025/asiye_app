@@ -9,6 +9,7 @@
     "@firebase/rules-unit-testing": "latest",
     "firebase": "latest",
     "firebase-tools": "latest",
-    "jsdom": "30.1.2"
+    "jsdom": "30.1.2",
+    "playwright": "1.62.1"
   }
 }
