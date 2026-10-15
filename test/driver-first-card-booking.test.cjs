@@ -88,7 +88,7 @@ test('driver-first parcel acceptance and verified payment preserve driver',()=>{
   assert.match(backend,/String\(trip\.taxiId\) !== String\(payment\.splitDriverId\)/);
   assert.match(backend,/verifyDriverPaystackSplit\(payment, transaction\)/);
   const handler=read('assets/passenger-v2/js/wallet.js');
-  const from=handler.indexOf('Parcel card payments follow driver acceptance');
+  const from=handler.indexOf('Parcel card charges follow driver acceptance');
   assert.ok(from>0);
   const returnBlock=handler.slice(from,from+850);
   assert.match(returnBlock,/!request\.taxiId/);
