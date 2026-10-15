@@ -216,151 +216,52 @@ ASIYE.parcels = {
             throw new Error('Choose Cash or Card. Prepaid Wallet is discontinued.');
         }
 
-        const pickupPin =
-            await ASIYE.booking
-                .requirePassengerPin();
-
-        // Sharing is optional after driver arrival; never block dispatch on WhatsApp.
-
-        const requestRef =
-            firebase.database()
-                .ref('requests')
-                .push();
-
-        const requestId =
-            requestRef.key;
-
-        const requestData = {
-            requestId,
-            type:
-                'delivery',
-            rideType:
-                'delivery',
-            carCategory:
-                'go',
-            status: 'pending',
-            paymentStatus: paymentMethod === 'card'
-                ? 'awaiting_driver' : 'cash_due',
-
-            commuterId:
-                uid,
-            commuterName:
-                user.name ||
-                user.firstName ||
-                'Passenger',
-            commuterPhone:
-                user.phone ||
-                user.phoneNumber ||
-                '',
-            commuterProfileImageUrl:
-                profileImageUrl,
-            passengerProfileImageUrl:
-                profileImageUrl,
-
-            recipientName:
-                details.recipientName,
-            recipientPhone:
-                details.recipientPhone,
-            parcelDescription:
-                details.parcelDescription,
-            parcelSize:
-                details.parcelSize ||
-                'small',
-            fragile:
-                details.fragile === true,
-
-            pickupAddress:
-                pickup.address ||
-                'Current location',
-            commuterLocation: {
-                latitude:
-                    pickup.latitude,
-                longitude:
-                    pickup.longitude
-            },
-
-            destination:
-                destination.address ||
-                destination.name,
-            destinationName:
-                destination.name ||
-                destination.address,
-            destinationCoords: {
-                latitude:
-                    destination.latitude,
-                longitude:
-                    destination.longitude
-            },
-
-            routeDistanceKm:
-                Number(route.distanceKm || 0),
-            routeDurationMinutes:
-                Number(route.durationMinutes || 0),
-
-            calculatedPrice:
-                fare,
-            finalAmount:
-                fare,
-            paymentMethod,
-
-            requirePin:
-                true,
-            pickupPin,
-            safetyShareRequired:
-                false,
-            safetyShareCompleted:
-                false,
-            safetyShareAt:
-                firebase.database.ServerValue.TIMESTAMP,
-
-            commissionRate:
-                0.20,
-
-            taxiId:
-                null,
-            driverName:
-                null,
-            driverPhone:
-                null,
-            driverRating:
-                null,
-
-            createdAt:
-                firebase.database.ServerValue.TIMESTAMP
-        };
-
-        await requestRef.set(
-            requestData
+        // Parcel V2 is created exclusively by Firebase Admin, including
+        // its fare, private PIN, payment state and initial passenger lock.
+        const authUser = firebase.auth().currentUser;
+        if (!authUser) throw new Error('Sign in before requesting delivery.');
+        const token = await authUser.getIdToken(true);
+        const response = await fetch(
+            'https://us-central1-asiye-80386.cloudfunctions.net/createParcelRequestSecure',
+            {
+                method:'POST',
+                headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
+                body:JSON.stringify({
+                    recipientName:details.recipientName,
+                    recipientPhone:details.recipientPhone,
+                    parcelDescription:details.parcelDescription,
+                    parcelSize:details.parcelSize || 'small',
+                    fragile:details.fragile === true,
+                    paymentMethod,
+                    pickup:{
+                        latitude:pickup.latitude, longitude:pickup.longitude,
+                        address:pickup.address || 'Current location'
+                    },
+                    destination:{
+                        latitude:destination.latitude, longitude:destination.longitude,
+                        address:destination.address || destination.name,
+                        name:destination.name || destination.address
+                    },
+                    routeDistanceKm:Number(route.distanceKm),
+                    routeDurationMinutes:Number(route.durationMinutes)
+                })
+            }
         );
-
-        await firebase.database()
-            .ref(`delivery_requests/${requestId}`)
-            .set(requestData);
-
-        await firebase.database()
-            .ref(`commuters/${uid}`)
-            .update({
-                currentRequest:
-                    requestId
-            });
-
-        ASIYE.state.booking.requestId =
-            requestId;
-
-        ASIYE.state.booking.request =
-            requestData;
-
-        localStorage.setItem(
-            'currentRequestId',
-            requestId
-        );
-
-        if (!['cash', 'card'].includes(requestData.paymentMethod)) {
-            throw new Error('Choose Cash or Card. Wallet is discontinued.');
+        const payload = await response.json().catch(()=>({}));
+        if (!response.ok || !payload.requestId || !payload.request) {
+            throw new Error(payload.error || 'Secure parcel booking could not be created.');
         }
-        // First find an approved driver; only their accepted request may
-        // initialize a Paystack transaction on their verified subaccount.
-        await ASIYE.booking.notifyGoDrivers(requestId, requestData);
+        const requestId = payload.requestId;
+        ASIYE.state.booking.requestId = requestId;
+        ASIYE.state.booking.request = payload.request;
+        ASIYE.state.booking.fare = Number(payload.request.finalAmount);
+        localStorage.setItem('currentRequestId',requestId);
+        // Cache the secret only in this passenger's memory, never in RTDB.
+        ASIYE.ride._parcelPins = ASIYE.ride._parcelPins || {};
+        if (payload.pickupPin) ASIYE.ride._parcelPins[requestId]=String(payload.pickupPin);
+        // Driver matching begins AFTER the backend has reserved the passenger.
+        // Cash/authorisation: the driver accepts before any card is charged.
+        await ASIYE.booking.notifyGoDrivers(requestId,payload.request);
         await ASIYE.ride.start(requestId);
         return requestId;
     }
