@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guardrail: until a new release is intentionally versioned, payment work
+# Guardrail: payment work, including the Android 342 review APK,
 # MUST descend from the actual signed Android 11.0.71 (341) build and iOS
 # 46522.0.0 (93124) IPA source. These are source commits, not store approvals.
 set -euo pipefail
@@ -17,10 +17,14 @@ for anchor in "$ANDROID_341" "$IOS_93124"; do
   }
   echo "OK: source includes release $(git rev-parse --short "$anchor")"
 done
-grep -Fxq 'version: 11.0.71+341' pubspec.yaml || {
-  echo "::error::Expected source version 11.0.71+341. Before shipping a new store build, perform a reviewed next-version bump and adjust this gate." >&2
-  exit 1
-}
+SOURCE_VERSION="$(awk '/^version:/ {print $2}' pubspec.yaml)"
+case "$SOURCE_VERSION" in
+  11.0.71+341|11.0.72+342) ;;
+  *)
+    echo "::error::Expected reviewed source version 11.0.71+341 or 11.0.72+342; found $SOURCE_VERSION." >&2
+    exit 1
+    ;;
+esac
 grep -Fq "ASIYE_IOS_MARKETING_VERSION: '46522.0.0'" .github/workflows/ios_release.yml || {
   echo "::error::iOS uploaded source version 46522.0.0 is not aligned." >&2
   exit 1
@@ -30,4 +34,5 @@ grep -Fq 'versionCode = flutter.versionCode' android/app/build.gradle.kts || {
   exit 1
 }
 echo 'PASS: lineage includes the signed 11.0.71 (341) Android source and uploaded 46522.0.0 (93124) iOS source.'
-echo 'RELEASE WARNING: do not republish versionCode 341. Increment Android before the next Play build.'
+echo "Validated payment source version: $SOURCE_VERSION"
+echo 'RELEASE WARNING: versionCode 341 must not be republished. Android 342 is a review build; store release and backend rollout require separate verification.'
