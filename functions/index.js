@@ -6452,6 +6452,12 @@ exports.submitGoFareOffer =
             });
         }
 
+        if (String(context.trip.paymentMethod || "cash").toLowerCase() === "wallet") {
+          return response.status(409).json({
+            error:"Wallet payments are discontinued. Choose Cash or Card before offering."
+          });
+        }
+
         if (
           context.trip.taxiId ||
           context.trip.fareStatus ===
@@ -11617,9 +11623,13 @@ async function recordCardTripPaymentHeld(
     ).val();
 
   if (!trip) {
-    throw new Error(
-      "Trip was not found."
-    );
+    throw new Error("Trip was not found.");
+  }
+  // Passenger payment belongs irrevocably to the same driver at checkout.
+  // A driver reassignment after checkout needs refund/manual handling,
+  // not an automatic redirection to a different bank account.
+  if (!trip.taxiId || String(trip.taxiId) !== String(payment.splitDriverId)) {
+    throw new Error("The assigned driver changed after card checkout; payment requires manual review.");
   }
 
   await admin.database()
@@ -11730,7 +11740,20 @@ exports.configureDriverCardPayout = onRequest(
           .map(item => ({ name: String(item.name), code: String(item.code) })) });
       }
       if (request.method === "GET") {
-        const saved=(await admin.database().ref(`driverPaystackSubaccounts/${driverId}`).once("value")).val();
+        const subRef=admin.database().ref(`driverPaystackSubaccounts/${driverId}`);
+        let saved=(await subRef.once("value")).val();
+        if (saved?.subaccountCode && saved?.status === "pending_paystack_verification") {
+          const result=await paystackRequest("/subaccount/"+
+            encodeURIComponent(saved.subaccountCode));
+          const live=result.data||{};
+          if (isVerifiedSubaccount(live,saved.subaccountCode) &&
+              (!live.account_number ||
+               String(live.account_number).slice(-4) === saved.accountLast4)) {
+            await subRef.update({status:"verified",verifiedAt:admin.database.ServerValue.TIMESTAMP});
+            await admin.database().ref(`taxis/${driverId}`).update({payoutStatus:"verified"});
+            saved={...saved,status:"verified"};
+          }
+        }
         return response.status(200).json({ok:true,status:saved?.status||"not_configured",
           accountLast4:saved?.accountLast4||"",bankName:saved?.bankName||"",
           accountName:saved?.accountName||"",subaccountCode:saved?.subaccountCode||""});
