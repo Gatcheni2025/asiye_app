@@ -695,8 +695,8 @@ ASIYE.ride = {
 
 
         if (
-            method ===
-                'card' && !['held', 'captured'].includes(request.paymentStatus)
+            method === 'card' && request.taxiId &&
+            !['held', 'captured'].includes(request.paymentStatus)
         ) {
             ASIYE.payments
                 ?.prepare?.(
