@@ -76,7 +76,8 @@ test('Paystack is initialized for the server-resolved agreed amount', () => {
   const start = functionsSource.indexOf(
     'async function initialiseCardTripPayment'
   );
-  const block = functionsSource.slice(start, start + 5000);
+  const end = functionsSource.indexOf('async function prepareTripPaymentServer', start);
+  const block = functionsSource.slice(start, end);
 
   assert.ok(
     block.includes('Math.round(\n                amount *\n                100')
