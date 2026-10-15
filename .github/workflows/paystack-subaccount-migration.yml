@@ -29,6 +29,8 @@ jobs:
           node --check assets/member-pages.js
       - name: New Paystack 80/20 and no-wallet regression checks
         run: node --test test/paystack-subaccount-migration.test.cjs
+      - name: Driver-first Parcel and Work payment regressions
+        run: node --test test/driver-first-card-booking.test.cjs
       - name: Existing booking PIN and commission regressions
         run: node --test test/go-continuation.test.cjs test/club-lifecycle.test.cjs test/card-booking-sequence.test.cjs test/go-fare-settlement-lifecycle.test.cjs
       - name: Compliance release gate
