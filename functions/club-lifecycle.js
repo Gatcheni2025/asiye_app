@@ -596,7 +596,7 @@ function registerClubLifecycle(deps) {
       )
         fail("Choose valid pickup and destination locations.", 400);
     }
-    if (!["cash", "wallet", "card"].includes(body.paymentMethod || "cash"))
+    if (!["cash", "card"].includes(body.paymentMethod || "cash"))
       fail("Invalid payment method.", 400);
     return {
       commuterId: profile.id,
