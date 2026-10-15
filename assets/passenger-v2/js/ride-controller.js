@@ -1691,7 +1691,7 @@ ASIYE.ride = {
                   'Content-Type':'application/json'},body:JSON.stringify({requestId})}
             );
             const result = await response.json().catch(()=>({}));
-            if (!response.ok || !/^\\d{4}$/.test(String(result.pickupPin||'')))
+            if (!response.ok || !/^[0-9]{4}$/.test(String(result.pickupPin||'')))
                 throw new Error(result.error || 'Could not load your pickup PIN.');
             this._parcelPins = this._parcelPins || {};
             this._parcelPins[requestId] = String(result.pickupPin);
