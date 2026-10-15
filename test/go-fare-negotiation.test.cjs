@@ -376,7 +376,7 @@ test('Driver counter is capped and passenger controls acceptance', () => {
   );
 });
 
-test('Cash, Wallet and Card all use the post-agreement payment gate', () => {
+test('Cash and Card use the post-agreement payment gate', () => {
   assert.ok(
     walletSource.includes(
       'NEGOTIATED ASIYE GO'
@@ -395,17 +395,10 @@ test('Cash, Wallet and Card all use the post-agreement payment gate', () => {
     )
   );
 
-  assert.ok(
-    walletSource.includes(
-      "method !==\n                'card'"
-    )
-  );
-
-  assert.ok(
-    walletSource.includes(
-      "method !==\n                'card' ||"
-    )
-  );
+  assert.match(walletSource, /method\s*!==\s*'card'/);
+  assert.match(walletSource, /method\s*!==\s*'card'\s*\|\|/);
+  const stateSource = fs.readFileSync('assets/passenger-v2/js/state.js', 'utf8');
+  assert.match(stateSource, /\['cash', 'card'\]\.includes/);
 });
 
 test('Negotiated payment preparation is single-flight per request', () => {
