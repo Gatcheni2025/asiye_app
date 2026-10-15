@@ -70,3 +70,30 @@ test('after server assignment driver still cannot fabricate PIN or payment',asyn
  await assertFails(update(ref(db('passenger-auth'),'requests/parcel-secure'),
    {paymentStatus:'captured'}));
 });
+
+test('active secure Parcel locks cannot be cleared by deleting or updating profiles',async()=>{
+ await env.withSecurityRulesDisabled(async context=>{
+  await update(ref(context.database()),{
+   'taxis/driver-record/currentRequest':'parcel-secure',
+   'commuters/p1/currentRequest':'parcel-secure'
+  });
+ });
+ for(const [uid,profile] of [['driver-auth','taxis/driver-record'],['passenger-auth','commuters/p1']]){
+  await assertFails(update(ref(db(uid),profile),{currentRequest:null}));
+  await assertFails(update(ref(db(uid),profile),{currentRequest:'another-request'}));
+  await assertFails(set(ref(db(uid),profile),null));
+ }
+});
+
+test('driver cannot forge, remove or replace the server Parcel completion credit marker',async()=>{
+ const path='taxis/driver-record/parcelTripCredits';
+ await assertFails(set(ref(db('driver-auth'),path),{'parcel-secure':true}));
+ await env.withSecurityRulesDisabled(async context=>{
+  await set(ref(context.database(),path),{'parcel-secure':true});
+ });
+ await assertFails(set(ref(db('driver-auth'),path),null));
+ await assertFails(set(ref(db('driver-auth'),path),{'another-parcel':true}));
+ await assertFails(set(ref(db('driver-auth'),'taxis/driver-record'),{authUid:'driver-auth'}));
+ await assertFails(set(ref(db('driver-auth'),'taxis/driver-record'),null));
+ await assertSucceeds(update(ref(db('driver-auth'),'taxis/driver-record'),{lastSeen:123}));
+});

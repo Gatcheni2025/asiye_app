@@ -8035,6 +8035,8 @@ exports.goTripActionSecure = onRequest(
       const ref = admin.database().ref(`requests/${id}`);
       const trip = (await ref.once('value')).val();
       if (!trip || trip.type === 'club') return response.status(409).json({error: 'Use the Club booking action for this trip.'});
+      if (trip.parcelSecurityVersion === 2)
+        return response.status(409).json({error: 'Use the secure Parcel action for this booking.'});
       const name = String(request.body.action || '');
       const passenger = await profileOwnedByAuth('commuters', trip.commuterId, user.uid);
       const driver = trip.taxiId && await profileOwnedByAuth('taxis', trip.taxiId, user.uid);
@@ -8216,15 +8218,19 @@ exports.createParcelRequestSecure = onRequest(
       reserved=true;
       const pin=String(require("node:crypto").randomInt(1000,10000));
       const db=admin.database();
-      await db.ref(`parcelPrivate/${id}`).set({
-        passengerId,authUid:user.uid,pin,createdAt:Date.now(),expiresAt:Date.now()+8*60*60*1000
-      });
-      await ref.set(record);
-      await db.ref(`delivery_requests/${id}`).set(record);
-      if(record.paymentMethod==="cash")await db.ref(tripPaymentPath(id,passengerId)).set({
+      const updates={
+        [`parcelPrivate/${id}`]:{
+          passengerId,authUid:user.uid,pin,createdAt:Date.now(),expiresAt:Date.now()+8*60*60*1000
+        },
+        [`requests/${id}`]:record,
+        [`delivery_requests/${id}`]:record
+      };
+      if(record.paymentMethod==="cash")updates[tripPaymentPath(id,passengerId)]={
         method:"cash",provider:"cash",requestId:id,passengerId,amount:record.finalAmount,
         currency:"ZAR",status:"cash_due",createdAt:Date.now()
-      });
+      };
+      // Dispatch listeners must never observe a booking without its PIN/ledger.
+      await db.ref().update(updates);
       return res.status(200).json({ok:true,requestId:id,request:record,pickupPin:pin});
     }catch(error){
       // Only remove our reservation, never overwrite a different booking.
@@ -8263,20 +8269,20 @@ exports.cancelParcelBookingSecure = onRequest(
       const passenger=await profileOwnedByAuth("commuters",trip.commuterId,user.uid);
       const driver=trip.taxiId&&await profileOwnedByAuth("taxis",trip.taxiId,user.uid);
       if(!passenger&&!driver)return res.status(403).json({error:"Not your booking."});
-      if(String(trip.status||"").startsWith("cancelled"))
-        return res.status(200).json({ok:true,status:trip.status});
-      if(["arrived","in_transit","completed"].includes(trip.status)||trip.arrivedAt||trip.pinVerifiedAt)
+      const cancelled=String(trip.status||"").startsWith("cancelled");
+      if(!cancelled&&(["arrived","in_transit","completed"].includes(trip.status)||trip.arrivedAt||trip.pinVerifiedAt))
         return res.status(409).json({error:"Driver has arrived. Contact support to end this Parcel."});
       const ledger=(await db.ref(tripPaymentPath(id,trip.commuterId)).once("value")).val();
-      if(trip.paymentMethod==="card" && ledger &&
-        ["initialized","held","captured","success"].includes(ledger.status))
+      if(!cancelled&&trip.paymentMethod==="card" && ledger &&
+        ["initializing","initialization_unknown","initialized","held","captured","success"].includes(ledger.status))
         return res.status(409).json({error:"Card checkout exists. Contact support for a verified cancellation/refund."});
       const nextStatus=driver?"cancelled_by_driver":"cancelled_by_commuter";
       const tx=await ref.transaction(current=>{
-        if(!current||current.taxiId!==trip.taxiId||current.parcelSecurityVersion!==2||
+        if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId||current.parcelSecurityVersion!==2)return;
+        if(String(current.status||"").startsWith("cancelled"))return current;
+        if(
           current.arrivedAt||current.pinVerifiedAt||
           ["arrived","in_transit","completed"].includes(current.status))return;
-        if(String(current.status||"").startsWith("cancelled"))return current;
         return {...current,status:nextStatus,cancelledAt:Date.now()};
       },undefined,false);
       if(!tx.committed||!tx.snapshot.val())
@@ -8343,7 +8349,8 @@ exports.parcelTripActionSecure = onRequest(
         return res.status(403).json({error:"Only the assigned driver can verify pickup."});
       const taxi=(await db.ref(`taxis/${trip.taxiId}`).once("value")).val();
       const pickup=trip.commuterLocation||{};
-      const locationFresh=Boolean(taxi&&Number(taxi.lastSeen)>Date.now()-120000);
+      const locationFresh=Boolean(taxi&&Number(taxi.lastSeen)>Date.now()-120000&&
+        Number(taxi.lastSeen)<=Date.now()+10000);
       const nearPickup=Boolean(locationFresh&&taxi.currentRequest===id&&
         parcelSecurity.distanceKm(Number(taxi.latitude),Number(taxi.longitude),
           Number(pickup.latitude),Number(pickup.longitude))<=0.3);
@@ -8369,7 +8376,8 @@ exports.parcelTripActionSecure = onRequest(
       // Status mirror is server-only on secure parcels.
       await db.ref(`delivery_requests/${id}`).update({
         status:result.status,arrivedAt:result.arrivedAt||null,
-        pinVerifiedAt:result.pinVerifiedAt||null,tripStartedAt:result.tripStartedAt||null
+        pinVerifiedAt:result.pinVerifiedAt||null,tripStartedAt:result.tripStartedAt||null,
+        completedAt:result.completedAt||null
       });
       if(name==="complete"){
         const gross=Number(result.finalAmount||0);
@@ -8385,6 +8393,14 @@ exports.parcelTripActionSecure = onRequest(
             commissionDebt:Math.round((Number(taxi.commissionDebt||0)+
               (result.paymentMethod==="cash"?gross*0.2:0))*100)/100
           };
+        },undefined,false);
+        // Retrying a completed action repairs cleanup after a lost response.
+        // A newer booking must never lose its reservation.
+        await db.ref(`commuters/${trip.commuterId}/currentRequest`)
+          .transaction(v=>v===id?null:undefined,undefined,false);
+        await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+          if(!taxi||taxi.currentRequest!==id)return undefined;
+          return {...taxi,currentRequest:null,isFull:false,passengerCount:0};
         },undefined,false);
       }
       const verified=name==="verifyPin"?result.status==="in_transit"&&!!result.pinVerifiedAt:undefined;
@@ -10334,6 +10350,7 @@ async function paystackRequest(
       PAYSTACK_API + path,
       {
         method,
+        signal: AbortSignal.timeout(20000),
         headers: {
           Authorization:
             "Bearer " + secret,
@@ -10358,7 +10375,7 @@ async function paystackRequest(
 
   if (
     !response.ok ||
-    payload.status === false
+    payload.status !== true
   ) {
     const error =
       new Error(
@@ -11511,179 +11528,94 @@ async function initialiseCardTripPayment(
     };
   }
 
-  const profile =
-    passenger?.data ||
-    {};
-
-  const email =
-    String(
-      profile.email ||
-      decoded.email ||
-      paystackFallbackEmail(
-        decoded.uid
-      )
-    )
-      .trim()
-      .toLowerCase();
-
-  const reference =
-    paystackReference();
-
-  const initialized =
-    await paystackRequest(
-      "/transaction/initialize",
-      {
-        method:
-          "POST",
-        body: {
-          email,
-          amount:
-            String(
-              Math.round(
-                amount *
-                100
-              )
-            ),
-          currency:
-            "ZAR",
-          reference,
-          subaccount:registered.subaccountCode,
-          bearer:"account",
-          callback_url:
-            PAYSTACK_CALLBACK_URL,
-          channels: [
-            "card"
-          ],
-          metadata: {
-            purpose:
-              "asiye_trip_card",
-            uid:
-              decoded.uid,
-            passengerId,
-            requestId,
-            rideType:
-              trip.type ===
-                "club"
-                ? trip.clubMode ||
-                  "club"
-                : trip.rideType ||
-                  "go"
-          }
-        }
-      }
-    );
-
-  const data =
-    initialized.data ||
-    {};
-
-  if (
-    !data.authorization_url ||
-    !data.reference
-  ) {
-    throw new Error(
-      "Paystack did not return a card checkout link."
-    );
+  // Reserve the immutable reference BEFORE making an external request. A lost
+  // response must not let a retry create a second payable checkout.
+  if (current) {
+    const error = new Error("Card checkout is already being prepared or needs verification. Retry verification or contact support.");
+    error.code = "payment/checkout-in-progress";
+    throw error;
   }
-
-  await admin.database()
-    .ref()
-    .update({
-      [
-        tripPaymentPath(
-          requestId,
-          passengerId
-        )
-      ]:
-        {
-          method:
-            "card",
-          provider:"paystack",
-           splitMode:"paystack_subaccount_80_20",
-           splitDriverId:driverId,
-           subaccountCode:registered.subaccountCode,
-           platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
-           requestId,
-          passengerId,
-          uid:
-            decoded.uid,
-          amount,
-          amountSubunit:
-            Math.round(
-              amount *
-              100
-            ),
-          currency:
-            "ZAR",
-          reference,
-          authorizationUrl:
-            data.authorization_url,
-          accessCode:
-            data.access_code ||
-            "",
-          status:
-            "initialized",
-          createdAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP
-        },
-      [
-        `tripPaymentReferences/${reference}`
-      ]:
-        {
-          requestId,
-          passengerId,
-          createdAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP
-        }
-    });
-
-  await markTripPassengerPayment(
-    requestId,
-    passengerId,
-    trip,
-    {
-      paymentStatus:
-        "payment_required",
-      paymentReference:
-        reference
-    }
-  );
-
-  if (
-    trip.type !==
-      "club"
-  ) {
-    await admin.database()
-      .ref(
-        `requests/${requestId}`
-      )
-      .update({
-        status:
-          "payment_required",
-        paymentsReady:
-          false
-      });
-  }
-  if (trip.type === "delivery") {
-    await admin.database().ref(`delivery_requests/${requestId}`).update({
-      status: "payment_required", paymentStatus: "payment_required",
-      paymentsReady: false
-    });
-  }
-
-  return {
-    ready:
-      false,
-    status:
-      "payment_required",
-    reference,
-    authorizationUrl:
-      data.authorization_url
+  const profile = passenger?.data || {};
+  const email = String(profile.email || decoded.email || paystackFallbackEmail(decoded.uid)).trim().toLowerCase();
+  const reference = paystackReference();
+  const candidate = {
+    method:"card", provider:"paystack", splitMode:"paystack_subaccount_80_20",
+    splitDriverId:driverId, subaccountCode:registered.subaccountCode,
+    platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
+    requestId, passengerId, uid:decoded.uid, amount,
+    amountSubunit:Math.round(amount * 100), currency:"ZAR", reference,
+    status:"initializing", createdAt:Date.now()
   };
+  const claim = await paymentRef.transaction(value => value ? undefined : candidate, undefined, false);
+  if (!claim.committed) {
+    const error = new Error("A card checkout already exists. Refresh the booking before retrying.");
+    error.code = "payment/checkout-in-progress";
+    throw error;
+  }
+  await admin.database().ref(`tripPaymentReferences/${reference}`).set({requestId,passengerId,createdAt:Date.now()});
+
+  let data;
+  try {
+    const fresh = (await admin.database().ref(`requests/${requestId}`).once("value")).val();
+    if (!fresh || String(fresh.status || "").startsWith("cancelled") ||
+        ["completed","rejected","expired"].includes(fresh.status) || fresh.taxiId !== driverId)
+      throw Error("Booking changed before checkout. Contact support before retrying payment.");
+    const initialized = await paystackRequest("/transaction/initialize", {
+      method:"POST",
+      body:{
+        email, amount:String(Math.round(amount * 100)), currency:"ZAR", reference,
+        subaccount:registered.subaccountCode, bearer:"account",
+        callback_url:PAYSTACK_CALLBACK_URL, channels:["card"],
+        metadata:{purpose:"asiye_trip_card",uid:decoded.uid,passengerId,requestId,
+          rideType:trip.type === "club" ? trip.clubMode || "club" : trip.rideType || "go"}
+      }
+    });
+    data = initialized.data || {};
+    if (data.reference !== reference ||
+        !String(data.authorization_url || "").startsWith("https://checkout.paystack.com/"))
+      throw Error("Paystack returned a mismatched checkout reference or link.");
+  } catch (error) {
+    // The provider may have accepted the request even when its response was
+    // lost. Keep the same reference and callback mapping for reconciliation.
+    await paymentRef.transaction(value => {
+      if (!value || value.reference !== reference || value.status !== "initializing") return;
+      return {...value,status:"initialization_unknown",initializationErrorAt:Date.now()};
+    }, undefined, false);
+    throw error;
+  }
+  const initializedTx = await paymentRef.transaction(value => {
+    if (!value || value.reference !== reference) return;
+    if (!["initializing","initialization_unknown"].includes(value.status)) return value;
+    return {...value,status:"initialized",authorizationUrl:data.authorization_url,
+      accessCode:data.access_code || ""};
+  }, undefined, false);
+  if (!initializedTx.committed) throw Error("Card checkout changed before confirmation.");
+  const payment = initializedTx.snapshot.val();
+  if (["held","captured"].includes(payment.status))
+    return {ready:true,status:payment.status,reference};
+  if (payment.status !== "initialized") throw Error("Card payment is under refund review.");
+
+  if (trip.parcelSecurityVersion === 2) {
+    // Acceptance already set payment_required. Never resurrect a cancelled
+    // Parcel or overwrite an already verified payment after a slow API call.
+    const tx = await admin.database().ref(`requests/${requestId}`).transaction(value => {
+      if (!value || value.taxiId !== driverId ||
+          !["payment_required","accepted"].includes(value.status)) return;
+      return {...value,paymentReference:reference};
+    }, undefined, false);
+    if (!tx.committed) throw Error("Parcel changed while preparing payment. Contact support.");
+  } else {
+    await markTripPassengerPayment(requestId, passengerId, trip,
+      {paymentStatus:"payment_required",paymentReference:reference});
+    if (trip.type !== "club") await admin.database().ref(`requests/${requestId}`).transaction(value => {
+      if (!value || value.taxiId !== driverId ||
+          ["held","captured"].includes(value.paymentStatus) ||
+          String(value.status || "").startsWith("cancelled") ||
+          ["completed","rejected","expired"].includes(value.status)) return;
+      return {...value,status:"payment_required",paymentsReady:false};
+    }, undefined, false);
+  }
+  return {ready:false,status:"payment_required",reference,authorizationUrl:data.authorization_url};
 }
 
 async function prepareTripPaymentServer(
@@ -11701,6 +11633,12 @@ async function prepareTripPaymentServer(
   if (method === 'wallet') {
     const error = new Error('Wallet payment is unavailable. Select Cash or Card.');
     error.code = 'payment/wallet-disabled';
+    throw error;
+  }
+  if (String(trip.status || "").startsWith("cancelled") ||
+      ["completed","rejected","expired"].includes(trip.status)) {
+    const error = new Error("This booking has ended. Payment cannot be started.");
+    error.code = "payment/trip-ended";
     throw error;
   }
   /*
@@ -11890,150 +11828,87 @@ async function prepareTripPaymentServer(
   );
 }
 
-async function recordCardTripPaymentHeld(
-  payment,
-  transaction
-) {
-  if (!verifyDriverPaystackSplit(payment, transaction)) {
-    throw Error('Paystack card charge is missing a verified driver subaccount split.');
+async function recordCardTripPaymentHeld(payment, transaction) {
+  if (!verifyDriverPaystackSplit(payment, transaction))
+    throw Error("Paystack card charge is missing a verified driver subaccount split.");
+  if (!transactionMatchesPayment(transaction, payment))
+    throw Error("Card transaction does not match the trip fare.");
+  const {requestId,passengerId} = payment;
+  const db=admin.database(), requestRef=db.ref(`requests/${requestId}`);
+  const trip=(await requestRef.once("value")).val();
+  if (!trip) throw Error("Trip was not found.");
+  const paymentRef=db.ref(tripPaymentPath(requestId,passengerId));
+  const cancelled=value=>String(value?.status || "").startsWith("cancelled") ||
+    ["rejected","expired"].includes(value?.status);
+  const matches=current=>current && current.reference===payment.reference &&
+    current.splitDriverId===payment.splitDriverId && current.subaccountCode===payment.subaccountCode;
+  async function quarantine(reason) {
+    const result=await paymentRef.transaction(current=>{
+      if (!matches(current)) return;
+      if (["refund_pending","refunded","refund_review"].includes(current.status)) return current;
+      return {...current,status:"refund_review",paymentRefundAttention:true,
+        paystackTransactionId:String(transaction.id || ""),
+        paidAt:transaction.paid_at || transaction.paidAt || Date.now(),refundReviewAt:Date.now()};
+    },undefined,false);
+    if (!result.committed) throw Error("Payment changed during refund review.");
+    await requestRef.update({paymentRefundAttention:true,refundReviewReason:reason});
+    return {requestId,passengerId,status:result.snapshot.val().status};
   }
+  // A late/duplicate charge cannot resurrect a cancelled booking or reverse
+  // a completed refund. Direct subaccount settlement needs merchant review.
+  if (cancelled(trip)) return quarantine("charge_after_parcel_cancellation");
+  if (!trip.taxiId || String(trip.taxiId) !== String(payment.splitDriverId))
+    return quarantine("driver_changed_after_checkout");
 
-  if (
-    !transactionMatchesPayment(
-      transaction,
-      payment
-    )
-  ) {
-    throw new Error(
-      "Card transaction does not match the trip fare."
-    );
-  }
-
-  const requestId =
-    String(
-      payment.requestId ||
-      ""
-    );
-
-  const passengerId =
-    String(
-      payment.passengerId ||
-      ""
-    );
-
-  const trip =
-    (
-      await admin.database()
-        .ref(
-          `requests/${requestId}`
-        )
-        .once(
-          "value"
-        )
-    ).val();
-
-  if (!trip) {
-    throw new Error("Trip was not found.");
-  }
-  // A late successful Paystack callback must never reactivate a cancelled
-  // Parcel. Paystack may already have split funds: flag manual merchant refund
-  // and driver clawback review instead of marking this booking payable.
-  if (trip.type === "delivery" && trip.parcelSecurityVersion === 2 &&
-      String(trip.status || "").startsWith("cancelled")) {
-    const ref=admin.database().ref(tripPaymentPath(requestId,passengerId));
-    await ref.update({
-      status:"refund_review",paymentRefundAttention:true,
-      paystackTransactionId:String(transaction.id||""),
-      paidAt:transaction.paid_at||transaction.paidAt||Date.now(),
-      refundReviewAt:Date.now()
-    });
-    await admin.database().ref(`requests/${requestId}`).update({
-      paymentRefundAttention:true,refundReviewReason:"charge_after_parcel_cancellation"
-    });
-    return {requestId,passengerId,status:"refund_review"};
-  }
-  // Passenger payment belongs irrevocably to the same driver at checkout.
-  // A driver reassignment after checkout needs refund/manual handling,
-  // not an automatic redirection to a different bank account.
-  if (!trip.taxiId || String(trip.taxiId) !== String(payment.splitDriverId)) {
-    throw new Error("The assigned driver changed after card checkout; payment requires manual review.");
-  }
-
-  // Transactional idempotence: duplicated Paystack webhooks must never
-  // regress an already captured/refunded payment back to "held".
-  const paymentRef=admin.database().ref(tripPaymentPath(requestId,passengerId));
   const settledTx=await paymentRef.transaction(current=>{
-    if(!current || current.reference!==payment.reference ||
-       current.splitDriverId!==payment.splitDriverId ||
-       current.subaccountCode!==payment.subaccountCode) return;
-    if(["held","captured","refund_pending","refunded","refund_review"].includes(current.status))
+    if (!matches(current)) return;
+    if (["held","captured","refund_pending","refunded","refund_review"].includes(current.status))
       return current;
-    return {...current,
-      status:"held",heldAt:Date.now(),
-      paystackTransactionId:String(transaction.id||""),
-      channel:String(transaction.channel||"card"),
-      paidAt:transaction.paid_at||transaction.paidAt||Date.now()
-    };
+    return {...current,status:"held",heldAt:Date.now(),
+      paystackTransactionId:String(transaction.id || ""),channel:String(transaction.channel || "card"),
+      paidAt:transaction.paid_at || transaction.paidAt || Date.now()};
   },undefined,false);
-  if(!settledTx.committed || !settledTx.snapshot.val())
-    throw Error("Paystack payment reference changed while confirming.");
+  if (!settledTx.committed) throw Error("Paystack payment reference changed while confirming.");
   const ledgerStatus=settledTx.snapshot.val().status;
-  if(ledgerStatus==="captured" || ledgerStatus==="refund_pending" ||
+  if (ledgerStatus==="captured" || ledgerStatus==="refund_pending" ||
       ledgerStatus==="refunded" || ledgerStatus==="refund_review")
     return {requestId,passengerId,status:ledgerStatus};
 
-  await markTripPassengerPayment(
-    requestId,
-    passengerId,
-    trip,
-    {
-      paymentStatus:
-        "held",
-      paymentHeldAmount:
-        Number(
-          payment.amount ||
-          0
-        )
+  if (trip.parcelSecurityVersion === 2) {
+    // The assignment/cancellation check must happen inside the same transaction
+    // that unlocks pickup, after provider verification has finished.
+    const tx=await requestRef.transaction(current=>{
+      if (!current || current.parcelSecurityVersion!==2 || cancelled(current) ||
+          current.taxiId!==payment.splitDriverId || current.commuterId!==passengerId) return;
+      if (["captured","refund_pending","refunded","refund_review"].includes(current.paymentStatus)) return current;
+      return {...current,paymentStatus:"held",paymentsReady:true,paymentHeldAmount:Number(payment.amount),
+        ...(current.status === "payment_required" ? {status:"accepted"} : {})};
+    },undefined,false);
+    if (!tx.committed) {
+      const latest=(await requestRef.once("value")).val();
+      return quarantine(cancelled(latest) ? "charge_after_parcel_cancellation" : "driver_changed_after_checkout");
     }
-  );
-
-  if (
-    trip.type ===
-      "club"
-  ) {
-    await refreshClubPaymentsReady(
-      requestId
-    );
-  } else {
-    await admin.database()
-      .ref(
-        `requests/${requestId}`
-      )
-      .update({
-        paymentStatus:
-          "held",
-        paymentsReady:
-          true,
-        ...(trip.type === "delivery"
-          ? (trip.status === "payment_required" ? {status:"accepted"} : {})
-          : trip.negotiationEnabled === true ? {} : {
-              status: trip.safetyShareCompleted ? "pending" : trip.status
-            })
-      });
-  }
-  if (trip.type === "delivery") {
-    await admin.database().ref(`delivery_requests/${requestId}`).update({
-      paymentStatus: "held", paymentsReady: true,
-      ...(trip.status === "payment_required" ? {status:"accepted"} : {})
+    const current=tx.snapshot.val();
+    await db.ref(`delivery_requests/${requestId}`).update({
+      status:current.status,paymentStatus:current.paymentStatus,paymentsReady:current.paymentsReady
     });
+    return {requestId,passengerId,status:current.paymentStatus};
   }
-
-  return {
-    requestId,
-    passengerId,
-    status:
-      "held"
-  };
+  await markTripPassengerPayment(requestId,passengerId,trip,
+    {paymentStatus:"held",paymentHeldAmount:Number(payment.amount || 0)});
+  if (trip.type === "club") {
+    await refreshClubPaymentsReady(requestId);
+  } else {
+    await requestRef.update({paymentStatus:"held",paymentsReady:true,
+      ...(trip.type === "delivery"
+        ? (trip.status === "payment_required" ? {status:"accepted"} : {})
+        : trip.negotiationEnabled === true ? {} : {status:trip.safetyShareCompleted ? "pending" : trip.status})});
+  }
+  if (trip.type === "delivery") await db.ref(`delivery_requests/${requestId}`).update({
+    paymentStatus:"held",paymentsReady:true,
+    ...(trip.status === "payment_required" ? {status:"accepted"} : {})
+  });
+  return {requestId,passengerId,status:"held"};
 }
 
 exports.configureDriverCardPayout = onRequest(
@@ -12292,6 +12167,8 @@ exports.prepareTripPayment =
 
       } catch (error) {
         const status =
+          error?.code === 'payment/checkout-in-progress' ||
+          error?.code === 'payment/trip-ended' ||
           error?.code === 'payment/wallet-disabled' ||
           error?.code === 'payment/driver-subaccount-required' ||
           error?.code ===
@@ -12446,7 +12323,9 @@ exports.verifyTripCardPayment =
               payment.status ||
               ""
             )
-          )
+          ) && context.trip.taxiId === payment.splitDriverId &&
+          !String(context.trip.status || "").startsWith("cancelled") &&
+          !["rejected","expired"].includes(context.trip.status)
         ) {
           return response
             .status(200)
@@ -12489,7 +12368,7 @@ exports.verifyTripCardPayment =
             });
         }
 
-        await recordCardTripPaymentHeld(
+        const confirmation = await recordCardTripPaymentHeld(
           payment,
           transaction
         );
@@ -12500,12 +12379,12 @@ exports.verifyTripCardPayment =
             ok:
               true,
             status:
-              "held",
+              confirmation.status,
             requestId,
             passengerId:
               context.passengerId,
             ready:
-              true
+              ["held","captured"].includes(confirmation.status)
           });
 
       } catch (error) {
@@ -13550,6 +13429,9 @@ exports.releaseTripPayment =
             requestId
           );
 
+        if (context.trip.parcelSecurityVersion === 2)
+          return response.status(409).json({error:"Use secure Parcel cancellation and support refund review for this payment."});
+
         const paymentRef =
           admin.database()
             .ref(
@@ -14559,6 +14441,15 @@ exports.releaseCancelledGoTripPayment =
           trip.type ===
             "club"
         ) {
+          return null;
+        }
+
+        if (trip.parcelSecurityVersion === 2) {
+          const payment=(await admin.database().ref(tripPaymentPath(requestId,trip.commuterId)).once("value")).val();
+          if (payment?.method === "card" &&
+              ["initializing","initialization_unknown","initialized","held","captured"].includes(payment.status))
+            await change.after.ref.parent.update({paymentRefundAttention:true,
+              refundReviewReason:"secure_parcel_cancelled_card_payment"});
           return null;
         }
 

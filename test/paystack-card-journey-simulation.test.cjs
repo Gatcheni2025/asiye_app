@@ -89,7 +89,7 @@ test('duplicate callbacks never regress already captured or refund-review ledger
  assert.match(fragment,/paymentRef\.transaction\(current=>/);
  assert.match(fragment,/\["held","captured","refund_pending","refunded","refund_review"\]/);
  assert.match(fragment,/ledgerStatus==="captured"/);
- assert.match(fragment,/refundReviewReason:"charge_after_parcel_cancellation"/);
+ assert.match(fragment,/quarantine\("charge_after_parcel_cancellation"\)/);
  assert.match(src,/createHmac\(\s*"sha512"/);
  assert.match(src,/timingSafeEqual/);
 });
