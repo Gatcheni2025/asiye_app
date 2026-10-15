@@ -703,21 +703,14 @@ ASIYE.payments = {
         }
 
 
-        /*
-         * Parcel/card flows already complete their safety share before
-         * checkout in build 329. Keep their existing dispatch behaviour.
-         */
+        // Parcel card charges follow driver acceptance: never redispatch a paid ride.
         if (
-            request.status ===
-                'pending' ||
-            request.paymentStatus ===
-                'held'
+            request.status === 'pending' ||
+            request.paymentStatus === 'held'
         ) {
-            await ASIYE.booking
-                ?.notifyGoDrivers?.(
-                    pending.requestId,
-                    request
-                );
+            if (!request.taxiId) {
+                throw new Error('Paid parcel cannot resume without its assigned driver. Contact Asiye support.');
+            }
 
             await ASIYE.ride
                 ?.start?.(
@@ -802,8 +795,8 @@ ASIYE.payments = {
             }
 
             if (
-                request.poolReady !==
-                    true
+                request.poolReady !== true ||
+                (method === 'card' && (!request.taxiId || !request.driverAcceptedAt))
             ) {
                 return;
             }
@@ -980,10 +973,10 @@ ASIYE.payments = {
 
 
         if (
-            method !==
-                'card' ||
-            status !==
-                'payment_required'
+            method !== 'card' ||
+            status !== 'payment_required' ||
+            !request.taxiId ||
+            (request.type === 'club' && (!request.poolReady || !request.driverAcceptedAt))
         ) {
             return;
         }
