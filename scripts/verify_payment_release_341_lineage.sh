@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guardrail: payment work, including the Android 342 review APK,
+# Guardrail: payment work, including the Android 343 mobile builds,
 # MUST descend from the actual signed Android 11.0.71 (341) build and iOS
 # 46522.0.0 (93124) IPA source. These are source commits, not store approvals.
 set -euo pipefail
@@ -19,9 +19,9 @@ for anchor in "$ANDROID_341" "$IOS_93124"; do
 done
 SOURCE_VERSION="$(awk '/^version:/ {print $2}' pubspec.yaml)"
 case "$SOURCE_VERSION" in
-  11.0.71+341|11.0.72+342) ;;
+  11.0.71+341|11.0.72+342|11.0.73+343) ;;
   *)
-    echo "::error::Expected reviewed source version 11.0.71+341 or 11.0.72+342; found $SOURCE_VERSION." >&2
+    echo "::error::Expected reviewed source version 11.0.71+341, 11.0.72+342 or 11.0.73+343; found $SOURCE_VERSION." >&2
     exit 1
     ;;
 esac
@@ -35,4 +35,4 @@ grep -Fq 'versionCode = flutter.versionCode' android/app/build.gradle.kts || {
 }
 echo 'PASS: lineage includes the signed 11.0.71 (341) Android source and uploaded 46522.0.0 (93124) iOS source.'
 echo "Validated payment source version: $SOURCE_VERSION"
-echo 'RELEASE WARNING: versionCode 341 must not be republished. Android 342 is a review build; store release and backend rollout require separate verification.'
+echo 'RELEASE WARNING: previous versionCodes must not be republished. Mobile artifacts and TestFlight builds do not authorize a production backend or public store rollout.'
