@@ -11482,10 +11482,8 @@ async function prepareTripPaymentServer(
   }
 
   if (
-    trip.type ===
-      "club" &&
-    trip.poolReady !==
-      true
+    trip.type === "club" &&
+    (trip.poolReady !== true || !trip.taxiId || !trip.driverAcceptedAt)
   ) {
     return {
       ready:
