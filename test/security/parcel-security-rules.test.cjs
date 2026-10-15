@@ -41,8 +41,8 @@ test('mobile clients cannot create a legacy client-generated delivery or alter s
  }));
  await assertFails(set(ref(db('passenger-auth'),'parcelPrivate/parcel-secure/pin'),'2222'));
 });
-test('legitimate assigned driver can accept a ready card delivery',async()=>{
- await assertSucceeds(update(ref(db('driver-auth'),'requests/parcel-secure'),{
+test('driver cannot directly claim secure Parcel; backend owns acceptance',async()=>{
+ await assertFails(update(ref(db('driver-auth'),'requests/parcel-secure'),{
    taxiId:'driver-record',driverAuthUid:'driver-auth',
    status:'payment_required',paymentStatus:'payment_required'
  }));
@@ -58,11 +58,13 @@ test('passenger and driver cannot forge paid state, pickup, PIN or completed sta
   await assertFails(update(ref(db(uid),'delivery_requests/parcel-secure'),{status:'completed'}));
  }
 });
-test('driver cannot fabricate Parcel PIN verification after legitimately accepting',async()=>{
- await assertSucceeds(update(ref(db('driver-auth'),'requests/parcel-secure'),{
-   taxiId:'driver-record',driverAuthUid:'driver-auth',
-   status:'payment_required',paymentStatus:'payment_required'
- }));
+test('after server assignment driver still cannot fabricate PIN or payment',async()=>{
+ await env.withSecurityRulesDisabled(async context=>{
+   await update(ref(context.database(),'requests/parcel-secure'),{
+     taxiId:'driver-record',driverAuthUid:'driver-auth',
+     status:'payment_required',paymentStatus:'payment_required'
+   });
+ });
  await assertFails(update(ref(db('driver-auth'),'requests/parcel-secure'),
    {status:'driver_on_way',pinVerifiedAt:123,tripStartedAt:123}));
  await assertFails(update(ref(db('passenger-auth'),'requests/parcel-secure'),
