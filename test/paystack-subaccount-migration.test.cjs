@@ -36,7 +36,7 @@ test('no Asiye-funded Paystack bank transfer remains in live route',()=>{
   assert.match(src,/percentage_charge:PLATFORM_COMMISSION_PERCENT/);
   assert.match(src,/subaccount:registered\.subaccountCode/);
   assert.match(src,/bearer:"account"/);
-  assert.match(src,/verifyDriverPaystackSplit\(payment,transaction\)/);
+  assert.match(src,/verifyDriverPaystackSplit\(payment,\s*transaction\)/);
   assert.match(src,/payment\/driver-subaccount-required/);
 });
 test('new wallet funding and wallet-paid bookings are disabled without deleting old credits',()=>{
