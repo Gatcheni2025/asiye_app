@@ -11217,6 +11217,33 @@ async function initialiseCardTripPayment(
   } =
     context;
 
+  // A Paystack subaccount is immutable for the transaction: NEVER collect
+  // the full fare before the driver and their approved bank are known.
+  const driverId=safeProfileId(trip?.taxiId||trip?.driverId);
+  if(!driverId){
+    const e=new Error("Card payment is available after a driver accepts. Cash remains available.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+  const driver=(await admin.database().ref(`taxis/${driverId}`).once("value")).val();
+  if(!driver||driver.verificationStatus!=="verified"||driver.vehicleApproved!==true){
+    const e=new Error("Driver identity and vehicle approval are required for card payments.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+  const registered=(await admin.database().ref(`driverPaystackSubaccounts/${driverId}`).once("value")).val();
+  if(!registered||registered.platformCommissionPercent!==PLATFORM_COMMISSION_PERCENT||
+     !/^ACCT_[A-Za-z0-9]+$/.test(String(registered.subaccountCode||""))){
+    const e=new Error("The assigned driver is not registered with Paystack for direct settlements.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+  // Check live Paystack subaccount verification (not merely a stored status).
+  const result=await paystackRequest("/subaccount/"+encodeURIComponent(registered.subaccountCode));
+  const live=result.data||{};
+  if(!isVerifiedSubaccount(live,registered.subaccountCode)||
+     (live.account_number && String(live.account_number).slice(-4)!==registered.accountLast4)){
+    const e=new Error("Paystack has not yet verified this driver's subaccount.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+
   const paymentRef =
     admin.database()
       .ref(
@@ -11234,6 +11261,12 @@ async function initialiseCardTripPayment(
         )
     ).val();
 
+  if(current&&(current.splitMode!=="paystack_subaccount_80_20"||
+    current.splitDriverId!==driverId||
+    current.subaccountCode!==registered.subaccountCode)){
+    const e=new Error("Card checkout belongs to an incompatible payout account. Contact support.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
   if (
     current &&
     [
@@ -11311,6 +11344,8 @@ async function initialiseCardTripPayment(
           currency:
             "ZAR",
           reference,
+          subaccount:registered.subaccountCode,
+          bearer:"account",
           callback_url:
             PAYSTACK_CALLBACK_URL,
           channels: [
@@ -11360,9 +11395,12 @@ async function initialiseCardTripPayment(
         {
           method:
             "card",
-          provider:
-            "paystack",
-          requestId,
+          provider:"paystack",
+           splitMode:"paystack_subaccount_80_20",
+           splitDriverId:driverId,
+           subaccountCode:registered.subaccountCode,
+           platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
+           requestId,
           passengerId,
           uid:
             decoded.uid,
