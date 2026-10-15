@@ -2252,6 +2252,16 @@ ASIYE_DRIVER.trip = {
         reason = ''
     ) {
         if (this.request?.clubSecurityVersion === 2) { await window.ClubLive.driverAction('cancelDriver'); await this.releaseDriver(); return true; }
+        if (this.request?.parcelSecurityVersion === 2) {
+            const result = await ASIYE_DRIVER.requests.postNegotiation(
+                'cancelParcelBookingSecure',{requestId:this.requestId}
+            );
+            if (result.ok) {
+                await this.releaseDriver();
+                this.cleanup();
+            }
+            return Boolean(result.ok);
+        }
         if (this.request && this.request.type !== 'club') {
             await this.goAction('cancel');
             await this.releaseDriver();
