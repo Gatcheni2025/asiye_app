@@ -204,10 +204,7 @@ ASIYE.parcels = {
         const route =
             ASIYE.state.route;
 
-        const fare =
-            Number(
-                ASIYE.pricing.calculate().go || 0
-            );
+        // Final Parcel fare is calculated and locked by the backend.
 
         const paymentMethod = String(
             ASIYE.state.booking.paymentMethod || 'cash'
