@@ -223,29 +223,16 @@ test('cancelled negotiated Go releases payment and driver reservation', () => {
   );
 });
 
-test('card payout is based on verified private payment amount, never request fare fields', () => {
-  const start = functionsSource.indexOf(
-    'async function issueDriverCardPayout'
-  );
-  const block = functionsSource.slice(start, start + 5500);
-
-  assert.ok(
-    block.includes(
-      'splitCardFare(Number(payment.amountSubunit))'
-    )
-  );
-  assert.ok(
-    block.includes(
-      'isVerifiedCardPayment(payment, verified)'
-    )
-  );
-
-  assert.equal(
-    block.includes(
-      'trip.agreedFare'
-    ),
-    false
-  );
+test('new card fares use verified direct Paystack subaccount settlements, never Asiye transfers', () => {
+  const start=functionsSource.indexOf('async function initialiseCardTripPayment');
+  const end=functionsSource.indexOf('async function prepareTripPaymentServer',start);
+  const block=functionsSource.slice(start,end);
+  assert.ok(block.includes('subaccount:registered.subaccountCode'));
+  assert.ok(block.includes('bearer:"account"'));
+  assert.ok(block.includes('driverPaystackSubaccounts/'));
+  assert.ok(block.includes('isVerifiedSubaccount'));
+  assert.equal(functionsSource.includes('paystackRequest("/transfer"'),false);
+  assert.equal(functionsSource.includes('paystackRequest("/transferrecipient"'),false);
 });
 
 test('20/80 card split preserves Asiye and driver shares', () => {
