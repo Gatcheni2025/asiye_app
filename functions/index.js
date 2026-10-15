@@ -8086,6 +8086,104 @@ exports.goTripActionSecure = onRequest(
     }
   });
 
+// Parcel V2 driver assignment is server-controlled; direct RTDB claim is forbidden.
+exports.acceptParcelRequestSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    let driverId="",id="",driverLocked=false,requestClaimed=false;
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Driver sign-in required."});
+      driverId=safeProfileId(req.body?.driverId);
+      id=String(req.body?.requestId||"");
+      if(!driverId||!parcelSecurity.validId(id))
+        return res.status(400).json({error:"Invalid driver or Parcel reference."});
+      if(!await profileOwnedByAuth("taxis",driverId,user.uid))
+        return res.status(403).json({error:"This driver account is not yours."});
+      const db=admin.database(),driverRef=db.ref(`taxis/${driverId}`);
+      const driver=(await driverRef.once("value")).val();
+      const vehicleApproved=driver?.vehicleApproved===true||
+        String(driver?.vehicleApprovalStatus||"").toLowerCase()==="approved";
+      if(!driver||driver.verificationStatus!=="verified"||!vehicleApproved||
+        !driverProfileCanReceiveRequests(driver))
+        return res.status(403).json({error:"Approved driver and vehicle compliance required."});
+      const reqRef=db.ref(`requests/${id}`);
+      const trip=(await reqRef.once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(409).json({error:"Secure Parcel V2 required."});
+      if(!["pending","searching","driver_busy","accepted","payment_required"].includes(trip.status))
+        return res.status(409).json({error:"Parcel is no longer available."});
+      if(trip.taxiId&&trip.taxiId!==driverId)
+        return res.status(409).json({error:"Another driver already accepted this Parcel."});
+      if(trip.queuedTaxiId&&trip.queuedTaxiId!==driverId)
+        return res.status(409).json({error:"Parcel is reserved for another driver."});
+      if(trip.paymentMethod==="card"){
+        const account=(await db.ref(`driverPaystackSubaccounts/${driverId}`).once("value")).val();
+        if(account?.status!=="verified"||
+          !/^ACCT_[A-Za-z0-9]+$/.test(String(account.subaccountCode||"")))
+          return res.status(409).json({error:"Complete Paystack subaccount verification before accepting Card bookings."});
+      }
+      const driverLock=await driverRef.child("currentRequest").transaction(
+        v=>v==null||v===""||v===id?id:undefined,undefined,false);
+      if(!driverLock.committed)
+        return res.status(409).json({error:"Finish your other active booking before accepting."});
+      driverLocked=true;
+      const now=Date.now();
+      const tx=await reqRef.transaction(current=>{
+        if(!current||current.type!=="delivery"||current.parcelSecurityVersion!==2||
+           current.commuterId!==trip.commuterId ||
+           !["pending","searching","driver_busy","accepted","payment_required"].includes(current.status)||
+           (current.taxiId&&current.taxiId!==driverId)||
+           (current.queuedTaxiId&&current.queuedTaxiId!==driverId))return;
+        if(current.taxiId===driverId)return current;
+        const card=current.paymentMethod==="card";
+        return {...current,
+          taxiId:driverId,driverAuthUid:user.uid,
+          driverName:String(driver.name||driver.fullName||"Asiye Driver"),
+          driverPhone:String(driver.phone||driver.phoneNumber||""),
+          vehicleReg:String(driver.vehicleReg||driver.registrationNumber||""),
+          vehicleMake:String(driver.vehicleMake||driver.make||""),
+          vehicleModel:String(driver.vehicleModel||driver.model||""),
+          vehicleColor:String(driver.vehicleColor||driver.color||""),
+          driverProfileImageUrl:String(driver.profileImageUrl||""),
+          driverVehiclePhoto:String(driver.vehiclePhoto||driver.carPhoto||""),
+          acceptedAt:now,status:card?"payment_required":"accepted",
+          paymentStatus:card?"payment_required":"cash_due",
+          paymentsReady:!card,queuedTaxiId:null,driverBusy:false
+        };
+      },undefined,false);
+      if(!tx.committed||!tx.snapshot.val()||tx.snapshot.val().taxiId!==driverId)
+        return res.status(409).json({error:"Parcel was accepted by another driver or cancelled."});
+      requestClaimed=true;
+      const accepted=tx.snapshot.val();
+      await driverRef.update({currentRequest:id,isBroadcasting:false,isFull:true,
+        passengerCount:1,updatedAt:now});
+      await db.ref(`delivery_requests/${id}`).update({
+        taxiId:driverId,driverAuthUid:user.uid,driverName:accepted.driverName,
+        status:accepted.status,paymentStatus:accepted.paymentStatus,acceptedAt:now
+      });
+      await db.ref(`notifications/commuters/${trip.commuterId}`).push({
+        type:"request_accepted",requestId:id,driverId,driverName:accepted.driverName,
+        status:accepted.status,timestamp:now
+      });
+      return res.status(200).json({ok:true,requestId:id,status:accepted.status,taxiId:driverId});
+    }catch(e){
+      return res.status(e.status||409).json({error:e.message||"Unable to accept Parcel."});
+    }finally{
+      if(driverLocked&&!requestClaimed){
+        const db=admin.database();
+        const ownerSnapshot=await db.ref(`requests/${id}/taxiId`).once("value").catch(()=>null);
+        const owner=ownerSnapshot?.val()||null;
+        if(owner!==driverId)await db.ref(`taxis/${driverId}/currentRequest`)
+          .transaction(v=>v===id?null:undefined,undefined,false).catch(()=>{});
+      }
+    }
+  }
+);
+
 // Secure Parcel V2: PIN is generated and stored ONLY on the backend.
 // No driver or request listener receives the passenger's secret PIN.
 const parcelSecurity = require("./parcel-security");
