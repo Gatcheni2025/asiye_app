@@ -8086,6 +8086,146 @@ exports.goTripActionSecure = onRequest(
     }
   });
 
+// Secure Parcel V2: PIN is generated and stored ONLY on the backend.
+// No driver or request listener receives the passenger's secret PIN.
+const parcelSecurity = require("./parcel-security");
+exports.createParcelRequestSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    res.set("Cache-Control","no-store");
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    let id="", passengerId="", reserved=false;
+    try {
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Sign in to request a parcel."});
+      const passenger=await resolvePassengerForWallet(user);
+      if(!passenger?.id || !await profileOwnedByAuth("commuters",passenger.id,user.uid))
+        return res.status(403).json({error:"Passenger account is not verified."});
+      const data=passenger.data||{};
+      passengerId=passenger.id;
+      const ref=admin.database().ref("requests").push();
+      id=ref.key;
+      const record=parcelSecurity.createParcelRecord(req.body||{},{
+        id:passengerId,name:data.name||data.fullName,
+        phone:data.phone||data.phoneNumber,
+        profileImageUrl:data.profileImageUrl
+      },id,Date.now());
+      const lock=admin.database().ref(`commuters/${passengerId}/currentRequest`);
+      const tx=await lock.transaction(current=>current?undefined:id,undefined,false);
+      if(!tx.committed)return res.status(409).json({error:"You already have an active booking. Resume or cancel it."});
+      reserved=true;
+      const pin=String(require("node:crypto").randomInt(1000,10000));
+      const db=admin.database();
+      await db.ref(`parcelPrivate/${id}`).set({
+        passengerId,authUid:user.uid,pin,createdAt:Date.now(),expiresAt:Date.now()+8*60*60*1000
+      });
+      await ref.set(record);
+      await db.ref(`delivery_requests/${id}`).set(record);
+      if(record.paymentMethod==="cash")await db.ref(tripPaymentPath(id,passengerId)).set({
+        method:"cash",provider:"cash",requestId:id,passengerId,amount:record.finalAmount,
+        currency:"ZAR",status:"cash_due",createdAt:Date.now()
+      });
+      return res.status(200).json({ok:true,requestId:id,request:record,pickupPin:pin});
+    }catch(error){
+      // Only remove our reservation, never overwrite a different booking.
+      if(reserved){
+        await admin.database().ref(`commuters/${passengerId}/currentRequest`)
+          .transaction(v=>v===id?null:undefined,undefined,false).catch(()=>{});
+      }
+      if(id){
+        const db=admin.database();
+        await Promise.all([
+          db.ref(`requests/${id}`).remove(),
+          db.ref(`delivery_requests/${id}`).remove(),
+          db.ref(`parcelPrivate/${id}`).remove(),
+          db.ref(`tripPayments/${id}`).remove()
+        ]).catch(()=>{});
+      }
+      return res.status(error.status||400).json({error:error.message||"Unable to create secure parcel."});
+    }
+  }
+);
+exports.getParcelPickupPinSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);res.set("Cache-Control","no-store");
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Sign in to view your pickup PIN."});
+      const id=String(req.body?.requestId||"");
+      if(!parcelSecurity.validId(id))return res.status(400).json({error:"Invalid parcel."});
+      const db=admin.database();
+      const trip=(await db.ref(`requests/${id}`).once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(404).json({error:"Secure parcel not found."});
+      if(!await profileOwnedByAuth("commuters",trip.commuterId,user.uid))
+        return res.status(403).json({error:"Only the sender can view the pickup PIN."});
+      const secret=(await db.ref(`parcelPrivate/${id}`).once("value")).val();
+      if(!secret||secret.passengerId!==trip.commuterId||
+        secret.expiresAt<Date.now()||String(trip.status||"").startsWith("cancelled"))
+        return res.status(409).json({error:"Parcel PIN has expired or been cancelled."});
+      return res.status(200).json({ok:true,requestId:id,pickupPin:secret.pin});
+    }catch(e){return res.status(e.status||409).json({error:e.message});}
+  }
+);
+exports.parcelTripActionSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    res.set("Cache-Control","no-store");
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Driver sign-in required."});
+      const id=String(req.body?.requestId||"");
+      if(!parcelSecurity.validId(id))return res.status(400).json({error:"Invalid parcel reference."});
+      const name=String(req.body?.action||"");
+      if(!["onWay","arrive","verifyPin"].includes(name))
+        return res.status(400).json({error:"Unsupported Parcel action."});
+      const db=admin.database(),ref=db.ref(`requests/${id}`);
+      const trip=(await ref.once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(409).json({error:"Secure Parcel V2 required."});
+      if(!trip.taxiId||!await profileOwnedByAuth("taxis",trip.taxiId,user.uid))
+        return res.status(403).json({error:"Only the assigned driver can verify pickup."});
+      const taxi=(await db.ref(`taxis/${trip.taxiId}`).once("value")).val();
+      const pickup=trip.commuterLocation||{};
+      const nearPickup=Boolean(taxi&&taxi.currentRequest===id&&
+        Number(taxi.lastSeen)>Date.now()-120000&&
+        parcelSecurity.distanceKm(Number(taxi.latitude),Number(taxi.longitude),
+          Number(pickup.latitude),Number(pickup.longitude))<=0.3);
+      const driverReserved=!!taxi&&taxi.currentRequest===id;
+      const ledger=(await db.ref(tripPaymentPath(id,trip.commuterId)).once("value")).val();
+      const secret=name==="verifyPin"?
+        (await db.ref(`parcelPrivate/${id}`).once("value")).val():null;
+      if(name==="verifyPin"&&(!secret||secret.expiresAt<Date.now()||
+          secret.passengerId!==trip.commuterId))
+        return res.status(409).json({error:"Pickup PIN is expired or missing."});
+      const tx=await ref.transaction(current=>{
+        if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId)return;
+        return parcelSecurity.action(current,name,req.body?.pin,secret?.pin,
+          {driverReserved,ledger,nearPickup},Date.now());
+      },undefined,false);
+      if(!tx.committed||!tx.snapshot.val())
+        return res.status(409).json({error:"Parcel assignment changed. Reopen the booking."});
+      const result=tx.snapshot.val();
+      // Status mirror is server-only on secure parcels.
+      await db.ref(`delivery_requests/${id}`).update({
+        status:result.status,arrivedAt:result.arrivedAt||null,
+        pinVerifiedAt:result.pinVerifiedAt||null,tripStartedAt:result.tripStartedAt||null
+      });
+      const verified=name==="verifyPin"?result.status==="in_transit"&&!!result.pinVerifiedAt:undefined;
+      return res.status(200).json({ok:true,status:result.status,pinValid:verified,
+        attemptsRemaining:name==="verifyPin"?Math.max(0,5-Number(result.pinAttempts||0)):undefined});
+    }catch(e){return res.status(e.status||409).json({error:e.message||"Unable to verify Parcel pickup."});}
+  }
+);
+
 exports.dispatchGoRideRequest =
   onRequest(
     {
