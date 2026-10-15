@@ -1571,6 +1571,24 @@ ASIYE.booking = {
         }
 
 
+        if (request.parcelSecurityVersion === 2) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Sign in before cancelling your Parcel.');
+            const token = await user.getIdToken(true);
+            const response = await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/cancelParcelBookingSecure',
+                {method:'POST',headers:{Authorization:`Bearer ${token}`,
+                  'Content-Type':'application/json'},body:JSON.stringify({requestId})}
+            );
+            const result = await response.json().catch(()=>({}));
+            if (!response.ok) throw new Error(result.error || 'Unable to cancel Parcel.');
+            this.clearLocalRide();
+            ASIYE.ride?.stop?.();
+            ASIYE.map?.clearTrip?.();
+            ASIYE.ui.renderHome();
+            return true;
+        }
+
         if (request.clubSecurityVersion === 2) {
             await window.ClubLive.post('clubDriverActionSecure', {requestId, action:'cancelPassenger'});
             this.clearLocalRide();
