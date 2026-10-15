@@ -3086,7 +3086,7 @@ window.AsiyePages = {
                     }
                 );
 
-            const email = config?.supportEmail;
+            const email = config?.supportEmail || 'admin@asiye.cloud';
 
             if (
                 email &&
@@ -3095,9 +3095,15 @@ window.AsiyePages = {
                         email
                     )
             ) {
-                body.innerHTML +=
-                    `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`;
+                body.insertAdjacentHTML(
+                    'beforeend',
+                    `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`
+                );
             }
+            body.insertAdjacentHTML(
+                'beforeend',
+                '<a class="member-primary member-secondary-support" href="tel:+27315661165">Call Asiye Support · 031 566 1165</a>'
+            );
             window.AsiyeSupportChat?.mount(body, {
                 role: driver ? 'driver' : 'passenger',
                 dialog
