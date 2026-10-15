@@ -62,7 +62,7 @@ function pricingFor(distanceKm, durationMinutes) {
   return context.ASIYE.pricing.calculate();
 }
 
-test('Go pricing protects an 85-95 percent negotiation corridor', () => {
+test('Go pricing protects an 65-95 percent negotiation corridor', () => {
   const quote = pricingFor(10, 20);
 
   assert.equal(
@@ -72,7 +72,7 @@ test('Go pricing protects an 85-95 percent negotiation corridor', () => {
 
   assert.equal(
     quote.goMinimumOffer,
-    101
+    77
   );
 
   assert.equal(
@@ -92,12 +92,12 @@ test('Go pricing protects an 85-95 percent negotiation corridor', () => {
 
   assert.equal(
     quote.goDriverMinimumNet,
-    80.80
+    61.60
   );
 
   assert.equal(
     quote.goMinimumAsiyeCommission,
-    20.20
+    15.40
   );
 });
 
@@ -130,9 +130,9 @@ test('Go breakdown always preserves the 20/80 split', () => {
     quote
   );
 
-  assert.equal(low.fare, 101);
-  assert.equal(low.asiyeCommission, 20.20);
-  assert.equal(low.driverReceives, 80.80);
+  assert.equal(low.fare, 77);
+  assert.equal(low.asiyeCommission, 15.40);
+  assert.equal(low.driverReceives, 61.60);
 
   assert.equal(high.fare, 112);
   assert.equal(high.asiyeCommission, 22.40);
@@ -204,7 +204,7 @@ test('Server recomputes and enforces protected Go fares', () => {
   for (const required of [
     'const ASIYE_GO_NEGOTIATION',
     'suggestedRatio: 0.90',
-    'minimumRatio: 0.85',
+    'minimumRatio: 0.65',
     'maximumRatio: 0.95',
     'commissionRate: 0.20',
     'maxDriverCounters: 2',
