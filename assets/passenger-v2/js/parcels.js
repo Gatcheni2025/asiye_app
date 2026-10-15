@@ -209,6 +209,13 @@ ASIYE.parcels = {
                 ASIYE.pricing.calculate().go || 0
             );
 
+        const paymentMethod = String(
+            ASIYE.state.booking.paymentMethod || 'cash'
+        ).toLowerCase();
+        if (!['cash', 'card'].includes(paymentMethod)) {
+            throw new Error('Choose Cash or Card. Prepaid Wallet is discontinued.');
+        }
+
         const pickupPin =
             await ASIYE.booking
                 .requirePassengerPin();
@@ -232,7 +239,7 @@ ASIYE.parcels = {
             carCategory:
                 'go',
             status: 'pending',
-            paymentStatus: ASIYE.state.booking.paymentMethod === 'card'
+            paymentStatus: paymentMethod === 'card'
                 ? 'awaiting_driver' : 'cash_due',
 
             commuterId:
@@ -294,9 +301,7 @@ ASIYE.parcels = {
                 fare,
             finalAmount:
                 fare,
-            paymentMethod:
-                ASIYE.state.booking.paymentMethod ||
-                'cash',
+            paymentMethod,
 
             requirePin:
                 true,
