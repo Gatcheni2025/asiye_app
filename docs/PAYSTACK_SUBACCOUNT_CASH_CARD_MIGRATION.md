@@ -1,5 +1,9 @@
 # Asiye Paystack 80/20 + Cash/Card only migration (review branch)
-**DO NOT deploy to production automatically.** Source: 11.0.71+341.
+**DO NOT deploy to production automatically.** Android review source: `11.0.72+342`,
+descended from the signed 341 release and uploaded iOS source.
+The signed APK is for installation testing: 152 regression checks and
+105 Firebase/security checks passed before build. The workflow does not deploy
+functions/rules/hosting, publish mobile stores or certify real Paystack settlement.
 ### Core changes
 - New Paystack `/subaccount` route for approved drivers, with `percentage_charge: 20` credited to Asiye and 80% directly settled to driver's Paystack subaccount. Gateway fees default to Asiye.
 - Each new card charge MUST identify the verified and assigned driver before `/transaction/initialize`, with `subaccount: ACCT_...`. A passenger is NEVER charged to Asiye's main account as a later-to-be-split payment.
@@ -15,6 +19,6 @@
 3. Run sandbox tests for Go negotiated fare, full/partial Club, parcel, cancellation/refunds, driver reassignment, double callbacks, cash payments, multiple passenger IDs, all payment methods. Confirm Paystack transaction includes subaccount and amount; Asiye bears processing fees.
 4. Reconcile every legacy wallet balance, uncleared EFT and historical payout through admin/support. Do not delete old ledger state. Update legal policies and customer notices.
 5. Update and test signed APK/AAB and iOS builds, and server rule protections before enabling card checkout in Production. Confirm final app version used by Play/App Store.
-6. Payment descriptions must not claim funds are held in escrow: Paystack settles on its own T+2 schedule.
+6. Payment descriptions must not claim funds are held in escrow: Paystack controls settlement under its applicable schedule.
 ### Important
 `is_verified` on the Paystack subaccount must be true before a driver may receive card-funded trips. New Paystack subaccounts may initially be pending verification. Paystack's official subaccount API and account verification prerequisites are authoritative.
