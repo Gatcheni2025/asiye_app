@@ -11959,37 +11959,28 @@ async function recordCardTripPaymentHeld(
     throw new Error("The assigned driver changed after card checkout; payment requires manual review.");
   }
 
-  await admin.database()
-    .ref(
-      tripPaymentPath(
-        requestId,
-        passengerId
-      )
-    )
-    .update({
-      status:
-        "held",
-      heldAt:
-        admin.database
-          .ServerValue
-          .TIMESTAMP,
-      paystackTransactionId:
-        String(
-          transaction.id ||
-          ""
-        ),
-      channel:
-        String(
-          transaction.channel ||
-          "card"
-        ),
-      paidAt:
-        transaction.paid_at ||
-        transaction.paidAt ||
-        admin.database
-          .ServerValue
-          .TIMESTAMP
-    });
+  // Transactional idempotence: duplicated Paystack webhooks must never
+  // regress an already captured/refunded payment back to "held".
+  const paymentRef=admin.database().ref(tripPaymentPath(requestId,passengerId));
+  const settledTx=await paymentRef.transaction(current=>{
+    if(!current || current.reference!==payment.reference ||
+       current.splitDriverId!==payment.splitDriverId ||
+       current.subaccountCode!==payment.subaccountCode) return;
+    if(["held","captured","refund_pending","refunded","refund_review"].includes(current.status))
+      return current;
+    return {...current,
+      status:"held",heldAt:Date.now(),
+      paystackTransactionId:String(transaction.id||""),
+      channel:String(transaction.channel||"card"),
+      paidAt:transaction.paid_at||transaction.paidAt||Date.now()
+    };
+  },undefined,false);
+  if(!settledTx.committed || !settledTx.snapshot.val())
+    throw Error("Paystack payment reference changed while confirming.");
+  const ledgerStatus=settledTx.snapshot.val().status;
+  if(ledgerStatus==="captured" || ledgerStatus==="refund_pending" ||
+      ledgerStatus==="refunded" || ledgerStatus==="refund_review")
+    return {requestId,passengerId,status:ledgerStatus};
 
   await markTripPassengerPayment(
     requestId,
