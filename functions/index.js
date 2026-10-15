@@ -11935,6 +11935,23 @@ async function recordCardTripPaymentHeld(
   if (!trip) {
     throw new Error("Trip was not found.");
   }
+  // A late successful Paystack callback must never reactivate a cancelled
+  // Parcel. Paystack may already have split funds: flag manual merchant refund
+  // and driver clawback review instead of marking this booking payable.
+  if (trip.type === "delivery" && trip.parcelSecurityVersion === 2 &&
+      String(trip.status || "").startsWith("cancelled")) {
+    const ref=admin.database().ref(tripPaymentPath(requestId,passengerId));
+    await ref.update({
+      status:"refund_review",paymentRefundAttention:true,
+      paystackTransactionId:String(transaction.id||""),
+      paidAt:transaction.paid_at||transaction.paidAt||Date.now(),
+      refundReviewAt:Date.now()
+    });
+    await admin.database().ref(`requests/${requestId}`).update({
+      paymentRefundAttention:true,refundReviewReason:"charge_after_parcel_cancellation"
+    });
+    return {requestId,passengerId,status:"refund_review"};
+  }
   // Passenger payment belongs irrevocably to the same driver at checkout.
   // A driver reassignment after checkout needs refund/manual handling,
   // not an automatic redirection to a different bank account.
