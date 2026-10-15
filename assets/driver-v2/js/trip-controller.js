@@ -103,6 +103,12 @@ ASIYE_DRIVER.trip = {
         return ASIYE_DRIVER.requests.postNegotiation('goTripActionSecure', {requestId: this.requestId, action, ...details});
     },
 
+    async parcelAction(action, details = {}) {
+        return ASIYE_DRIVER.requests.postNegotiation('parcelTripActionSecure', {
+            requestId:this.requestId, action, ...details
+        });
+    },
+
     /* ========================================================
        STATE MACHINE
        ======================================================== */
@@ -453,6 +459,11 @@ ASIYE_DRIVER.trip = {
             throw new Error('Confirm Paystack payment before collecting this parcel.');
         }
 
+        if (this.request.parcelSecurityVersion === 2) {
+            await this.parcelAction('onWay');
+            await this.startPickupNavigation(this.request);
+            return;
+        }
         if (this.request.goContinuationVersion === 2) {
             await this.goAction('onWay');
             await this.startPickupNavigation(this.request);
@@ -628,7 +639,8 @@ ASIYE_DRIVER.trip = {
 
     async startDestinationNavigation(request) {
         const current = this.requestRef ? (await this.requestRef.once('value')).val() : request;
-        if (current?.goContinuationVersion === 2 && (current.status !== 'in_transit' || !current.pinVerifiedAt))
+        if ((current?.goContinuationVersion === 2 || current?.parcelSecurityVersion === 2) &&
+            (current.status !== 'in_transit' || !current.pinVerifiedAt))
             throw new Error('Verify the passenger PIN at pickup before starting destination navigation.');
         ASIYE_DRIVER.ui.closePassengerPin?.();
         ASIYE_DRIVER.ui.showInTransit(current || request);
@@ -687,6 +699,10 @@ ASIYE_DRIVER.trip = {
         }
 
 
+        if (this.request.parcelSecurityVersion === 2) {
+            await this.parcelAction('arrive');
+            return;
+        }
         if (this.request.goContinuationVersion === 2) {
             await this.goAction('arrive');
             return;
@@ -752,7 +768,7 @@ ASIYE_DRIVER.trip = {
                         request.commuterName,
 
                     expectedPin:
-                        request.pickupPin,
+                        request.parcelSecurityVersion === 2 ? undefined : request.pickupPin,
 
                     isClub:
                         false
@@ -768,6 +784,11 @@ ASIYE_DRIVER.trip = {
     async verifyGoPin(
         enteredPin
     ) {
+        if (this.request?.parcelSecurityVersion === 2) {
+            const result = await this.parcelAction('verifyPin', {pin:enteredPin});
+            if (result.pinValid) await this.startDestinationNavigation(this.request);
+            return result.pinValid === true;
+        }
         if (this.request?.goContinuationVersion === 2) {
             const result = await this.goAction('verifyPin', {pin: enteredPin});
             if (result.pinValid) await this.startDestinationNavigation(this.request);
@@ -835,6 +856,8 @@ ASIYE_DRIVER.trip = {
 
 
     async startGoTrip() {
+        if (this.request?.parcelSecurityVersion === 2)
+            throw new Error('Parcel movement requires server PIN verification.');
 
         await this.requestRef.update({
 
@@ -1803,6 +1826,12 @@ ASIYE_DRIVER.trip = {
             if (request.goContinuationVersion === 2 && String(request.paymentMethod).toLowerCase() === 'cash')
                 await this.goAction('collectCash', {cashCollected: true});
             const settlementResult = await this.settleSelectedPayments();
+            if (request.parcelSecurityVersion === 2) {
+                await this.parcelAction('complete');
+                ASIYE_DRIVER.ui.closePassengerPin?.();
+                await this.releaseDriver();
+                return;
+            }
             if (settlementResult?.serverCompleted === true) {
                 ASIYE_DRIVER.ui.closePassengerPin?.();
                 await this.releaseDriver();
