@@ -502,6 +502,9 @@ exports.createEftSmsTopup = onRequest(
       request,
       response
     );
+    if (request.method !== 'OPTIONS') return response.status(410).json({
+      error:'Wallet top-ups are discontinued. Contact Asiye support to resolve existing credit.'
+    });
 
     if (
       request.method ===
@@ -9977,6 +9980,8 @@ const {
   splitCardFare, stableTransferReference, isVerifiedCardPayment,
   isPayoutReady, bankInput
 } = require("./driver-card-payout");
+const {PLATFORM_COMMISSION_PERCENT, code:paystackSubaccountCode,
+  isVerifiedSubaccount, verifySplit:verifyDriverPaystackSplit} = require("./paystack-subaccount-split");
 
 // Driver card transfers are private server-owned financial records.
 // The passenger card charge stays on Asiye's Paystack account until the
@@ -9985,6 +9990,9 @@ const driverPayoutPath = (requestId, passengerId) =>
   `driverCardPayouts/${requestId}/${passengerId}`;
 
 async function issueDriverCardPayout(requestId, passengerId, trip) {
+  // Paystack prohibits aggregation. Legacy payout records need manual
+  // reconciliation; never initiate new bank transfers from Asiye.
+  return {status:'legacy_manual_reconciliation_required'};
   const driverId = safeProfileId(trip?.taxiId || trip?.driverId);
   if (trip?.status !== "completed" || !driverId) return { status: "not_ready" };
   const payment = (await admin.database()
@@ -11449,6 +11457,11 @@ async function prepareTripPaymentServer(
   } =
     context;
 
+  if (method === 'wallet') {
+    const error = new Error('Wallet payment is unavailable. Select Cash or Card.');
+    error.code = 'payment/wallet-disabled';
+    throw error;
+  }
   /*
    * Negotiated Go has a hard server-side payment gate. A modified WebView
    * cannot initialise Paystack, reserve Wallet funds, or mark Cash due until
@@ -11641,7 +11654,10 @@ async function prepareTripPaymentServer(
 async function recordCardTripPaymentHeld(
   payment,
   transaction
-) {
+) {  if (!verifyDriverPaystackSplit(payment,transaction)) {
+    throw Error('Paystack card charge is missing a verified driver subaccount split.');
+  }
+
   if (
     !transactionMatchesPayment(
       transaction,
@@ -12002,6 +12018,8 @@ exports.prepareTripPayment =
 
       } catch (error) {
         const status =
+          error?.code === 'payment/wallet-disabled' ||
+          error?.code === 'payment/driver-subaccount-required' ||
           error?.code ===
             "payment/insufficient-wallet" ||
           error?.code ===
@@ -13544,6 +13562,9 @@ exports.initializePaystackWalletTopup =
         request,
         response
       );
+      if (request.method !== 'OPTIONS') return response.status(410).json({
+        error:'Wallet top-ups are discontinued. Contact Asiye support to resolve existing credit.'
+      });
 
       if (
         request.method ===
