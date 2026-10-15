@@ -296,6 +296,35 @@ test('cancellation during slow checkout stays cancelled; duplicate charge cannot
   assert.equal(verified.body.status,'refunded');
 });
 
+test('Go permits 65% offers, rejects lower fares and lets an eligible driver counter before passenger agreement',async()=>{
+  const requestId='go-offer65-handler';
+  await db.ref('requests/'+requestId).set({
+    requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+    paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',
+    routeDistanceKm:10,routeDurationMinutes:0,commuterLocation:pickup,destinationCoords:destination
+  });
+  await db.ref('commuters/sender/currentRequest').set(requestId);
+  assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount:64})).status,422);
+  const offered=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
+  assert.equal(offered.status,200,JSON.stringify(offered.body));
+  assert.equal((await read('requests/'+requestId)).minimumFareOffer,65);
+  assert.equal((await read('requests/'+requestId)).driverNetFare,52);
+  assert.equal((await read('requests/'+requestId)).platformCommission,13);
+  await db.ref(`notifications/taxis/driver/${requestId}`).set({requestId,status:'pending'});
+  assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:96})).status,422);
+  assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:64})).status,422);
+  const counter=await call('counterGoFare','driver-auth',{requestId,amount:80});
+  assert.equal(counter.status,200,JSON.stringify(counter.body));
+  assert.equal((await call('acceptGoFareCounter','member-auth',{requestId})).status,403);
+  const accepted=await call('acceptGoFareCounter','sender-auth',{requestId});
+  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
+  assert.equal(accepted.body.agreedFare,80);
+  assert.equal(accepted.body.driverNetFare,64);
+  assert.equal(accepted.body.platformCommission,16);
+  assert.equal((await read('requests/'+requestId)).taxiId,'driver');
+  assert.equal(initializations.length,0,'Negotiation must not charge a card');
+});
+
 test('Go agreed fare passes the same checkout and signed provider verification handlers',async()=>{
   const requestId='go-handler-reference-01';
   await db.ref('commuters/sender/email').remove();
