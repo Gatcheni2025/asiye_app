@@ -5484,7 +5484,7 @@ const ASIYE_GO_NEGOTIATION = Object.freeze({
     minimumFare: 30
   }),
   suggestedRatio: 0.90,
-  minimumRatio: 0.85,
+  minimumRatio: 0.65,
   maximumRatio: 0.95,
   commissionRate: 0.20,
   maxDriverCounters: 2
