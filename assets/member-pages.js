@@ -1495,6 +1495,10 @@ window.AsiyePages = {
     },
 
     async open(page) {
+        if (page === 'wallet') {
+            window.alert('Asiye Wallet is discontinued. Contact support about existing funds.');
+            return;
+        }
         this.dialog?.close(); this.dialog?.remove();
         const driver = !!window.ASIYE_DRIVER;
         const app = driver ? ASIYE_DRIVER : ASIYE;
@@ -1598,13 +1602,13 @@ window.AsiyePages = {
                 const link = document.createElement('a');
                 link.href = './payout.html';
                 link.className = 'member-primary member-secondary-support';
-                link.textContent = 'Set up bank account · 80% card payouts';
+                link.textContent = 'Set up Paystack subaccount · direct 80% settlement';
                 body.append(link);
                 const payoutInfo = document.createElement('p');
                 payoutInfo.className = 'member-note';
                 payoutInfo.textContent = user.payoutStatus === 'verified'
-                    ? 'Your card payout bank is verified (ending ' + (user.payoutAccountLast4 || '****') + ').'
-                    : 'Validate your South African banking details to receive completed card-trip earnings.';
+                    ? 'Your Paystack subaccount bank is verified (ending ' + (user.payoutAccountLast4 || '****') + ').'
+                    : 'Paystack must verify your bank account for direct driver settlement.';
                 body.append(payoutInfo);
                 this.bindDriverFaceScan(
                     body

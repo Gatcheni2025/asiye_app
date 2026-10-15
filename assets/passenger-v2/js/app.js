@@ -192,51 +192,7 @@ ASIYE.ui = {
             </div>
 
 
-            <!-- WALLET -->
 
-            <button
-                id="walletStrip"
-                class="wallet-strip"
-            >
-
-                <div class="wallet-left">
-
-                    <div class="wallet-icon">
-
-                        <i class="fas fa-wallet"></i>
-
-                    </div>
-
-
-                    <div>
-
-                        <span class="wallet-label">
-
-                            Asiye Wallet
-
-                        </span>
-
-
-                        <span class="wallet-amount">
-
-                            R${credits.toFixed(2)}
-
-                        </span>
-
-                    </div>
-
-                </div>
-
-
-                <i
-                    class="
-                        fas
-                        fa-chevron-right
-                        wallet-arrow
-                    "
-                ></i>
-
-            </button>
 
         `;
 
@@ -602,18 +558,8 @@ ASIYE.ui = {
                     'Card',
                 detail:
                     'Card payment'
-            },
-            {
-                id:
-                    'wallet',
-                icon:
-                    'fa-wallet',
-                label:
-                    'Wallet / voucher credit',
-                detail:
-                    `R${Number(walletBalance || 0).toFixed(2)} available`
             }
-        ];
+                ];
 
         return `
             <section class="asiye-payment-picker">
@@ -666,8 +612,7 @@ ASIYE.ui = {
                 if (
                     ![
                         'cash',
-                        'card',
-                        'wallet'
+                        'card'
                     ].includes(
                         normalised
                     )
@@ -2933,24 +2878,7 @@ document.addEventListener(
                 commuter
             );
 
-        ASIYE.wallet
-            ?.start?.(
-                commuterId
-            );
-
-        // Reconcile a successful wallet recharge after the Paystack
-        // browser returns; a delayed webhook must not leave a stale balance.
-        void ASIYE.payments?.reconcileWalletTopup?.();
-        if (!window._asiyeWalletReconcileBound) {
-            window._asiyeWalletReconcileBound = true;
-            window.addEventListener('focus', () => {
-                void ASIYE.payments?.reconcileWalletTopup?.();
-            });
-            document.addEventListener('visibilitychange', () => {
-                if (!document.hidden) void ASIYE.payments?.reconcileWalletTopup?.();
-            });
-        }
-
+        // Wallet funding is retired; historical balances remain intact.
 
         localStorage.setItem(
             'userId',

@@ -370,8 +370,8 @@ ASIYE.parcels = {
             await ASIYE.payments.prepare(requestId);
             return requestId;
         }
-        if (requestData.paymentMethod === 'wallet') {
-            await ASIYE.payments.prepare(requestId);
+        if (!['cash','card'].includes(requestData.paymentMethod)) {
+            throw new Error('Choose Cash or Card. Wallet is discontinued.');
         }
 
         await ASIYE.booking.notifyGoDrivers(

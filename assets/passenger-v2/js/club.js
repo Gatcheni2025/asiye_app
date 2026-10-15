@@ -1060,25 +1060,8 @@ ASIYE.club = {
             )
             .toLowerCase();
 
-        if (
-            paymentMethod ===
-            'wallet'
-        ) {
-            if (
-                !ASIYE.wallet ||
-                typeof ASIYE.wallet.requireFare !==
-                    'function'
-            ) {
-                throw new Error(
-                    'Asiye Wallet is unavailable. Reopen the app and try again.'
-                );
-            }
-
-            await ASIYE.wallet
-                .requireFare(
-                    requiredFare,
-                    this.getConfig(type).name
-                );
+        if (!['cash','card'].includes(paymentMethod)) {
+            throw new Error('Choose Cash or Card. Wallet is discontinued.');
         }
 
         await ASIYE.profile
