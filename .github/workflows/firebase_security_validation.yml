@@ -84,6 +84,9 @@ jobs:
         run: |
           node --check functions/index.js
           node --check functions/club-lifecycle.js
+          node --check functions/parcel-security.js
+          node --check assets/passenger-v2/js/parcels.js
+          node --check assets/passenger-v2/js/ride-controller.js
           node --check assets/club-live.js
           node --check functions/club-pool-security.js
           node --check functions/trip-share-security.js
