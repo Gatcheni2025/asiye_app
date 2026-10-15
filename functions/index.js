@@ -11117,7 +11117,10 @@ async function initialiseCardTripPayment(
     e.code="payment/driver-subaccount-required";throw e;
   }
   const driver=(await admin.database().ref(`taxis/${driverId}`).once("value")).val();
-  if(!driver||driver.verificationStatus!=="verified"||driver.vehicleApproved!==true){
+  const vehicleApproved = driver?.vehicleApproved === true ||
+    String(driver?.vehicleApprovalStatus || "").toLowerCase() === "approved";
+  if (!driver || String(driver.verificationStatus || "").toLowerCase() !== "verified" ||
+      !vehicleApproved || !driverProfileCanReceiveRequests(driver)) {
     const e=new Error("Driver identity and vehicle approval are required for card payments.");
     e.code="payment/driver-subaccount-required";throw e;
   }
@@ -11731,8 +11734,11 @@ exports.configureDriverCardPayout = onRequest(
         return response.status(403).json({ error: "Not your driver account." });
       const driver = (await admin.database().ref(`taxis/${driverId}`)
         .once("value")).val();
-      if (!driver || driver.verificationStatus !== "verified")
-        return response.status(403).json({ error: "Driver must be verified before setting up payouts." });
+      const vehicleApproved = driver?.vehicleApproved === true ||
+        String(driver?.vehicleApprovalStatus || "").toLowerCase() === "approved";
+      if (!driver || String(driver.verificationStatus || "").toLowerCase() !== "verified" ||
+          !vehicleApproved || !driverProfileCanReceiveRequests(driver))
+        return response.status(403).json({ error: "Driver and vehicle must be fully approved before setting up a Paystack subaccount." });
       if (request.method === "GET" && request.query?.action === "banks") {
         const banks = await paystackRequest("/bank?currency=ZAR&enabled_for_verification=true&perPage=100");
         return response.status(200).json({ ok: true, banks: (banks.data || [])
