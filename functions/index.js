@@ -11806,11 +11806,10 @@ exports.configureDriverCardPayout = onRequest(
           .map(item => ({ name: String(item.name), code: String(item.code) })) });
       }
       if (request.method === "GET") {
-        const saved = (await admin.database()
-          .ref(`driverPayoutAccounts/${driverId}`).once("value")).val();
-        return response.status(200).json({ ok: true, status: saved?.status || "not_configured",
-          accountLast4: saved?.accountLast4 || "", bankName: saved?.bankName || "",
-          accountName: saved?.accountName || "" });
+        const saved=(await admin.database().ref(`driverPaystackSubaccounts/${driverId}`).once("value")).val();
+        return response.status(200).json({ok:true,status:saved?.status||"not_configured",
+          accountLast4:saved?.accountLast4||"",bankName:saved?.bankName||"",
+          accountName:saved?.accountName||"",subaccountCode:saved?.subaccountCode||""});
       }
       if (request.method !== "POST")
         return response.status(405).json({ error: "Method not supported." });
@@ -11834,49 +11833,54 @@ exports.configureDriverCardPayout = onRequest(
           error: "Bank account could not be verified for this driver. Check the account holder and ID number."
         });
       }
-      const recipientResult = await paystackRequest("/transferrecipient", {
-        method: "POST",
-        body: {
-          type: "basa", name: clean.accountName,
-          account_number: clean.accountNumber, bank_code: clean.bankCode,
-          currency: "ZAR", description: "Asiye driver fare earnings"
-        }
+      // Subaccounts are provisioned only once: retries after Paystack timeouts
+      // require manual reconciliation to prevent duplicate payout destinations.
+      const subRef=admin.database().ref(`driverPaystackSubaccounts/${driverId}`);
+      const lock=await subRef.transaction(x=>x?undefined:{
+        status:"provisioning",ownerUid:actor.uid,
+        accountLast4:clean.accountNumber.slice(-4),
+        startedAt:admin.database.ServerValue.TIMESTAMP
+      },undefined,false);
+      if(!lock.committed)return response.status(409).json({
+        error:"Driver subaccount already exists or needs review. Contact Asiye support."
       });
-      const recipientCode = String(recipientResult.data?.recipient_code || "");
-      if (!/^RCP_[A-Za-z0-9]+$/.test(recipientCode)) {
-        throw Error("Paystack did not provide a bank payout recipient.");
+      let sub;
+      try {
+        const created=await paystackRequest("/subaccount",{
+          method:"POST",body:{
+            business_name:clean.accountName,
+            settlement_bank:clean.bankCode,
+            account_number:clean.accountNumber,
+            percentage_charge:PLATFORM_COMMISSION_PERCENT,
+            description:"Asiye direct driver settlement"
+          }
+        });
+        sub=created.data||{};
+      } catch(error) {
+        await subRef.update({status:"manual_review"});
+        throw error;
       }
-      await admin.database().ref(`driverPayoutAccounts/${driverId}`).set({
-        status: "verified", recipientCode,
-        accountName: clean.accountName,
-        accountLast4: clean.accountNumber.slice(-4),
-        bankCode: clean.bankCode,
-        bankName: String(recipientResult.data?.details?.bank_name || clean.bankCode),
-        verifiedBy: "paystack",
-        verifiedAt: admin.database.ServerValue.TIMESTAMP,
-        ownerUid: actor.uid
+      const subCode=paystackSubaccountCode(sub);
+      if(!/^ACCT_[A-Za-z0-9]+$/.test(subCode)||
+         Number(sub.percentage_charge)!==PLATFORM_COMMISSION_PERCENT){
+        await subRef.update({status:"manual_review"});
+        throw Error("Paystack subaccount requires manual review.");
+      }
+      const ready=isVerifiedSubaccount(sub,subCode);
+      await subRef.set({
+        status:ready?"verified":"pending_paystack_verification",
+        subaccountCode:subCode,platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
+        bankCode:clean.bankCode,bankName:String(sub.settlement_bank||clean.bankCode),
+        accountName:clean.accountName,accountLast4:clean.accountNumber.slice(-4),
+        ownerUid:actor.uid,createdAt:admin.database.ServerValue.TIMESTAMP
       });
       await admin.database().ref(`taxis/${driverId}`).update({
-        payoutStatus: "verified", payoutAccountLast4: clean.accountNumber.slice(-4)
+        payoutStatus:ready?"verified":"pending_paystack_verification",
+        payoutAccountLast4:clean.accountNumber.slice(-4)
       });
-      // Start previously earned but undelivered card payouts once the driver
-      // provides a verified bank. Every transfer reference remains immutable.
-      const queue = (await admin.database().ref(`driverPayoutQueues/${driverId}`)
-        .limitToFirst(100).once("value")).val() || {};
-      for (const item of Object.values(queue)) {
-        try {
-          const completedTrip = (await admin.database()
-            .ref(`requests/${item.requestId}`).once("value")).val();
-          if (completedTrip?.status === "completed") {
-            await issueDriverCardPayout(item.requestId, item.passengerId, completedTrip);
-          }
-        } catch (error) {
-          console.warn("Bank enabled; existing payout requires review",
-            item.requestId, error?.message || String(error));
-        }
-      }
-      return response.status(200).json({ ok: true, status: "verified",
-        accountLast4: clean.accountNumber.slice(-4) });
+      return response.status(200).json({ok:true,
+        status:ready?"verified":"pending_paystack_verification",
+        subaccountCode:subCode,accountLast4:clean.accountNumber.slice(-4)});
     } catch (error) {
       console.error("Driver payout bank configuration error", error?.message);
       return response.status(422).json({
