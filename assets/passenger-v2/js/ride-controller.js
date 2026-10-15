@@ -555,16 +555,31 @@ ASIYE.ride = {
         if (!container) return;
         const passenger = this.getPassengerData(request) || {};
         const escape = value => ASIYE.ui.escape(String(value || ''));
-        const old = container.querySelector('[data-trip-summary]');
-        old?.remove();
+        container.querySelector('[data-trip-summary]')?.remove();
         const summary = document.createElement('section');
         summary.dataset.tripSummary = 'true';
         const arrival = Boolean(passenger.arrivedAt || request.arrivedAt || request.tripStartedAt ||
             ['arrived', 'passenger_onboard', 'all_onboard', 'in_transit'].includes(status));
-        summary.innerHTML = `<p><strong>Pickup:</strong> ${escape(passenger.pickupAddress || request.pickupAddress)}<br>
-            <strong>Destination:</strong> ${escape(passenger.destination || request.destination || request.destinationName)}<br>
-            <strong>Fare:</strong> R${Number(ASIYE.state.booking.fare || 0).toFixed(2)} · ${escape(ASIYE.state.booking.paymentMethod)}</p>
-            ${arrival ? '' : '<button type="button" class="secondary-button" data-trip-cancel>Cancel booking</button>'}`;
+        const pickup = escape(passenger.pickupAddress || request.pickupAddress || 'Pickup details pending');
+        const destination = escape(passenger.destination || request.destination || request.destinationName || 'Destination details pending');
+        const fare = Number(ASIYE.state.booking.fare || 0).toFixed(2);
+        const method = String(ASIYE.state.booking.paymentMethod || request.paymentMethod || 'cash').toLowerCase();
+        const modern = Boolean(container.querySelector('.ride-match'));
+        if (modern) {
+            summary.className = 'ride-match-summary';
+            summary.innerHTML = `
+                <div class="ride-match-route" aria-label="Your route">
+                    <div class="ride-match-stop"><span class="ride-match-location" aria-hidden="true"></span><div><span>Pickup</span><p>${pickup}</p></div></div>
+                    <div class="ride-match-stop"><span class="ride-match-location ride-match-location--destination" aria-hidden="true"></span><div><span>Destination</span><p>${destination}</p></div></div>
+                </div>
+                <div class="ride-match-fare"><div><span>Agreed fare</span><small>${method === 'cash' ? 'Cash · pay after your trip' : escape(method === 'card' ? 'Card payment' : method)}</small></div><strong>R${fare}</strong></div>
+                ${arrival ? '' : '<button type="button" class="ride-match-cancel" data-trip-cancel>Cancel booking</button>'}`;
+        } else {
+            summary.innerHTML = `<p><strong>Pickup:</strong> ${pickup}<br>
+                <strong>Destination:</strong> ${destination}<br>
+                <strong>Fare:</strong> R${fare} · ${escape(method)}</p>
+                ${arrival ? '' : '<button type="button" class="secondary-button" data-trip-cancel>Cancel booking</button>'}`;
+        }
         container.append(summary);
         summary.querySelector('[data-trip-cancel]')?.addEventListener('click', async event => {
             event.currentTarget.disabled = true;
@@ -1616,59 +1631,43 @@ ASIYE.ride = {
        ======================================================== */
 
     renderDriverAssigned(request) {
-
-        const container =
-            document.getElementById(
-                'sheetContent'
-            );
-
-
+        const container = document.getElementById('sheetContent');
         if (!container) return;
-
-
-        const name =
-            request.driverName ||
-            'Your driver';
-
-
-        const isClub =
-            request.type === 'club';
-
-
+        const escape = value => ASIYE.ui.escape(String(value || ''));
+        const isClub = request.type === 'club';
+        const phone = String(request.driverPhone || '').replace(/[^\d+]/g, '');
+        const callable = /^\+?\d{6,15}$/.test(phone);
         container.innerHTML = `
-
-            <div class="home-kicker">
-                ${
-                    isClub
-                    ? 'Asiye Club'
-                    : 'Asiye Go'
-                }
-            </div>
-
-            <h2 class="home-title">
-                ${ASIYE.ui.escape(name)}
-                accepted your ride
-            </h2>
-
-            <div class="home-greeting">
-
-                ${
-                    isClub
-
-                    ?
-
-                    'Your driver is assigned and waiting for the Club departure stage.'
-
-                    :
-
-                    'Your driver is preparing to come to you.'
-                }
-
-            </div>
-
-            ${this.driverCard(request)}
-
-        `;
+            <section class="ride-match" aria-label="Your confirmed driver">
+                <div class="ride-match-topline">
+                    <span class="ride-match-service">${isClub ? 'Asiye Club' : 'Asiye Go'}</span>
+                    <span class="ride-match-status">${this.rideMatchIcon('check')}Driver confirmed</span>
+                </div>
+                <h2>Your ride is confirmed</h2>
+                <p class="ride-match-intro">${isClub
+                    ? 'Your driver is assigned. We’ll keep you updated as your Club gets ready.'
+                    : 'Your driver is getting ready to collect you.'}</p>
+                ${this.driverCard(request)}
+                <div class="ride-match-actions" aria-label="Contact your driver">
+                    ${callable
+                        ? `<a href="tel:${escape(phone)}" aria-label="Call ${escape(request.driverName || 'your driver')}">${this.rideMatchIcon('call')}Call driver</a>`
+                        : `<button type="button" disabled>${this.rideMatchIcon('call')}Call unavailable</button>`}
+                    <button type="button" data-match-message>${this.rideMatchIcon('message')}Message</button>
+                </div>
+                <p class="ride-match-feedback" role="status" aria-live="polite"></p>
+            </section>`;
+        container.querySelector('[data-match-message]')?.addEventListener('click', async () => {
+            try {
+                if (typeof window.AsiyeTripChat?.open !== 'function')
+                    throw new Error('Messaging is unavailable. Please call your driver.');
+                await window.AsiyeTripChat.open(request, request.requestId || this.requestId);
+            } catch (error) {
+                const feedback = container.querySelector('.ride-match-feedback');
+                if (feedback) feedback.textContent = error.message || 'Messaging is unavailable right now.';
+            }
+        });
+        container.querySelectorAll('.ride-match img').forEach(img =>
+            img.addEventListener('error', () => img.remove(), {once: true}));
     },
 
 
@@ -2054,73 +2053,47 @@ ASIYE.ride = {
        DRIVER CARD
        ======================================================== */
 
+    rideMatchIcon(name) {
+        const paths = {
+            check: '<path d="m6 12 4 4 8-8"/>',
+            call: '<path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a14 14 0 0 1-7-7l2-2-2-5Z"/>',
+            message: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5A8.5 8.5 0 0 1 10.5 3h2a8.5 8.5 0 0 1 8.5 8.5Z"/><path d="M7 9h9M7 13h6"/>',
+            car: '<path d="m5 10 2-5h10l2 5M4 10h16v8H4zM6 18v2m12-2v2M7 14h.01M17 14h.01"/>'
+        };
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ''}</svg>`;
+    },
+
     driverCard(request) {
-
-        const escape =
-            value => ASIYE.ui.escape(value);
-
-        const name =
-            request.driverName ||
-            'Driver';
-
-        const photo =
-            request.driverProfileImageUrl ||
-            request.profileImageUrl ||
-            request.profile_picture_url ||
-            '';
-
-        const carPhoto =
-            request.driverVehiclePhoto ||
-            request.vehiclePhoto ||
-            '';
-
-        const vehicle =
-            [
-                request.vehicleColor,
-                request.vehicleMake,
-                request.vehicleModel,
-                request.vehicleYear
-            ]
-            .filter(Boolean)
-            .join(' ');
-
+        const escape = value => ASIYE.ui.escape(String(value || ''));
+        const name = String(request.driverName || 'Your driver');
+        const image = value => /^(https?:\/\/|\.{0,2}\/|assets\/)/i.test(String(value || ''))
+            ? String(value) : '';
+        const photo = image(request.driverProfileImageUrl || request.profileImageUrl || request.profile_picture_url);
+        const carPhoto = image(request.driverVehiclePhoto || request.vehiclePhoto);
+        const vehicle = [request.vehicleColor, request.vehicleMake, request.vehicleModel, request.vehicleYear]
+            .filter(Boolean).join(' ');
+        const rating = Number(request.driverRating);
         return `
-            <div class="asiye-driver-card" style="align-items:flex-start;">
-                <div class="menu-avatar" style="overflow:hidden;">
-                    ${photo
-                        ? `<img src="${escape(photo)}" alt="${escape(name)}" style="width:100%;height:100%;object-fit:cover;">`
-                        : escape(name.charAt(0).toUpperCase())}
+            <div class="ride-match-driver-card">
+                <div class="ride-match-driver">
+                    <div class="ride-match-avatar" aria-hidden="true"><span>${escape(name.charAt(0).toUpperCase())}</span>
+                        ${photo ? `<img src="${escape(photo)}" alt="">` : ''}</div>
+                    <div class="ride-match-driver-info">
+                        <strong>${escape(name)}</strong>
+                        <span>${Number.isFinite(rating) && rating > 0 && rating <= 5
+                            ? `<span class="ride-match-star" aria-hidden="true">★</span> ${rating.toFixed(1)} <span class="ride-match-dot">·</span> Your driver`
+                            : 'Your assigned driver'}</span>
+                    </div>
                 </div>
-
-                <div class="asiye-driver-data" style="min-width:0;flex:1;">
-                    <div class="asiye-driver-name">
-                        ${escape(name)}
+                <div class="ride-match-vehicle">
+                    <div class="ride-match-car-photo" aria-hidden="true">${this.rideMatchIcon('car')}
+                        ${carPhoto ? `<img src="${escape(carPhoto)}" alt="">` : ''}</div>
+                    <div class="ride-match-vehicle-info">
+                        <span>${escape(vehicle || 'Vehicle details will appear here')}</span>
+                        ${request.vehicleReg ? `<strong class="ride-match-plate">${escape(request.vehicleReg)}</strong>` : ''}
                     </div>
-
-                    <div class="asiye-driver-details">
-                        ★ ${escape(request.driverRating || '5.0')} · Verified driver
-                    </div>
-
-                    <div class="asiye-driver-details" style="margin-top:5px;">
-                        ${escape(vehicle || 'Vehicle details pending')}
-                    </div>
-
-                    ${request.vehicleReg
-                        ? `<div class="asiye-driver-plate">${escape(request.vehicleReg)}</div>`
-                        : ''}
-
-                    ${request.driverPhone
-                        ? `<div class="asiye-driver-details" style="margin-top:5px;">${escape(request.driverPhone)}</div>`
-                        : ''}
                 </div>
-            </div>
-
-            ${carPhoto
-                ? `<div style="margin-top:10px;border-radius:14px;overflow:hidden;background:#f4f4f4;">
-                    <img src="${escape(carPhoto)}" alt="Assigned vehicle" style="display:block;width:100%;max-height:170px;object-fit:cover;">
-                   </div>`
-                : ''}
-        `;
+            </div>`;
     },
 
 
