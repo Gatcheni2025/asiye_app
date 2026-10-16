@@ -72,6 +72,17 @@ test('driver logout persists offline flags for the authenticated profile before 
  } finally {dom.window.close();}
 });
 
+test('logout takes the verified current driver profile offline when an account has an older linked profile',async()=>{
+ const {dom,w,calls}=presenceWindow();
+ try {
+  w.ASIYE_DRIVER.state.driverId='current-owned-driver';
+  w.ASIYE_DRIVER.state.driver.authUid='verified-auth';
+  await w.AsiyeDriverPresence.goOffline();
+  const write=calls.find(c=>Array.isArray(c)&&c[0]==='write');
+  assert.equal(write[1],'taxis/current-owned-driver');
+ } finally {dom.window.close();}
+});
+
 test('failed offline persistence does not sign the driver out or claim success',async()=>{
  const {dom,w,calls}=presenceWindow(true);
  try {

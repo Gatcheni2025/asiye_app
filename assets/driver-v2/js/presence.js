@@ -41,8 +41,13 @@
             if (app?.state) app.state.loggingOut = true;
             try {
                 const user = firebase.auth().currentUser;
-                // Resolve from Firebase Auth; localStorage can refer to a previous account.
-                const profile = user ? await window.AsiyeEnrollment.resolveDriverProfile(user) : null;
+                const current = app?.state;
+                const currentOwned = user && current?.driverId &&
+                    (current.driverId === user.uid || current.driver?.authUid === user.uid || current.driver?.userUid === user.uid);
+                // Prefer the verified profile in use; legacy accounts can have
+                // another linked record. Never trust a localStorage ID alone.
+                const profile = currentOwned ? {id:current.driverId}
+                    : user ? await window.AsiyeEnrollment.resolveDriverProfile(user) : null;
                 if (profile) await firebase.database().ref(`taxis/${profile.id}`).update(offline());
                 app?.requests?.stop?.();
                 app?.location?.stop?.();
