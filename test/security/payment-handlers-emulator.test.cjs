@@ -326,14 +326,15 @@ test('Go permits 65% offers, rejects lower fares and lets an eligible driver cou
 });
 
 test('Go cancellation before driver acceptance permits the second and third bookings without admin intervention',async()=>{
- for(const requestId of ['first-cancelled','second-cancelled','third-booking']){
+ for(const requestId of ['go-first-cancelled-reference','go-second-cancelled-reference','go-third-booking-reference']){
+  assert.match(requestId,/^[A-Za-z0-9_-]{16,128}$/);
   await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
    paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',routeDistanceKm:10,routeDurationMinutes:0,
    commuterLocation:pickup,destinationCoords:destination});
   const offer=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
   assert.equal(offer.status,200,JSON.stringify(offer.body));
   assert.equal(await read('commuters/sender/currentRequest'),requestId);
-  if(requestId==='third-booking')continue;
+  if(requestId==='go-third-booking-reference')continue;
   assert.equal((await call('goTripActionSecure','member-auth',{requestId,action:'cancel'})).status,403);
   const cancelled=await call('goTripActionSecure','sender-auth',{requestId,action:'cancel'});
   assert.equal(cancelled.status,200,JSON.stringify(cancelled.body));
@@ -346,16 +347,17 @@ test('Go cancellation before driver acceptance permits the second and third book
 });
 
 test('legacy cancelled pointers self-heal while delayed cancellations preserve a newer active booking',async()=>{
- await db.ref('requests/old').set({requestId:'old',commuterId:'sender',type:'ehailing',rideType:'go',status:'cancelled',negotiationEnabled:true});
- await db.ref('commuters/sender/currentRequest').set('old');
- const requestId='new-booking';
+ const oldId='go-old-cancelled-reference';
+ await db.ref('requests/'+oldId).set({requestId:oldId,commuterId:'sender',type:'ehailing',rideType:'go',status:'cancelled',negotiationEnabled:true});
+ await db.ref('commuters/sender/currentRequest').set(oldId);
+ const requestId='go-new-booking-reference';
  await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
   paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',routeDistanceKm:10,routeDurationMinutes:0,
   commuterLocation:pickup,destinationCoords:destination});
  const offer=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
  assert.equal(offer.status,200,JSON.stringify(offer.body));
  assert.equal(await read('commuters/sender/currentRequest'),requestId);
- assert.equal((await call('goTripActionSecure','sender-auth',{requestId:'old',action:'cancel'})).status,200);
+ assert.equal((await call('goTripActionSecure','sender-auth',{requestId:oldId,action:'cancel'})).status,200);
  assert.equal(await read('commuters/sender/currentRequest'),requestId);
  await db.ref('requests/conflicting').set({...(await read('requests/'+requestId)),requestId:'conflicting'});
  const conflict=await call('submitGoFareOffer','sender-auth',{requestId:'conflicting',amount:70});

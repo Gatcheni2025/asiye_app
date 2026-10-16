@@ -81,7 +81,7 @@ jobs:
         run: |
           npm --prefix test/security install --no-audit --no-fund
           npm --prefix functions install --no-audit --no-fund
-      - name: Firebase authorization, exported payment handlers and support form checks
+      - name: Firebase authorization, repeated cancellation, exported handlers and support form checks
         working-directory: test/security
         run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json 'npm test'
 
