@@ -893,7 +893,7 @@ ASIYE.ride = {
 
                     <div class="home-greeting">
                         ${ASIYE.ui.escape(driverName)}
-                        has sent a protected counter offer.
+                        has sent you a counter-offer.
                         No payment has been taken yet.
                     </div>
                 </div>
@@ -932,7 +932,7 @@ ASIYE.ride = {
                 id="acceptGoFareCounter"
                 class="primary-button"
             >
-                Accept R${counterFare.toFixed(0)}
+                Accept R${counterFare.toFixed(0)} &amp; book ride
             </button>
 
             <button
@@ -941,6 +941,10 @@ ASIYE.ride = {
                 style="margin-top:9px;"
             >
                 Keep my R${passengerOffer.toFixed(0)} offer
+            </button>
+
+            <button id="cancelGoFareRequest" class="secondary-button" style="margin-top:9px;">
+                Cancel request
             </button>
         `;
 
@@ -969,7 +973,8 @@ ASIYE.ride = {
                         await ASIYE.goNegotiation
                             .acceptDriverCounter(
                                 request.requestId ||
-                                this.requestId
+                                this.requestId,
+                                request
                             );
 
 
@@ -985,7 +990,7 @@ ASIYE.ride = {
                             false;
 
                         button.textContent =
-                            `Accept R${counterFare.toFixed(0)}`;
+                            `Accept R${counterFare.toFixed(0)} & book ride`;
 
 
                         ASIYE.ui
@@ -1022,7 +1027,8 @@ ASIYE.ride = {
                         await ASIYE.goNegotiation
                             .keepPassengerOffer(
                                 request.requestId ||
-                                this.requestId
+                                this.requestId,
+                                request
                             );
 
 
@@ -1070,6 +1076,10 @@ ASIYE.ride = {
                     }
                 }
             );
+
+        document.getElementById('cancelGoFareRequest')?.addEventListener('click', () => {
+            ASIYE.booking?.cancelCurrentRide?.();
+        });
     },
 
 
@@ -1144,6 +1154,11 @@ ASIYE.ride = {
                     ? `${foundCount} nearby drivers have received your request.`
                     : 'A nearby driver has received your request.';
 
+        const fareDecision = request.lastGoFareDecision;
+        const driverDeclined = fareDecision?.action === 'declined' &&
+            Number(fareDecision.offerRound) === Number(request.passengerOfferRound || 1);
+        const offer = Number(request.passengerOffer || request.finalAmount || 0);
+
 
         container.innerHTML = `
 
@@ -1174,7 +1189,7 @@ ASIYE.ride = {
                     <div class="home-greeting">
                         ${
                             driverFound
-                            ? 'Waiting for a driver to accept your trip.'
+                            ? 'Waiting for a driver to accept your fare or make a counter-offer.'
                             : 'Checking active Asiye drivers around your pickup. We will keep searching automatically.'
                         }
                     </div>
@@ -1182,6 +1197,10 @@ ASIYE.ride = {
                 </div>
 
             </div>
+
+            ${driverDeclined ? `<p class="go-fare-protection-note" role="status">${ASIYE.ui.escape(fareDecision.driverName || 'A driver')} declined your R${offer.toFixed(0)} offer. Your booking stays open for other drivers.</p>` : ''}
+
+            ${request.negotiationEnabled ? `<p class="go-fare-protection-note">Your offer: <strong>R${offer.toFixed(0)}</strong>. Drivers decide whether to accept, decline or counter. No payment is taken until a fare is agreed.</p>` : ''}
 
             <div class="asiye-request-activity">
 

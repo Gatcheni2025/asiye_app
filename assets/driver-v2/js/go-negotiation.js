@@ -126,8 +126,9 @@ ASIYE_DRIVER.goNegotiation = {
             );
 
         const waiting = request.fareStatus === 'driver_counter';
-        const limitReached = Number(request.driverCounterCount || 0) >= 2;
-        const canCounter = !waiting && !limitReached && passengerOffer < maximum;
+        const canCounter = !waiting && passengerOffer < maximum;
+        const recommendedMinimum = Number(request.recommendedMinimumFare || Number(request.marketReferenceFare || 0) * 0.65 || 1);
+        const lowOffer = passengerOffer < recommendedMinimum;
         const counterNet = amount => this.money(Number(amount) * (1 - commissionRate));
 
 
@@ -168,13 +169,14 @@ ASIYE_DRIVER.goNegotiation = {
 
             <p class="driver-go-offer-status" role="status">${waiting
                 ? `Counter R${this.money(request.driverCounterFare)} sent · waiting for the passenger`
-                : 'Live passenger offer · accept or suggest a fare'}</p>
+                : lowOffer ? 'Low passenger offer · you decide whether to accept, decline or counter'
+                    : 'Live passenger offer · accept, decline or counter'}</p>
 
             <div class="driver-go-recommendation">
                 <span>Recommended counter</span>
                 <strong>R${suggestedCounter.toFixed(0)}</strong>
                 <p>You receive R${counterNet(suggestedCounter)} after commission.</p>
-                <small>Based on the route fare. Check the pickup distance and trip before deciding.</small>
+                <small>Based on the route fare. This is a recommendation; you can accept the passenger’s lower offer.</small>
             </div>
 
             <div class="driver-go-negotiation-copy">
@@ -223,7 +225,7 @@ ASIYE_DRIVER.goNegotiation = {
 
             <small>
                 You receive <strong id="driverCounterNet">R${counterNet(suggestedCounter)}</strong> for this counter.
-                ${limitReached ? 'Counter-offer limit reached; you can still accept the passenger offer.' : `${Math.max(0, 2 - Number(request.driverCounterCount || 0))} counter-offers remaining.`}
+                The offer stays open until you or the passenger makes a decision.
                 No payment is taken until the passenger agrees.
             </small>
         `;

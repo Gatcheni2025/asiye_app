@@ -296,7 +296,7 @@ test('cancellation during slow checkout stays cancelled; duplicate charge cannot
   assert.equal(verified.body.status,'refunded');
 });
 
-test('Go permits 65% offers, rejects lower fares and lets an eligible driver counter before passenger agreement',async()=>{
+test('Go forwards low offers and leaves the driver in control before passenger agreement',async()=>{
   const requestId='go-offer65-handler';
   await db.ref('requests/'+requestId).set({
     requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
@@ -304,25 +304,122 @@ test('Go permits 65% offers, rejects lower fares and lets an eligible driver cou
     routeDistanceKm:10,routeDurationMinutes:0,commuterLocation:pickup,destinationCoords:destination
   });
   await db.ref('commuters/sender/currentRequest').set(requestId);
-  assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount:64})).status,422);
-  const offered=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
+  for(const amount of [0,-1,'not-a-fare',96]) assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount})).status,422);
+  const offered=await call('submitGoFareOffer','sender-auth',{requestId,amount:40});
   assert.equal(offered.status,200,JSON.stringify(offered.body));
-  assert.equal((await read('requests/'+requestId)).minimumFareOffer,65);
-  assert.equal((await read('requests/'+requestId)).driverNetFare,52);
-  assert.equal((await read('requests/'+requestId)).platformCommission,13);
+  const pending=await read('requests/'+requestId);
+  assert.equal(pending.minimumFareOffer,1);
+  assert.equal(pending.recommendedMinimumFare,65);
+  assert.equal(pending.driverNetFare,32);
+  assert.equal(pending.platformCommission,8);
+  assert.equal(pending.fareStatus,'passenger_offer');
+  assert.equal(pending.lastGoFareDecision,undefined);
   await db.ref(`notifications/taxis/driver/${requestId}`).set({requestId,status:'pending'});
   assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:96})).status,422);
-  assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:64})).status,422);
+  assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:39})).status,422);
+  assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:80,passengerOffer:65})).status,409);
+  await db.ref('requests/'+requestId+'/driverCounterCount').set(2);
   const counter=await call('counterGoFare','driver-auth',{requestId,amount:80});
   assert.equal(counter.status,200,JSON.stringify(counter.body));
+  assert.equal((await read('requests/'+requestId)).counterExpiresAt,undefined);
+  assert.equal((await read('requests/'+requestId)).driverCounterCount,3,'The driver may make another counter after two rounds');
   assert.equal((await call('acceptGoFareCounter','member-auth',{requestId})).status,403);
-  const accepted=await call('acceptGoFareCounter','sender-auth',{requestId});
+  assert.equal((await call('acceptGoFareCounter','sender-auth',{requestId,amount:75})).status,409);
+  assert.equal((await read('requests/'+requestId)).taxiId,undefined);
+  await db.ref('requests/'+requestId+'/counterExpiresAt').set(Date.now()-120000);
+  const accepted=await call('acceptGoFareCounter','sender-auth',{requestId,amount:80,negotiationRound:2});
   assert.equal(accepted.status,200,JSON.stringify(accepted.body));
   assert.equal(accepted.body.agreedFare,80);
   assert.equal(accepted.body.driverNetFare,64);
   assert.equal(accepted.body.platformCommission,16);
   assert.equal((await read('requests/'+requestId)).taxiId,'driver');
   assert.equal(initializations.length,0,'Negotiation must not charge a card');
+});
+
+async function lowGoOffer(requestId='go-low-offer-reference'){
+  await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+    paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',routeDistanceKm:10,routeDurationMinutes:0,
+    commuterLocation:pickup,destinationCoords:destination});
+  const offer=await call('submitGoFareOffer','sender-auth',{requestId,amount:40});
+  assert.equal(offer.status,200,JSON.stringify(offer.body));
+  const dispatched=await call('dispatchGoRideRequest','sender-auth',{requestId});
+  assert.equal(dispatched.status,200,JSON.stringify(dispatched.body));
+  assert.ok(await read(`notifications/taxis/driver/${requestId}`),'A low offer reaches the driver');
+  return requestId;
+}
+
+test('a driver can accept a low fare with the same 80/20 agreement',async()=>{
+  const requestId=await lowGoOffer();
+  const accepted=await call('acceptGoFareOffer','driver-auth',{requestId,amount:40});
+  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
+  const agreement=await read('goFareAgreements/'+requestId);
+  assert.equal(agreement.agreedFare,40);assert.equal(agreement.driverNetFare,32);assert.equal(agreement.platformCommission,8);
+  assert.equal(agreement.driverId,'driver');assert.equal(initializations.length,0);
+});
+
+test('only a notified driver can decline; the passenger can continue with other drivers or a new offer',async()=>{
+  const requestId=await lowGoOffer();
+  await db.ref(`notifications/taxis/otherDriver/${requestId}`).remove();
+  assert.equal((await call('declineGoFareOffer',null,{requestId})).status,401);
+  assert.equal((await call('declineGoFareOffer','other-driver-auth',{requestId})).status,403);
+  assert.equal((await call('declineGoFareOffer','sender-auth',{requestId})).status,403);
+  const declined=await call('declineGoFareOffer','driver-auth',{requestId,amount:40,negotiationRound:1});
+  assert.equal(declined.status,200,JSON.stringify(declined.body));
+  assert.equal((await call('declineGoFareOffer','driver-auth',{requestId})).status,200,'Retry is idempotent');
+  const trip=await read('requests/'+requestId);
+  assert.equal(trip.status,'searching');assert.equal(trip.fareStatus,'passenger_offer');
+  assert.equal(trip.lastGoFareDecision.driverId,'driver');assert.equal(trip.lastGoFareDecision.action,'declined');
+  assert.equal(await read('commuters/sender/currentRequest'),requestId);
+  assert.equal(await read(`notifications/taxis/driver/${requestId}`),null);
+  const notices=Object.values(await read('notifications/commuters/sender'));
+  assert.equal(notices.filter(n=>n.type==='go_fare_declined').length,1);
+  assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount:40})).status,200);
+  assert.equal((await read('requests/'+requestId)).passengerOfferRound,1,'A duplicate offer must not erase the driver decision');
+  assert.equal((await call('dispatchGoRideRequest','sender-auth',{requestId})).status,200);
+  assert.equal(await read(`notifications/taxis/driver/${requestId}`),null,'The driver is not asked again about the same offer');
+  assert.ok(await read(`notifications/taxis/otherDriver/${requestId}`));
+  assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount:50})).status,200);
+  assert.equal((await call('dispatchGoRideRequest','sender-auth',{requestId})).status,200);
+  assert.ok(await read(`notifications/taxis/driver/${requestId}`),'A changed offer can be considered again');
+  assert.equal((await read('requests/'+requestId)).passengerOfferRound,2);
+  assert.equal(initializations.length,0);
+});
+
+test('stale decline taps cannot reject a newer passenger offer',async()=>{
+  const requestId=await lowGoOffer();
+  assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount:50})).status,200);
+  assert.equal((await call('declineGoFareOffer','driver-auth',{requestId,amount:40,negotiationRound:1})).status,409);
+  assert.equal((await read('requests/'+requestId)).lastGoFareDecision,undefined);
+  assert.equal((await read('requests/'+requestId)).passengerOffer,50);
+});
+
+test('a driver may withdraw their counter and the passenger cannot accept it afterwards',async()=>{
+  const requestId=await lowGoOffer();
+  assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:80})).status,200);
+  const retry=await call('submitGoFareOffer','sender-auth',{requestId,amount:40});
+  assert.equal(retry.status,200);assert.equal(retry.body.pricing.fareStatus,'driver_counter');
+  assert.equal((await read('requests/'+requestId)).driverCounterFare,80,'A duplicate passenger request must preserve the driver counter');
+  assert.equal((await call('declineGoFareOffer','driver-auth',{requestId,amount:40,negotiationRound:2})).status,200);
+  const trip=await read('requests/'+requestId);
+  assert.equal(trip.fareStatus,'passenger_offer');assert.equal(trip.driverCounterFare,undefined);
+  assert.equal((await call('acceptGoFareCounter','sender-auth',{requestId,amount:80,negotiationRound:2})).status,409);
+  assert.equal((await read('requests/'+requestId)).taxiId,undefined);
+});
+
+test('simultaneous driver acceptance and rejection produce one decision',async()=>{
+  const requestId=await lowGoOffer();
+  const [accepted,declined]=await Promise.all([
+    call('acceptGoFareOffer','driver-auth',{requestId,amount:40}),
+    call('declineGoFareOffer','driver-auth',{requestId,amount:40,negotiationRound:1})
+  ]);
+  const trip=await read('requests/'+requestId);
+  if(accepted.status===200){
+    assert.equal(declined.status,409);assert.equal(trip.fareStatus,'agreed');assert.equal(trip.lastGoFareDecision,undefined);
+  }else{
+    assert.equal(declined.status,200);assert.ok([403,409].includes(accepted.status));
+    assert.equal(trip.taxiId,undefined);assert.equal(trip.lastGoFareDecision.action,'declined');
+  }
+  assert.equal(initializations.length,0);
 });
 
 test('Go cancellation before driver acceptance permits the second and third bookings without admin intervention',async()=>{

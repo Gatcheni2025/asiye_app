@@ -45,7 +45,9 @@ ASIYE_DRIVER.requests = {
         const signature = request => JSON.stringify([
             request?.status, request?.taxiId, request?.fareStatus, request?.passengerOffer,
             request?.agreedFare, request?.driverCounterFare, request?.negotiationRound,
-            request?.driverCounterCount, request?.counterExpiresAt
+            request?.driverCounterCount, request?.counterExpiresAt,
+            request?.fareCounterDeclinedDrivers?.[ASIYE_DRIVER.state.driverId],
+            request?.fareOfferDeclinedDrivers?.[ASIYE_DRIVER.state.driverId]?.offerRound
         ]);
         this.incomingSignature = signature(initial);
         const ref = firebase.database().ref(`requests/${requestId}`);
@@ -174,6 +176,11 @@ ASIYE_DRIVER.requests = {
                 {
                     requestId:
                         id,
+
+                    ...(this.activeRequest?.requestId === id || this.activeRequest?.key === id ? {
+                        passengerOffer: this.activeRequest.passengerOffer,
+                        negotiationRound: this.activeRequest.negotiationRound
+                    } : {}),
 
                     amount:
                         Math.round(
@@ -717,6 +724,10 @@ ASIYE_DRIVER.requests = {
     isRequestAvailable(
         request
     ) {
+
+        const driverId = ASIYE_DRIVER.state.driverId;
+        if (request.fareCounterDeclinedDrivers?.[driverId] === true ||
+            request.fareOfferDeclinedDrivers?.[driverId]?.offerRound === Number(request.passengerOfferRound || 1)) return false;
 
         const status =
             String(
@@ -2776,8 +2787,6 @@ ASIYE_DRIVER.requests = {
         requestId = null
     ) {
 
-        this.stopIncomingWatch();
-
         const id =
 
             requestId ||
@@ -2790,6 +2799,20 @@ ASIYE_DRIVER.requests = {
             return;
         }
 
+        const offer = this.activeRequest;
+        const notificationKey = this.activeNotificationKey;
+        if (ASIYE_DRIVER.goNegotiation?.isProtectedGo(offer)) {
+            try {
+                await this.postNegotiation('declineGoFareOffer', {
+                    requestId: id,
+                    amount: Number(offer.passengerOffer),
+                    negotiationRound: offer.negotiationRound
+                });
+            } catch (error) {
+                ASIYE_DRIVER.ui?.toast?.(error.message || 'Could not decline the offer. Try again.', 'danger');
+                return;
+            }
+        }
 
         /*
          * Do NOT cancel the passenger's booking.
@@ -2798,14 +2821,16 @@ ASIYE_DRIVER.requests = {
          */
 
         if (
-            this.activeNotificationKey
+            notificationKey
         ) {
 
             await this.removeNotification(
-                this.activeNotificationKey
+                notificationKey
             );
         }
 
+        if (this.activeRequest && (this.activeRequest.key || this.activeRequest.requestId) !== id) return;
+        this.stopIncomingWatch();
 
         this.activeRequest =
             null;

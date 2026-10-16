@@ -1,9 +1,10 @@
-name: Go Fare Negotiation
+name: Go Fare Negotiation and Driver Decisions
 
 on:
   push:
     branches:
       - feature/11.0.61-331-pricing-search
+      - fix/paystack-subaccounts-cash-card-no-wallet
     paths:
       - 'functions/index.js'
       - 'assets/passenger-v2/js/pricing.js'
@@ -14,6 +15,9 @@ on:
       - 'assets/driver-v2/js/go-negotiation.js'
       - 'assets/driver-v2/js/requests.js'
       - 'assets/driver-v2/js/trip-controller.js'
+      - 'assets/driver-v2/js/app.js'
+      - 'database.rules.json'
+      - 'test/security/**'
       - 'test/go-fare-negotiation.test.cjs'
       - 'test/go-fare-settlement-lifecycle.test.cjs'
       - '.github/workflows/go_fare_negotiation.yml'
@@ -25,13 +29,18 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
 
       - name: Validate negotiation JavaScript
         run: |
@@ -43,7 +52,38 @@ jobs:
           node --check assets/passenger-v2/js/wallet.js
           node --check assets/driver-v2/js/go-negotiation.js
           node --check assets/driver-v2/js/requests.js
+          node --check assets/driver-v2/js/app.js
           node --check assets/driver-v2/js/trip-controller.js
 
-      - name: Test protected Go negotiation and settlement
-        run: node --test test/go-fare-negotiation.test.cjs test/go-fare-settlement-lifecycle.test.cjs
+      - name: Test negotiation, booking, payment failures and duplicate callbacks
+        run: >
+          node --test
+          test/go-fare-negotiation.test.cjs
+          test/go-fare-settlement-lifecycle.test.cjs
+          test/go-continuation.test.cjs
+          test/paystack-subaccount-migration.test.cjs
+          test/paystack-card-journey-simulation.test.cjs
+          test/parcel-security.test.cjs
+          test/driver-first-card-booking.test.cjs
+          test/club-lifecycle.test.cjs
+          test/card-booking-sequence.test.cjs
+          test/member-pages.test.cjs
+          test/admin-portal.test.cjs
+          test/login-otp.test.cjs
+          test/native-auth-session.test.cjs
+          test/card-payout-passenger.test.cjs
+          test/club-work-readiness.test.cjs
+          test/request-search-awareness.test.cjs
+          test/passenger-booking-identity.test.cjs
+          test/active-booking-recovery.test.cjs
+          test/preloader-readiness.test.cjs
+          test/v2-navigation.test.cjs
+
+      - name: Install Firebase emulator and exported handler test dependencies
+        run: |
+          npm --prefix test/security install --no-audit --no-fund
+          npm --prefix functions install --no-audit --no-fund
+
+      - name: Verify live fare UI, driver decisions, Firebase authorization and exported payment handlers
+        working-directory: test/security
+        run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json 'npm test'

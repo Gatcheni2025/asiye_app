@@ -62,7 +62,7 @@ function pricingFor(distanceKm, durationMinutes) {
   return context.ASIYE.pricing.calculate();
 }
 
-test('Go pricing protects an 65-95 percent negotiation corridor', () => {
+test('Go pricing recommends 65-90 percent while allowing positive lower offers', () => {
   const quote = pricingFor(10, 20);
 
   assert.equal(
@@ -72,8 +72,9 @@ test('Go pricing protects an 65-95 percent negotiation corridor', () => {
 
   assert.equal(
     quote.goMinimumOffer,
-    77
+    1
   );
+  assert.equal(quote.goRecommendedMinimum, 77);
 
   assert.equal(
     quote.goSuggested,
@@ -92,12 +93,12 @@ test('Go pricing protects an 65-95 percent negotiation corridor', () => {
 
   assert.equal(
     quote.goDriverMinimumNet,
-    61.60
+    0.80
   );
 
   assert.equal(
     quote.goMinimumAsiyeCommission,
-    15.40
+    0.20
   );
 });
 
@@ -122,7 +123,7 @@ test('Go breakdown always preserves the 20/80 split', () => {
 
   const quote = context.ASIYE.pricing.calculate();
   const low = context.ASIYE.pricing.goBreakdown(
-    quote.goMinimumOffer,
+    40,
     quote
   );
   const high = context.ASIYE.pricing.goBreakdown(
@@ -130,9 +131,9 @@ test('Go breakdown always preserves the 20/80 split', () => {
     quote
   );
 
-  assert.equal(low.fare, 77);
-  assert.equal(low.asiyeCommission, 15.40);
-  assert.equal(low.driverReceives, 61.60);
+  assert.equal(low.fare, 40);
+  assert.equal(low.asiyeCommission, 8);
+  assert.equal(low.driverReceives, 32);
 
   assert.equal(high.fare, 112);
   assert.equal(high.asiyeCommission, 22.40);
@@ -204,10 +205,9 @@ test('Server recomputes and enforces protected Go fares', () => {
   for (const required of [
     'const ASIYE_GO_NEGOTIATION',
     'suggestedRatio: 0.90',
-    'minimumRatio: 0.65',
+    'recommendedMinimumRatio: 0.65',
     'maximumRatio: 0.95',
     'commissionRate: 0.20',
-    'maxDriverCounters: 2',
     'function goMarketReference',
     'function goNegotiationPricing',
     'function validGoNegotiatedAmount',
@@ -227,6 +227,7 @@ test('Every negotiation action is a server endpoint', () => {
     'exports.acceptGoFareOffer',
     'exports.acceptGoFareCounter',
     'exports.declineGoFareCounter',
+    'exports.declineGoFareOffer',
     'exports.finalizeNegotiatedGoBooking'
   ]) {
     assert.ok(
@@ -326,7 +327,7 @@ test('Agreed fare is copied into a private server ledger', () => {
   );
 });
 
-test('Driver counter is capped and passenger controls acceptance', () => {
+test('Driver chooses a counter within the ceiling and passenger controls acceptance', () => {
   assert.ok(
     driverNegotiationSource.includes(
       'Passenger offer'
@@ -360,12 +361,6 @@ test('Driver counter is capped and passenger controls acceptance', () => {
   assert.ok(
     passengerRideSource.includes(
       'keepPassengerOffer'
-    )
-  );
-
-  assert.ok(
-    functionsSource.includes(
-      'counterCount >='
     )
   );
 

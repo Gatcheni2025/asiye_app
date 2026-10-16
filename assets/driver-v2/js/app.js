@@ -1631,15 +1631,17 @@ ASIYE_DRIVER.ui = {
             true;
 
 
-        this.startRequestTimer(
-            isEarlyWork
-                ? 45
-                : ASIYE_DRIVER.goNegotiation?.isProtectedGo(request)
-                    ? (request.fareStatus === 'driver_counter'
-                        ? Math.max(1, Math.min(60, Math.ceil((Number(request.counterExpiresAt || Date.now() + 60000) - Date.now()) / 1000)))
-                        : 60)
-                    : 20
-        );
+        if (ASIYE_DRIVER.goNegotiation?.isProtectedGo(request)) {
+            this.stopRequestTimer();
+            const timer = document.getElementById('incomingRequestTimer');
+            if (timer) {
+                timer.textContent = 'Open';
+                timer.setAttribute('aria-label', 'Offer stays open until a decision is made');
+            }
+        } else {
+            document.getElementById('incomingRequestTimer')?.removeAttribute('aria-label');
+            this.startRequestTimer(isEarlyWork ? 45 : 20);
+        }
     },
 
 

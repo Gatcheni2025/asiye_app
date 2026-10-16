@@ -388,6 +388,23 @@ test('negotiated Go commercial fields cannot be rewritten by passenger or driver
   }));
 });
 
+test('Go recommendations, driver decisions and counter versions cannot be forged or deleted by clients', async () => {
+  const fields={recommendedMinimumFare:65,passengerOfferRound:1,negotiationRound:2,
+    fareOfferDeclinedDrivers:{'driver-record':{offerRound:1,amount:40}},
+    fareCounterDeclinedDrivers:{otherDriver:true},lastGoFareDecision:{action:'declined',driverId:'driver-record'},
+    negotiationDriverId:'driver-record',negotiationDriverName:'Driver One',driverCounterCount:1,counterExpiresAt:100};
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(),'requests/negotiated-active'),fields);
+  });
+  for(const actor of ['passenger-auth','driver-auth']){
+    for(const [key,value] of Object.entries(fields)){
+      await assertFails(update(ref(dbFor(actor),'requests/negotiated-active'),{[key]:null}));
+      await assertFails(update(ref(dbFor(actor),'requests/negotiated-active'),{[key]:typeof value==='object'?{forged:true}:typeof value==='number'?999:'forged'}));
+    }
+    await assertSucceeds(get(ref(dbFor(actor),'requests/negotiated-active')));
+  }
+});
+
 test('negotiated Go clients cannot forge server settlement or complete early', async () => {
   const driverDb = dbFor('driver-auth');
 

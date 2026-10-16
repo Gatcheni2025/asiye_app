@@ -167,6 +167,86 @@ test('driver sees the live passenger amount, recommendation and counter earnings
  } finally {dom.window.close();}
 });
 
+test('low Go offers stay visible without a timer rejecting them and recommendations remain optional',()=>{
+ const {dom,w,offer}=driverWindow();
+ try{
+  const intervals=[];let declined=0;
+  w.setInterval=fn=>{intervals.push(fn);return intervals.length;};
+  w.ASIYE_DRIVER.requests.decline=async()=>{declined++;};
+  const low={...offer,passengerOffer:40,minimumFareOffer:1,recommendedMinimumFare:65,driverCounterCount:3};
+  w.ASIYE_DRIVER.ui.showIncomingRequest(low);
+  for(let second=0;second<180;second++)for(const tick of intervals)tick();
+  assert.equal(declined,0);assert.equal(intervals.length,0);
+  assert.equal(w.document.getElementById('incomingRequestOverlay').classList.contains('open'),true);
+  assert.equal(w.document.getElementById('incomingRequestTimer').textContent,'Open');
+  assert.match(w.document.getElementById('acceptRequestButton').textContent,/Accept R40/);
+  assert.equal(w.document.getElementById('counterFareButton').disabled,false);
+  assert.match(w.document.querySelector('[role="status"]').textContent,/you decide/);
+  assert.match(w.document.querySelector('.driver-go-recommendation').textContent,/R90/);
+  w.ASIYE_DRIVER.ui.showIncomingRequest({...low,fareStatus:'driver_counter',driverCounterFare:80,counterExpiresAt:Date.now()-1000});
+  assert.equal(intervals.length,0,'Waiting for a passenger must not start an automatic-decline timer');
+ }finally{dom.window.close();}
+});
+
+test('driver decline records an authenticated decision and a failed request leaves the offer open',async()=>{
+ const {dom,w,offer}=driverWindow();
+ try{
+  const app=w.ASIYE_DRIVER,calls=[],removed=[];
+  app.ui.toast=()=>{};app.ui.showIncomingRequest(offer);
+  app.requests.activeRequest=offer;app.requests.activeNotificationKey='ride';
+  app.requests.postNegotiation=async()=>{throw Error('No connection');};
+  await app.requests.decline();
+  assert.equal(w.document.getElementById('incomingRequestOverlay').classList.contains('open'),true);
+  assert.equal(app.requests.activeRequest,offer);
+  app.requests.postNegotiation=async(endpoint,body)=>{calls.push([endpoint,body]);return {ok:true};};
+  app.requests.removeNotification=async key=>removed.push(key);
+  await app.requests.decline();
+  assert.equal(calls[0][0],'declineGoFareOffer');assert.equal(calls[0][1].requestId,'ride');assert.equal(calls[0][1].amount,65);
+  assert.deepEqual(removed,['ride']);assert.equal(app.requests.activeRequest,null);
+  assert.equal(w.document.getElementById('incomingRequestOverlay').classList.contains('open'),false);
+ }finally{dom.window.close();}
+});
+
+test('a passenger can type and submit an offer below the recommendation without it being raised or rejected',()=>{
+ const dom=new JSDOM('<div id="sheetContent"></div>',{runScripts:'outside-only'});
+ try{
+  const w=dom.window;
+  w.ASIYE={state:{booking:{rideType:'go',goNegotiation:{}},route:{distanceKm:10,durationMinutes:20}}};
+  load(w,'assets/passenger-v2/js/pricing.js');load(w,'assets/passenger-v2/js/go-negotiation.js');
+  const app=w.ASIYE;app.goNegotiation.mount(w.document.getElementById('sheetContent'),app.pricing.calculate());
+  const input=w.document.getElementById('goFareOfferInput');input.value='40';
+  input.dispatchEvent(new w.Event('input'));input.dispatchEvent(new w.Event('change'));
+  assert.equal(input.value,'40');assert.equal(app.goNegotiation.validate(),40);
+  assert.equal(w.document.getElementById('goFareOfferError').textContent,'');
+  assert.match(w.document.getElementById('goFareOfferGuidance').textContent,/R40 offer will be sent to drivers/);
+ }finally{dom.window.close();}
+});
+
+test('the passenger live listener displays a new driver counter immediately and accepts the amount shown',async()=>{
+ const dom=new JSDOM('<div id="sheetContent"></div>',{runScripts:'outside-only',url:'https://example.test/passenger-v2/'});
+ try{
+  const w=dom.window,calls=[];let listener,cancelled=0;
+  const request={requestId:'ride',commuterId:'passenger',type:'ehailing',rideType:'go',status:'searching',
+   negotiationEnabled:true,fareStatus:'passenger_offer',passengerOffer:40,finalAmount:40,maximumFareOffer:95,
+   pickupAddress:'Pickup',destination:'Destination',driverFoundCount:1,passengerOfferRound:1,negotiationRound:1};
+  w.ASIYE={state:{userId:'passenger',booking:{},ui:{}},ui:{escape:v=>String(v),toast:()=>{}},booking:{cancelCurrentRide:async()=>{cancelled++;}},
+   goNegotiation:{acceptDriverCounter:async(id,counter)=>calls.push([id,counter.driverCounterFare,counter.negotiationRound])}};
+  w.firebase={database:()=>({ref:()=>({once:async()=>({val:()=>request}),
+   on:(event,fn)=>{listener=fn;return fn;},off:()=>{}})})};
+  load(w,'assets/passenger-v2/js/ride-controller.js');
+  await w.ASIYE.ride.start('ride',request);
+  assert.match(w.document.getElementById('sheetContent').textContent,/Your offer:\s*R40/);
+  const counter={...request,fareStatus:'driver_counter',driverCounterFare:80,negotiationDriverName:'Sipho',negotiationDriverId:'driver',negotiationRound:2};
+  listener({val:()=>counter});
+  assert.match(w.document.getElementById('sheetContent').textContent,/Driver counter: R80/);
+  w.document.getElementById('acceptGoFareCounter').click();await flush();
+  assert.deepEqual(calls,[['ride',80,2]]);
+  w.document.getElementById('cancelGoFareRequest').click();await flush();assert.equal(cancelled,1);
+  listener({val:()=>({...request,lastGoFareDecision:{action:'declined',driverName:'Sipho',offerRound:1}})});
+  assert.match(w.document.querySelector('[role="status"]').textContent,/Sipho declined your R40 offer/);
+ }finally{dom.window.close();}
+});
+
 test('a waiting Go counter does not disable acceptance of the next Work or Parcel request',()=>{
  for(const type of ['club','delivery']){
   const {dom,w,offer}=driverWindow();

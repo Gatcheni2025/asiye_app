@@ -5484,10 +5484,9 @@ const ASIYE_GO_NEGOTIATION = Object.freeze({
     minimumFare: 30
   }),
   suggestedRatio: 0.90,
-  minimumRatio: 0.65,
+  recommendedMinimumRatio: 0.65,
   maximumRatio: 0.95,
-  commissionRate: 0.20,
-  maxDriverCounters: 2
+  commissionRate: 0.20
 });
 
 function goMoney(value) {
@@ -5570,12 +5569,14 @@ function goNegotiationPricing(trip) {
   const marketReference =
     goMarketReference(trip);
 
-  const minimumFareOffer =
+  // A low fare is a driver's decision. The route floor is advice, not a veto.
+  const minimumFareOffer = 1;
+  const recommendedMinimumFare =
     Math.max(
       1,
       Math.ceil(
         marketReference *
-        ASIYE_GO_NEGOTIATION.minimumRatio
+        ASIYE_GO_NEGOTIATION.recommendedMinimumRatio
       )
     );
 
@@ -5607,6 +5608,7 @@ function goNegotiationPricing(trip) {
     marketReferenceFare:
       marketReference,
     suggestedFare,
+    recommendedMinimumFare,
     minimumFareOffer,
     maximumFareOffer,
     commissionRate,
@@ -5627,7 +5629,7 @@ function validGoNegotiatedAmount(amount, pricing) {
   const value = Number(amount);
 
   return (
-    Number.isFinite(value) &&
+    Number.isSafeInteger(value) &&
     value >= pricing.minimumFareOffer &&
     value <= pricing.maximumFareOffer
   );
@@ -5680,6 +5682,8 @@ function goCommercialPatch(amount, pricing) {
       pricing.marketReferenceFare,
     suggestedFare:
       pricing.suggestedFare,
+    recommendedMinimumFare:
+      pricing.recommendedMinimumFare,
     minimumFareOffer:
       pricing.minimumFareOffer,
     maximumFareOffer:
@@ -5858,6 +5862,7 @@ async function reserveGoNegotiatedDriver({
   amount,
   expectedPassengerOffer,
   expectedCounterFare,
+  expectedNegotiationRound,
   expectedFareStatuses
 }) {
   if (driver.data.currentRequest !== requestId &&
@@ -5978,8 +5983,11 @@ async function reserveGoNegotiatedDriver({
 
           if (goContinuation.terminal(current.status) ||
               (expectedPassengerOffer != null && Number(current.passengerOffer) !== Number(expectedPassengerOffer)) ||
+              (expectedNegotiationRound != null && Number(current.negotiationRound || 1) !== Number(expectedNegotiationRound)) ||
+              current.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === Number(current.passengerOfferRound || 1) ||
+              current.fareCounterDeclinedDrivers?.[driver.id] === true ||
               (expectedCounterFare != null && (Number(current.driverCounterFare) !== Number(expectedCounterFare) ||
-                current.negotiationDriverId !== driver.id || Number(current.counterExpiresAt || 0) < Date.now()))) return undefined;
+                current.negotiationDriverId !== driver.id))) return undefined;
 
           if (
             current.taxiId &&
@@ -6529,6 +6537,15 @@ exports.submitGoFareOffer =
             null,
           driverCounterFare:
             null,
+          negotiationDriverId: null,
+          negotiationDriverName: null,
+          counterExpiresAt: null,
+          counterPlatformCommission: null,
+          counterDriverNetFare: null,
+          fareOfferDeclinedDrivers: null,
+          fareCounterDeclinedDrivers: null,
+          lastGoFareDecision: null,
+          passengerOfferRound: Number(context.trip.passengerOfferRound || 0) + 1,
           fareStatus:
             "passenger_offer",
           negotiationEnabled:
@@ -6738,7 +6755,13 @@ exports.submitGoFareOffer =
         const offered = await transactGoContinuation(context.ref, current => {
           if (current.commuterId !== context.trip.commuterId || current.taxiId ||
               current.fareStatus === 'agreed' || goContinuation.terminal(current.status)) return undefined;
-          return {...current, ...patch, status: ['pending','searching','driver_busy'].includes(current.status) ? current.status : 'pending'};
+          if (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(current.negotiationRound || 1)) return undefined;
+          // An HTTP retry must not erase a driver's decision or pending counter.
+          if (Number(current.passengerOfferRound || 0) > 0 && Number(current.passengerOffer) === amount) return current;
+          return {...current, ...patch,
+            negotiationRound: Number(current.negotiationRound || 0) + 1,
+            passengerOfferRound: Number(current.passengerOfferRound || 0) + 1,
+            status: ['pending','searching','driver_busy'].includes(current.status) ? current.status : 'pending'};
         });
         if (!offered.committed || !offered.snapshot.val()) {
           const latest = offered.snapshot.val();
@@ -6757,7 +6780,7 @@ exports.submitGoFareOffer =
             requestId:
               context.requestId,
             pricing:
-              patch
+              offered.snapshot.val()
           });
 
       } catch (error) {
@@ -6910,17 +6933,9 @@ exports.counterGoFare =
             0
           );
 
-        if (
-          counterCount >=
-          ASIYE_GO_NEGOTIATION
-            .maxDriverCounters
-        ) {
-          return response
-            .status(409)
-            .json({
-              error:
-                "The maximum number of driver counters has been reached."
-            });
+        if ((request.body?.passengerOffer != null && Number(request.body.passengerOffer) !== passengerOffer) ||
+            (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+          return response.status(409).json({error:'The passenger offer changed. Review the latest fare before countering.'});
         }
 
         if (
@@ -6970,9 +6985,8 @@ exports.counterGoFare =
             commercial.platformCommission,
           counterDriverNetFare:
             commercial.driverNetFare,
-          counterExpiresAt:
-            Date.now() +
-            (60 * 1000),
+          // Remains open until a passenger or driver makes a decision.
+          counterExpiresAt: null,
           fareCounterUpdatedAt:
             admin.database
               .ServerValue
@@ -6981,7 +6995,10 @@ exports.counterGoFare =
         const counter = await transactGoContinuation(context.ref, current => {
           if (goContinuation.terminal(current.status) || current.taxiId || current.fareStatus !== 'passenger_offer' ||
               Number(current.passengerOffer) !== Number(context.trip.passengerOffer) ||
-              Number(current.driverCounterCount || 0) !== counterCount) return undefined;
+              Number(current.driverCounterCount || 0) !== counterCount ||
+              Number(current.negotiationRound || 1) !== Number(context.trip.negotiationRound || 1) ||
+              current.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === Number(current.passengerOfferRound || 1) ||
+              current.fareCounterDeclinedDrivers?.[driver.id] === true) return undefined;
           return {...current, ...counterPatch};
         });
         if (!counter.committed || !counter.snapshot.val()) return response.status(409).json({error:'The passenger offer changed. Review the latest fare before countering.'});
@@ -6997,7 +7014,7 @@ exports.counterGoFare =
               title:
                 "Driver counter offer",
               message:
-                `${goDriverDetails(driver).driverName} countered R${amount}. Your protected range ends at R${pricing.maximumFareOffer}.`,
+                `${goDriverDetails(driver).driverName} countered R${amount}. Accept this fare to book the ride, or keep your offer.`,
               requestId:
                 context.requestId,
               counterFare:
@@ -7195,6 +7212,7 @@ exports.acceptGoFareOffer =
               decoded.uid,
             amount,
             expectedPassengerOffer: context.trip.passengerOffer,
+            expectedNegotiationRound: context.trip.negotiationRound || 1,
             expectedFareStatuses: [
               "passenger_offer"
             ]
@@ -7329,22 +7347,9 @@ exports.acceptGoFareCounter =
             });
         }
 
-        if (
-          Number(
-            context.trip.counterExpiresAt ||
-            0
-          ) &&
-          Date.now() >
-            Number(
-              context.trip.counterExpiresAt
-            )
-        ) {
-          return response
-            .status(409)
-            .json({
-              error:
-                "This driver counter expired. Keep searching for another driver."
-            });
+        if ((request.body?.amount != null && Number(request.body.amount) !== Number(context.trip.driverCounterFare)) ||
+            (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+          return response.status(409).json({error:'The driver counter changed. Review the latest fare before accepting.'});
         }
 
         const driverSnapshot =
@@ -7394,7 +7399,7 @@ exports.acceptGoFareCounter =
             .status(422)
             .json({
               error:
-                "The driver counter is outside the protected range."
+                "The driver counter is not a valid fare."
             });
         }
 
@@ -7410,6 +7415,7 @@ exports.acceptGoFareCounter =
             amount,
             expectedPassengerOffer: context.trip.passengerOffer,
             expectedCounterFare: context.trip.driverCounterFare,
+            expectedNegotiationRound: context.trip.negotiationRound || 1,
             expectedFareStatuses: [
               "driver_counter"
             ]
@@ -7458,6 +7464,80 @@ exports.acceptGoFareCounter =
       }
     }
   );
+
+// Only an authenticated notified driver can decline their copy of an offer.
+// The passenger booking stays active for the other drivers.
+exports.declineGoFareOffer = onRequest(
+  {region: 'us-central1', invoker: 'public'},
+  async (request, response) => {
+    walletSmsCors(request, response);
+    if (request.method === 'OPTIONS') return response.status(204).send('');
+    if (request.method !== 'POST') return response.status(405).json({error:'POST required.'});
+    try {
+      const decoded = await verifiedRequestUser(request);
+      if (!decoded) return response.status(401).json({error:'Driver authentication is required.'});
+      const driver = await resolveTaxiForAuthUid(decoded.uid);
+      if (!driver) return response.status(403).json({error:'Driver profile could not be verified.'});
+      const context = await loadGoNegotiationRequest(request.body?.requestId);
+      if (goContinuation.terminal(context.trip.status) || context.trip.taxiId || context.trip.fareStatus === 'agreed') {
+        return response.status(409).json({error:'This ride has already changed or been accepted.'});
+      }
+      const offerRound = Number(context.trip.passengerOfferRound || 1);
+      if (context.trip.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === offerRound) {
+        return response.status(200).json({ok:true, requestId:context.requestId, decision:'declined'});
+      }
+      const notificationRef = admin.database().ref(`notifications/taxis/${driver.id}/${context.requestId}`);
+      if (!(await notificationRef.once('value')).exists()) {
+        return response.status(403).json({error:'This offer was not sent to your driver account.'});
+      }
+      if ((request.body?.amount != null && Number(request.body.amount) !== Number(context.trip.passengerOffer)) ||
+          (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+        return response.status(409).json({error:'The passenger offer changed. Review it before declining.'});
+      }
+      let changed = false;
+      const decision = await transactGoContinuation(context.ref, current => {
+        changed = false;
+        if (goContinuation.terminal(current.status) || current.taxiId ||
+            !['passenger_offer','driver_counter'].includes(current.fareStatus) ||
+            Number(current.passengerOfferRound || 1) !== offerRound ||
+            Number(current.passengerOffer) !== Number(context.trip.passengerOffer) ||
+            Number(current.negotiationRound || 1) !== Number(context.trip.negotiationRound || 1)) return undefined;
+        if (current.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === offerRound) return current;
+        changed = true;
+        const record = {offerRound, amount:Number(current.passengerOffer), at:Date.now()};
+        const next = {...current,
+          fareOfferDeclinedDrivers:{...current.fareOfferDeclinedDrivers, [driver.id]:record},
+          lastGoFareDecision:{...record, action:'declined', driverId:driver.id, driverName:goDriverDetails(driver).driverName}
+        };
+        if (current.fareStatus === 'driver_counter' && current.negotiationDriverId === driver.id) {
+          Object.assign(next, {fareStatus:'passenger_offer', driverCounterFare:null,
+            counterDriverNetFare:null, counterPlatformCommission:null, counterExpiresAt:null,
+            negotiationDriverId:null, negotiationDriverName:null,
+            negotiationRound:Number(current.negotiationRound || 1) + 1});
+        }
+        if (next.fareStatus === 'passenger_offer') {
+          next.driverFoundCount = Math.max(0, Number(current.driverFoundCount || 1) - 1);
+          next.driverSearchStatus = next.driverFoundCount ? 'driver_found_waiting_acceptance' : 'searching';
+          next.status = 'searching';
+        }
+        return next;
+      });
+      if (!decision.committed) return response.status(409).json({error:'This offer changed. Refresh before deciding.'});
+      await notificationRef.remove().catch(() => {});
+      if (changed && context.trip.commuterId) {
+        await admin.database().ref(`notifications/commuters/${context.trip.commuterId}`).push({
+          type:'go_fare_declined', title:'Driver declined your offer',
+          message:`${goDriverDetails(driver).driverName} declined R${context.trip.passengerOffer}. Your request is still open for other drivers.`,
+          requestId:context.requestId, timestamp:admin.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+      }
+      return response.status(200).json({ok:true, requestId:context.requestId, decision:'declined'});
+    } catch (error) {
+      console.error('Decline Go fare offer failed', error?.message || error);
+      return response.status(500).json({error:error?.message || 'Unable to decline this offer.'});
+    }
+  }
+);
 
 exports.declineGoFareCounter =
   onRequest(
@@ -7550,7 +7630,17 @@ exports.declineGoFareCounter =
             });
         }
 
-        await context.ref.update({
+        if ((request.body?.amount != null && Number(request.body.amount) !== Number(context.trip.driverCounterFare)) ||
+            (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+          return response.status(409).json({error:'The driver counter changed. Review the latest fare before deciding.'});
+        }
+
+        const declined = await transactGoContinuation(context.ref, current => {
+          if (goContinuation.terminal(current.status) || current.taxiId || current.fareStatus !== 'driver_counter' ||
+              current.negotiationDriverId !== driverId ||
+              Number(current.driverCounterFare) !== Number(context.trip.driverCounterFare) ||
+              Number(current.negotiationRound || 1) !== Number(context.trip.negotiationRound || 1)) return undefined;
+          return {...current,
           fareStatus:
             "passenger_offer",
           driverCounterFare:
@@ -7567,15 +7657,15 @@ exports.declineGoFareCounter =
             null,
           status:
             "searching",
-          [
-            `fareCounterDeclinedDrivers/${driverId}`
-          ]:
-            true,
+          negotiationRound: Number(current.negotiationRound || 1) + 1,
+          fareCounterDeclinedDrivers: {...current.fareCounterDeclinedDrivers, [driverId]: true},
           fareCounterUpdatedAt:
             admin.database
               .ServerValue
               .TIMESTAMP
+          };
         });
+        if (!declined.committed) return response.status(409).json({error:'This counter changed or the ride was already accepted.'});
 
         await admin.database()
           .ref(
@@ -8712,6 +8802,8 @@ exports.dispatchGoRideRequest =
             ) {
               return;
             }
+
+            if (trip.fareOfferDeclinedDrivers?.[child.key]?.offerRound === Number(trip.passengerOfferRound || 1)) return;
 
             const lat =
               Number(

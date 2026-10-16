@@ -1,4 +1,4 @@
-name: Asiye 344 Android and iOS Test Releases
+name: Asiye 345 Android and iOS Test Releases
 
 on:
   workflow_dispatch:
@@ -22,8 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ASIYE_SOURCE_VERSION: '11.0.74+344'
-  ASIYE_IOS_MARKETING_VERSION: '46522.0.2'
+  ASIYE_SOURCE_VERSION: '11.0.75+345'
+  ASIYE_IOS_MARKETING_VERSION: '46522.0.3'
 
 jobs:
   validation:
@@ -44,7 +44,7 @@ jobs:
       - name: Verify release ancestry and selected review version
         run: |
           test "$GITHUB_REF_NAME" = 'fix/paystack-subaccounts-cash-card-no-wallet'
-          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.74+344'
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.75+345'
           bash scripts/verify_payment_release_341_lineage.sh
           node scripts/ios_release_preflight.cjs
       - name: Check JavaScript syntax
@@ -93,13 +93,13 @@ jobs:
         run: node render-ride-confirmation.cjs
       - uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.74-344-ui-review
+          name: asiye-11.0.75-345-ui-review
           path: ui-review/
           if-no-files-found: error
           retention-days: 7
 
   android:
-    name: Signed Android 11.0.74 (344) APK and AAB
+    name: Signed Android 11.0.75 (345) APK and AAB
     needs: validation
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -162,28 +162,28 @@ jobs:
           APK_PACKAGE=$("$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | sed -n '1p')
           printf '%s\n' "$APK_PACKAGE"
           printf '%s\n' "$APK_PACKAGE" | grep -F "name='com.asiyeapp.asiye'"
-          printf '%s\n' "$APK_PACKAGE" | grep -F "versionCode='344'"
-          printf '%s\n' "$APK_PACKAGE" | grep -F "versionName='11.0.74'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionCode='345'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionName='11.0.75'"
       - name: Validate AAB signature and version
         run: |
           jarsigner -verify build/app/outputs/bundle/release/app-release.aab | tee aab-signature.txt
           grep -F 'jar verified' aab-signature.txt
           curl --fail --location --silent --show-error https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar --output "$RUNNER_TEMP/bundletool.jar"
           java -jar "$RUNNER_TEMP/bundletool.jar" validate --bundle=build/app/outputs/bundle/release/app-release.aab
-          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionCode')" = '344'
-          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionName')" = '11.0.74'
+          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionCode')" = '345'
+          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionName')" = '11.0.75'
       - name: Prepare installation download and build details
         shell: bash
         run: |
           mkdir -p review-apk
-          cp build/app/outputs/flutter-apk/app-release.apk review-apk/Asiye-11.0.74-344.apk
-          cp build/app/outputs/bundle/release/app-release.aab review-apk/Asiye-11.0.74-344.aab
+          cp build/app/outputs/flutter-apk/app-release.apk review-apk/Asiye-11.0.75-345.apk
+          cp build/app/outputs/bundle/release/app-release.aab review-apk/Asiye-11.0.75-345.aab
           (
             cd review-apk
-            sha256sum Asiye-11.0.74-344.apk Asiye-11.0.74-344.aab > SHA256SUMS.txt
+            sha256sum Asiye-11.0.75-345.apk Asiye-11.0.75-345.aab > SHA256SUMS.txt
           )
           cat > review-apk/BUILD-INFO.txt <<EOF
-          Asiye Android 11.0.74 (344) — APK for testing and AAB for Play review
+          Asiye Android 11.0.75 (345) — APK for testing and AAB for Play review
           Source commit: $GITHUB_SHA
           Source branch: $GITHUB_REF_NAME
           Package: com.asiyeapp.asiye
@@ -193,7 +193,8 @@ jobs:
           Real provider transactions, refunds, settlements and device testing are not certified by this build.
           Secure Card and Parcel workflows require the matching reviewed backend and rules.
           This workflow does not deploy Firebase functions, rules, hosting or mobile stores.
-          Go negotiation: minimum 65%, suggested 90%, maximum 95% of the reference fare; driver counters require passenger agreement.
+          Go negotiation: low positive offers reach drivers; 65% is advisory, 90% is recommended and the 95% ceiling is retained. Drivers decide whether to accept, decline or counter.
+          Go offers and counters remain open for a decision; no automatic driver rejection or counter expiry. Passenger counter acceptance is bound to the fare displayed.
           Cancelled bookings release only their own active reference and can be booked again without administrator intervention.
           Driver logout confirms offline availability before signing out; live incoming offers include recommended counters and net earnings.
           Support: admin@asiye.cloud | 031 566 1165
@@ -202,7 +203,7 @@ jobs:
           cat review-apk/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.74-344-android
+          name: asiye-11.0.75-345-android
           path: review-apk/
           if-no-files-found: error
           retention-days: 30
@@ -260,7 +261,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.74-344-ios
+          name: asiye-11.0.75-345-ios
           path: |
             ios/release-output/*.ipa
             ios/release-output/release-info.json
