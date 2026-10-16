@@ -989,6 +989,8 @@ ASIYE_DRIVER.ui = {
 
         try {
 
+            if (newOnline) await window.AsiyeDriverPresence.prepare(driverId);
+
             await firebase
                 .database()
                 .ref(
@@ -1058,6 +1060,9 @@ ASIYE_DRIVER.ui = {
                     ?.start?.();
 
             } else {
+
+                ASIYE_DRIVER.requests?.stop?.();
+                this.closeIncomingRequest();
 
                 this.toast(
                     'You are now offline.'
@@ -1252,7 +1257,7 @@ ASIYE_DRIVER.ui = {
             )
 
             : Number(
-                request.agreedFare ||
+                (request.negotiationEnabled === true && request.fareStatus !== 'agreed' ? request.passengerOffer : request.agreedFare) ||
                 request.finalAmount ||
                 request.calculatedPrice ||
                 0
@@ -1623,7 +1628,11 @@ ASIYE_DRIVER.ui = {
         this.startRequestTimer(
             isEarlyWork
                 ? 45
-                : 20
+                : ASIYE_DRIVER.goNegotiation?.isProtectedGo(request)
+                    ? (request.fareStatus === 'driver_counter'
+                        ? Math.max(1, Math.min(60, Math.ceil((Number(request.counterExpiresAt || Date.now() + 60000) - Date.now()) / 1000)))
+                        : 60)
+                    : 20
         );
     },
 
@@ -4483,6 +4492,8 @@ async function (
             driverId,
             driver
         );
+
+        window.AsiyeDriverPresence.start(driverId);
 
 
         localStorage.setItem(

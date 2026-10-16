@@ -42,6 +42,19 @@ ASIYE.ride = {
     driverSearchRetryMax:
         6,
 
+    isActiveBooking(request, passengerId = ASIYE.state.userId) {
+        const ended = value => {
+            const status = String(value || '').trim().toLowerCase();
+            return ['completed','expired','rejected'].includes(status) || /^cancelled(?:_|$)|^canceled(?:_|$)/.test(status);
+        };
+        const ids = [passengerId, window.firebase?.auth?.()?.currentUser?.uid].filter(Boolean).map(String);
+        const memberId = ids.find(id => request?.passengers?.[id]);
+        return Boolean(request && ids.length &&
+            (ids.includes(String(request.commuterId || '')) || memberId) &&
+            !ended(request.status) &&
+            !(request.type === 'club' && ended(request.passengers?.[memberId]?.status)));
+    },
+
     async refreshLiveTripRoute(driverLatitude, driverLongitude) {
         const now = Date.now();
         const previous = this.lastApproachRoutePoint;
@@ -2355,17 +2368,6 @@ ASIYE.ride = {
             );
 
 
-        const terminal = [
-
-            'completed',
-            'cancelled_by_driver',
-            'cancelled_by_admin',
-            'cancelled_by_commuter',
-            'rejected',
-            'expired'
-        ];
-
-
         for (
             const requestId
             of candidates
@@ -2387,38 +2389,15 @@ ASIYE.ride = {
                 snap.val();
 
 
-            const ownsRequest =
-                Boolean(
-                    request &&
-                    commuterId &&
-                    (
-                        String(
-                            request.commuterId ||
-                            ''
-                        ) ===
-                            String(
-                                commuterId
-                            ) ||
-                        request.passengers?.[
-                            commuterId
-                        ]
-                    )
-                );
-
-
-            const stale =
-                !request ||
-                !ownsRequest ||
-                (request?.type === 'club' && terminal.includes(String(request.passengers?.[commuterId]?.status || ''))) ||
-                terminal.includes(
-                    String(
-                        request?.status ||
-                        ''
-                    )
-                );
+            const stale = !this.isActiveBooking(request, commuterId);
 
 
             if (stale) {
+
+                if (ASIYE.state.booking.requestId === requestId) {
+                    ASIYE.state.booking.requestId = null;
+                    ASIYE.state.booking.request = null;
+                }
 
                 if (
                     localRequestId ===
@@ -2443,7 +2422,7 @@ ASIYE.ride = {
                         )
                         .transaction(
                             current =>
-                                String(
+                                current == null || String(
                                     current ||
                                     ''
                                 ) ===

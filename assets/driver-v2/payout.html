@@ -36,6 +36,9 @@ footer a,footer button{flex:1;text-align:center}
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <script src="./js/firebase.js"></script>
+<script src="./js/enrollment-gate.js"></script>
+<script src="./js/presence.js"></script>
+<script src="../session.js"></script>
 <script>
 (async () => {
 const base='https://us-central1-asiye-80386.cloudfunctions.net/configureDriverCardPayout';
@@ -89,9 +92,8 @@ form.onsubmit=async event=>{
  finally{button.disabled=false;}
 };
 document.getElementById('logoutBank').onclick=async()=>{
- await firebase.auth().signOut();
- ['driverId','userId','authUid','userType'].forEach(k=>localStorage.removeItem(k));
- location.replace('./login.html');
+ try { await window.AsiyeSession.logout(); }
+ catch(error) { state.textContent='Unable to confirm you are offline. Check your connection and retry.'; }
 };
 })();
 </script>

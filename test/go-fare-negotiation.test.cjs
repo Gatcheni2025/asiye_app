@@ -141,7 +141,7 @@ test('Go breakdown always preserves the 20/80 split', () => {
 
 test('Passenger request enters negotiation before payment, PIN or sharing', () => {
   const createStart = bookingSource.indexOf(
-    'async createGoRide()'
+    'async createGoRide('
   );
   const legacyPayment = bookingSource.indexOf(
     'Legacy fixed-fare payment flow',

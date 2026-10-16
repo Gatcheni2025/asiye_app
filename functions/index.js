@@ -5856,8 +5856,16 @@ async function reserveGoNegotiatedDriver({
   driver,
   driverAuthUid,
   amount,
+  expectedPassengerOffer,
+  expectedCounterFare,
   expectedFareStatuses
 }) {
+  if (driver.data.currentRequest !== requestId &&
+      (driver.data.isOnline !== true || driver.data.isBroadcasting !== true || !driverProfileCanReceiveRequests(driver.data))) {
+    const error = new Error('Go online with an approved vehicle before accepting a new fare.');
+    error.code = 'negotiation/not-available';
+    throw error;
+  }
   const requestRef =
     admin.database()
       .ref(
@@ -5967,6 +5975,11 @@ async function reserveGoNegotiatedDriver({
           if (sameDriverReservation) {
             return current;
           }
+
+          if (goContinuation.terminal(current.status) ||
+              (expectedPassengerOffer != null && Number(current.passengerOffer) !== Number(expectedPassengerOffer)) ||
+              (expectedCounterFare != null && (Number(current.driverCounterFare) !== Number(expectedCounterFare) ||
+                current.negotiationDriverId !== driver.id || Number(current.counterExpiresAt || 0) < Date.now()))) return undefined;
 
           if (
             current.taxiId &&
@@ -6458,6 +6471,10 @@ exports.submitGoFareOffer =
           });
         }
 
+        if (goContinuation.terminal(context.trip.status)) {
+          return response.status(409).json({error: "This booking has ended. Start a new booking."});
+        }
+
         if (
           context.trip.taxiId ||
           context.trip.fareStatus ===
@@ -6547,10 +6564,6 @@ exports.submitGoFareOffer =
               .TIMESTAMP
         };
 
-        await context.ref.update(
-          patch
-        );
-
         /*
          * Booking-critical passenger lock is written by the authenticated
          * server after ownership is verified. The passenger client must not
@@ -6573,6 +6586,8 @@ exports.submitGoFareOffer =
           const terminalStatuses =
             new Set([
               "completed",
+              "cancelled",
+              "canceled",
               "cancelled_by_driver",
               "cancelled_by_admin",
               "cancelled_by_commuter",
@@ -6613,6 +6628,8 @@ exports.submitGoFareOffer =
                     existingTrip.commuterId ||
                     ""
                   ) === passengerId ||
+                  String(existingTrip.commuterId || '') === decoded.uid ||
+                  existingTrip.passengers?.[decoded.uid] ||
                   existingTrip.passengers?.[
                     passengerId
                   ]
@@ -6621,6 +6638,8 @@ exports.submitGoFareOffer =
 
             const existingIsTerminal =
               !existingTrip ||
+              goContinuation.terminal(existingTrip?.status) ||
+              (existingTrip?.type === "club" && goContinuation.terminal(existingTrip.passengers?.[passengerId]?.status)) ||
               terminalStatuses.has(
                 String(
                   existingTrip?.status ||
@@ -6632,13 +6651,7 @@ exports.submitGoFareOffer =
             if (existingIsTerminal) {
               await passengerCurrentRef
                 .transaction(
-                  current =>
-                    String(
-                      current ||
-                      ""
-                    ) === existingRequestId
-                      ? null
-                      : undefined,
+                  current => goContinuation.clearRequestPointer(current, existingRequestId),
                   undefined,
                   false
                 );
@@ -6720,6 +6733,20 @@ exports.submitGoFareOffer =
                   )
               });
           }
+        }
+
+        const offered = await transactGoContinuation(context.ref, current => {
+          if (current.commuterId !== context.trip.commuterId || current.taxiId ||
+              current.fareStatus === 'agreed' || goContinuation.terminal(current.status)) return undefined;
+          return {...current, ...patch, status: ['pending','searching','driver_busy'].includes(current.status) ? current.status : 'pending'};
+        });
+        if (!offered.committed || !offered.snapshot.val()) {
+          const latest = offered.snapshot.val();
+          const ended = !latest || goContinuation.terminal(latest.status);
+          if (ended) await admin.database().ref(`commuters/${passengerId}/currentRequest`)
+            .transaction(current => goContinuation.clearRequestPointer(current, context.requestId), undefined, false);
+          return response.status(409).json({error: 'This booking changed. Start a new booking or refresh your active ride.',
+            ...(ended ? {} : {code:'booking/active-exists', activeRequestId:context.requestId, activeStatus:latest.status})});
         }
 
         return response
@@ -6832,6 +6859,13 @@ exports.counterGoFare =
             });
         }
 
+        if (goContinuation.terminal(context.trip.status) || context.trip.fareStatus !== 'passenger_offer') {
+          return response.status(409).json({error:'This offer changed or is waiting for the passenger. Refresh before countering.'});
+        }
+        if (driver.data.isOnline !== true || driver.data.isBroadcasting !== true || driver.data.currentRequest || !driverProfileCanReceiveRequests(driver.data)) {
+          return response.status(409).json({error:'Go online and finish any active trip before sending a counter-offer.'});
+        }
+
         const notification =
           await admin.database()
             .ref(
@@ -6915,7 +6949,7 @@ exports.counterGoFare =
             pricing
           );
 
-        await context.ref.update({
+        const counterPatch = {
           driverCounterFare:
             amount,
           negotiationDriverId:
@@ -6943,7 +6977,14 @@ exports.counterGoFare =
             admin.database
               .ServerValue
               .TIMESTAMP
+        };
+        const counter = await transactGoContinuation(context.ref, current => {
+          if (goContinuation.terminal(current.status) || current.taxiId || current.fareStatus !== 'passenger_offer' ||
+              Number(current.passengerOffer) !== Number(context.trip.passengerOffer) ||
+              Number(current.driverCounterCount || 0) !== counterCount) return undefined;
+          return {...current, ...counterPatch};
         });
+        if (!counter.committed || !counter.snapshot.val()) return response.status(409).json({error:'The passenger offer changed. Review the latest fare before countering.'});
 
         if (context.trip.commuterId) {
           await admin.database()
@@ -7141,6 +7182,10 @@ exports.acceptGoFareOffer =
             });
         }
 
+        if (request.body?.amount != null && Number(request.body.amount) !== amount) {
+          return response.status(409).json({error:'The passenger offer changed. Review the latest amount before accepting.'});
+        }
+
         const trip =
           await reserveGoNegotiatedDriver({
             requestId:
@@ -7149,6 +7194,7 @@ exports.acceptGoFareOffer =
             driverAuthUid:
               decoded.uid,
             amount,
+            expectedPassengerOffer: context.trip.passengerOffer,
             expectedFareStatuses: [
               "passenger_offer"
             ]
@@ -7362,6 +7408,8 @@ exports.acceptGoFareCounter =
               driver.data?.userUid ||
               driver.id,
             amount,
+            expectedPassengerOffer: context.trip.passengerOffer,
+            expectedCounterFare: context.trip.driverCounterFare,
             expectedFareStatuses: [
               "driver_counter"
             ]
@@ -8074,11 +8122,13 @@ exports.goTripActionSecure = onRequest(
       if (name === 'cancel') {
         const locks = [[`commuters/${trip.commuterId}/currentRequest`, id]];
         if (trip.taxiId) await admin.database().ref(`taxis/${trip.taxiId}`).transaction(taxi => {
+          if (taxi === null) return null;
           if (!taxi || taxi.currentRequest !== id) return undefined;
           return {...taxi, currentRequest: null, isFull: false, passengerCount: 0};
         });
         for (const [path, expected] of locks)
-          await admin.database().ref(path).transaction(value => value === expected ? null : undefined);
+          await admin.database().ref(path).transaction(value => goContinuation.clearRequestPointer(value, expected), undefined, false);
+        if (trip.queuedTaxiId) await admin.database().ref(`taxis/${trip.queuedTaxiId}/bookingQueue/${id}`).remove();
         if (trip.type === 'delivery') await admin.database().ref(`delivery_requests/${id}`).update({status: result.status, cancelledAt: result.cancelledAt});
       }
       return response.json({ok: true, status: result.status,
@@ -14437,14 +14487,7 @@ exports.releaseCancelledGoTripPayment =
 
         if (
           before === after ||
-          ![
-            "cancelled_by_commuter",
-            "cancelled_by_driver",
-            "cancelled_by_admin",
-            "rejected"
-          ].includes(
-            after
-          )
+          !(after === 'rejected' || /^cancelled(?:_|$)|^canceled(?:_|$)/.test(after))
         ) {
           return null;
         }
@@ -14470,6 +14513,12 @@ exports.releaseCancelledGoTripPayment =
         ) {
           return null;
         }
+
+        // Admin cancellations and older clients must release the same pointer.
+        // A delayed cancellation must never clear a newer active booking.
+        if (trip.commuterId) await admin.database()
+          .ref(`commuters/${trip.commuterId}/currentRequest`)
+          .transaction(current => goContinuation.clearRequestPointer(current, requestId), undefined, false);
 
         if (trip.parcelSecurityVersion === 2) {
           const payment=(await admin.database().ref(tripPaymentPath(requestId,trip.commuterId)).once("value")).val();
@@ -14503,16 +14552,7 @@ exports.releaseCancelledGoTripPayment =
               `taxis/${trip.taxiId}/currentRequest`
             )
             .transaction(
-              current =>
-                String(
-                  current ||
-                  ""
-                ) ===
-                  String(
-                    requestId
-                  )
-                  ? null
-                  : undefined
+              current => goContinuation.clearRequestPointer(current, requestId)
             )
             .catch(
               () => {}

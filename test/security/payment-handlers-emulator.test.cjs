@@ -325,6 +325,84 @@ test('Go permits 65% offers, rejects lower fares and lets an eligible driver cou
   assert.equal(initializations.length,0,'Negotiation must not charge a card');
 });
 
+test('Go cancellation before driver acceptance permits the second and third bookings without admin intervention',async()=>{
+ for(const requestId of ['first-cancelled','second-cancelled','third-booking']){
+  await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+   paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',routeDistanceKm:10,routeDurationMinutes:0,
+   commuterLocation:pickup,destinationCoords:destination});
+  const offer=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
+  assert.equal(offer.status,200,JSON.stringify(offer.body));
+  assert.equal(await read('commuters/sender/currentRequest'),requestId);
+  if(requestId==='third-booking')continue;
+  assert.equal((await call('goTripActionSecure','member-auth',{requestId,action:'cancel'})).status,403);
+  const cancelled=await call('goTripActionSecure','sender-auth',{requestId,action:'cancel'});
+  assert.equal(cancelled.status,200,JSON.stringify(cancelled.body));
+  assert.equal((await read('requests/'+requestId)).status,'cancelled_by_commuter');
+  assert.equal(await read('commuters/sender/currentRequest'),null);
+  assert.equal((await call('goTripActionSecure','sender-auth',{requestId,action:'cancel'})).status,200,'Cancellation retry must be idempotent');
+  assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount:80})).status,409,'Ended requests cannot be reactivated');
+ }
+ assert.equal(initializations.length,0);
+});
+
+test('legacy cancelled pointers self-heal while delayed cancellations preserve a newer active booking',async()=>{
+ await db.ref('requests/old').set({requestId:'old',commuterId:'sender',type:'ehailing',rideType:'go',status:'cancelled',negotiationEnabled:true});
+ await db.ref('commuters/sender/currentRequest').set('old');
+ const requestId='new-booking';
+ await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+  paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',routeDistanceKm:10,routeDurationMinutes:0,
+  commuterLocation:pickup,destinationCoords:destination});
+ const offer=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
+ assert.equal(offer.status,200,JSON.stringify(offer.body));
+ assert.equal(await read('commuters/sender/currentRequest'),requestId);
+ assert.equal((await call('goTripActionSecure','sender-auth',{requestId:'old',action:'cancel'})).status,200);
+ assert.equal(await read('commuters/sender/currentRequest'),requestId);
+ await db.ref('requests/conflicting').set({...(await read('requests/'+requestId)),requestId:'conflicting'});
+ const conflict=await call('submitGoFareOffer','sender-auth',{requestId:'conflicting',amount:70});
+ assert.equal(conflict.status,409);assert.equal(conflict.body.activeRequestId,requestId);
+});
+
+test('offline drivers and cancelled rides cannot receive a new counter-offer',async()=>{
+ const requestId='counter-availability';
+ await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'searching',
+  paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',passengerOffer:65,routeDistanceKm:10,routeDurationMinutes:0});
+ await db.ref(`notifications/taxis/driver/${requestId}`).set({requestId});
+ await db.ref('taxis/driver').update({isOnline:false,isBroadcasting:false});
+ assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:80})).status,409);
+ await db.ref('taxis/driver').update({isOnline:true,isBroadcasting:true});
+ await db.ref('requests/'+requestId+'/status').set('cancelled_by_commuter');
+ assert.equal((await call('counterGoFare','driver-auth',{requestId,amount:80})).status,409);
+ assert.equal((await read('requests/'+requestId)).driverCounterFare,undefined);
+});
+
+test('driver acceptance rejects a fare that differs from the offer displayed on screen',async()=>{
+ const requestId='changed-driver-offer';
+ await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+  paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',routeDistanceKm:10,routeDurationMinutes:0,
+  commuterLocation:pickup,destinationCoords:destination});
+ assert.equal((await call('submitGoFareOffer','sender-auth',{requestId,amount:75})).status,200);
+ await db.ref(`notifications/taxis/driver/${requestId}`).set({requestId});
+ assert.equal((await call('acceptGoFareOffer','driver-auth',{requestId,amount:65})).status,409);
+ assert.equal((await read('requests/'+requestId)).taxiId,undefined);
+ const accepted=await call('acceptGoFareOffer','driver-auth',{requestId,amount:75});
+ assert.equal(accepted.status,200,JSON.stringify(accepted.body));
+ assert.equal(accepted.body.agreedFare,75);
+});
+
+test('admin cancellation cleanup clears the matching pointer and preserves a newer booking',async()=>{
+ const requestId='admin-cancelled';
+ const status=db.ref('requests/'+requestId+'/status');
+ await db.ref('requests/'+requestId).set({requestId,commuterId:'sender',type:'ehailing',status:'searching'});
+ const before=await status.once('value');await status.set('cancelled_by_admin');
+ const after=await status.once('value');
+ await db.ref('commuters/sender/currentRequest').set(requestId);
+ await handlers.releaseCancelledGoTripPayment.run({before,after},{params:{requestId}});
+ assert.equal(await read('commuters/sender/currentRequest'),null);
+ await db.ref('commuters/sender/currentRequest').set('new-active-booking');
+ await handlers.releaseCancelledGoTripPayment.run({before,after},{params:{requestId}});
+ assert.equal(await read('commuters/sender/currentRequest'),'new-active-booking');
+});
+
 test('Go agreed fare passes the same checkout and signed provider verification handlers',async()=>{
   const requestId='go-handler-reference-01';
   await db.ref('commuters/sender/email').remove();

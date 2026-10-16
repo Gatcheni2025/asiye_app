@@ -29,6 +29,54 @@ ASIYE_DRIVER.requests = {
     activeRequest:
         null,
 
+    incomingRef: null,
+    incomingListener: null,
+    incomingSignature: '',
+
+    stopIncomingWatch() {
+        if (this.incomingRef && this.incomingListener) this.incomingRef.off('value', this.incomingListener);
+        this.incomingRef = null;
+        this.incomingListener = null;
+        this.incomingSignature = '';
+    },
+
+    watchIncomingRequest(requestId, initial) {
+        this.stopIncomingWatch();
+        const signature = request => JSON.stringify([
+            request?.status, request?.taxiId, request?.fareStatus, request?.passengerOffer,
+            request?.agreedFare, request?.driverCounterFare, request?.negotiationRound,
+            request?.driverCounterCount, request?.counterExpiresAt
+        ]);
+        this.incomingSignature = signature(initial);
+        const ref = firebase.database().ref(`requests/${requestId}`);
+        this.incomingRef = ref;
+        this.incomingListener = ref.on('value', snapshot => {
+            if (this.incomingRef !== ref || ASIYE_DRIVER.state?.loggingOut) return;
+            const request = snapshot.val();
+            const next = signature(request);
+            if (next === this.incomingSignature) return;
+            this.incomingSignature = next;
+            if (!request || !this.isRequestAvailable(request)) {
+                this.stopIncomingWatch();
+                ASIYE_DRIVER.ui?.closeIncomingRequest?.();
+                this.removeNotification(this.activeNotificationKey);
+                this.activeRequest = null;
+                ASIYE_DRIVER.state.incomingRequest = null;
+                if (request?.taxiId === ASIYE_DRIVER.state.driverId && request.fareStatus === 'agreed' &&
+                    ASIYE_DRIVER.trip?.requestId !== requestId) ASIYE_DRIVER.trip?.start?.(requestId);
+                return;
+            }
+            request.key = requestId;
+            request.requestId = requestId;
+            this.activeRequest = request;
+            ASIYE_DRIVER.state.incomingRequest = request;
+            ASIYE_DRIVER.ui?.showIncomingRequest?.(request);
+        }, () => {
+            this.stopIncomingWatch();
+            ASIYE_DRIVER.ui?.closeIncomingRequest?.();
+        });
+    },
+
 
     async postNegotiation(
         endpoint,
@@ -155,6 +203,8 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     start() {
+
+        if (ASIYE_DRIVER.state?.loggingOut) return;
 
         const driverId =
             ASIYE_DRIVER.state?.driverId;
@@ -486,6 +536,8 @@ ASIYE_DRIVER.requests = {
         notificationKey = null
     ) {
 
+        if (ASIYE_DRIVER.state?.loggingOut) return;
+
         try {
 
             const snapshot =
@@ -502,6 +554,8 @@ ASIYE_DRIVER.requests = {
 
             const request =
                 snapshot.val();
+
+            if (ASIYE_DRIVER.state?.loggingOut) return;
 
 
             if (!request) {
@@ -520,6 +574,8 @@ ASIYE_DRIVER.requests = {
 
             request.key =
                 requestId;
+
+            request.requestId = requestId;
 
 
             if (
@@ -582,6 +638,7 @@ ASIYE_DRIVER.requests = {
             }
 
 
+            this.watchIncomingRequest(requestId, request);
             this.playRequestSound();
 
 
@@ -600,6 +657,8 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     isDriverAvailable() {
+
+        if (ASIYE_DRIVER.state?.loggingOut) return false;
 
         const driver =
             ASIYE_DRIVER.state
@@ -751,6 +810,8 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     async accept(requestId = null) {
+
+        const displayedOffer = Number(this.activeRequest?.passengerOffer);
 
         if (!await AsiyeEnrollment.requireApproval()) return;
 
@@ -1020,7 +1081,8 @@ ASIYE_DRIVER.requests = {
                     'acceptGoFareOffer',
                     {
                         requestId:
-                            id
+                            id,
+                        ...(Number.isFinite(displayedOffer) ? {amount:displayedOffer} : {})
                     }
                 );
 
@@ -2714,6 +2776,8 @@ ASIYE_DRIVER.requests = {
         requestId = null
     ) {
 
+        this.stopIncomingWatch();
+
         const id =
 
             requestId ||
@@ -3015,6 +3079,8 @@ ASIYE_DRIVER.requests = {
 
 
     stop() {
+
+        this.stopIncomingWatch();
 
         if (
             this.notificationRef &&

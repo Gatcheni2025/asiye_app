@@ -17,7 +17,7 @@ platform :ios do
     ios_version = ENV.fetch("ASIYE_IOS_MARKETING_VERSION", "")
     source_version = ENV.fetch("ASIYE_SOURCE_VERSION", "")
     UI.user_error!("A three-component iOS version is required.") unless ios_version.match?(/\A\d+\.\d+\.\d+\z/)
-    UI.user_error!("The selected mobile source must be 11.0.73+343.") unless source_version == "11.0.73+343"
+    UI.user_error!("The selected mobile source must be 11.0.74+344.") unless source_version == "11.0.74+344"
 
     # Authenticate before compilation and select a fresh build above Apple's
     # current train and this workflow's unique run/attempt floor.
@@ -105,7 +105,7 @@ platform :ios do
       skip_waiting_for_build_processing: true,
       distribute_external: false,
       notify_external_testers: false,
-      changelog: "Cleaner ride confirmation, Go offers from 65% of the reference fare and driver counter-offers. Review build; matching backend and real payment acceptance remain required."
+      changelog: "Fix cancelled-booking recovery, take drivers offline on logout, and show live passenger offers with recommended driver counter-offers. Review build; matching backend and real payment acceptance remain required."
     )
   end
 end

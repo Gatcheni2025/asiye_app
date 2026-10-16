@@ -4979,6 +4979,15 @@ body.navigation-camera-mode #driverNavigationButton {
     align-items:center;
     margin-top:12px;
 }
+.driver-go-offer-status{font-size:12px;line-height:1.45;color:#245e40;font-weight:700;margin:12px 0}
+.driver-go-recommendation{background:#fff;border:1px solid #c5dccd;border-radius:12px;padding:12px}
+.driver-go-recommendation > span{display:block;font-size:12px;color:#536c5b}
+.driver-go-recommendation > strong{display:block;font-size:24px;color:#16472e;margin:4px 0}
+.driver-go-recommendation p{margin:4px 0;font-size:13px;color:#244f34}
+.driver-go-recommendation small{display:block;font-size:11px;line-height:1.45;color:#66756b}
+.driver-go-counter-choices{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.driver-go-counter-choices button{min-height:44px;flex:1;min-width:125px;border:1px solid #c6d6cb;background:#fff;border-radius:10px;padding:8px;color:#245837;font-size:12px;font-weight:700}
+.driver-go-counter-choices button:disabled{opacity:.55}
 .driver-go-counter-row > span{
     font-weight:900;
     color:#234d35;
