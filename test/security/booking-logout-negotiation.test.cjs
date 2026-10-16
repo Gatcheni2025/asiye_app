@@ -156,6 +156,21 @@ test('driver sees the live passenger amount, recommendation and counter earnings
  } finally {dom.window.close();}
 });
 
+test('a waiting Go counter does not disable acceptance of the next Work or Parcel request',()=>{
+ for(const type of ['club','delivery']){
+  const {dom,w,offer}=driverWindow();
+  try {
+   const app=w.ASIYE_DRIVER;
+   app.ui.showIncomingRequest({...offer,fareStatus:'driver_counter',driverCounterFare:80});
+   assert.equal(w.document.getElementById('acceptRequestButton').disabled,true);
+   app.ui.showIncomingRequest({...offer,type,rideType:type==='club'?'club4':'delivery',negotiationEnabled:false,
+    status:type==='club'?'pool_ready':'pending',fareStatus:undefined,minimumPassengers:3,passengerCount:3,pricePerPassenger:40});
+   assert.equal(w.document.getElementById('acceptRequestButton').disabled,false,type);
+   assert.equal(w.document.getElementById('acceptRequestButton').textContent,'Accept');
+  } finally {dom.window.close();}
+ }
+});
+
 test('driver live watch closes cancelled rides and moves agreed fares into the assigned trip',()=>{
  for(const cancelled of [true,false]){
   const {dom,w,offer,emit,started}=driverWindow();

@@ -1198,6 +1198,12 @@ ASIYE_DRIVER.ui = {
         const isClub =
             request.type === 'club';
 
+        const acceptButton = document.getElementById('acceptRequestButton');
+        if (acceptButton) {
+            acceptButton.disabled = false;
+            acceptButton.textContent = 'Accept';
+        }
+
 
         const isDelivery =
             request.type ===
