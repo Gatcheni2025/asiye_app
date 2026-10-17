@@ -17,7 +17,7 @@ platform :ios do
     ios_version = ENV.fetch("ASIYE_IOS_MARKETING_VERSION", "")
     source_version = ENV.fetch("ASIYE_SOURCE_VERSION", "")
     UI.user_error!("A three-component iOS version is required.") unless ios_version.match?(/\A\d+\.\d+\.\d+\z/)
-    UI.user_error!("The selected mobile source must be 11.0.75+345.") unless source_version == "11.0.75+345"
+    UI.user_error!("The selected mobile source must be 11.0.76+346.") unless source_version == "11.0.76+346"
 
     # Authenticate before compilation and select a fresh build above Apple's
     # current train and this workflow's unique run/attempt floor.
@@ -102,10 +102,12 @@ platform :ios do
     upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
-      skip_waiting_for_build_processing: true,
+      skip_waiting_for_build_processing: false,
+      wait_processing_interval: 30,
+      wait_processing_timeout_duration: 1800,
       distribute_external: false,
       notify_external_testers: false,
-      changelog: "Fix cancelled-booking recovery, take drivers offline on logout, and show live passenger offers with recommended driver counter-offers. Review build; matching backend and real payment acceptance remain required."
+      changelog: "Fix cancelled-booking recovery, take drivers offline on logout, and show live passenger offers with recommended driver counter-offers. Includes payment launch approval and duplicate-refund safeguards. Release candidate; matching backend rollout and provider acceptance remain required."
     )
   end
 end
