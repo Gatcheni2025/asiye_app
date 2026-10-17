@@ -6,7 +6,7 @@ function isVerifiedSubaccount(value, expected) {
     (!expected || code(value) === expected) &&
     Number(value?.percentage_charge) === PLATFORM_COMMISSION_PERCENT &&
     value?.is_verified === true &&
-    ![false,0,'0'].includes(value?.active);
+    value?.active === true;
 }
 function verifySplit(payment, transaction) {
   const returned = transaction?.subaccount;

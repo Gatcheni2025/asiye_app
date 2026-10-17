@@ -6,7 +6,7 @@ on:
         description: 'Initialize checkout or verify previously paid TEST reference'
         required: true
         type: choice
-        options: [initialize, verify]
+        options: [check, initialize, verify]
       reference:
         description: 'Only for verify: Paystack TEST reference from initialize job'
         required: false

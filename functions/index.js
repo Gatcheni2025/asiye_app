@@ -490,12 +490,7 @@ async function sendTwilioSms({
 exports.createEftSmsTopup = onRequest(
   {
     region:
-      "us-central1",
-    secrets: [
-      twilioAccountSid,
-      twilioAuthToken,
-      twilioFromNumber
-    ]
+      "us-central1"
   },
   async (request, response) => {
     walletSmsCors(
@@ -10458,7 +10453,7 @@ const PAYSTACK_API =
   "https://api.paystack.co";
 
 const PAYSTACK_CALLBACK_URL =
-  "https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn";
+  `https://us-central1-${admin.app().options.projectId || process.env.GCLOUD_PROJECT || "asiye-80386"}.cloudfunctions.net/paystackPaymentReturn`;
 
 function paystackReference() {
   return `ASIYE-${Date.now().toString(36)}-${paystackCrypto.randomBytes(16).toString("hex")}`;
@@ -10475,6 +10470,21 @@ const {
 } = require("./driver-card-payout");
 const {PLATFORM_COMMISSION_PERCENT, code:paystackSubaccountCode,
   isVerifiedSubaccount, verifySplit:verifyDriverPaystackSplit} = require("./paystack-subaccount-split");
+
+const {keyDomain, requireLaunchApproval, requireTransactionDomain,
+  refundableCancellation, createCardRefundService} = require("./paystack-payment-safety");
+const configuredPaystackDomain = () => keyDomain(paystackSecretKey.value());
+const cardRefundService = createCardRefundService({
+  database: () => admin.database(), request: paystackRequest,
+  configuredDomain: configuredPaystackDomain, markPayment: markTripPassengerPayment
+});
+async function requirePaystackCheckoutApproval() {
+  const domain = configuredPaystackDomain();
+  const launch = domain === "live"
+    ? (await admin.database().ref("paymentLaunch/paystack").once("value")).val() : null;
+  requireLaunchApproval(domain, launch);
+  return domain;
+}
 
 // Historical driver transfer records remain private for reconciliation.
 // New card fares use Paystack subaccounts at checkout; no later Asiye-funded
@@ -11596,6 +11606,8 @@ async function initialiseCardTripPayment(
   } =
     context;
 
+  const paystackDomain = await requirePaystackCheckoutApproval();
+
   // A Paystack subaccount is immutable for the transaction: NEVER collect
   // the full fare before the driver and their approved bank are known.
   const driverId=safeProfileId(trip?.taxiId||trip?.driverId);
@@ -11620,7 +11632,7 @@ async function initialiseCardTripPayment(
   // Check live Paystack subaccount verification (not merely a stored status).
   const result=await paystackRequest("/subaccount/"+encodeURIComponent(registered.subaccountCode));
   const live=result.data||{};
-  if(!isVerifiedSubaccount(live,registered.subaccountCode)||
+  if(live.domain !== paystackDomain || !isVerifiedSubaccount(live,registered.subaccountCode)||
      (live.account_number && String(live.account_number).slice(-4)!==registered.accountLast4)){
     const e=new Error("Paystack has not yet verified this driver's subaccount.");
     e.code="payment/driver-subaccount-required";throw e;
@@ -11702,7 +11714,7 @@ async function initialiseCardTripPayment(
   const reference = paystackReference();
   const candidate = {
     method:"card", provider:"paystack", splitMode:"paystack_subaccount_80_20",
-    splitDriverId:driverId, subaccountCode:registered.subaccountCode,
+    splitDriverId:driverId, subaccountCode:registered.subaccountCode, paystackDomain,
     platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
     requestId, passengerId, uid:decoded.uid, amount,
     amountSubunit:Math.round(amount * 100), currency:"ZAR", reference,
@@ -11995,6 +12007,7 @@ async function prepareTripPaymentServer(
 }
 
 async function recordCardTripPaymentHeld(payment, transaction) {
+  requireTransactionDomain(payment, transaction, configuredPaystackDomain());
   if (!verifyDriverPaystackSplit(payment, transaction))
     throw Error("Paystack card charge is missing a verified driver subaccount split.");
   if (!transactionMatchesPayment(transaction, payment))
@@ -12012,7 +12025,7 @@ async function recordCardTripPaymentHeld(payment, transaction) {
     const result=await paymentRef.transaction(current=>{
       if (current===null) return null;
       if (!matches(current)) return;
-      if (["refund_pending","refunded","refund_review"].includes(current.status)) return current;
+      if (["refund_initializing","refund_unknown","refund_pending","refunded","refund_review"].includes(current.status)) return current;
       return {...current,status:"refund_review",paymentRefundAttention:true,
         paystackTransactionId:String(transaction.id || ""),
         paidAt:transaction.paid_at || transaction.paidAt || Date.now(),refundReviewAt:Date.now()};
@@ -12030,7 +12043,7 @@ async function recordCardTripPaymentHeld(payment, transaction) {
   const settledTx=await paymentRef.transaction(current=>{
     if (current===null) return null;
     if (!matches(current)) return;
-    if (["held","captured","refund_pending","refunded","refund_review"].includes(current.status))
+    if (["held","captured","refund_initializing","refund_unknown","refund_pending","refunded","refund_review"].includes(current.status))
       return current;
     return {...current,status:"held",heldAt:Date.now(),
       paystackTransactionId:String(transaction.id || ""),channel:String(transaction.channel || "card"),
@@ -12038,7 +12051,7 @@ async function recordCardTripPaymentHeld(payment, transaction) {
   },undefined,false);
   if (!settledTx.committed) throw Error("Paystack payment reference changed while confirming.");
   const ledgerStatus=settledTx.snapshot.val().status;
-  if (ledgerStatus==="captured" || ledgerStatus==="refund_pending" ||
+  if (ledgerStatus==="captured" || ledgerStatus==="refund_initializing" || ledgerStatus==="refund_unknown" || ledgerStatus==="refund_pending" ||
       ledgerStatus==="refunded" || ledgerStatus==="refund_review")
     return {requestId,passengerId,status:ledgerStatus};
 
@@ -12049,7 +12062,7 @@ async function recordCardTripPaymentHeld(payment, transaction) {
       if (current===null) return null;
       if (!current || current.parcelSecurityVersion!==2 || cancelled(current) ||
           current.taxiId!==payment.splitDriverId || current.commuterId!==passengerId) return;
-      if (["captured","refund_pending","refunded","refund_review"].includes(current.paymentStatus)) return current;
+      if (["captured","refund_initializing","refund_unknown","refund_pending","refunded","refund_review"].includes(current.paymentStatus)) return current;
       return {...current,paymentStatus:"held",paymentsReady:true,paymentHeldAmount:Number(payment.amount),
         ...(current.status === "payment_required" ? {status:"accepted"} : {})};
     },undefined,false);
@@ -12204,8 +12217,8 @@ exports.configureDriverCardPayout = onRequest(
   }
 );
 
-// Server-only payout trigger: the passenger has already paid, but the
-// assigned driver receives their 80% only after trip completion.
+// Compatibility trigger only. Direct driver settlement is arranged by Paystack
+// at checkout; trip completion never initiates a replacement bank transfer.
 exports.disburseCompletedCardTrips = functions.runWith({
   secrets: [paystackSecretKey]
 }).database.ref("/requests/{requestId}/status").onUpdate(async(change, context) => {
@@ -12335,7 +12348,7 @@ exports.prepareTripPayment =
           });
 
       } catch (error) {
-        const status =
+        const status = error?.code === 'payment/launch-not-approved' || error?.code === 'payment/configuration' ? 503 :
           error?.code === 'payment/checkout-in-progress' ||
           error?.code === 'payment/trip-ended' ||
           error?.code === 'payment/wallet-disabled' ||
@@ -12509,6 +12522,14 @@ exports.verifyTripCardPayment =
               ready:
                 true
             });
+        }
+
+        if (payment.status === "refunded")
+          return response.status(200).json({ok: true, requestId, ready: false, status: "refunded"});
+        if (["refund_initializing", "refund_unknown", "refund_pending", "refund_review"].includes(payment.status)) {
+          const refund = await cardRefundService.synchronize(reference);
+          return response.status(200).json({ok: true, requestId, ready: false,
+            status: refund?.status || payment.status});
         }
 
         const transaction =
@@ -13158,6 +13179,9 @@ exports.settleTripPayment =
             });
         }
 
+        if (!['in_transit', 'completed'].includes(trip.status))
+          return response.status(409).json({error: 'Only an ongoing or completed trip can be settled.'});
+
         if (trip.clubSecurityVersion === 2 && !['in_transit', 'completed'].includes(trip.status)) {
           return response.status(409).json({error:'Secure Club payments can only be settled after verified departure.'});
         }
@@ -13286,15 +13310,13 @@ exports.settleTripPayment =
               );
 
             } else {
-              await paymentRef
-                .update({
-                  status:
-                    "captured",
-                  capturedAt:
-                    admin.database
-                      .ServerValue
-                      .TIMESTAMP
-                });
+              const captured = await paymentRef.transaction(current => {
+                if (current === null) return null;
+                if (current.reference !== payment.reference || !["held", "captured"].includes(current.status)) return;
+                return {...current, status: "captured", capturedAt: current.capturedAt || Date.now()};
+              }, undefined, false);
+              if (!captured.committed || captured.snapshot.val()?.status !== "captured")
+                return response.status(409).json({error: "Payment changed during settlement."});
             }
 
             await markTripPassengerPayment(
@@ -13376,410 +13398,53 @@ exports.settleTripPayment =
     }
   );
 
-async function releaseTripPaymentForPassenger(
-  requestId,
-  passengerId
-) {
-  const paymentRef =
-    admin.database()
-      .ref(
-        tripPaymentPath(
-          requestId,
-          passengerId
-        )
-      );
-
-  const payment =
-    (
-      await paymentRef
-        .once(
-          "value"
-        )
-    ).val();
-
-  if (!payment) {
-    return {
-      status:
-        "nothing_to_release"
-    };
+async function releaseTripPaymentForPassenger(requestId, passengerId) {
+  const ref = admin.database().ref(tripPaymentPath(requestId, passengerId));
+  const payment = (await ref.once("value")).val();
+  if (!payment) return {status: "nothing_to_release"};
+  const trip = (await admin.database().ref(`requests/${requestId}`).once("value")).val();
+  if (!refundableCancellation(trip, passengerId)) {
+    const error = new Error("Cancel an unstarted booking before requesting its payment release. Contact support for a started trip.");
+    error.status = 409;
+    throw error;
   }
-
-  if (
-    [
-      "released",
-      "refund_pending",
-      "refunded"
-    ].includes(
-      String(
-        payment.status ||
-        ""
-      )
-    )
-  ) {
-    return {
-      status:
-        payment.status
-    };
+  if (payment.method === "card") return cardRefundService.release(payment);
+  if (payment.method === "wallet") {
+    const released = await releaseWalletTripPayment(requestId, passengerId);
+    return {status: "released", balance: Number(released.balance || 0)};
   }
-
-  if (
-    payment.method ===
-      "wallet"
-  ) {
-    const released =
-      await releaseWalletTripPayment(
-        requestId,
-        passengerId
-      );
-
-    return {
-      status:
-        "released",
-      balance:
-        Number(
-          released.balance ||
-          0
-        )
-    };
-  }
-
-  if (
-    payment.method ===
-      "card" &&
-    payment.status ===
-      "held"
-  ) {
-    const refund =
-      await paystackRequest(
-        "/refund",
-        {
-          method:
-            "POST",
-          body: {
-            transaction:
-              payment.paystackTransactionId ||
-              payment.reference,
-            amount:
-              Math.round(
-                Number(
-                  payment.amount ||
-                  0
-                ) *
-                100
-              ),
-            currency:
-              "ZAR",
-            customer_note:
-              "Asiye ride cancelled before completion",
-            merchant_note:
-              `Asiye trip ${requestId} cancelled`
-          }
-        }
-      );
-
-    await paymentRef
-      .update({
-        status:
-          "refund_pending",
-        refundId:
-          String(
-            refund.data?.id ||
-            ""
-          ),
-        refundStatus:
-          String(
-            refund.data?.status ||
-            "pending"
-          ),
-        refundRequestedAt:
-          admin.database
-            .ServerValue
-            .TIMESTAMP
-      });
-
-    return {
-      status:
-        "refund_pending"
-    };
-  }
-
-  if (
-    payment.status ===
-      "captured"
-  ) {
-    return {
-      status:
-        "captured"
-    };
-  }
-
-  await paymentRef
-    .update({
-      status:
-        "released",
-      releasedAt:
-        admin.database
-          .ServerValue
-          .TIMESTAMP
-    });
-
-  return {
-    status:
-      "released"
-  };
+  const result = await ref.transaction(current => {
+    if (current === null) return null;
+    if (current.status === "captured") return current;
+    return {...current, status: "released", releasedAt: Date.now()};
+  }, undefined, false);
+  return {status: result.snapshot.val()?.status || "nothing_to_release"};
 }
 
-
-exports.releaseTripPayment =
-  onRequest(
-    {
-      region:
-        "us-central1",
-      invoker:
-        "public",
-      secrets: [
-        paystackSecretKey
-      ]
-    },
-    async (
-      request,
-      response
-    ) => {
-      walletSmsCors(
-        request,
-        response
-      );
-
-      if (
-        request.method ===
-        "OPTIONS"
-      ) {
-        return response
-          .status(204)
-          .send("");
-      }
-
-      if (
-        request.method !==
-        "POST"
-      ) {
-        return response
-          .status(405)
-          .json({
-            error:
-              "POST required."
-          });
-      }
-
-      try {
-        const decoded =
-          await verifiedRequestUser(
-            request
-          );
-
-        if (!decoded) {
-          return response
-            .status(401)
-            .json({
-              error:
-                "Sign in again before cancelling this payment."
-            });
-        }
-
-        const requestId =
-          String(
-            request.body?.requestId ||
-            ""
-          ).trim();
-
-        const context =
-          await tripPassengerContext(
-            decoded,
-            requestId
-          );
-
-        if (context.trip.parcelSecurityVersion === 2)
-          return response.status(409).json({error:"Use secure Parcel cancellation and support refund review for this payment."});
-
-        const paymentRef =
-          admin.database()
-            .ref(
-              tripPaymentPath(
-                requestId,
-                context.passengerId
-              )
-            );
-
-        const payment =
-          (
-            await paymentRef
-              .once(
-                "value"
-              )
-          ).val();
-
-        if (!payment) {
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              status:
-                "nothing_to_release"
-            });
-        }
-
-        if (
-          payment.method ===
-            "wallet"
-        ) {
-          const released =
-            await releaseWalletTripPayment(
-              requestId,
-              context.passengerId
-            );
-
-          await markTripPassengerPayment(
-            requestId,
-            context.passengerId,
-            context.trip,
-            {
-              paymentStatus:
-                "released"
-            }
-          );
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              status:
-                "released",
-              balance:
-                Number(
-                  released.balance ||
-                  0
-                )
-            });
-        }
-
-        if (
-          payment.method ===
-            "card" &&
-          payment.status ===
-            "held"
-        ) {
-          const refund =
-            await paystackRequest(
-              "/refund",
-              {
-                method:
-                  "POST",
-                body: {
-                  transaction:
-                    payment.paystackTransactionId ||
-                    payment.reference,
-                  amount:
-                    Math.round(
-                      Number(
-                        payment.amount ||
-                        0
-                      ) *
-                      100
-                    ),
-                  currency:
-                    "ZAR",
-                  customer_note:
-                    "Asiye ride cancelled before completion",
-                  merchant_note:
-                    `Asiye trip ${requestId} cancelled`
-                }
-              }
-            );
-
-          await paymentRef
-            .update({
-              status:
-                "refund_pending",
-              refundId:
-                String(
-                  refund.data?.id ||
-                  ""
-                ),
-              refundStatus:
-                String(
-                  refund.data?.status ||
-                  "pending"
-                ),
-              refundRequestedAt:
-                admin.database
-                  .ServerValue
-                  .TIMESTAMP
-            });
-
-          await markTripPassengerPayment(
-            requestId,
-            context.passengerId,
-            context.trip,
-            {
-              paymentStatus:
-                "refund_pending"
-            }
-          );
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              status:
-                "refund_pending"
-            });
-        }
-
-        await paymentRef
-          .update({
-            status:
-              payment.status ===
-                "captured"
-                ? "captured"
-                : "released",
-            releasedAt:
-              admin.database
-                .ServerValue
-                .TIMESTAMP
-          });
-
-        return response
-          .status(200)
-          .json({
-            ok:
-              true,
-            status:
-              payment.status ===
-                "captured"
-                ? "captured"
-                : "released"
-          });
-
-      } catch (error) {
-        console.error(
-          "Trip payment release failed",
-          error
-        );
-
-        return response
-          .status(500)
-          .json({
-            error:
-              error?.message ||
-              "Unable to release ride payment."
-          });
-      }
+exports.releaseTripPayment = onRequest(
+  {region: "us-central1", invoker: "public", secrets: [paystackSecretKey]},
+  async (request, response) => {
+    walletSmsCors(request, response);
+    response.set("Cache-Control", "no-store");
+    if (request.method === "OPTIONS") return response.status(204).send("");
+    if (request.method !== "POST") return response.status(405).json({error: "POST required."});
+    try {
+      const decoded = await verifiedRequestUser(request);
+      if (!decoded) return response.status(401).json({error: "Sign in again before cancelling this payment."});
+      const requestId = String(request.body?.requestId || "").trim();
+      const context = await tripPassengerContext(decoded, requestId);
+      if (context.trip.parcelSecurityVersion === 2)
+        return response.status(409).json({error: "Use secure Parcel cancellation and support refund review for this payment."});
+      const result = await releaseTripPaymentForPassenger(requestId, context.passengerId);
+      return response.status(200).json({ok: true, ...result});
+    } catch (error) {
+      console.error("Trip payment release failed", error?.message);
+      const status = error?.code === "payment/not-passenger" ? 403 :
+        error?.code === "payment/trip-not-found" ? 404 : error?.status || 502;
+      return response.status(status).json({error: error?.message || "Unable to release ride payment."});
     }
-  );
-
+  }
+);
 
 exports.paystackPaymentReturn =
   onRequest(
@@ -14343,6 +14008,8 @@ exports.paystackWebhook =
             ""
           );
 
+        if (!secret.trim()) return response.status(503).send("Webhook is not configured.");
+
         const raw =
           Buffer.isBuffer(
             request.rawBody
@@ -14396,6 +14063,12 @@ exports.paystackWebhook =
         const event =
           request.body ||
           {};
+
+        if (["refund.pending", "refund.processing", "refund.needs-attention", "refund.failed", "refund.processed"].includes(event.event)) {
+          const reference = sanitizeReference(event.data?.transaction_reference);
+          await cardRefundService.synchronize(reference);
+          return response.status(200).send("ok");
+        }
 
         if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(event.event)) {
           const transfer = event.data || {};

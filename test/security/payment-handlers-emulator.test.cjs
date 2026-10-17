@@ -14,6 +14,7 @@ const pickup={latitude:-29.85,longitude:30.95,address:'Pickup'};
 const destination={latitude:-29.80,longitude:30.99,address:'Destination'};
 let db,app,handlers,originalFetch,originalVerify,originalSecret;
 let initializations,verifications,transactions,onInitialize,verificationPatch;
+let refunds,onRefund,refundPatch,subaccountPatch;
 
 before(()=>{
   const host=process.env.FIREBASE_DATABASE_EMULATOR_HOST;
@@ -28,11 +29,11 @@ before(()=>{
   global.fetch=async(url,options={})=>{
     const parsed=new URL(url);
     assert.equal(parsed.origin,'https://api.paystack.co','Unexpected external request');
-    assert.equal(options.headers.Authorization,'Bearer '+secret);
+    assert.equal(options.headers.Authorization,'Bearer '+process.env.PAYSTACK_SECRET_KEY);
     let data;
     if(parsed.pathname.startsWith('/subaccount/')){
       data={subaccount_code:account,percentage_charge:20,is_verified:true,active:true,
-        account_number:'1234567890',domain:'test'};
+        account_number:'1234567890',domain:'test',...subaccountPatch};
     }else if(parsed.pathname==='/transaction/initialize'){
       const body=JSON.parse(options.body);
       initializations.push(body);
@@ -40,7 +41,7 @@ before(()=>{
       assert.equal(body.bearer,'account');
       assert.deepEqual(body.channels,['card']);
       transactions.set(body.reference,{id:initializations.length,reference:body.reference,
-        status:'success',currency:'ZAR',amount:Number(body.amount),channel:'card',
+        status:'success',domain:'test',currency:'ZAR',amount:Number(body.amount),channel:'card',
         subaccount:{subaccount_code:account,percentage_charge:20}});
       if(onInitialize)await onInitialize(body);
       data={reference:body.reference,authorization_url:'https://checkout.paystack.com/emulator',access_code:'test'};
@@ -48,6 +49,18 @@ before(()=>{
       const reference=decodeURIComponent(parsed.pathname.split('/').pop());
       verifications.push(reference);
       data={...transactions.get(reference),...verificationPatch};
+    }else if(parsed.pathname==='/refund'&&options.method==='POST'){
+      const body=JSON.parse(options.body);
+      const transaction=[...transactions.values()].find(t=>String(t.id)===String(body.transaction)||t.reference===body.transaction);
+      assert.ok(transaction,'Refund must identify an actual verified transaction');
+      data={id:1000+refunds.length,transaction:{id:transaction.id,reference:transaction.reference},
+        amount:body.amount,currency:'ZAR',domain:'test',status:'pending'};
+      refunds.push(data);
+      if(onRefund)await onRefund(data);
+    }else if(parsed.pathname.startsWith('/refund/')){
+      data={...refunds.find(r=>String(r.id)===parsed.pathname.split('/').pop()),...refundPatch};
+    }else if(parsed.pathname==='/refund'){
+      data=refunds.filter(r=>String(r.transaction.id)===parsed.searchParams.get('transaction')).map(r=>({...r,...refundPatch}));
     }else{
       throw Error('Unexpected Paystack operation: '+parsed.pathname);
     }
@@ -58,6 +71,7 @@ before(()=>{
 
 beforeEach(async()=>{
   initializations=[];verifications=[];transactions=new Map();onInitialize=null;verificationPatch={};
+  refunds=[];onRefund=null;refundPatch={};subaccountPatch={};process.env.PAYSTACK_SECRET_KEY=secret;
   const driver={authUid:'driver-auth',userUid:'driver-auth',name:'Driver',verificationStatus:'verified',
     vehicleApproved:true,vehicleType:'go',vehicleReg:'ND12345',vehicleMake:'Toyota',vehicleModel:'Corolla',
     vehicleColor:'White',vehicleYear:2025,vehicleSeats:4,vehiclePhoto:'https://example.test/car.jpg',
@@ -518,6 +532,8 @@ test('Go agreed fare passes the same checkout and signed provider verification h
   const checkout=await call('prepareTripPayment','sender-auth',{requestId});
   assert.equal(checkout.status,200,JSON.stringify(checkout.body));
   assert.equal(initializations[0].amount,'10000');
+  assert.equal(initializations[0].callback_url,
+    `https://us-central1-${projectId}.cloudfunctions.net/paystackPaymentReturn`);
   assert.match(initializations[0].email,/^[^\s@]+@asiye\.cloud$/);
   assert.equal((await webhook(checkout.body.reference)).status,200);
   assert.equal((await read('requests/'+requestId)).status,'accepted');
@@ -560,4 +576,136 @@ test('cancellation retries repair interrupted cleanup and preserve newer locks',
   assert.equal((await call('cancelParcelBookingSecure','sender-auth',{requestId})).status,200);
   assert.equal(await read('commuters/sender/currentRequest'),'new-booking');
   assert.equal(await read('taxis/driver/currentRequest'),'new-booking');
+});
+
+async function goCardForRefund() {
+  const requestId='go-refund-handler-reference';
+  await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',
+    taxiId:'driver',status:'payment_required',paymentMethod:'card',agreedFare:100,finalAmount:100,
+    negotiationEnabled:true,fareStatus:'agreed',goContinuationRequestedVersion:2,commissionRate:0.2,
+    commuterLocation:pickup,destinationCoords:destination});
+  await db.ref('goFareAgreements/'+requestId).set({driverId:'driver',agreedFare:100,
+    paymentMethod:'card',commissionRate:0.2,currency:'ZAR'});
+  const checkout=await call('prepareTripPayment','sender-auth',{requestId});
+  assert.equal(checkout.status,200,JSON.stringify(checkout.body));
+  assert.equal((await webhook(checkout.body.reference)).status,200);
+  return {requestId,reference:checkout.body.reference};
+}
+
+async function refundWebhook(reference,valid=true) {
+  const body={event:'refund.processed',data:{transaction_reference:reference,status:'processed',amount:'1'}};
+  const rawBody=Buffer.from(JSON.stringify(body));
+  const signature=crypto.createHmac('sha512',secret).update(rawBody).digest('hex');
+  return call('paystackWebhook',null,body,{rawBody,headers:{'x-paystack-signature':valid?signature:'forged'}});
+}
+
+test('live checkout defaults off and needs server-only provider approval plus validation evidence',async()=>{
+  const {requestId}=await parcel('card');await accept(requestId);
+  process.env.PAYSTACK_SECRET_KEY='sk_live_TESTING_NOT_A_REAL_KEY';
+  for(const launch of [null,{liveEnabled:true},{liveEnabled:true,approvalReference:'provider-review'}]){
+    await db.ref('paymentLaunch/paystack').set(launch);
+    assert.equal((await call('prepareTripPayment','sender-auth',{requestId})).status,503);
+    assert.equal(await read(`tripPayments/${requestId}/sender`),null);
+  }
+  assert.equal(initializations.length,0);
+  await db.ref('paymentLaunch/paystack').set({liveEnabled:true,approvalReference:'provider-review',
+    validationReference:'accepted-staging-evidence'});
+  subaccountPatch={domain:'live'};
+  assert.equal((await call('prepareTripPayment','sender-auth',{requestId})).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).paystackDomain,'live');
+});
+
+test('provider responses from a different mode cannot initialize checkout or unlock pickup',async()=>{
+  const {requestId}=await parcel('card');await accept(requestId);
+  subaccountPatch={domain:'live'};
+  assert.equal((await call('prepareTripPayment','sender-auth',{requestId})).status,409);
+  assert.equal(initializations.length,0);
+  subaccountPatch={};
+  const checkout=await call('prepareTripPayment','sender-auth',{requestId});
+  verificationPatch={domain:'live'};
+  assert.equal((await webhook(checkout.body.reference)).status,500);
+  assert.equal((await read('requests/'+requestId)).paymentsReady,false);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'initialized');
+});
+
+test('an active booking cannot refund or settle before verified departure',async()=>{
+  const {requestId}=await goCardForRefund();
+  assert.equal((await call('releaseTripPayment',null,{requestId})).status,401);
+  assert.equal((await call('releaseTripPayment','member-auth',{requestId})).status,403);
+  assert.equal((await call('releaseTripPayment','sender-auth',{requestId})).status,409);
+  assert.equal((await call('settleTripPayment','driver-auth',{requestId})).status,409);
+  assert.equal(refunds.length,0);
+  await db.ref('requests/'+requestId).update({status:'cancelled_by_admin',pinVerifiedAt:1,tripStartedAt:1});
+  assert.equal((await call('releaseTripPayment','sender-auth',{requestId})).status,409);
+  assert.equal(refunds.length,0);
+});
+
+test('concurrent client and cancellation-trigger refunds issue exactly one provider refund',async()=>{
+  const {requestId,reference}=await goCardForRefund();
+  const status=db.ref('requests/'+requestId+'/status');
+  const before=await status.once('value');await status.set('cancelled_by_commuter');
+  const after=await status.once('value');
+  let enter,release;
+  const entered=new Promise(resolve=>{enter=resolve;});
+  const pending=new Promise(resolve=>{release=resolve;});
+  onRefund=async()=>{enter();await pending;};
+  const first=call('releaseTripPayment','sender-auth',{requestId});
+  await entered;
+  const duplicate=await call('releaseTripPayment','sender-auth',{requestId});
+  assert.equal(duplicate.body.status,'refund_initializing');
+  await handlers.releaseCancelledGoTripPayment.run({before,after},{params:{requestId}});
+  assert.equal((await webhook(reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refund_initializing');
+  release();
+  assert.equal((await first).body.status,'refund_pending');
+  assert.equal(refunds.length,1);
+  assert.equal((await call('releaseTripPayment','sender-auth',{requestId})).body.status,'refund_pending');
+  assert.equal(refunds.length,1);
+});
+
+test('unknown refund outcomes stay reserved and reconcile through verified provider data, never a second POST',async()=>{
+  const {requestId,reference}=await goCardForRefund();
+  await db.ref('requests/'+requestId+'/status').set('cancelled_by_commuter');
+  onRefund=async()=>{throw Error('Simulated lost refund response after provider acceptance');};
+  assert.equal((await call('releaseTripPayment','sender-auth',{requestId})).status,502);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refund_unknown');
+  assert.equal((await call('releaseTripPayment','sender-auth',{requestId})).body.status,'refund_unknown');
+  assert.equal(refunds.length,1);
+  assert.equal((await refundWebhook(reference,false)).status,401);
+  refundPatch={status:'processed',amount:1};
+  assert.equal((await refundWebhook(reference)).status,500,'A signed event cannot override the actual refund amount');
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refund_unknown');
+  refundPatch={status:'processed'};
+  assert.equal((await refundWebhook(reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refunded');
+  refundPatch={status:'pending'};
+  assert.equal((await refundWebhook(reference)).status,200);
+  assert.equal((await webhook(reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refunded');
+  assert.equal((await read('requests/'+requestId)).status,'cancelled_by_commuter');
+  assert.equal(refunds.length,1);
+});
+
+test('refund failure needs review; a verified processed result finishes it without reissuing a refund',async()=>{
+  const {requestId,reference}=await goCardForRefund();
+  await db.ref('requests/'+requestId+'/status').set('cancelled_by_commuter');
+  assert.equal((await call('releaseTripPayment','sender-auth',{requestId})).body.status,'refund_pending');
+  refundPatch={status:'failed'};
+  assert.equal((await refundWebhook(reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refund_review');
+  refundPatch={status:'processed',currency:'NGN'};
+  assert.equal((await refundWebhook(reference)).status,500);
+  refundPatch={status:'processed'};
+  assert.equal((await refundWebhook(reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refunded');
+  assert.equal(refunds.length,1);
+});
+
+test('an unconfigured webhook cannot authenticate with an empty known HMAC key',async()=>{
+  process.env.PAYSTACK_SECRET_KEY='';
+  const body={event:'charge.success',data:{reference:'ASIYE-EMPTY-SECRET'}};
+  const rawBody=Buffer.from(JSON.stringify(body));
+  const signature=crypto.createHmac('sha512','').update(rawBody).digest('hex');
+  assert.equal((await call('paystackWebhook',null,body,{rawBody,
+    headers:{'x-paystack-signature':signature}})).status,503);
 });

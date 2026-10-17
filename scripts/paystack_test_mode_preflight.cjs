@@ -5,10 +5,10 @@ const secret=String(process.env.PAYSTACK_TEST_SECRET_KEY||'').trim();
 const subaccount=String(process.env.PAYSTACK_TEST_DRIVER_SUBACCOUNT||'').trim();
 if(!/^sk_test_[A-Za-z0-9]+$/.test(secret))throw Error('PAYSTACK_TEST_SECRET_KEY must be a Paystack TEST secret (sk_test_). Never use live keys.');
 if(!/^ACCT_[A-Za-z0-9]+$/.test(subaccount))throw Error('A valid TEST subaccount code is required.');
-if(!['initialize','verify'].includes(mode))throw Error('Mode must be initialize or verify.');
+if(!['check','initialize','verify'].includes(mode))throw Error('Mode must be check, initialize or verify.');
 async function api(route,options={}){
  const response=await fetch('https://api.paystack.co'+route,{
-  ...options,headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'}
+  ...options,signal:AbortSignal.timeout(20000),headers:{Authorization:'Bearer '+secret,'Content-Type':'application/json'}
  });
  const payload=await response.json().catch(()=>({}));
  if(!response.ok||payload.status!==true)throw Error('Paystack TEST API: '+(payload.message||response.status));
@@ -17,10 +17,15 @@ async function api(route,options={}){
 async function main(){
  const account=await api('/subaccount/'+encodeURIComponent(subaccount));
  if(account.subaccount_code!==subaccount || Number(account.percentage_charge)!==20 ||
-    account.active===false || account.domain!=='test')
+    account.active!==true || account.domain!=='test')
   throw Error('Driver TEST subaccount must be active, test-mode and have 20% Asiye commission.');
  console.log('PASS Test-mode driver subaccount exists, active, 20% Asiye / 80% driver.');
  // is_verified can be false in test mode; never override the production verification gate.
+ if(mode==='check'){
+  console.log('READ-ONLY CHECK: no checkout, charge, refund or transfer was initiated.');
+  console.log('Production bank-verification gate:',account.is_verified===true?'verified':'pending; Card booking must remain blocked');
+  return;
+ }
  if(mode==='initialize'){
   const reference='ASIYE-TEST-'+Date.now().toString(36).toUpperCase();
   const transaction=await api('/transaction/initialize',{
@@ -43,7 +48,7 @@ async function main(){
   const transaction=await api('/transaction/verify/'+encodeURIComponent(reference));
   const code=typeof transaction.subaccount==='string'?transaction.subaccount:
     String(transaction.subaccount?.subaccount_code||'');
-  if(transaction.status!=='success'||transaction.currency!=='ZAR'||
+  if(transaction.domain!=='test'||transaction.status!=='success'||transaction.currency!=='ZAR'||
      Number(transaction.amount)!==10000||transaction.reference!==reference||
      code!==subaccount)
     throw Error('TEST transaction amount, currency, subaccount or status does not match.');

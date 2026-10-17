@@ -152,6 +152,21 @@ function dbFor(uid) {
   return env.authenticatedContext(uid).database();
 }
 
+test('passengers, drivers and client-side admins cannot read or enable the live payment launch gate', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'admins/admin-auth'), true);
+    await set(ref(context.database(), 'paymentLaunch/paystack'), {liveEnabled: false});
+  });
+  for (const uid of ['passenger-auth', 'driver-auth', 'admin-auth']) {
+    const db = dbFor(uid);
+    await assertFails(get(ref(db, 'paymentLaunch/paystack')));
+    await assertFails(set(ref(db, 'paymentLaunch/paystack'), {
+      liveEnabled: true, approvalReference: 'forged', validationReference: 'forged'
+    }));
+    await assertFails(update(ref(db), {'paymentLaunch/paystack/liveEnabled': true}));
+  }
+});
+
 test('anonymous users cannot read protected profiles or requests', async () => {
   const db = env.unauthenticatedContext().database();
   await assertFails(get(ref(db, 'commuters/p1')));

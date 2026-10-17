@@ -16,6 +16,7 @@ test('80/20 split: main platform 20%, driver 80%, only verified active drivers',
   assert.equal(isVerifiedSubaccount({...good,percentage_charge:80},'ACCT_valid123'),false);
   assert.equal(isVerifiedSubaccount({...good,is_verified:false},'ACCT_valid123'),false);
   assert.equal(isVerifiedSubaccount({...good,active:false},'ACCT_valid123'),false);
+  assert.equal(isVerifiedSubaccount({...good,active:undefined},'ACCT_valid123'),false);
   assert.equal(isVerifiedSubaccount(good,'ACCT_other'),false);
 });
 test('Paystack server verification rejects a wrong or missing driver subaccount', () => {
