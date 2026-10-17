@@ -311,12 +311,7 @@
         button.disabled = true;
         try {
             stopCamera();
-            await firebase.auth().signOut();
-            ['driverId','userId','commuterId','authUid','userType',
-                'driverPhone','driverName','currentRequestId'].forEach(key => {
-                try { localStorage.removeItem(key); } catch (_) {}
-            });
-            window.location.replace('./login.html');
+            await window.AsiyeSession.logout();
         } catch (error) {
             button.disabled = false;
             status.textContent = 'Unable to log out. Please check your connection and retry.';

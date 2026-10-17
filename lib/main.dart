@@ -1638,6 +1638,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   }
 
   Future<void> _performLogout() async {
+    _stopLocationWatch();
     final prefs =
         await SharedPreferences.getInstance();
 

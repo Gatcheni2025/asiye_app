@@ -263,7 +263,7 @@ ASIYE.wallet = {
    Negotiated Go: no money is reserved until driver + passenger agree a fare.
    Cash: marks the agreed fare due after negotiation.
    Wallet: reserves the agreed fare after negotiation; Club reserves when full.
-   Card: opens Paystack only after negotiation; funds remain held until completion.
+   Card: opens Paystack after driver/fare agreement; Paystack splits the charge directly.
    ============================================================ */
 
 ASIYE.payments = {
@@ -696,28 +696,21 @@ ASIYE.payments = {
                 );
 
             ASIYE.ui?.toast?.(
-                'Card payment held. Your Club will move once all passenger payments are ready.'
+                'Card payment confirmed. Your Club will move once all passenger payments are ready.'
             );
 
             return true;
         }
 
 
-        /*
-         * Parcel/card flows already complete their safety share before
-         * checkout in build 329. Keep their existing dispatch behaviour.
-         */
+        // Parcel card charges follow driver acceptance: never redispatch a paid ride.
         if (
-            request.status ===
-                'pending' ||
-            request.paymentStatus ===
-                'held'
+            request.status === 'pending' ||
+            request.paymentStatus === 'held'
         ) {
-            await ASIYE.booking
-                ?.notifyGoDrivers?.(
-                    pending.requestId,
-                    request
-                );
+            if (!request.taxiId) {
+                throw new Error('Paid parcel cannot resume without its assigned driver. Contact Asiye support.');
+            }
 
             await ASIYE.ride
                 ?.start?.(
@@ -725,7 +718,7 @@ ASIYE.payments = {
                 );
 
             ASIYE.ui?.toast?.(
-                'Card payment confirmed. Looking for your driver.'
+                'Card payment confirmed. Your assigned driver can proceed to collection.'
             );
 
             return true;
@@ -802,8 +795,8 @@ ASIYE.payments = {
             }
 
             if (
-                request.poolReady !==
-                    true
+                request.poolReady !== true ||
+                (method === 'card' && (!request.taxiId || !request.driverAcceptedAt))
             ) {
                 return;
             }
@@ -980,10 +973,10 @@ ASIYE.payments = {
 
 
         if (
-            method !==
-                'card' ||
-            status !==
-                'payment_required'
+            method !== 'card' ||
+            status !== 'payment_required' ||
+            !request.taxiId ||
+            (request.type === 'club' && (!request.poolReady || !request.driverAcceptedAt))
         ) {
             return;
         }

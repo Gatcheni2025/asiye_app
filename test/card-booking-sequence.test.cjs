@@ -17,7 +17,7 @@ const ride = fs.readFileSync(
 
 test('Go card booking negotiates before Paystack, PIN and live-share', () => {
     const createStart =
-        booking.indexOf('async createGoRide()');
+        booking.indexOf('async createGoRide(');
     const legacyStart =
         booking.indexOf(
             'Legacy fixed-fare payment flow',

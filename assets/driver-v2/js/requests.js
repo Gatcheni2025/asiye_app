@@ -29,6 +29,56 @@ ASIYE_DRIVER.requests = {
     activeRequest:
         null,
 
+    incomingRef: null,
+    incomingListener: null,
+    incomingSignature: '',
+
+    stopIncomingWatch() {
+        if (this.incomingRef && this.incomingListener) this.incomingRef.off('value', this.incomingListener);
+        this.incomingRef = null;
+        this.incomingListener = null;
+        this.incomingSignature = '';
+    },
+
+    watchIncomingRequest(requestId, initial) {
+        this.stopIncomingWatch();
+        const signature = request => JSON.stringify([
+            request?.status, request?.taxiId, request?.fareStatus, request?.passengerOffer,
+            request?.agreedFare, request?.driverCounterFare, request?.negotiationRound,
+            request?.driverCounterCount, request?.counterExpiresAt,
+            request?.fareCounterDeclinedDrivers?.[ASIYE_DRIVER.state.driverId],
+            request?.fareOfferDeclinedDrivers?.[ASIYE_DRIVER.state.driverId]?.offerRound
+        ]);
+        this.incomingSignature = signature(initial);
+        const ref = firebase.database().ref(`requests/${requestId}`);
+        this.incomingRef = ref;
+        this.incomingListener = ref.on('value', snapshot => {
+            if (this.incomingRef !== ref || ASIYE_DRIVER.state?.loggingOut) return;
+            const request = snapshot.val();
+            const next = signature(request);
+            if (next === this.incomingSignature) return;
+            this.incomingSignature = next;
+            if (!request || !this.isRequestAvailable(request)) {
+                this.stopIncomingWatch();
+                ASIYE_DRIVER.ui?.closeIncomingRequest?.();
+                this.removeNotification(this.activeNotificationKey);
+                this.activeRequest = null;
+                ASIYE_DRIVER.state.incomingRequest = null;
+                if (request?.taxiId === ASIYE_DRIVER.state.driverId && request.fareStatus === 'agreed' &&
+                    ASIYE_DRIVER.trip?.requestId !== requestId) ASIYE_DRIVER.trip?.start?.(requestId);
+                return;
+            }
+            request.key = requestId;
+            request.requestId = requestId;
+            this.activeRequest = request;
+            ASIYE_DRIVER.state.incomingRequest = request;
+            ASIYE_DRIVER.ui?.showIncomingRequest?.(request);
+        }, () => {
+            this.stopIncomingWatch();
+            ASIYE_DRIVER.ui?.closeIncomingRequest?.();
+        });
+    },
+
 
     async postNegotiation(
         endpoint,
@@ -127,6 +177,11 @@ ASIYE_DRIVER.requests = {
                     requestId:
                         id,
 
+                    ...(this.activeRequest?.requestId === id || this.activeRequest?.key === id ? {
+                        passengerOffer: this.activeRequest.passengerOffer,
+                        negotiationRound: this.activeRequest.negotiationRound
+                    } : {}),
+
                     amount:
                         Math.round(
                             Number(
@@ -155,6 +210,8 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     start() {
+
+        if (ASIYE_DRIVER.state?.loggingOut) return;
 
         const driverId =
             ASIYE_DRIVER.state?.driverId;
@@ -486,6 +543,8 @@ ASIYE_DRIVER.requests = {
         notificationKey = null
     ) {
 
+        if (ASIYE_DRIVER.state?.loggingOut) return;
+
         try {
 
             const snapshot =
@@ -502,6 +561,8 @@ ASIYE_DRIVER.requests = {
 
             const request =
                 snapshot.val();
+
+            if (ASIYE_DRIVER.state?.loggingOut) return;
 
 
             if (!request) {
@@ -520,6 +581,8 @@ ASIYE_DRIVER.requests = {
 
             request.key =
                 requestId;
+
+            request.requestId = requestId;
 
 
             if (
@@ -582,6 +645,7 @@ ASIYE_DRIVER.requests = {
             }
 
 
+            this.watchIncomingRequest(requestId, request);
             this.playRequestSound();
 
 
@@ -600,6 +664,8 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     isDriverAvailable() {
+
+        if (ASIYE_DRIVER.state?.loggingOut) return false;
 
         const driver =
             ASIYE_DRIVER.state
@@ -658,6 +724,10 @@ ASIYE_DRIVER.requests = {
     isRequestAvailable(
         request
     ) {
+
+        const driverId = ASIYE_DRIVER.state.driverId;
+        if (request.fareCounterDeclinedDrivers?.[driverId] === true ||
+            request.fareOfferDeclinedDrivers?.[driverId]?.offerRound === Number(request.passengerOfferRound || 1)) return false;
 
         const status =
             String(
@@ -751,6 +821,8 @@ ASIYE_DRIVER.requests = {
        ======================================================== */
 
     async accept(requestId = null) {
+
+        const displayedOffer = Number(this.activeRequest?.passengerOffer);
 
         if (!await AsiyeEnrollment.requireApproval()) return;
 
@@ -936,6 +1008,31 @@ ASIYE_DRIVER.requests = {
         );
 
 
+        if (freshRequest.type === 'delivery' &&
+            freshRequest.parcelSecurityVersion === 2) {
+            // Firebase client may not claim or change a secure Parcel.
+            // The backend atomically checks driver identity, active trip
+            // lock, vehicle compliance and the verified Paystack subaccount.
+            const result = await this.postNegotiation(
+                'acceptParcelRequestSecure', {requestId:id,driverId}
+            );
+            const updated = (await requestRef.once('value')).val();
+            if (!updated || updated.taxiId !== driverId) {
+                throw new Error('Server Parcel assignment could not be verified.');
+            }
+            updated.requestId=id;
+            this.activeRequest=updated;
+            ASIYE_DRIVER.state.incomingRequest=null;
+            await this.removeNotification(this.activeNotificationKey);
+            await ASIYE_DRIVER.trip?.start?.(id);
+            ASIYE_DRIVER.ui?.toast?.(
+                updated.paymentMethod === 'card'
+                    ? 'Parcel accepted. Waiting for passenger Paystack payment.'
+                    : 'Parcel accepted. Navigate to the pickup.'
+            );
+            return result;
+        }
+
         const isProtectedGo =
             freshRequest.type !==
                 'club' &&
@@ -995,7 +1092,8 @@ ASIYE_DRIVER.requests = {
                     'acceptGoFareOffer',
                     {
                         requestId:
-                            id
+                            id,
+                        ...(Number.isFinite(displayedOffer) ? {amount:displayedOffer} : {})
                     }
                 );
 
@@ -1699,19 +1797,13 @@ ASIYE_DRIVER.requests = {
             }
 
 
-            const nextStatus =
-
-                isClub
-
-                ? (
-                    poolReady
-
-                    ? 'pool_ready'
-
-                    : 'driver_waiting'
-                )
-
-                : 'accepted';
+            const needsDriverCardCheckout =
+                !isClub &&
+                claimedRequest.type === 'delivery' &&
+                String(claimedRequest.paymentMethod || 'cash').toLowerCase() === 'card';
+            const nextStatus = isClub
+                ? (poolReady ? 'pool_ready' : 'driver_waiting')
+                : needsDriverCardCheckout ? 'payment_required' : 'accepted';
 
 
             /* ========================================================
@@ -1766,6 +1858,11 @@ ASIYE_DRIVER.requests = {
 
                 status:
                     nextStatus,
+
+                ...(needsDriverCardCheckout ? {
+                    paymentStatus: 'payment_required',
+                    paymentsReady: false
+                } : {}),
 
                 acceptedAt:
 
@@ -2702,6 +2799,20 @@ ASIYE_DRIVER.requests = {
             return;
         }
 
+        const offer = this.activeRequest;
+        const notificationKey = this.activeNotificationKey;
+        if (ASIYE_DRIVER.goNegotiation?.isProtectedGo(offer)) {
+            try {
+                await this.postNegotiation('declineGoFareOffer', {
+                    requestId: id,
+                    amount: Number(offer.passengerOffer),
+                    negotiationRound: offer.negotiationRound
+                });
+            } catch (error) {
+                ASIYE_DRIVER.ui?.toast?.(error.message || 'Could not decline the offer. Try again.', 'danger');
+                return;
+            }
+        }
 
         /*
          * Do NOT cancel the passenger's booking.
@@ -2710,14 +2821,16 @@ ASIYE_DRIVER.requests = {
          */
 
         if (
-            this.activeNotificationKey
+            notificationKey
         ) {
 
             await this.removeNotification(
-                this.activeNotificationKey
+                notificationKey
             );
         }
 
+        if (this.activeRequest && (this.activeRequest.key || this.activeRequest.requestId) !== id) return;
+        this.stopIncomingWatch();
 
         this.activeRequest =
             null;
@@ -2991,6 +3104,8 @@ ASIYE_DRIVER.requests = {
 
 
     stop() {
+
+        this.stopIncomingWatch();
 
         if (
             this.notificationRef &&

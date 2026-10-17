@@ -7,6 +7,27 @@ window.ASIYE = window.ASIYE || {};
 
 ASIYE.booking = {
 
+    async releaseCancelledBookingPointer(requestId, passengerId = ASIYE.state.userId) {
+        if (!passengerId || !requestId) return;
+        await firebase.database().ref(`commuters/${passengerId}/currentRequest`).transaction(current =>
+            current == null || String(current) === String(requestId) ? null : undefined
+        );
+    },
+
+    async pruneEndedBooking(passengerId) {
+        const ref = firebase.database().ref(`commuters/${passengerId}/currentRequest`);
+        const requestId = String((await ref.once('value')).val() || '').trim();
+        if (!requestId) return;
+        const request = (await firebase.database().ref(`requests/${requestId}`).once('value')).val();
+        if (ASIYE.ride.isActiveBooking(request, passengerId)) return;
+        await this.releaseCancelledBookingPointer(requestId, passengerId);
+        if (localStorage.getItem('currentRequestId') === requestId) localStorage.removeItem('currentRequestId');
+        if (ASIYE.state.booking.requestId === requestId) {
+            ASIYE.state.booking.requestId = null;
+            ASIYE.state.booking.request = null;
+        }
+    },
+
     async resolvePassengerForBooking() {
 
         const authUser =
@@ -218,7 +239,7 @@ ASIYE.booking = {
        ASIYE GO
        ======================================================== */
 
-    async createGoRide() {
+    async createGoRide(retriedStaleBooking = false) {
 
         const passenger =
             await this
@@ -227,6 +248,8 @@ ASIYE.booking = {
 
         const uid =
             passenger.id;
+
+        await this.pruneEndedBooking(uid);
 
 
         const user =
@@ -643,18 +666,6 @@ ASIYE.booking = {
 
 
             if (activeRequestId) {
-
-                localStorage.setItem(
-                    'currentRequestId',
-                    activeRequestId
-                );
-
-
-                ASIYE.state.booking
-                    .requestId =
-                    activeRequestId;
-
-
                 const activeSnapshot =
                     await firebase
                         .database()
@@ -670,7 +681,10 @@ ASIYE.booking = {
                     activeSnapshot.val();
 
 
-                if (activeRequest) {
+                if (ASIYE.ride.isActiveBooking(activeRequest, uid)) {
+
+                    localStorage.setItem('currentRequestId', activeRequestId);
+                    ASIYE.state.booking.requestId = activeRequestId;
 
                     activeRequest.requestId =
                         activeRequestId;
@@ -694,6 +708,10 @@ ASIYE.booking = {
 
                     return activeRequestId;
                 }
+
+                // Cancellation can finish between a conflict response and this
+                // read. Ask the server once more instead of reopening an ended ride.
+                if (!retriedStaleBooking) return this.createGoRide(true);
             }
 
 
@@ -708,7 +726,7 @@ ASIYE.booking = {
                 )
                 .transaction(
                     current =>
-                        String(
+                        current == null || String(
                             current ||
                             ''
                         ) ===
@@ -1565,14 +1583,45 @@ ASIYE.booking = {
 
         if (!request) {
 
+            await this.releaseCancelledBookingPointer(requestId);
+
             this.clearLocalRide();
 
             return;
         }
 
+        if (!ASIYE.ride.isActiveBooking(request)) {
+            await this.releaseCancelledBookingPointer(requestId);
+            this.clearLocalRide();
+            ASIYE.ride?.stop?.();
+            ASIYE.map?.clearTrip?.();
+            ASIYE.ui.renderHome();
+            return true;
+        }
+
+
+        if (request.parcelSecurityVersion === 2) {
+            const user = firebase.auth().currentUser;
+            if (!user) throw new Error('Sign in before cancelling your Parcel.');
+            const token = await user.getIdToken(true);
+            const response = await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/cancelParcelBookingSecure',
+                {method:'POST',headers:{Authorization:`Bearer ${token}`,
+                  'Content-Type':'application/json'},body:JSON.stringify({requestId})}
+            );
+            const result = await response.json().catch(()=>({}));
+            if (!response.ok) throw new Error(result.error || 'Unable to cancel Parcel.');
+            await this.releaseCancelledBookingPointer(requestId);
+            this.clearLocalRide();
+            ASIYE.ride?.stop?.();
+            ASIYE.map?.clearTrip?.();
+            ASIYE.ui.renderHome();
+            return true;
+        }
 
         if (request.clubSecurityVersion === 2) {
             await window.ClubLive.post('clubDriverActionSecure', {requestId, action:'cancelPassenger'});
+            await this.releaseCancelledBookingPointer(requestId);
             this.clearLocalRide();
             ASIYE.ride?.stop?.();
             ASIYE.map?.clearTrip?.();
@@ -1582,6 +1631,7 @@ ASIYE.booking = {
 
         if (request.type !== 'club') {
             await ASIYE.goNegotiation.post('goTripActionSecure', {requestId, action: 'cancel'});
+            await this.releaseCancelledBookingPointer(requestId);
             this.clearLocalRide();
             ASIYE.ride?.stop?.();
             ASIYE.map?.clearTrip?.();

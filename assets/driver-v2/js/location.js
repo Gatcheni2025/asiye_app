@@ -154,6 +154,8 @@ ASIYE_DRIVER.location = {
         position
     ) {
 
+        if (ASIYE_DRIVER.state?.loggingOut) return;
+
         if (
             !position?.coords
         ) {

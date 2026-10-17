@@ -42,6 +42,19 @@ ASIYE.ride = {
     driverSearchRetryMax:
         6,
 
+    isActiveBooking(request, passengerId = ASIYE.state.userId) {
+        const ended = value => {
+            const status = String(value || '').trim().toLowerCase();
+            return ['completed','expired','rejected'].includes(status) || /^cancelled(?:_|$)|^canceled(?:_|$)/.test(status);
+        };
+        const ids = [passengerId, window.firebase?.auth?.()?.currentUser?.uid].filter(Boolean).map(String);
+        const memberId = ids.find(id => request?.passengers?.[id]);
+        return Boolean(request && ids.length &&
+            (ids.includes(String(request.commuterId || '')) || memberId) &&
+            !ended(request.status) &&
+            !(request.type === 'club' && ended(request.passengers?.[memberId]?.status)));
+    },
+
     async refreshLiveTripRoute(driverLatitude, driverLongitude) {
         const now = Date.now();
         const previous = this.lastApproachRoutePoint;
@@ -555,16 +568,31 @@ ASIYE.ride = {
         if (!container) return;
         const passenger = this.getPassengerData(request) || {};
         const escape = value => ASIYE.ui.escape(String(value || ''));
-        const old = container.querySelector('[data-trip-summary]');
-        old?.remove();
+        container.querySelector('[data-trip-summary]')?.remove();
         const summary = document.createElement('section');
         summary.dataset.tripSummary = 'true';
         const arrival = Boolean(passenger.arrivedAt || request.arrivedAt || request.tripStartedAt ||
             ['arrived', 'passenger_onboard', 'all_onboard', 'in_transit'].includes(status));
-        summary.innerHTML = `<p><strong>Pickup:</strong> ${escape(passenger.pickupAddress || request.pickupAddress)}<br>
-            <strong>Destination:</strong> ${escape(passenger.destination || request.destination || request.destinationName)}<br>
-            <strong>Fare:</strong> R${Number(ASIYE.state.booking.fare || 0).toFixed(2)} · ${escape(ASIYE.state.booking.paymentMethod)}</p>
-            ${arrival ? '' : '<button type="button" class="secondary-button" data-trip-cancel>Cancel booking</button>'}`;
+        const pickup = escape(passenger.pickupAddress || request.pickupAddress || 'Pickup details pending');
+        const destination = escape(passenger.destination || request.destination || request.destinationName || 'Destination details pending');
+        const fare = Number(ASIYE.state.booking.fare || 0).toFixed(2);
+        const method = String(ASIYE.state.booking.paymentMethod || request.paymentMethod || 'cash').toLowerCase();
+        const modern = Boolean(container.querySelector('.ride-match'));
+        if (modern) {
+            summary.className = 'ride-match-summary';
+            summary.innerHTML = `
+                <div class="ride-match-route" aria-label="Your route">
+                    <div class="ride-match-stop"><span class="ride-match-location" aria-hidden="true"></span><div><span>Pickup</span><p>${pickup}</p></div></div>
+                    <div class="ride-match-stop"><span class="ride-match-location ride-match-location--destination" aria-hidden="true"></span><div><span>Destination</span><p>${destination}</p></div></div>
+                </div>
+                <div class="ride-match-fare"><div><span>Agreed fare</span><small>${method === 'cash' ? 'Cash · pay after your trip' : escape(method === 'card' ? 'Card payment' : method)}</small></div><strong>R${fare}</strong></div>
+                ${arrival ? '' : '<button type="button" class="ride-match-cancel" data-trip-cancel>Cancel booking</button>'}`;
+        } else {
+            summary.innerHTML = `<p><strong>Pickup:</strong> ${pickup}<br>
+                <strong>Destination:</strong> ${destination}<br>
+                <strong>Fare:</strong> R${fare} · ${escape(method)}</p>
+                ${arrival ? '' : '<button type="button" class="secondary-button" data-trip-cancel>Cancel booking</button>'}`;
+        }
         container.append(summary);
         summary.querySelector('[data-trip-cancel]')?.addEventListener('click', async event => {
             event.currentTarget.disabled = true;
@@ -695,8 +723,9 @@ ASIYE.ride = {
 
 
         if (
-            method ===
-                'card' && !['held', 'captured'].includes(request.paymentStatus)
+            method === 'card' && request.taxiId &&
+            !['held', 'captured'].includes(request.paymentStatus) &&
+            ASIYE.payments?.pendingCard?.()?.requestId !== request.requestId
         ) {
             ASIYE.payments
                 ?.prepare?.(
@@ -864,7 +893,7 @@ ASIYE.ride = {
 
                     <div class="home-greeting">
                         ${ASIYE.ui.escape(driverName)}
-                        has sent a protected counter offer.
+                        has sent you a counter-offer.
                         No payment has been taken yet.
                     </div>
                 </div>
@@ -903,7 +932,7 @@ ASIYE.ride = {
                 id="acceptGoFareCounter"
                 class="primary-button"
             >
-                Accept R${counterFare.toFixed(0)}
+                Accept R${counterFare.toFixed(0)} &amp; book ride
             </button>
 
             <button
@@ -912,6 +941,10 @@ ASIYE.ride = {
                 style="margin-top:9px;"
             >
                 Keep my R${passengerOffer.toFixed(0)} offer
+            </button>
+
+            <button id="cancelGoFareRequest" class="secondary-button" style="margin-top:9px;">
+                Cancel request
             </button>
         `;
 
@@ -940,7 +973,8 @@ ASIYE.ride = {
                         await ASIYE.goNegotiation
                             .acceptDriverCounter(
                                 request.requestId ||
-                                this.requestId
+                                this.requestId,
+                                request
                             );
 
 
@@ -956,7 +990,7 @@ ASIYE.ride = {
                             false;
 
                         button.textContent =
-                            `Accept R${counterFare.toFixed(0)}`;
+                            `Accept R${counterFare.toFixed(0)} & book ride`;
 
 
                         ASIYE.ui
@@ -993,7 +1027,8 @@ ASIYE.ride = {
                         await ASIYE.goNegotiation
                             .keepPassengerOffer(
                                 request.requestId ||
-                                this.requestId
+                                this.requestId,
+                                request
                             );
 
 
@@ -1041,6 +1076,10 @@ ASIYE.ride = {
                     }
                 }
             );
+
+        document.getElementById('cancelGoFareRequest')?.addEventListener('click', () => {
+            ASIYE.booking?.cancelCurrentRide?.();
+        });
     },
 
 
@@ -1115,6 +1154,11 @@ ASIYE.ride = {
                     ? `${foundCount} nearby drivers have received your request.`
                     : 'A nearby driver has received your request.';
 
+        const fareDecision = request.lastGoFareDecision;
+        const driverDeclined = fareDecision?.action === 'declined' &&
+            Number(fareDecision.offerRound) === Number(request.passengerOfferRound || 1);
+        const offer = Number(request.passengerOffer || request.finalAmount || 0);
+
 
         container.innerHTML = `
 
@@ -1145,7 +1189,7 @@ ASIYE.ride = {
                     <div class="home-greeting">
                         ${
                             driverFound
-                            ? 'Waiting for a driver to accept your trip.'
+                            ? 'Waiting for a driver to accept your fare or make a counter-offer.'
                             : 'Checking active Asiye drivers around your pickup. We will keep searching automatically.'
                         }
                     </div>
@@ -1153,6 +1197,10 @@ ASIYE.ride = {
                 </div>
 
             </div>
+
+            ${driverDeclined ? `<p class="go-fare-protection-note" role="status">${ASIYE.ui.escape(fareDecision.driverName || 'A driver')} declined your R${offer.toFixed(0)} offer. Your booking stays open for other drivers.</p>` : ''}
+
+            ${request.negotiationEnabled ? `<p class="go-fare-protection-note">Your offer: <strong>R${offer.toFixed(0)}</strong>. Drivers decide whether to accept, decline or counter. No payment is taken until a fare is agreed.</p>` : ''}
 
             <div class="asiye-request-activity">
 
@@ -1615,59 +1663,43 @@ ASIYE.ride = {
        ======================================================== */
 
     renderDriverAssigned(request) {
-
-        const container =
-            document.getElementById(
-                'sheetContent'
-            );
-
-
+        const container = document.getElementById('sheetContent');
         if (!container) return;
-
-
-        const name =
-            request.driverName ||
-            'Your driver';
-
-
-        const isClub =
-            request.type === 'club';
-
-
+        const escape = value => ASIYE.ui.escape(String(value || ''));
+        const isClub = request.type === 'club';
+        const phone = String(request.driverPhone || '').replace(/[^\d+]/g, '');
+        const callable = /^\+?\d{6,15}$/.test(phone);
         container.innerHTML = `
-
-            <div class="home-kicker">
-                ${
-                    isClub
-                    ? 'Asiye Club'
-                    : 'Asiye Go'
-                }
-            </div>
-
-            <h2 class="home-title">
-                ${ASIYE.ui.escape(name)}
-                accepted your ride
-            </h2>
-
-            <div class="home-greeting">
-
-                ${
-                    isClub
-
-                    ?
-
-                    'Your driver is assigned and waiting for the Club departure stage.'
-
-                    :
-
-                    'Your driver is preparing to come to you.'
-                }
-
-            </div>
-
-            ${this.driverCard(request)}
-
-        `;
+            <section class="ride-match" aria-label="Your confirmed driver">
+                <div class="ride-match-topline">
+                    <span class="ride-match-service">${isClub ? 'Asiye Club' : 'Asiye Go'}</span>
+                    <span class="ride-match-status">${this.rideMatchIcon('check')}Driver confirmed</span>
+                </div>
+                <h2>Your ride is confirmed</h2>
+                <p class="ride-match-intro">${isClub
+                    ? 'Your driver is assigned. We’ll keep you updated as your Club gets ready.'
+                    : 'Your driver is getting ready to collect you.'}</p>
+                ${this.driverCard(request)}
+                <div class="ride-match-actions" aria-label="Contact your driver">
+                    ${callable
+                        ? `<a href="tel:${escape(phone)}" aria-label="Call ${escape(request.driverName || 'your driver')}">${this.rideMatchIcon('call')}Call driver</a>`
+                        : `<button type="button" disabled>${this.rideMatchIcon('call')}Call unavailable</button>`}
+                    <button type="button" data-match-message>${this.rideMatchIcon('message')}Message</button>
+                </div>
+                <p class="ride-match-feedback" role="status" aria-live="polite"></p>
+            </section>`;
+        container.querySelector('[data-match-message]')?.addEventListener('click', async () => {
+            try {
+                if (typeof window.AsiyeTripChat?.open !== 'function')
+                    throw new Error('Messaging is unavailable. Please call your driver.');
+                await window.AsiyeTripChat.open(request, request.requestId || this.requestId);
+            } catch (error) {
+                const feedback = container.querySelector('.ride-match-feedback');
+                if (feedback) feedback.textContent = error.message || 'Messaging is unavailable right now.';
+            }
+        });
+        container.querySelectorAll('.ride-match img').forEach(img =>
+            img.addEventListener('error', () => img.remove(), {once: true}));
     },
 
 
@@ -1675,12 +1707,47 @@ ASIYE.ride = {
        DRIVER ON WAY
        ======================================================== */
 
+    async retrieveParcelPickupPin(requestId) {
+        if (!requestId || this._parcelPins?.[requestId] ||
+            this._parcelPinPending?.[requestId]) return;
+        this._parcelPinPending = this._parcelPinPending || {};
+        this._parcelPinPending[requestId] = true;
+        try {
+            const currentUser = firebase.auth().currentUser;
+            if (!currentUser) return;
+            const token = await currentUser.getIdToken();
+            const response = await fetch(
+                'https://us-central1-asiye-80386.cloudfunctions.net/getParcelPickupPinSecure',
+                {method:'POST',headers:{Authorization:`Bearer ${token}`,
+                  'Content-Type':'application/json'},body:JSON.stringify({requestId})}
+            );
+            const result = await response.json().catch(()=>({}));
+            if (!response.ok || !/^[0-9]{4}$/.test(String(result.pickupPin||'')))
+                throw new Error(result.error || 'Could not load your pickup PIN.');
+            this._parcelPins = this._parcelPins || {};
+            this._parcelPins[requestId] = String(result.pickupPin);
+            // Only redraw the PIN panel for the same active trip.
+            const node = document.querySelector('[data-parcel-pin]');
+            if (this.requestId === requestId && node) {
+                node.setAttribute('aria-label','Pickup PIN '+this._parcelPins[requestId]);
+                node.innerHTML=Array.from(this._parcelPins[requestId])
+                    .map(digit=>'<span aria-hidden="true">'+digit+'</span>').join('');
+            }
+        }catch(error){
+            console.warn('Secure Parcel PIN could not be loaded:',error?.message);
+        }finally{
+            delete this._parcelPinPending[requestId];
+        }
+    },
+
     renderPickupCard(request, arrived) {
         const container = document.getElementById('sheetContent');
         if (!container) return;
         const escape = value => ASIYE.ui.escape(value);
         const passenger = this.getPassengerData(request);
-        const pin = String(passenger.pickupPin ?? request.pickupPin ?? '----');
+        const secureParcel = request.type === 'delivery' && request.parcelSecurityVersion === 2;
+        const pin = secureParcel ? String(this._parcelPins?.[request.requestId] || '----')
+            : String(passenger.pickupPin ?? request.pickupPin ?? '----');
         const name = request.driverName || 'Your driver';
         const rating = Number(request.driverRating);
         const phone = String(request.driverPhone || '').replace(/[^\d+]/g, '');
@@ -1739,7 +1806,7 @@ ASIYE.ride = {
                 ` : ''}
                 <div class="pickup-pin">
                     <div class="pickup-pin-heading"><span>${arrived ? 'Give your driver this PIN' : 'Your pickup PIN'}</span>${icon('safety')}</div>
-                    <div class="pickup-pin-digits" aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
+                    <div class="pickup-pin-digits" ${secureParcel ? 'data-parcel-pin' : ''} aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
                     <p>${arrived ? 'Share when you are ready to start your ride.' : 'Share with your driver when they arrive.'}</p>
                 </div>
                 <div class="pickup-actions">
@@ -1795,6 +1862,7 @@ ASIYE.ride = {
             });
         }
         ASIYE.map?.resize();
+        if (secureParcel && pin === '----') void this.retrieveParcelPickupPin(request.requestId);
     },
 
     renderDriverOnWay(request) {
@@ -2017,73 +2085,47 @@ ASIYE.ride = {
        DRIVER CARD
        ======================================================== */
 
+    rideMatchIcon(name) {
+        const paths = {
+            check: '<path d="m6 12 4 4 8-8"/>',
+            call: '<path d="M7 3H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3l-5-2-2 2a14 14 0 0 1-7-7l2-2-2-5Z"/>',
+            message: '<path d="M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5A8.5 8.5 0 0 1 10.5 3h2a8.5 8.5 0 0 1 8.5 8.5Z"/><path d="M7 9h9M7 13h6"/>',
+            car: '<path d="m5 10 2-5h10l2 5M4 10h16v8H4zM6 18v2m12-2v2M7 14h.01M17 14h.01"/>'
+        };
+        return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || ''}</svg>`;
+    },
+
     driverCard(request) {
-
-        const escape =
-            value => ASIYE.ui.escape(value);
-
-        const name =
-            request.driverName ||
-            'Driver';
-
-        const photo =
-            request.driverProfileImageUrl ||
-            request.profileImageUrl ||
-            request.profile_picture_url ||
-            '';
-
-        const carPhoto =
-            request.driverVehiclePhoto ||
-            request.vehiclePhoto ||
-            '';
-
-        const vehicle =
-            [
-                request.vehicleColor,
-                request.vehicleMake,
-                request.vehicleModel,
-                request.vehicleYear
-            ]
-            .filter(Boolean)
-            .join(' ');
-
+        const escape = value => ASIYE.ui.escape(String(value || ''));
+        const name = String(request.driverName || 'Your driver');
+        const image = value => /^(https?:\/\/|\.{0,2}\/|assets\/)/i.test(String(value || ''))
+            ? String(value) : '';
+        const photo = image(request.driverProfileImageUrl || request.profileImageUrl || request.profile_picture_url);
+        const carPhoto = image(request.driverVehiclePhoto || request.vehiclePhoto);
+        const vehicle = [request.vehicleColor, request.vehicleMake, request.vehicleModel, request.vehicleYear]
+            .filter(Boolean).join(' ');
+        const rating = Number(request.driverRating);
         return `
-            <div class="asiye-driver-card" style="align-items:flex-start;">
-                <div class="menu-avatar" style="overflow:hidden;">
-                    ${photo
-                        ? `<img src="${escape(photo)}" alt="${escape(name)}" style="width:100%;height:100%;object-fit:cover;">`
-                        : escape(name.charAt(0).toUpperCase())}
+            <div class="ride-match-driver-card">
+                <div class="ride-match-driver">
+                    <div class="ride-match-avatar" aria-hidden="true"><span>${escape(name.charAt(0).toUpperCase())}</span>
+                        ${photo ? `<img src="${escape(photo)}" alt="">` : ''}</div>
+                    <div class="ride-match-driver-info">
+                        <strong>${escape(name)}</strong>
+                        <span>${Number.isFinite(rating) && rating > 0 && rating <= 5
+                            ? `<span class="ride-match-star" aria-hidden="true">★</span> ${rating.toFixed(1)} <span class="ride-match-dot">·</span> Your driver`
+                            : 'Your assigned driver'}</span>
+                    </div>
                 </div>
-
-                <div class="asiye-driver-data" style="min-width:0;flex:1;">
-                    <div class="asiye-driver-name">
-                        ${escape(name)}
+                <div class="ride-match-vehicle">
+                    <div class="ride-match-car-photo" aria-hidden="true">${this.rideMatchIcon('car')}
+                        ${carPhoto ? `<img src="${escape(carPhoto)}" alt="">` : ''}</div>
+                    <div class="ride-match-vehicle-info">
+                        <span>${escape(vehicle || 'Vehicle details will appear here')}</span>
+                        ${request.vehicleReg ? `<strong class="ride-match-plate">${escape(request.vehicleReg)}</strong>` : ''}
                     </div>
-
-                    <div class="asiye-driver-details">
-                        ★ ${escape(request.driverRating || '5.0')} · Verified driver
-                    </div>
-
-                    <div class="asiye-driver-details" style="margin-top:5px;">
-                        ${escape(vehicle || 'Vehicle details pending')}
-                    </div>
-
-                    ${request.vehicleReg
-                        ? `<div class="asiye-driver-plate">${escape(request.vehicleReg)}</div>`
-                        : ''}
-
-                    ${request.driverPhone
-                        ? `<div class="asiye-driver-details" style="margin-top:5px;">${escape(request.driverPhone)}</div>`
-                        : ''}
                 </div>
-            </div>
-
-            ${carPhoto
-                ? `<div style="margin-top:10px;border-radius:14px;overflow:hidden;background:#f4f4f4;">
-                    <img src="${escape(carPhoto)}" alt="Assigned vehicle" style="display:block;width:100%;max-height:170px;object-fit:cover;">
-                   </div>`
-                : ''}
-        `;
+            </div>`;
     },
 
 
@@ -2345,17 +2387,6 @@ ASIYE.ride = {
             );
 
 
-        const terminal = [
-
-            'completed',
-            'cancelled_by_driver',
-            'cancelled_by_admin',
-            'cancelled_by_commuter',
-            'rejected',
-            'expired'
-        ];
-
-
         for (
             const requestId
             of candidates
@@ -2377,38 +2408,15 @@ ASIYE.ride = {
                 snap.val();
 
 
-            const ownsRequest =
-                Boolean(
-                    request &&
-                    commuterId &&
-                    (
-                        String(
-                            request.commuterId ||
-                            ''
-                        ) ===
-                            String(
-                                commuterId
-                            ) ||
-                        request.passengers?.[
-                            commuterId
-                        ]
-                    )
-                );
-
-
-            const stale =
-                !request ||
-                !ownsRequest ||
-                (request?.type === 'club' && terminal.includes(String(request.passengers?.[commuterId]?.status || ''))) ||
-                terminal.includes(
-                    String(
-                        request?.status ||
-                        ''
-                    )
-                );
+            const stale = !this.isActiveBooking(request, commuterId);
 
 
             if (stale) {
+
+                if (ASIYE.state.booking.requestId === requestId) {
+                    ASIYE.state.booking.requestId = null;
+                    ASIYE.state.booking.request = null;
+                }
 
                 if (
                     localRequestId ===
@@ -2433,7 +2441,7 @@ ASIYE.ride = {
                         )
                         .transaction(
                             current =>
-                                String(
+                                current == null || String(
                                     current ||
                                     ''
                                 ) ===

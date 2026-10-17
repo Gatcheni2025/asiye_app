@@ -152,6 +152,21 @@ function dbFor(uid) {
   return env.authenticatedContext(uid).database();
 }
 
+test('passengers, drivers and client-side admins cannot read or enable the live payment launch gate', async () => {
+  await env.withSecurityRulesDisabled(async context => {
+    await set(ref(context.database(), 'admins/admin-auth'), true);
+    await set(ref(context.database(), 'paymentLaunch/paystack'), {liveEnabled: false});
+  });
+  for (const uid of ['passenger-auth', 'driver-auth', 'admin-auth']) {
+    const db = dbFor(uid);
+    await assertFails(get(ref(db, 'paymentLaunch/paystack')));
+    await assertFails(set(ref(db, 'paymentLaunch/paystack'), {
+      liveEnabled: true, approvalReference: 'forged', validationReference: 'forged'
+    }));
+    await assertFails(update(ref(db), {'paymentLaunch/paystack/liveEnabled': true}));
+  }
+});
+
 test('anonymous users cannot read protected profiles or requests', async () => {
   const db = env.unauthenticatedContext().database();
   await assertFails(get(ref(db, 'commuters/p1')));
@@ -386,6 +401,23 @@ test('negotiated Go commercial fields cannot be rewritten by passenger or driver
     platformCommission: 0,
     driverNetFare: 100
   }));
+});
+
+test('Go recommendations, driver decisions and counter versions cannot be forged or deleted by clients', async () => {
+  const fields={recommendedMinimumFare:65,passengerOfferRound:1,negotiationRound:2,
+    fareOfferDeclinedDrivers:{'driver-record':{offerRound:1,amount:40}},
+    fareCounterDeclinedDrivers:{otherDriver:true},lastGoFareDecision:{action:'declined',driverId:'driver-record'},
+    negotiationDriverId:'driver-record',negotiationDriverName:'Driver One',driverCounterCount:1,counterExpiresAt:100};
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(),'requests/negotiated-active'),fields);
+  });
+  for(const actor of ['passenger-auth','driver-auth']){
+    for(const [key,value] of Object.entries(fields)){
+      await assertFails(update(ref(dbFor(actor),'requests/negotiated-active'),{[key]:null}));
+      await assertFails(update(ref(dbFor(actor),'requests/negotiated-active'),{[key]:typeof value==='object'?{forged:true}:typeof value==='number'?999:'forged'}));
+    }
+    await assertSucceeds(get(ref(dbFor(actor),'requests/negotiated-active')));
+  }
 });
 
 test('negotiated Go clients cannot forge server settlement or complete early', async () => {

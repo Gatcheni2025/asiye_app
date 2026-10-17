@@ -154,8 +154,8 @@ test("driver and passenger receive the same reservation alert and deadline; PIN 
       403,
     );
 });
-test("Cash Wallet Card accept empty shareToken without storing a client PIN", async () => {
-  for (const method of ["cash", "wallet", "card"]) {
+test("Cash and Card accept empty shareToken without storing a client PIN", async () => {
+  for (const method of ["cash", "card"]) {
     for (const path of [
       "commuters/p0/currentRequest",
       "commuters/p1/currentRequest",
@@ -176,6 +176,13 @@ test("Cash Wallet Card accept empty shareToken without storing a client PIN", as
     assert.equal(p.passengers.p1.pickupPin, undefined);
     assert.equal(p.passengers.p1.safetyShareRequired, false);
   }
+});
+test("new Club Wallet bookings are rejected before saving passenger funds", async () => {
+  await db.ref("commuters/p0/currentRequest").remove();
+  const id = "pool-wallet-disabled";
+  const response = await call(service.create,"p0",body(id,"wallet"));
+  assert.equal(response.status,400);
+  assert.equal(await read("requests/"+id),null);
 });
 test("concurrent joins keep shared count, pickup, destination and countdown", async () => {
   const initial = await create();

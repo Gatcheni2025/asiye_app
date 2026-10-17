@@ -989,6 +989,8 @@ ASIYE_DRIVER.ui = {
 
         try {
 
+            if (newOnline) await window.AsiyeDriverPresence.prepare(driverId);
+
             await firebase
                 .database()
                 .ref(
@@ -1058,6 +1060,9 @@ ASIYE_DRIVER.ui = {
                     ?.start?.();
 
             } else {
+
+                ASIYE_DRIVER.requests?.stop?.();
+                this.closeIncomingRequest();
 
                 this.toast(
                     'You are now offline.'
@@ -1193,6 +1198,12 @@ ASIYE_DRIVER.ui = {
         const isClub =
             request.type === 'club';
 
+        const acceptButton = document.getElementById('acceptRequestButton');
+        if (acceptButton) {
+            acceptButton.disabled = false;
+            acceptButton.textContent = 'Accept';
+        }
+
 
         const isDelivery =
             request.type ===
@@ -1252,7 +1263,7 @@ ASIYE_DRIVER.ui = {
             )
 
             : Number(
-                request.agreedFare ||
+                (request.negotiationEnabled === true && request.fareStatus !== 'agreed' ? request.passengerOffer : request.agreedFare) ||
                 request.finalAmount ||
                 request.calculatedPrice ||
                 0
@@ -1620,11 +1631,17 @@ ASIYE_DRIVER.ui = {
             true;
 
 
-        this.startRequestTimer(
-            isEarlyWork
-                ? 45
-                : 20
-        );
+        if (ASIYE_DRIVER.goNegotiation?.isProtectedGo(request)) {
+            this.stopRequestTimer();
+            const timer = document.getElementById('incomingRequestTimer');
+            if (timer) {
+                timer.textContent = 'Open';
+                timer.setAttribute('aria-label', 'Offer stays open until a decision is made');
+            }
+        } else {
+            document.getElementById('incomingRequestTimer')?.removeAttribute('aria-label');
+            this.startRequestTimer(isEarlyWork ? 45 : 20);
+        }
     },
 
 
@@ -4483,6 +4500,8 @@ async function (
             driverId,
             driver
         );
+
+        window.AsiyeDriverPresence.start(driverId);
 
 
         localStorage.setItem(

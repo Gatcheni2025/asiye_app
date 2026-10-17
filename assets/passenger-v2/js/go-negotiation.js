@@ -119,7 +119,7 @@ ASIYE.goNegotiation = {
                         Asiye Go fare
                     </div>
                     <strong>
-                        Make a protected offer
+                        Make your fare offer
                     </strong>
                 </div>
 
@@ -132,20 +132,6 @@ ASIYE.goNegotiation = {
             </div>
 
             <div class="go-fare-range-copy">
-                Offer between
-                <strong>
-                    R${Number(
-                        prices.goMinimumOffer ||
-                        0
-                    ).toFixed(0)}
-                </strong>
-                and
-                <strong>
-                    R${Number(
-                        prices.goMaximumOffer ||
-                        0
-                    ).toFixed(0)}
-                </strong>.
                 Recommended:
                 <strong>
                     R${Number(
@@ -202,9 +188,13 @@ ASIYE.goNegotiation = {
             </div>
 
             <p class="go-fare-protection-note">
-                Choose a fare within the displayed range. Any driver
-                counteroffer must stay within this range.
+                You can offer less than the recommendation, up to
+                R${Number(prices.goMaximumOffer || 0).toFixed(0)}.
+                The driver decides whether to accept, decline or counter.
+                No payment is taken until the fare is agreed.
             </p>
+
+            <p id="goFareOfferGuidance" class="go-fare-protection-note" role="status"></p>
 
             <div
                 id="goFareOfferError"
@@ -370,6 +360,8 @@ ASIYE.goNegotiation = {
                         0
                     ),
 
+                recommendedMinimum: Number(this.prices.goRecommendedMinimum || 1),
+
                 marketReference:
                     Number(
                         this.prices
@@ -481,6 +473,13 @@ ASIYE.goNegotiation = {
         if (error) {
             error.textContent =
                 '';
+        }
+
+        const guidance = document.getElementById('goFareOfferGuidance');
+        if (guidance) {
+            guidance.textContent = safe < Number(this.prices.goRecommendedMinimum || 1)
+                ? `Your R${safe} offer will be sent to drivers. A low offer may receive a counter-offer.`
+                : 'Your offer will be sent to drivers for a decision.';
         }
 
 
@@ -703,26 +702,32 @@ ASIYE.goNegotiation = {
 
 
     acceptDriverCounter(
-        requestId
+        requestId,
+        counter = {}
     ) {
 
         return this.post(
             'acceptGoFareCounter',
             {
-                requestId
+                requestId,
+                ...(counter.driverCounterFare != null ? {amount:Number(counter.driverCounterFare)} : {}),
+                ...(counter.negotiationRound != null ? {negotiationRound:Number(counter.negotiationRound)} : {})
             }
         );
     },
 
 
     keepPassengerOffer(
-        requestId
+        requestId,
+        counter = {}
     ) {
 
         return this.post(
             'declineGoFareCounter',
             {
-                requestId
+                requestId,
+                ...(counter.driverCounterFare != null ? {amount:Number(counter.driverCounterFare)} : {}),
+                ...(counter.negotiationRound != null ? {negotiationRound:Number(counter.negotiationRound)} : {})
             }
         );
     }

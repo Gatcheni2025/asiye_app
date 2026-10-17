@@ -67,7 +67,7 @@ test('Go passenger UI changes from searching to Driver found', () => {
   );
   assert.ok(
     rideSource.includes(
-      'Waiting for a driver to accept your trip'
+      'Waiting for a driver to accept your fare or make a counter-offer'
     )
   );
   assert.ok(

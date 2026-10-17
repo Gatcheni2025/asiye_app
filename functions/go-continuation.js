@@ -1,6 +1,13 @@
 'use strict';
 
-const terminal = status => ['completed', 'expired', 'rejected', 'cancelled'].includes(status) || String(status || '').startsWith('cancelled');
+const terminal = status => {
+  const value = String(status || '').trim().toLowerCase();
+  return ['completed', 'expired', 'rejected'].includes(value) || /^cancelled(?:_|$)|^canceled(?:_|$)/.test(value);
+};
+// Firebase may invoke a transaction with null before loading the server value.
+// Return null to let it synchronize; abort only for a different booking.
+const clearRequestPointer = (current, expected) =>
+  current == null || current === '' || String(current) === String(expected) ? null : undefined;
 const arrived = trip => Boolean(trip?.arrivedAt || trip?.tripStartedAt || ['arrived', 'passenger_onboard', 'all_onboard', 'in_transit', 'completed'].includes(trip?.status));
 const money = value => Math.round(Number(value) * 100);
 function fail(message, status = 409) { const error = new Error(message); error.status = status; throw error; }
@@ -34,6 +41,7 @@ function activate(trip, agreement, payment, pin, now) {
 }
 
 function action(trip, name, body, evidence, now) {
+  if (name === 'cancel' && /^cancelled(?:_|$)|^canceled(?:_|$)/.test(String(trip?.status || ''))) return trip;
   if (!trip || terminal(trip.status)) fail('This booking has ended.');
   if (name === 'cancel') {
     if (arrived(trip)) fail('The driver has arrived. Contact support to end this booking.');
@@ -83,4 +91,4 @@ function requireCashDropoff(trip) {
       !['in_transit', 'completed'].includes(trip.status))
     fail('Cash is collected after drop-off. Confirm collection at destination before completing the ride.');
 }
-module.exports = {terminal, arrived, paymentReady, activate, action, requireCashDropoff};
+module.exports = {terminal, clearRequestPointer, arrived, paymentReady, activate, action, requireCashDropoff};
