@@ -7,7 +7,8 @@ on:
       - 'functions/index.js'
       - 'functions/paystack-*.js'
       - 'database.rules.json'
-      - 'scripts/paystack_technical_readiness.cjs'
+      - 'scripts/paystack*.cjs'
+      - 'scripts/paystack_function_manifest.json'
       - '.github/workflows/paystack_technical_readiness.yml'
 permissions:
   contents: read

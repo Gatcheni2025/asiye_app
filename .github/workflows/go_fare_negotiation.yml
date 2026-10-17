@@ -7,6 +7,9 @@ on:
       - fix/paystack-subaccounts-cash-card-no-wallet
     paths:
       - 'functions/index.js'
+      - 'functions/paystack-payment-safety.js'
+      - 'functions/paystack-subaccount-split.js'
+      - 'test/paystack-payment-safety.test.cjs'
       - 'assets/passenger-v2/js/pricing.js'
       - 'assets/passenger-v2/js/go-negotiation.js'
       - 'assets/passenger-v2/js/booking.js'
@@ -61,7 +64,7 @@ jobs:
           test/go-fare-negotiation.test.cjs
           test/go-fare-settlement-lifecycle.test.cjs
           test/go-continuation.test.cjs
-          test/paystack-subaccount-migration.test.cjs
+          test/paystack-subaccount-migration.test.cjs test/paystack-payment-safety.test.cjs
           test/paystack-card-journey-simulation.test.cjs
           test/parcel-security.test.cjs
           test/driver-first-card-booking.test.cjs
