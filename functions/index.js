@@ -10476,7 +10476,8 @@ const {keyDomain, requireLaunchApproval, requireTransactionDomain,
 const configuredPaystackDomain = () => keyDomain(paystackSecretKey.value());
 const cardRefundService = createCardRefundService({
   database: () => admin.database(), request: paystackRequest,
-  configuredDomain: configuredPaystackDomain, markPayment: markTripPassengerPayment
+  configuredDomain: configuredPaystackDomain, markPayment: markTripPassengerPayment,
+  refreshClub: refreshClubPaymentsReady
 });
 async function requirePaystackCheckoutApproval() {
   const domain = configuredPaystackDomain();

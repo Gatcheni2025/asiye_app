@@ -47,7 +47,7 @@ function refundableCancellation(trip, passengerId) {
 const refundState = status => status === 'processed' ? 'refunded' :
   ['pending', 'processing'].includes(status) ? 'refund_pending' : 'refund_review';
 
-function createCardRefundService({database, request, configuredDomain, markPayment}) {
+function createCardRefundService({database, request, configuredDomain, markPayment, refreshClub}) {
   async function updateFromProvider(payment, refund) {
     const transaction = refund?.transaction;
     const transactionMatches = typeof transaction === 'object' && transaction !== null
@@ -62,7 +62,7 @@ function createCardRefundService({database, request, configuredDomain, markPayme
     const result = await ref.transaction(current => {
       if (current === null) return null;
       if (current.reference !== payment.reference ||
-          !['refund_initializing', 'refund_unknown', 'refund_pending', 'refund_review', 'refunded'].includes(current.status)) return;
+          !['held', 'captured', 'refund_initializing', 'refund_unknown', 'refund_pending', 'refund_review', 'refunded'].includes(current.status)) return;
       if (current.status === 'refunded') return current;
       return {...current, status: refundState(refund.status), refundId: String(refund.id),
         refundStatus: String(refund.status || 'unknown'), refundVerifiedAt: Date.now(),
@@ -71,7 +71,12 @@ function createCardRefundService({database, request, configuredDomain, markPayme
     if (!result.committed || !result.snapshot.val()) throw Error('Refund payment changed during verification.');
     const current = result.snapshot.val();
     const trip = (await database().ref(`requests/${payment.requestId}`).once('value')).val();
-    if (trip) await markPayment(payment.requestId, payment.passengerId, trip, {paymentStatus: current.status});
+    if (trip) {
+      await markPayment(payment.requestId, payment.passengerId, trip,
+        {paymentStatus: current.status, paymentHeldAmount: 0});
+      if (trip.type === 'club') await refreshClub(payment.requestId);
+      else await database().ref(`requests/${payment.requestId}`).update({paymentsReady: false});
+    }
     if (trip && current.paymentRefundAttention) await database().ref(`requests/${payment.requestId}`).update({
       paymentRefundAttention: true, refundReviewReason: 'paystack_refund_needs_review'
     });
@@ -126,7 +131,9 @@ function createCardRefundService({database, request, configuredDomain, markPayme
     const payment = (await db.ref(`tripPayments/${mapping.requestId}/${mapping.passengerId}`).once('value')).val();
     if (!payment || payment.reference !== reference || payment.method !== 'card') return;
     if (payment.status === 'refunded') return {status: 'refunded'};
-    if (!['refund_initializing', 'refund_unknown', 'refund_pending', 'refund_review'].includes(payment.status)) return;
+    // Merchant-initiated refunds in Paystack's dashboard must also reconcile
+    // held/captured payments, including Parcel cases reviewed by support.
+    if (!['held', 'captured', 'refund_initializing', 'refund_unknown', 'refund_pending', 'refund_review'].includes(payment.status)) return;
     let refund;
     if (/^\d+$/.test(String(payment.refundId || ''))) {
       refund = (await request('/refund/' + encodeURIComponent(payment.refundId))).data;

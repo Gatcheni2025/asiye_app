@@ -13,12 +13,17 @@ This backend review does not publish another mobile build or activate live payme
 - Refunds require an authenticated owner and a cancelled, unstarted booking. Active/completed/started services require support review. Work passenger cancellation applies to the affected unboarded member; it does not refund another member.
 - Client cancellation and Firebase cancellation triggers share an atomic refund reservation. A lost response remains `refund_unknown`; retrying cannot submit a second refund. Provider-verified results reconcile it through `refund.pending`, `refund.processing`, `refund.needs-attention`, `refund.failed` and `refund.processed` notifications or the owner's payment-verification endpoint.
 - Refund notifications are HMAC checked and re-fetched from Paystack. Amount, currency, transaction and domain must match. A forged event, late charge or older pending callback cannot reverse a completed refund. `processed` records provider completion, not a promise that the customer's bank has already credited the money.
+- Support-initiated refunds in Paystack's dashboard also reconcile held/captured Parcel and ride payments through verified notifications; they disable payment readiness and never create another refund. Work refund updates leave other passengers' paid ledgers intact.
 - Trip settlement requires an ongoing/completed service and an atomic held-to-captured transition. It cannot overwrite a reserved refund. Direct driver settlement is performed by Paystack; trip completion initiates no replacement bank transfer.
 - Checkout return URLs derive from the current Firebase project, so an isolated staging checkout does not return to production.
 
 ## Verification and deployment
 
 Engineering validation runs in the existing Paystack migration and Firebase Security Validation workflows. The exported-handler suite uses isolated RTDB emulator namespaces, simulated identities and simulated Paystack responses. It does not certify actual provider charges, physical devices or bank settlement.
+
+The final local source passed **303 checks: 82 booking/payment regressions, 74 authentication/booking regressions and 147 Firebase authorization/UI/exported-handler checks**, with zero failures, cancellations or skips. Workflow YAML, JavaScript syntax and the 38-function staging manifest were validated. The first review commit also passed GitHub Firebase Security Validation and Go negotiation checks; the final source is rechecked in CI.
+
+The first read-only infrastructure check confirmed that the TEST key and production Firebase credential are configured. Production had 57 active endpoints, but was missing `configureDriverCardPayout`, all five secure Parcel endpoints, and `declineGoFareOffer`; its rule digest differed from this review. The assigned TEST subaccount variable, isolated staging project and staging credential were absent. These are observed configuration/deployment gaps, not evidence of completed provider or device acceptance.
 
 `Paystack Technical Readiness` performs **read-only** checks using existing GitHub Actions configuration. Its artifact records configured prerequisites, the active production endpoint inventory and whether deployed database rules match reviewed rules. Function names alone do not prove source revision. It does not deploy or read customer records, enable payments, charge cards, refund funds, or reveal keys/bank details.
 

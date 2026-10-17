@@ -709,3 +709,36 @@ test('an unconfigured webhook cannot authenticate with an empty known HMAC key',
   assert.equal((await call('paystackWebhook',null,body,{rawBody,
     headers:{'x-paystack-signature':signature}})).status,503);
 });
+
+test('support refunds performed in Paystack reconcile Parcel without enabling pickup or issuing another refund',async()=>{
+  const {requestId,reference}=await paidParcel();
+  const transaction=transactions.get(reference);
+  refunds.push({id:9000,transaction:{id:transaction.id,reference},amount:transaction.amount,
+    currency:'ZAR',domain:'test',status:'processed'});
+  assert.equal((await refundWebhook(reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refunded');
+  assert.equal((await read('requests/'+requestId)).paymentsReady,false);
+  assert.equal((await action(requestId,'onWay')).status,409);
+  assert.equal((await webhook(reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refunded');
+  assert.equal(refunds.length,1);
+});
+
+test('a Work refund affects only the cancelled member and preserves the other member payment',async()=>{
+  const requestId='work-refund-handler-reference';
+  await db.ref('requests/'+requestId).set({requestId,type:'club',clubMode:'club4',clubSecurityVersion:2,
+    commuterId:'sender',taxiId:'driver',status:'driver_waiting',paymentMethod:'card',poolReady:true,
+    driverAcceptedAt:Date.now(),pricePerPassenger:60,passengers:{
+      sender:{price:60,paymentMethod:'card',status:'waiting'},member:{price:40,paymentMethod:'card',status:'waiting'}}});
+  const checkouts=await Promise.all(['sender-auth','member-auth'].map(uid=>call('prepareTripPayment',uid,{requestId})));
+  for(const checkout of checkouts)assert.equal((await webhook(checkout.body.reference)).status,200);
+  await db.ref(`requests/${requestId}/passengers/sender/status`).set('cancelled_by_commuter');
+  const released=await call('releaseTripPayment','sender-auth',{requestId});
+  assert.equal(released.body.status,'refund_pending',JSON.stringify(released));
+  refundPatch={status:'processed'};
+  assert.equal((await refundWebhook(checkouts[0].body.reference)).status,200);
+  assert.equal((await read(`tripPayments/${requestId}/sender`)).status,'refunded');
+  assert.equal((await read(`tripPayments/${requestId}/member`)).status,'held');
+  assert.equal((await read(`requests/${requestId}/passengers/member`)).paymentStatus,'held');
+  assert.equal(refunds.length,1);assert.equal(refunds[0].amount,6000);
+});

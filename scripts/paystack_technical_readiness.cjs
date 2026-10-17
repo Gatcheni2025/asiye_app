@@ -57,6 +57,27 @@ async function main() {
     actualCardJourneyVerified: false, bankSettlementVerified: false};
   if (!report.paystack.testKeyConfigured) report.blockers.push('Configure GitHub Actions secret PAYSTACK_TEST_SECRET_KEY with a TEST key.');
   if (!report.paystack.testSubaccountConfigured) report.blockers.push('Configure repository variable PAYSTACK_TEST_DRIVER_SUBACCOUNT with the assigned TEST subaccount.');
+  if (report.paystack.testKeyConfigured && !report.paystack.testSubaccountConfigured) {
+    try {
+      const response = await fetch('https://api.paystack.co/subaccount?perPage=100', {
+        headers: {Authorization: 'Bearer ' + key}, signal: AbortSignal.timeout(20000)
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.status !== true) throw Error('TEST subaccount inventory failed.');
+      // Report only codes and readiness, never bank details or account names.
+      // Discovery does not assign an account to a real driver or create one.
+      report.paystack.discoveredTestSubaccounts = (Array.isArray(payload.data) ? payload.data : [])
+        .filter(item => item.domain === 'test').map(item => ({
+          subaccountCode: item.subaccount_code, active: item.active === true,
+          verified: item.is_verified === true, platformCommissionPercent: Number(item.percentage_charge)
+        }));
+      report.paystack.subaccountInventoryVerified = true;
+      console.log('Paystack TEST API authenticated; existing test subaccounts:', report.paystack.discoveredTestSubaccounts.length);
+    } catch (_) {
+      report.paystack.subaccountInventoryVerified = false;
+      report.blockers.push('Paystack TEST subaccount inventory could not be verified.');
+    }
+  }
   if (report.paystack.testKeyConfigured && report.paystack.testSubaccountConfigured) {
     const checked = spawnSync(process.execPath, [path.join(__dirname, 'paystack_test_mode_preflight.cjs'), 'check'],
       {env: process.env, stdio: 'inherit', timeout: 45000});
