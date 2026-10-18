@@ -754,6 +754,8 @@ ASIYE.ride = {
             !request ||
             request.type ===
                 'club' ||
+            request.fareStatus === 'driver_counter' ||
+            !['pending', 'searching', 'driver_busy'].includes(request.status) ||
             request.taxiId ||
             Number(
                 request.driverFoundCount ||
@@ -815,6 +817,11 @@ ASIYE.ride = {
                             'Go driver search retry failed:',
                             error
                         );
+                        // An HTTP failure emits no database update to schedule
+                        // the next attempt. Keep retrying the same active offer.
+                        const current = ASIYE.state.booking?.request;
+                        if (this.requestId === request.requestId && current)
+                            this.scheduleGoDriverSearchRetry(current);
                     }
                 },
                 8000

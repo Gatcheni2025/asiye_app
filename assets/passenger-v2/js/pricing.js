@@ -12,12 +12,12 @@ ASIYE.pricing = {
      *
      * GO recommendations guide the passenger and driver:
      *   suggested fare: 90% of market reference
-     *   lower recommendation: 65% (drivers may accept lower offers)
+     *   minimum passenger offer: 65% of the route reference
      *   maximum driver counter: 95%
      *   Asiye commission: 20%
      *   driver receives: 80%
      *
-     * A positive whole-rand fare can be offered below the recommendation.
+     * Offers from 65% up to the ceiling reach drivers below the recommendation.
      * The agreed fare always keeps the same 20/80 commission split.
      */
     rates: {
@@ -91,8 +91,7 @@ ASIYE.pricing = {
         const goRules =
             this.rates.go;
 
-        const minimumOffer = 1;
-        const recommendedMinimum =
+        const minimumOffer =
             Math.max(
                 1,
                 Math.ceil(
@@ -100,6 +99,7 @@ ASIYE.pricing = {
                     goRules.recommendedMinimumRatio
                 )
             );
+        const recommendedMinimum = minimumOffer;
 
         const maximumOffer =
             Math.max(

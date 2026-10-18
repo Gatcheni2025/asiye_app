@@ -5564,9 +5564,8 @@ function goNegotiationPricing(trip) {
   const marketReference =
     goMarketReference(trip);
 
-  // A low fare is a driver's decision. The route floor is advice, not a veto.
-  const minimumFareOffer = 1;
-  const recommendedMinimumFare =
+  // The 65% floor protects the range; the 90% suggestion never vetoes an offer.
+  const minimumFareOffer =
     Math.max(
       1,
       Math.ceil(
@@ -5574,6 +5573,7 @@ function goNegotiationPricing(trip) {
         ASIYE_GO_NEGOTIATION.recommendedMinimumRatio
       )
     );
+  const recommendedMinimumFare = minimumFareOffer;
 
   const maximumFareOffer =
     Math.max(
@@ -6767,16 +6767,26 @@ exports.submitGoFareOffer =
             ...(ended ? {} : {code:'booking/active-exists', activeRequestId:context.requestId, activeStatus:latest.status})});
         }
 
-        return response
-          .status(200)
-          .json({
-            ok:
-              true,
-            requestId:
-              context.requestId,
-            pricing:
-              offered.snapshot.val()
+        let dispatch;
+        try {
+          // Driver delivery is part of offer submission, not a second client task.
+          dispatch = await dispatchGoRideToDrivers(context.requestId, passengerId);
+        } catch (error) {
+          console.error("Go offer saved; driver delivery needs retry", error?.message || error);
+          await transactGoContinuation(context.ref, current => {
+            if (current.taxiId || goContinuation.terminal(current.status) || current.fareStatus !== "passenger_offer" ||
+                Number(current.negotiationRound) !== Number(offered.snapshot.val().negotiationRound)) return undefined;
+            return {...current, driverDispatchPending:true, driverFoundCount:0,
+              driverDispatchCount:0, driverSearchStatus:"searching_for_driver"};
           });
+          return response.status(503).json({
+            error:"Your offer is saved. Reconnecting to nearby drivers. You can retry the search.",
+            offerSaved:true, requestId:context.requestId, pricing:(await context.ref.once("value")).val()
+          });
+        }
+        return response.status(200).json({
+          ok:true, requestId:context.requestId, pricing:(await context.ref.once("value")).val(), dispatch
+        });
 
       } catch (error) {
         console.error(
@@ -8554,606 +8564,122 @@ exports.parcelTripActionSecure = onRequest(
   }
 );
 
-exports.dispatchGoRideRequest =
-  onRequest(
-    {
-      region:
-        "us-central1",
-      invoker:
-        "public"
-    },
-    async (
-      request,
-      response
-    ) => {
-      walletSmsCors(
-        request,
-        response
-      );
+// Shared by authenticated offer submission and the legacy dispatch endpoint.
+// The suggested fare is guidance only; every valid 65–95% offer can be sent.
+async function dispatchGoRideToDrivers(requestId, expectedOwner) {
+  const db = admin.database();
+  const ref = db.ref(`requests/${requestId}`);
+  const trip = (await ref.once("value")).val();
+  const fail = (status, message) => { throw Object.assign(new Error(message), {status}); };
+  if (!trip) fail(404, "Ride request was not found.");
+  if (trip.commuterId !== expectedOwner) fail(403, "This ride does not belong to you.");
+  if (trip.type === "club") fail(400, "Club rides use the Club dispatch flow.");
+  if (trip.taxiId || !["pending", "searching", "driver_busy"].includes(trip.status))
+    fail(409, "This ride is not ready for driver dispatch.");
 
-      if (
-        request.method ===
-        "OPTIONS"
-      ) {
-        return response
-          .status(204)
-          .send("");
-      }
+  const protectedGo = isGoNegotiationTrip(trip) && trip.negotiationEnabled === true;
+  if (protectedGo) {
+    // A retry must preserve a counter awaiting the passenger's decision.
+    if (trip.fareStatus === "driver_counter") return {mode:"waiting_passenger", drivers:0};
+    if (trip.fareStatus !== "passenger_offer" || Number(trip.passengerOfferRound || 0) < 1 ||
+        !validGoNegotiatedAmount(trip.passengerOffer, goNegotiationPricing(trip)))
+      fail(409, "Submit a valid fare offer before searching for drivers.");
+    if (!["cash", "card"].includes(String(trip.paymentMethod || "cash").toLowerCase()))
+      fail(409, "Choose Cash or Card before searching for drivers.");
+  }
 
-      if (
-        request.method !==
-        "POST"
-      ) {
-        return response
-          .status(405)
-          .json({
-            error:
-              "POST required."
-          });
-      }
+  const lat = Number(trip.commuterLocation?.latitude);
+  const lng = Number(trip.commuterLocation?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) fail(400, "Pickup location is unavailable.");
+  const idleDrivers = [], busyDrivers = [];
+  const taxis = await db.ref("taxis").once("value");
+  taxis.forEach(child => {
+    const taxi = child.val() || {};
+    if (taxi.isOnline !== true || !driverProfileCanReceiveRequests(taxi) ||
+        trip.fareCounterDeclinedDrivers?.[child.key] === true ||
+        trip.fareOfferDeclinedDrivers?.[child.key]?.offerRound === Number(trip.passengerOfferRound || 1)) return;
+    const driverLat = Number(taxi.latitude), driverLng = Number(taxi.longitude);
+    const vehicleType = String(taxi.vehicleType || "").toLowerCase();
+    if (!Number.isFinite(driverLat) || !Number.isFinite(driverLng) ||
+        (vehicleType && !["ehailing", "e-hailing", "go", "car"].includes(vehicleType))) return;
+    const distanceKm = haversineKm(lat, lng, driverLat, driverLng);
+    if (!Number.isFinite(distanceKm) || distanceKm > 10) return;
+    const candidate = {driverId:child.key, distanceKm};
+    if (taxi.currentRequest) busyDrivers.push(candidate);
+    else if (taxi.isFull !== true && taxi.isBroadcasting === true) idleDrivers.push(candidate);
+  });
+  idleDrivers.sort((a,b) => a.distanceKm - b.distanceKm);
+  busyDrivers.sort((a,b) => a.distanceKm - b.distanceKm);
+  const candidates = idleDrivers.slice(0,8);
+  const queued = candidates.length ? null : busyDrivers[0];
+  const mode = candidates.length ? "broadcast" : queued ? "queued" : "none";
+  const now = admin.database.ServerValue.TIMESTAMP;
+  const metadata = {
+    status: queued ? "driver_busy" : "searching",
+    driverBusy: Boolean(queued), driverDispatchCount:candidates.length, driverDispatchPending:false,
+    driverSearchStatus: candidates.length ? "driver_found_waiting_acceptance" :
+      queued ? "driver_found_busy" : "searching_for_driver",
+    driverFoundCount: candidates.length || (queued ? 1 : 0),
+    nearestDriverDistanceKm: candidates[0]?.distanceKm ?? queued?.distanceKm ?? null,
+    driverDispatchAt:now, driverSearchUpdatedAt:now,
+    ...(queued ? {queuedTaxiId:queued.driverId, queuedAt:now} : {})
+  };
+  // Do not resurrect a cancelled booking or overwrite a concurrent driver decision.
+  const updated = await transactGoContinuation(ref, current => {
+    if (current.commuterId !== expectedOwner || current.taxiId ||
+        !["pending", "searching", "driver_busy"].includes(current.status)) return undefined;
+    if (protectedGo && (current.fareStatus !== "passenger_offer" ||
+        Number(current.passengerOffer) !== Number(trip.passengerOffer) ||
+        Number(current.negotiationRound) !== Number(trip.negotiationRound) ||
+        JSON.stringify(current.fareOfferDeclinedDrivers || {}) !== JSON.stringify(trip.fareOfferDeclinedDrivers || {}))) return undefined;
+    return {...current, ...metadata};
+  });
+  if (!updated.committed || !updated.snapshot.val()) fail(409, "The booking changed. Refresh your offer before searching again.");
 
-      try {
-        const match =
-          (
-            request.get(
-              "authorization"
-            ) ||
-            ""
-          ).match(
-            /^Bearer (.+)$/
-          );
+  const saved = updated.snapshot.val();
+  const notice = {
+    requestId, rideType:"go", commuterId:saved.commuterId,
+    commuterName:saved.commuterName || "Passenger",
+    pickupAddress:saved.pickupAddress || "Pickup",
+    destination:saved.destination || saved.destinationName || "Destination",
+    fare:Number(protectedGo ? saved.passengerOffer : saved.finalAmount || saved.calculatedPrice || 0),
+    ...(protectedGo ? {passengerOffer:Number(saved.passengerOffer),
+      suggestedFare:Number(saved.suggestedFare), maximumFareOffer:Number(saved.maximumFareOffer),
+      negotiationRound:Number(saved.negotiationRound), passengerOfferRound:Number(saved.passengerOfferRound)} : {}),
+    paymentMethod:String(saved.paymentMethod || "cash")
+  };
+  const updates = {};
+  for (const candidate of candidates) {
+    updates[`notifications/taxis/${candidate.driverId}/${requestId}`] = {
+      ...notice, type:"ride_request", distanceKm:candidate.distanceKm, timestamp:now
+    };
+  }
+  if (queued) updates[`taxis/${queued.driverId}/bookingQueue/${requestId}`] = {...notice, queuedAt:now};
+  if (Object.keys(updates).length) await db.ref().update(updates);
+  return {mode, drivers:candidates.length, ...(queued ? {driverId:queued.driverId} : {})};
+}
 
-        if (!match) {
-          return response
-            .status(401)
-            .json({
-              error:
-                "Passenger authentication is required."
-            });
-        }
-
-        const decoded =
-          await admin.auth()
-            .verifyIdToken(
-              match[1]
-            );
-
-        const requestId =
-          String(
-            request.body?.requestId ||
-            ""
-          ).trim();
-
-        if (
-          !/^[A-Za-z0-9_-]{1,160}$/.test(
-            requestId
-          )
-        ) {
-          return response
-            .status(400)
-            .json({
-              error:
-                "Ride reference is invalid."
-            });
-        }
-
-        const passenger =
-          await resolvePassengerForWallet(
-            decoded
-          );
-
-        if (!passenger) {
-          return response
-            .status(403)
-            .json({
-              error:
-                "Passenger profile could not be verified."
-            });
-        }
-
-        const requestRef =
-          admin.database()
-            .ref(
-              `requests/${requestId}`
-            );
-
-        const snapshot =
-          await requestRef.once(
-            "value"
-          );
-
-        if (!snapshot.exists()) {
-          return response
-            .status(404)
-            .json({
-              error:
-                "Ride request was not found."
-            });
-        }
-
-        const trip =
-          snapshot.val() || {};
-
-        const ownsTrip =
-          trip.commuterId ===
-            passenger.id ||
-          trip.commuterId ===
-            decoded.uid ||
-          Boolean(
-            trip.passengers?.[
-              passenger.id
-            ]
-          ) ||
-          Boolean(
-            trip.passengers?.[
-              decoded.uid
-            ]
-          );
-
-        if (!ownsTrip) {
-          return response
-            .status(403)
-            .json({
-              error:
-                "This ride does not belong to the signed-in passenger."
-            });
-        }
-
-        if (
-          trip.type === "club"
-        ) {
-          return response
-            .status(400)
-            .json({
-              error:
-                "Club rides use the Club dispatch flow."
-            });
-        }
-
-        if (
-          ![
-            "pending",
-            "searching",
-            "driver_busy"
-          ].includes(
-            String(
-              trip.status ||
-              ""
-            )
-          )
-        ) {
-          return response
-            .status(409)
-            .json({
-              error:
-                "This ride is not ready for driver dispatch."
-            });
-        }
-
-        const pickupLat =
-          Number(
-            trip.commuterLocation
-              ?.latitude
-          );
-
-        const pickupLng =
-          Number(
-            trip.commuterLocation
-              ?.longitude
-          );
-
-        if (
-          !Number.isFinite(
-            pickupLat
-          ) ||
-          !Number.isFinite(
-            pickupLng
-          )
-        ) {
-          return response
-            .status(400)
-            .json({
-              error:
-                "Pickup location is unavailable."
-            });
-        }
-
-        const taxisSnapshot =
-          await admin.database()
-            .ref(
-              "taxis"
-            )
-            .once(
-              "value"
-            );
-
-        const idleDrivers =
-          [];
-
-        const busyDrivers =
-          [];
-
-        taxisSnapshot.forEach(
-          child => {
-            const taxi =
-              child.val() ||
-              {};
-
-            if (
-              taxi.isOnline !==
-                true ||
-              !driverProfileCanReceiveRequests(
-                taxi
-              )
-            ) {
-              return;
-            }
-
-            if (
-              trip.fareCounterDeclinedDrivers?.[
-                child.key
-              ] ===
-                true
-            ) {
-              return;
-            }
-
-            if (trip.fareOfferDeclinedDrivers?.[child.key]?.offerRound === Number(trip.passengerOfferRound || 1)) return;
-
-            const lat =
-              Number(
-                taxi.latitude
-              );
-
-            const lng =
-              Number(
-                taxi.longitude
-              );
-
-            if (
-              !Number.isFinite(lat) ||
-              !Number.isFinite(lng)
-            ) {
-              return;
-            }
-
-            const vehicleType =
-              String(
-                taxi.vehicleType ||
-                ""
-              )
-                .toLowerCase();
-
-            if (
-              vehicleType &&
-              ![
-                "ehailing",
-                "e-hailing",
-                "go",
-                "car"
-              ].includes(
-                vehicleType
-              )
-            ) {
-              return;
-            }
-
-            const distanceKm =
-              haversineKm(
-                pickupLat,
-                pickupLng,
-                lat,
-                lng
-              );
-
-            if (
-              !Number.isFinite(
-                distanceKm
-              ) ||
-              distanceKm >
-                10
-            ) {
-              return;
-            }
-
-            const item = {
-              driverId:
-                child.key,
-              taxi,
-              distanceKm
-            };
-
-            if (
-              taxi.currentRequest
-            ) {
-              busyDrivers.push(
-                item
-              );
-            } else if (
-              taxi.isFull !==
-                true &&
-              taxi.isBroadcasting ===
-                true
-            ) {
-              idleDrivers.push(
-                item
-              );
-            }
-          }
-        );
-
-        idleDrivers.sort(
-          (
-            left,
-            right
-          ) =>
-            left.distanceKm -
-            right.distanceKm
-        );
-
-        busyDrivers.sort(
-          (
-            left,
-            right
-          ) =>
-            left.distanceKm -
-            right.distanceKm
-        );
-
-        if (
-          idleDrivers.length
-        ) {
-          const candidates =
-            idleDrivers.slice(
-              0,
-              8
-            );
-
-          const updates = {};
-
-          for (
-            const candidate
-            of candidates
-          ) {
-            updates[
-              `notifications/taxis/${candidate.driverId}/${requestId}`
-            ] = {
-              type:
-                "ride_request",
-              requestId,
-              rideType:
-                "go",
-              commuterId:
-                trip.commuterId ||
-                passenger.id,
-              commuterName:
-                trip.commuterName ||
-                "Passenger",
-              pickupAddress:
-                trip.pickupAddress ||
-                "Pickup",
-              destination:
-                trip.destination ||
-                trip.destinationName ||
-                "Destination",
-              fare:
-                Number(
-                  trip.finalAmount ||
-                  trip.calculatedPrice ||
-                  0
-                ),
-              distanceKm:
-                candidate.distanceKm,
-              paymentMethod:
-                String(
-                  trip.paymentMethod ||
-                  "cash"
-                ),
-              timestamp:
-                admin.database
-                  .ServerValue
-                  .TIMESTAMP
-            };
-          }
-
-          updates[
-            `requests/${requestId}/status`
-          ] =
-            "searching";
-
-          updates[
-            `requests/${requestId}/driverDispatchCount`
-          ] =
-            candidates.length;
-
-          updates[
-            `requests/${requestId}/driverDispatchAt`
-          ] =
-            admin.database
-              .ServerValue
-              .TIMESTAMP;
-
-          updates[
-            `requests/${requestId}/driverBusy`
-          ] =
-            false;
-
-          updates[
-            `requests/${requestId}/driverSearchStatus`
-          ] =
-            "driver_found_waiting_acceptance";
-
-          updates[
-            `requests/${requestId}/driverFoundCount`
-          ] =
-            candidates.length;
-
-          updates[
-            `requests/${requestId}/nearestDriverDistanceKm`
-          ] =
-            Number(
-              candidates[0]?.distanceKm ||
-              0
-            );
-
-          updates[
-            `requests/${requestId}/driverSearchUpdatedAt`
-          ] =
-            admin.database
-              .ServerValue
-              .TIMESTAMP;
-
-          await admin.database()
-            .ref()
-            .update(
-              updates
-            );
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              mode:
-                "broadcast",
-              drivers:
-                candidates.length
-            });
-        }
-
-        if (
-          busyDrivers.length
-        ) {
-          const selected =
-            busyDrivers[0];
-
-          const now =
-            admin.database
-              .ServerValue
-              .TIMESTAMP;
-
-          await admin.database()
-            .ref()
-            .update({
-              [`requests/${requestId}/status`]:
-                "driver_busy",
-              [`requests/${requestId}/queuedTaxiId`]:
-                selected.driverId,
-              [`requests/${requestId}/driverBusy`]:
-                true,
-              [`requests/${requestId}/driverSearchStatus`]:
-                "driver_found_busy",
-              [`requests/${requestId}/driverFoundCount`]:
-                1,
-              [`requests/${requestId}/nearestDriverDistanceKm`]:
-                Number(
-                  selected.distanceKm ||
-                  0
-                ),
-              [`requests/${requestId}/driverSearchUpdatedAt`]:
-                now,
-              [`requests/${requestId}/queuedAt`]:
-                now,
-              [`taxis/${selected.driverId}/bookingQueue/${requestId}`]:
-                {
-                  requestId,
-                  commuterId:
-                    trip.commuterId ||
-                    passenger.id,
-                  commuterName:
-                    trip.commuterName ||
-                    "Passenger",
-                  pickupAddress:
-                    trip.pickupAddress ||
-                    "Pickup",
-                  destination:
-                    trip.destination ||
-                    trip.destinationName ||
-                    "Destination",
-                  fare:
-                    Number(
-                      trip.finalAmount ||
-                      trip.calculatedPrice ||
-                      0
-                    ),
-                  paymentMethod:
-                    String(
-                      trip.paymentMethod ||
-                      "cash"
-                    ),
-                  queuedAt:
-                    now
-                }
-            });
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              mode:
-                "queued",
-              driverId:
-                selected.driverId
-            });
-        }
-
-        await requestRef.update({
-          status:
-            "searching",
-          driverBusy:
-            false,
-          driverDispatchCount:
-            0,
-          driverSearchStatus:
-            "searching_for_driver",
-          driverFoundCount:
-            0,
-          nearestDriverDistanceKm:
-            null,
-          driverSearchUpdatedAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP,
-          driverDispatchAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP
-        });
-
-        return response
-          .status(200)
-          .json({
-            ok:
-              true,
-            mode:
-              "none",
-            drivers:
-              0
-          });
-
-      } catch (error) {
-        console.error(
-          "Go ride dispatch failed",
-          {
-            code:
-              error?.code ||
-              "unknown",
-            message:
-              error?.message ||
-              String(error)
-          }
-        );
-
-        return response
-          .status(500)
-          .json({
-            error:
-              "Unable to send this ride request to nearby drivers."
-          });
-      }
+exports.dispatchGoRideRequest = onRequest(
+  {region:"us-central1", invoker:"public"}, async (request, response) => {
+    walletSmsCors(request, response);
+    if (request.method === "OPTIONS") return response.status(204).send("");
+    if (request.method !== "POST") return response.status(405).json({error:"POST required."});
+    try {
+      const user = await verifiedRequestUser(request);
+      if (!user) return response.status(401).json({error:"Passenger authentication is required."});
+      const requestId = String(request.body?.requestId || "").trim();
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(requestId)) return response.status(400).json({error:"Ride reference is invalid."});
+      const passenger = await resolvePassengerForWallet(user);
+      const trip = (await admin.database().ref(`requests/${requestId}`).once("value")).val();
+      if (!trip) return response.status(404).json({error:"Ride request was not found."});
+      if (!passenger || !await goPassengerOwnsTrip(user, trip))
+        return response.status(403).json({error:"This ride does not belong to the signed-in passenger."});
+      return response.status(200).json({ok:true, ...await dispatchGoRideToDrivers(requestId, trip.commuterId)});
+    } catch (error) {
+      console.error("Go ride dispatch failed", error?.message || error);
+      return response.status(error.status || 500).json({error:error.message || "Unable to send this ride request to nearby drivers."});
     }
-  );
+  });
 
 
 // =================================================================

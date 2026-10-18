@@ -207,18 +207,108 @@ test('driver decline records an authenticated decision and a failed request leav
  }finally{dom.window.close();}
 });
 
-test('a passenger can type and submit an offer below the recommendation without it being raised or rejected',()=>{
+test('passenger starts at the 65% floor and can submit below the recommendation',()=>{
  const dom=new JSDOM('<div id="sheetContent"></div>',{runScripts:'outside-only'});
  try{
   const w=dom.window;
   w.ASIYE={state:{booking:{rideType:'go',goNegotiation:{}},route:{distanceKm:10,durationMinutes:20}}};
   load(w,'assets/passenger-v2/js/pricing.js');load(w,'assets/passenger-v2/js/go-negotiation.js');
   const app=w.ASIYE;app.goNegotiation.mount(w.document.getElementById('sheetContent'),app.pricing.calculate());
-  const input=w.document.getElementById('goFareOfferInput');input.value='40';
+  const input=w.document.getElementById('goFareOfferInput');
+  assert.equal(input.min,'77');assert.equal(input.value,'77');
+  assert.equal(w.document.getElementById('goFareOfferSlider').min,'77');
+  input.value='89';
   input.dispatchEvent(new w.Event('input'));input.dispatchEvent(new w.Event('change'));
-  assert.equal(input.value,'40');assert.equal(app.goNegotiation.validate(),40);
+  assert.equal(input.value,'89');assert.equal(app.goNegotiation.validate(),89);
   assert.equal(w.document.getElementById('goFareOfferError').textContent,'');
-  assert.match(w.document.getElementById('goFareOfferGuidance').textContent,/R40 offer will be sent to drivers/);
+  assert.match(w.document.getElementById('goFareOfferGuidance').textContent,/Your offer will be sent to drivers for a decision/);
+ }finally{dom.window.close();}
+});
+
+test('Go offer controls reject R1 and refresh their 65% bounds when the route changes',()=>{
+ const dom=new JSDOM('<div id="sheetContent"></div>',{runScripts:'outside-only'});
+ try{
+  const w=dom.window;
+  w.ASIYE={state:{booking:{rideType:'go',goNegotiation:{}},route:{distanceKm:10,durationMinutes:0}}};
+  load(w,'assets/passenger-v2/js/pricing.js');load(w,'assets/passenger-v2/js/go-negotiation.js');
+  const app=w.ASIYE,container=w.document.getElementById('sheetContent');
+  app.goNegotiation.mount(container,app.pricing.calculate());
+  let input=w.document.getElementById('goFareOfferInput');
+  assert.equal(input.value,'65');assert.equal(input.min,'65');
+  input.value='1';input.dispatchEvent(new w.Event('input'));
+  assert.throws(()=>app.goNegotiation.validate(),/between R65 and R95/);
+  app.state.route={distanceKm:20,durationMinutes:0};
+  app.goNegotiation.mount(container,app.pricing.calculate());
+  input=w.document.getElementById('goFareOfferInput');
+  assert.equal(input.min,'119');assert.equal(input.value,'119');
+  assert.equal(w.document.getElementById('goFareOfferSlider').min,'119');
+  assert.match(container.textContent,/Offer from R119/);
+  assert.equal(w.document.querySelectorAll('#goFareNegotiationPanel').length,1);
+ }finally{dom.window.close();}
+});
+
+test('a passenger retains the same request after a notification outage or lost submission response',async()=>{
+ for(const lostResponse of [false,true]){
+ const dom=new JSDOM('',{runScripts:'outside-only',url:'https://example.test'});
+ try{
+  const w=dom.window,records={},messages=[];let removed=0,notified=0;
+  w.ASIYE={state:{userId:'passenger',location:{latitude:-29.8,longitude:31},
+   destination:{latitude:-29.7,longitude:31.1},route:{distanceKm:10,durationMinutes:0},
+   booking:{paymentMethod:'cash',goNegotiation:{offer:65}}},profile:{ensureRequired:async()=> 'photo'},
+   ui:{toast:message=>messages.push(message)},goNegotiation:{currentOffer:()=>65,submitOffer:async id=>{
+    if(lostResponse){records.request.passengerOfferRound=1;throw Error('Lost submission response');}
+    throw Object.assign(Error('Dispatch outage'),{payload:{offerSaved:true,pricing:{requestId:id,
+     passengerOffer:65,fareStatus:'passenger_offer',passengerOfferRound:1,status:'searching'}}});
+   }}};
+  const ref={key:'saved-offer',set:async value=>{records.request=value;},once:async()=>({val:()=>records.request}),remove:async()=>{removed++;}};
+  const database=()=>({ref:p=>({push:()=>ref})});database.ServerValue={TIMESTAMP:123};w.firebase={database};
+  load(w,'assets/passenger-v2/js/pricing.js');load(w,'assets/passenger-v2/js/booking.js');
+  const booking=w.ASIYE.booking;
+  booking.resolvePassengerForBooking=async()=>({id:'passenger',data:{name:'Passenger'}});
+  booking.pruneEndedBooking=async()=>{};
+  booking.notifyGoDrivers=async()=>{notified++;};
+  assert.equal(await booking.createGoRide(),'saved-offer');
+  assert.equal(removed,0);assert.equal(notified,0);
+  assert.equal(w.ASIYE.state.booking.requestId,'saved-offer');
+  assert.equal(w.ASIYE.state.booking.request.passengerOffer,65);
+  assert.equal(w.localStorage.getItem('currentRequestId'),'saved-offer');
+  assert.match(messages[0],lostResponse?/reference is saved/:/offer is saved/);
+ }finally{dom.window.close();}
+ }
+});
+
+test('driver search retries a transport failure without creating a second booking',async()=>{
+ const dom=new JSDOM('',{runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+ try{
+  const w=dom.window,timers=[];let calls=0;
+  const request={requestId:'same-offer',type:'ehailing',rideType:'go',status:'searching',
+   fareStatus:'passenger_offer',passengerOffer:65};
+  w.setTimeout=fn=>{timers.push(fn);return timers.length;};w.clearTimeout=()=>{};
+  w.ASIYE={state:{booking:{requestId:request.requestId,request}},booking:{notifyGoDrivers:async id=>{
+   calls++;assert.equal(id,'same-offer');if(calls===1)throw Error('Network unavailable');
+  }}};
+  load(w,'assets/passenger-v2/js/ride-controller.js');
+  const ride=w.ASIYE.ride;ride.requestId=request.requestId;
+  ride.scheduleGoDriverSearchRetry(request);
+  await timers[0]();assert.equal(calls,1);assert.equal(timers.length,2);
+  await timers[1]();assert.equal(calls,2);assert.equal(timers.length,2);
+  ride.scheduleGoDriverSearchRetry({...request,fareStatus:'driver_counter'});
+  assert.equal(timers.length,2,'A counter awaiting passenger acceptance must not be rebroadcast');
+ }finally{dom.window.close();}
+});
+
+test('retrying a draft whose submission was lost validates and delivers the same offer on the server',async()=>{
+ const dom=new JSDOM('',{runScripts:'outside-only'});
+ try{
+  const w=dom.window,calls=[];
+  w.ASIYE={goNegotiation:{submitOffer:async(id,amount)=>{
+   calls.push([id,amount]);return {dispatch:{mode:'broadcast',drivers:1}};
+  }}};
+  load(w,'assets/passenger-v2/js/booking.js');
+  const result=await w.ASIYE.booking.notifyGoDrivers('same-draft',{
+   type:'ehailing',negotiationEnabled:true,fareStatus:'passenger_offer',passengerOffer:65
+  });
+  assert.deepEqual(calls,[['same-draft',65]]);assert.equal(result.mode,'broadcast');assert.equal(result.drivers,1);
  }finally{dom.window.close();}
 });
 

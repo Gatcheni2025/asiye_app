@@ -85,18 +85,7 @@ ASIYE.goNegotiation = {
             );
 
         if (existing) {
-            this.panel =
-                existing;
-
-            this.syncFromState();
-
-            this.setVisible(
-                ASIYE.state.booking
-                    .rideType ===
-                    'go'
-            );
-
-            return;
+            existing.remove();
         }
 
 
@@ -188,7 +177,8 @@ ASIYE.goNegotiation = {
             </div>
 
             <p class="go-fare-protection-note">
-                You can offer less than the recommendation, up to
+                Offer from R${Number(prices.goMinimumOffer || 0).toFixed(0)}
+                (65% of the route reference), up to
                 R${Number(prices.goMaximumOffer || 0).toFixed(0)}.
                 The driver decides whether to accept, decline or counter.
                 No payment is taken until the fare is agreed.
@@ -322,7 +312,7 @@ ASIYE.goNegotiation = {
                 ? existing
                 : Number(
                     this.prices
-                        .goSuggested ||
+                        .goMinimumOffer ||
                     0
                 );
 
@@ -375,6 +365,16 @@ ASIYE.goNegotiation = {
             offer,
             true
         );
+
+        // The same panel is reused when the route changes.
+        for (const id of ['goFareOfferInput', 'goFareOfferSlider']) {
+            const control = document.getElementById(id);
+            if (control) {
+                control.min = String(this.prices.goMinimumOffer);
+                control.max = String(this.prices.goMaximumOffer);
+                control.value = String(offer);
+            }
+        }
     },
 
 
@@ -515,7 +515,7 @@ ASIYE.goNegotiation = {
 
         const offer =
             Number(
-                ASIYE.state.booking
+                document.getElementById('goFareOfferInput')?.value ?? ASIYE.state.booking
                     .goNegotiation
                     ?.offer
             );

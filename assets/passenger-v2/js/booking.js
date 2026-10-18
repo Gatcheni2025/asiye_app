@@ -597,14 +597,20 @@ ASIYE.booking = {
          * Payment, PIN generation and loved-one sharing happen only after
          * the fare is agreed with a driver.
          */
+        let submissionAttempted = false;
         try {
 
-            const validated =
-                await ASIYE.goNegotiation
-                    .submitOffer(
-                        requestId,
-                        fare
-                    );
+            let validated;
+            try {
+                submissionAttempted = true;
+                validated = await ASIYE.goNegotiation.submitOffer(requestId, fare);
+            } catch (error) {
+                if (!error.payload?.offerSaved) throw error;
+                // The server owns this booking now. A dispatch outage must not
+                // delete it or clear the passenger's active reference.
+                validated = {pricing:error.payload.pricing, dispatch:{mode:'retry'}};
+            }
+            validated ||= {};
 
 
             if (
@@ -641,15 +647,36 @@ ASIYE.booking = {
             );
 
 
-            await this.notifyGoDrivers(
-                requestId,
-                requestData
-            );
+            if (!validated?.dispatch) {
+                // Compatibility with a server that still uses separate dispatch.
+                try {
+                    await this.notifyGoDrivers(requestId, requestData);
+                } catch (error) {
+                    validated.dispatch = {mode:'retry'};
+                }
+            }
+            if (validated.dispatch?.mode === 'retry') {
+                ASIYE.ui?.toast?.('Your offer is saved. Reconnecting to nearby drivers.');
+            }
 
 
             return requestId;
 
         } catch (error) {
+
+            if (submissionAttempted && (!Number.isFinite(error.status) || error.status >= 500)) {
+                // A lost HTTP response cannot prove the server rejected the
+                // offer. Retain this ID and retry it, never create another trip.
+                let saved = requestData;
+                try {
+                    saved = (await requestRef.once('value')).val() || requestData;
+                } catch (_) { /* Restore/retry the same draft when the connection returns. */ }
+                ASIYE.state.booking.requestId = requestId;
+                ASIYE.state.booking.request = saved;
+                localStorage.setItem('currentRequestId', requestId);
+                ASIYE.ui?.toast?.('Reconnecting your fare offer. Your booking reference is saved.');
+                return requestId;
+            }
 
             await requestRef
                 .remove()
@@ -1433,6 +1460,14 @@ ASIYE.booking = {
         requestId,
         request
     ) {
+
+        if (request?.negotiationEnabled === true && request.type !== 'delivery' &&
+            request.type !== 'club' && request.fareStatus === 'passenger_offer' &&
+            !Number(request.passengerOfferRound || 0)) {
+            // Recover a submission whose response was lost before validation.
+            const submitted = await ASIYE.goNegotiation.submitOffer(requestId, Number(request.passengerOffer));
+            if (submitted.dispatch) return submitted.dispatch;
+        }
 
         const authUser =
             firebase.auth()

@@ -62,7 +62,25 @@ function pricingFor(distanceKm, durationMinutes) {
   return context.ASIYE.pricing.calculate();
 }
 
-test('Go pricing recommends 65-90 percent while allowing positive lower offers', () => {
+test('passenger and server agree on the 65% minimum for different routes', () => {
+  const start = functionsSource.indexOf('const ASIYE_GO_NEGOTIATION');
+  const end = functionsSource.indexOf('function isGoNegotiationTrip', start);
+  const server = {haversineKm:() => 0};
+  vm.runInNewContext(functionsSource.slice(start, end) +
+    '; this.price = goNegotiationPricing; this.valid = validGoNegotiatedAmount;', server);
+  for (const [distanceKm, durationMinutes] of [[0,0],[1,2],[10,0],[10,20],[21.5,37]]) {
+    const client = pricingFor(distanceKm, durationMinutes);
+    const pricing = server.price({routeDistanceKm:distanceKm, routeDurationMinutes:durationMinutes});
+    assert.equal(client.goMinimumOffer, Math.ceil(client.marketReference * 0.65));
+    assert.equal(pricing.minimumFareOffer, client.goMinimumOffer);
+    assert.equal(pricing.maximumFareOffer, client.goMaximumOffer);
+    assert.equal(server.valid(pricing.minimumFareOffer, pricing), true);
+    assert.equal(server.valid(pricing.minimumFareOffer - 1, pricing), false);
+    assert.equal(server.valid(pricing.suggestedFare - 1, pricing), true);
+  }
+});
+
+test('Go pricing starts at 65 percent and keeps the recommendation optional', () => {
   const quote = pricingFor(10, 20);
 
   assert.equal(
@@ -72,7 +90,7 @@ test('Go pricing recommends 65-90 percent while allowing positive lower offers',
 
   assert.equal(
     quote.goMinimumOffer,
-    1
+    77
   );
   assert.equal(quote.goRecommendedMinimum, 77);
 
@@ -93,12 +111,12 @@ test('Go pricing recommends 65-90 percent while allowing positive lower offers',
 
   assert.equal(
     quote.goDriverMinimumNet,
-    0.80
+    61.60
   );
 
   assert.equal(
     quote.goMinimumAsiyeCommission,
-    0.20
+    15.40
   );
 });
 
@@ -131,9 +149,9 @@ test('Go breakdown always preserves the 20/80 split', () => {
     quote
   );
 
-  assert.equal(low.fare, 40);
-  assert.equal(low.asiyeCommission, 8);
-  assert.equal(low.driverReceives, 32);
+  assert.equal(low.fare, 77);
+  assert.equal(low.asiyeCommission, 15.4);
+  assert.equal(low.driverReceives, 61.6);
 
   assert.equal(high.fare, 112);
   assert.equal(high.asiyeCommission, 22.40);

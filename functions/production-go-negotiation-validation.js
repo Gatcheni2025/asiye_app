@@ -254,12 +254,12 @@ async function validate(tokens) {
   );
 
   assert(
-    submitted?.pricing?.minimumFareOffer === 101 &&
+    submitted?.pricing?.minimumFareOffer === 77 &&
     submitted?.pricing?.suggestedFare === 106 &&
     submitted?.pricing?.maximumFareOffer === 112,
     `Unexpected protected corridor: ${JSON.stringify(submitted?.pricing || {})}`
   );
-  record('Server recomputed 85–95% fare corridor', 'R101–R112, suggested R106');
+  record('Server recomputed 65–95% fare corridor', 'R77–R112, suggested R106');
 
   const passengerCurrentRequest = (
     await db.ref(
