@@ -91,6 +91,56 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ env.STAGING_CREDS }}
+      # The staging deploy identity can authenticate to Firebase while still
+      # lacking permission to discover required Google Cloud APIs. Check that
+      # state explicitly, without changing services, roles or production.
+      - name: Install Google Cloud SDK for staging diagnostics
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Check Cloud Functions staging APIs and metadata (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$STAGING_PROJECT" in
+            asiye-paystack-staging) ;;
+            *) echo "::error::Refusing preflight outside the known isolated Asiye staging project"; exit 1 ;;
+          esac
+          echo "Checking enabled Google Cloud services in $STAGING_PROJECT (read-only)"
+          if ! gcloud services list --enabled --project "$STAGING_PROJECT" --format="value(config.name)" > "$RUNNER_TEMP/staging-enabled-apis.txt" 2> "$RUNNER_TEMP/staging-service-errors.txt"; then
+            echo "::error::The staging deployer cannot list enabled APIs. Verify Service Usage Viewer on the staging project."
+            rm -f "$RUNNER_TEMP/staging-service-errors.txt"
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/staging-service-errors.txt"
+          REQUIRED_APIS=(cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com)
+          MISSING=0
+          for service in "${REQUIRED_APIS[@]}"; do
+            if grep -Fxq "$service" "$RUNNER_TEMP/staging-enabled-apis.txt"; then
+              echo "Enabled: $service"
+            else
+              echo "::error::Disabled or unavailable in staging: $service"
+              MISSING=1
+            fi
+          done
+          for service in eventarc.googleapis.com pubsub.googleapis.com runtimeconfig.googleapis.com iam.googleapis.com; do
+            if grep -Fxq "$service" "$RUNNER_TEMP/staging-enabled-apis.txt"; then
+              echo "Additional enabled API: $service"
+            else
+              echo "Additional API not enabled or unavailable: $service (may be needed for selected function types)"
+            fi
+          done
+          rm -f "$RUNNER_TEMP/staging-enabled-apis.txt"
+          if [ "$MISSING" -ne 0 ]; then
+            echo "::error::Enable the listed APIs in the staging Google Cloud console before running deploy."
+            exit 1
+          fi
+          echo "Required Cloud Functions APIs are enabled for isolated staging."
+          if ! gcloud functions list --project "$STAGING_PROJECT" --format="value(name)" > "$RUNNER_TEMP/staging-functions-visible.txt" 2> "$RUNNER_TEMP/staging-functions-errors.txt"; then
+            echo "::error::Cloud Functions listing failed. Confirm staging Cloud Functions Developer and project permissions; use Cloud Audit Logs for the exact reason."
+            rm -f "$RUNNER_TEMP/staging-functions-errors.txt" "$RUNNER_TEMP/staging-functions-visible.txt"
+            exit 1
+          fi
+          echo "Cloud Functions metadata is accessible by the staging deployer."
+          rm -f "$RUNNER_TEMP/staging-functions-errors.txt" "$RUNNER_TEMP/staging-functions-visible.txt"
       - name: Read-only staging Realtime Database instance visibility
         shell: bash
         run: |
