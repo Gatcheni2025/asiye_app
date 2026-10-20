@@ -30,6 +30,7 @@ jobs:
           node --check scripts/summarize_staging_deploy_error.cjs
           node --test test/staging-deploy-diagnostics.test.cjs
           node --test test/staging-function-scope.test.cjs
+          node --test test/staging-function-entry.test.cjs
           node --check assets/passenger-v2/js/app.js
           node --check assets/passenger-v2/js/state.js
           node --check assets/passenger-v2/js/club.js
