@@ -1,0 +1,17 @@
+# GitHub registers workflow_dispatch only when this file exists on the
+# repository default branch. This is a registration-only safety stub.
+# The full isolated staging deployment lives on the protected review branch.
+name: Deploy Paystack Review to Isolated Staging
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  no-main-deployment:
+    name: Refuse staging deployment from main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Select the Asiye Paystack review branch
+        run: |
+          echo "::error::Do not use main. Select the fix/paystack-subaccounts-cash-card-no-wallet branch in Run workflow."
+          exit 1
