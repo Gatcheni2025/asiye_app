@@ -111,7 +111,10 @@ jobs:
             exit 1
           fi
           rm -f "$RUNNER_TEMP/staging-service-errors.txt"
-          REQUIRED_APIS=(cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com)
+          # Asiye uses Firebase v2 database triggers (Eventarc) and
+          # expireClubWaiting onSchedule (Cloud Scheduler + Pub/Sub).
+          # Fail before writing rules/secrets if their deployment services are absent.
+          REQUIRED_APIS=(cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com eventarc.googleapis.com cloudscheduler.googleapis.com pubsub.googleapis.com)
           MISSING=0
           for service in "${REQUIRED_APIS[@]}"; do
             if grep -Fxq "$service" "$RUNNER_TEMP/staging-enabled-apis.txt"; then
@@ -121,7 +124,7 @@ jobs:
               MISSING=1
             fi
           done
-          for service in eventarc.googleapis.com pubsub.googleapis.com runtimeconfig.googleapis.com iam.googleapis.com; do
+          for service in runtimeconfig.googleapis.com iam.googleapis.com; do
             if grep -Fxq "$service" "$RUNNER_TEMP/staging-enabled-apis.txt"; then
               echo "Additional enabled API: $service"
             else
