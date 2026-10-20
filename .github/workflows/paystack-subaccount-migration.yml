@@ -24,6 +24,8 @@ jobs:
           node --check functions/parcel-security.js
           node --check functions/paystack-subaccount-split.js
           node --check functions/paystack-payment-safety.js
+          node --check scripts/paystack_technical_readiness.cjs
+          node --check scripts/verify_paystack_staging.cjs
           node --check assets/passenger-v2/js/app.js
           node --check assets/passenger-v2/js/state.js
           node --check assets/passenger-v2/js/club.js
