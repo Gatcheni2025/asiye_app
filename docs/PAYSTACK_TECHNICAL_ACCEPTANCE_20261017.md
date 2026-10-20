@@ -42,6 +42,12 @@ After configuration, manually run `Deploy Paystack Review to Isolated Staging` *
 
 Configure the **Test Mode** Paystack webhook URL to the staging `paystackWebhook` function before the provider journey. Use `Paystack Test-Mode Card Preflight` in `check` mode for read-only account validation; `initialize` creates a test checkout and `verify` validates its paid reference. A checkout URL or a passing initialize request is not proof of payment, Firebase fulfillment, refund or settlement.
 
+## 20 October 347 release gate update
+
+The draft 347 review branch now rejects missing or mismatched **staging** functions/rules in the read-only readiness report. A dedicated staging post-deployment verifier reads the deployed function inventory and RTDB rules, fails when either differs, and uploads `asiye-paystack-staging-verification` as evidence. It does **not** prove a source revision, payment capture, refund, device behavior, or merchant approval. See [the complete controlled release checklist](PRODUCTION_READINESS_347_20261020.md).
+
+**The current readiness failure remains expected.** The designated Paystack TEST subaccount, isolated staging project/credentials and matching production deployment are not established by these commits; Card activation is not approved. Do not substitute an active but unverified TEST driver payout account for a verified production account.
+
 ## Acceptance still required before live activation
 
 1. Paystack-hosted TEST card success, decline, timeout/retry, app closure/return, duplicate callback and refund journeys for Go, each Work member and Parcel. Confirm exact driver/subaccount, 80/20 allocations and platform fee bearer in provider records. Test one member paying while another fails, and verify that pickup remains locked until all required payments are ready.
