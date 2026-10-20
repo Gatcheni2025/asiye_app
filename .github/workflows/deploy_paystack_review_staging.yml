@@ -281,6 +281,10 @@ jobs:
           node --check functions/staging-index.generated.cjs
           # Fail before any staging resource writes if a selected export is missing.
           node -e "const assert=require('node:assert/strict');const manifest=require('./scripts/paystack_function_manifest.json');const exports=Object.keys(require('./functions/staging-index.generated.cjs'));assert.deepEqual(exports,manifest);console.log('Scoped Functions discovery matches all '+manifest.length+' reviewed exports.')"
+          # A filtered export map alone is insufficient: firebase-functions
+          # globally registers defineSecret declarations from the full index.
+          # Assert the staging discovery registry contains only useful secrets.
+          node -e "const assert=require('node:assert/strict');const {createRequire}=require('node:module');const {resolve}=require('node:path');require('./functions/staging-index.generated.cjs');const all=createRequire(resolve('functions/package.json'))('firebase-functions/params').declaredParams.map(p=>p.name);assert(all.includes('PAYSTACK_SECRET_KEY'));for(const n of ['TWILIO_ACCOUNT_SID','TWILIO_AUTH_TOKEN','TWILIO_FROM_NUMBER'])assert(!all.includes(n),'Unneeded Twilio secret still declared: '+n);console.log('Firebase staging params contain Paystack without retired Twilio declarations.')"
       - name: Configure only the staging TEST secret
         shell: bash
         run: |
