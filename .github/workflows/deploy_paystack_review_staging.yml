@@ -73,6 +73,7 @@ jobs:
           node --check functions/index.js
           node --check functions/paystack-payment-safety.js
           node --check scripts/build_staging_web_preview.cjs
+          node --check scripts/summarize_staging_deploy_error.cjs
           node --test test/staging-web-boundary.test.cjs
           node --test test/paystack-payment-safety.test.cjs test/paystack-subaccount-migration.test.cjs test/parcel-security.test.cjs test/paystack-card-journey-simulation.test.cjs
       - name: Verify Firebase rules and exported payment handlers
@@ -89,6 +90,13 @@ jobs:
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ env.STAGING_CREDS }}
+      - name: Read-only staging Realtime Database instance visibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This is metadata-only; it must not write client/user data.
+          echo "Checking deployment account's staging RTDB instance visibility..."
+          ./test/security/node_modules/.bin/firebase database:instances:list --project "$STAGING_PROJECT"
       - name: Configure only the staging TEST secret
         shell: bash
         run: |
@@ -98,12 +106,33 @@ jobs:
           trap 'rm -f "$KEY_FILE"' EXIT
           printf '%s' "$PAYSTACK_TEST_SECRET_KEY" > "$KEY_FILE"
           ./test/security/node_modules/.bin/firebase functions:secrets:set PAYSTACK_SECRET_KEY --project "$STAGING_PROJECT" --data-file "$KEY_FILE" --non-interactive
-      - name: Deploy the matching secure endpoints and rules only to staging
+      - name: Deploy staging RTDB security rules (separate diagnostic boundary)
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/asiye-staging-db-debug.log"
+          if ./test/security/node_modules/.bin/firebase deploy --project "$STAGING_PROJECT" --only database --non-interactive --debug > "$LOG_FILE" 2>&1; then
+            rm -f "$LOG_FILE" firebase-debug.log
+            echo "Staging RTDB rule deployment completed." >> "$GITHUB_STEP_SUMMARY"
+          else
+            node scripts/summarize_staging_deploy_error.cjs "$LOG_FILE" "Realtime Database rules"
+            rm -f "$LOG_FILE" firebase-debug.log
+            exit 1
+          fi
+      - name: Deploy reviewed secure Cloud Functions to isolated staging
+        shell: bash
         run: |
           set -euo pipefail
           SELECTOR=$(node -e "console.log(require('./scripts/paystack_function_manifest.json').map(n=>'functions:'+n).join(','))")
-          ./test/security/node_modules/.bin/firebase deploy --project "$STAGING_PROJECT" --only "$SELECTOR,database" --non-interactive
-          printf 'Reviewed source: %s\nIsolated project: %s\nLive payments remain gated. No production deployment was performed.\n' "$GITHUB_SHA" "$STAGING_PROJECT" >> "$GITHUB_STEP_SUMMARY"
+          LOG_FILE="$RUNNER_TEMP/asiye-staging-functions-debug.log"
+          if ./test/security/node_modules/.bin/firebase deploy --project "$STAGING_PROJECT" --only "$SELECTOR" --non-interactive --debug > "$LOG_FILE" 2>&1; then
+            rm -f "$LOG_FILE" firebase-debug.log
+            printf 'Reviewed source: %s\nIsolated project: %s\nLive payments remain gated. No production deployment was performed.\n' "$GITHUB_SHA" "$STAGING_PROJECT" >> "$GITHUB_STEP_SUMMARY"
+          else
+            node scripts/summarize_staging_deploy_error.cjs "$LOG_FILE" "Cloud Functions"
+            rm -f "$LOG_FILE" firebase-debug.log
+            exit 1
+          fi
       - name: Deploy staging-only web preview with no-index headers
         run: |
           set -euo pipefail
