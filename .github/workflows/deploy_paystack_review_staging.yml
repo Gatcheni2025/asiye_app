@@ -271,6 +271,10 @@ jobs:
           ./test/security/node_modules/.bin/firebase database:instances:list --project "$STAGING_PROJECT"
       - name: Generate reviewed staging-only Cloud Functions entrypoint
         shell: bash
+        env:
+          # Only for staging function export discovery; the local Node check
+          # otherwise lacks a DB URL when club-lifecycle.js initializes Admin.
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_STAGING_WEB_CONFIG }}
         run: |
           set -euo pipefail
           node scripts/prepare_staging_function_scope.cjs
@@ -301,6 +305,10 @@ jobs:
           fi
       - name: Deploy reviewed secure Cloud Functions to isolated staging
         shell: bash
+        env:
+          # Ensure the scoped entrypoint resolves the isolated RTDB even if
+          # Firebase CLI's discovery subprocess has no inferred database URL.
+          FIREBASE_CONFIG: ${{ vars.FIREBASE_STAGING_WEB_CONFIG }}
         run: |
           set -euo pipefail
           SELECTOR=$(node -e "console.log(require('./scripts/paystack_function_manifest.json').map(n=>'functions:'+n).join(','))")
