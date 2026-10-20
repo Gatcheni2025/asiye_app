@@ -10,13 +10,20 @@ test("staging entrypoint exports exactly reviewed functions without legacy Twili
   assert.match(source,/require\("\.\/index\.js"\)/);
   assert.match(source,/module\.exports = Object\.fromEntries/);
   const vm=require("node:vm");
-  const exports=vm.runInNewContext(source+"; module.exports", {
-    require: () => Object.fromEntries(names.concat(["createEftSmsTopup","sendEftPaymentStatusSms"]).map(n => [n,()=>{}])),
+  const params={declaredParams:[
+    {name:"TWILIO_ACCOUNT_SID"}, {name:"TWILIO_AUTH_TOKEN"}, {name:"TWILIO_FROM_NUMBER"},
+    {name:"PAYSTACK_SECRET_KEY"}, {name:"OTHER_PARAMETER"}
+  ]};
+  const all=Object.fromEntries(names.concat(["createEftSmsTopup","sendEftPaymentStatusSms"]).map(n => [n,()=>{}]));
+  const exported=vm.runInNewContext(source+"; module.exports", {
+    require: id => id === "firebase-functions/params" ? params : all,
     module:{exports:{}}
   });
-  assert.deepEqual(Object.keys(exports), names);
-  assert.equal(exports.createEftSmsTopup,undefined);
-  assert.equal(exports.sendEftPaymentStatusSms,undefined);
+  assert.deepEqual(Object.keys(exported), names);
+  assert.equal(exported.createEftSmsTopup,undefined);
+  assert.equal(exported.sendEftPaymentStatusSms,undefined);
+  assert.deepEqual(params.declaredParams.map(p=>p.name), ["PAYSTACK_SECRET_KEY","OTHER_PARAMETER"]);
+  assert.match(source,/Legacy Twilio secret was retained/);
 });
 test("staging allowlist rejects duplicate and legacy functions", () => {
   assert.throws(()=>verifyNames(names.concat(names[0])),/duplicate/);
@@ -53,4 +60,13 @@ test("workflow supplies staging DB URL only to scoped function generation and de
     assert.ok(slice.includes("FIREBASE_CONFIG: ${{ vars.FIREBASE_STAGING_WEB_CONFIG }}"),
       "Missing scoped staging runtime DB config in "+step);
   }
+});
+
+test("staging filtered exports reject missing SDK params registry", () => {
+  const vm=require("node:vm");
+  const all=Object.fromEntries(names.map(n=>[n,()=>{}]));
+  assert.throws(()=>vm.runInNewContext(renderEntry(names)+"; module.exports",{
+    require: id => id === "firebase-functions/params" ? {declaredParams:null} : all,
+    module:{exports:{}}
+  }),/registry is unavailable/);
 });
