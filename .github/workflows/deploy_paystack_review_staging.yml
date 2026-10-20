@@ -44,10 +44,17 @@ jobs:
           bash scripts/verify_payment_release_341_lineage.sh
           node --check functions/index.js
           node --check functions/paystack-payment-safety.js
+          node --check scripts/build_staging_web_preview.cjs
+          node --test test/staging-web-boundary.test.cjs
           node --test test/paystack-payment-safety.test.cjs test/paystack-subaccount-migration.test.cjs test/parcel-security.test.cjs test/paystack-card-journey-simulation.test.cjs
       - name: Verify Firebase rules and exported payment handlers
         working-directory: test/security
         run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json 'npm test'
+      - name: Prepare strictly isolated staging web-only passenger and driver preview
+        env:
+          FIREBASE_STAGING_WEB_CONFIG: ${{ vars.FIREBASE_STAGING_WEB_CONFIG }}
+          FIREBASE_STAGING_PROJECT: ${{ vars.FIREBASE_STAGING_PROJECT }}
+        run: node scripts/build_staging_web_preview.cjs
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ env.STAGING_CREDS }}
@@ -66,6 +73,13 @@ jobs:
           SELECTOR=$(node -e "console.log(require('./scripts/paystack_function_manifest.json').map(n=>'functions:'+n).join(','))")
           npx --yes firebase-tools@latest deploy --project "$STAGING_PROJECT" --only "$SELECTOR,database" --non-interactive
           printf 'Reviewed source: %s\nIsolated project: %s\nLive payments remain gated. No production deployment was performed.\n' "$GITHUB_SHA" "$STAGING_PROJECT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Deploy staging-only web preview with no-index headers
+        run: |
+          set -euo pipefail
+          npx --yes firebase-tools@latest deploy --project "$STAGING_PROJECT" --config firebase.staging.generated.json --only hosting --non-interactive
+          echo "Staging WEB-only preview: https://${STAGING_PROJECT}.web.app/passenger-v2/index.html" >> "$GITHUB_STEP_SUMMARY"
+          echo "Staging WEB-only driver: https://${STAGING_PROJECT}.web.app/driver-v2/index.html" >> "$GITHUB_STEP_SUMMARY"
+          echo "Native Android/iOS staging acceptance is NOT included." >> "$GITHUB_STEP_SUMMARY"
       - name: Read back active staging functions and database rules
         env:
           STAGING_PROJECT: ${{ vars.FIREBASE_STAGING_PROJECT }}
