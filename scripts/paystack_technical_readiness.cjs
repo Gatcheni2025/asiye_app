@@ -9,6 +9,7 @@ const {spawnSync} = require('node:child_process');
 const admin = require('../functions/node_modules/firebase-admin');
 const root = path.join(__dirname, '..');
 const requiredFunctions = require('./paystack_function_manifest.json');
+const {requireStagingConfig} = require('./build_staging_web_preview.cjs');
 const report = {source: process.env.GITHUB_SHA || 'local-uncommitted',
   checkedAt: new Date().toISOString(), readOnly: true, liveProcessingEnabledByThisCheck: false,
   blockers: []};
@@ -95,7 +96,21 @@ async function main() {
     }
   } else report.blockers.push('Firebase deployment credentials are not configured in GitHub Actions.');
   report.staging = {projectConfigured: !!process.env.FIREBASE_STAGING_PROJECT,
-    credentialsConfigured: !!process.env.FIREBASE_STAGING_CREDS};
+    credentialsConfigured: !!process.env.FIREBASE_STAGING_CREDS,
+    webConfigConfigured: !!String(process.env.FIREBASE_STAGING_WEB_CONFIG || '').trim(),
+    webConfigValid: false};
+  if (!report.staging.webConfigConfigured) {
+    report.blockers.push('Configure FIREBASE_STAGING_WEB_CONFIG with valid Firebase web JSON for the isolated staging project.');
+  } else {
+    try {
+      const webConfig = JSON.parse(process.env.FIREBASE_STAGING_WEB_CONFIG);
+      requireStagingConfig(webConfig, String(process.env.FIREBASE_STAGING_PROJECT || ''));
+      report.staging.webConfigValid = true;
+    } catch (_) {
+      // Never include the supplied config or credentials in CI logs/artifacts.
+      report.blockers.push('FIREBASE_STAGING_WEB_CONFIG is invalid JSON, incomplete, or does not match the isolated staging project.');
+    }
+  }
   if (!report.staging.projectConfigured || !report.staging.credentialsConfigured) {
     report.blockers.push('Configure an isolated FIREBASE_STAGING_PROJECT variable and FIREBASE_STAGING_SERVICE_ACCOUNT secret before staging deployment/device tests.');
   } else if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(process.env.FIREBASE_STAGING_PROJECT) ||
