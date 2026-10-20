@@ -144,6 +144,43 @@ jobs:
           fi
           echo "Cloud Functions metadata is accessible by the staging deployer."
           rm -f "$RUNNER_TEMP/staging-functions-errors.txt" "$RUNNER_TEMP/staging-functions-visible.txt"
+      - name: Read-only check for staging Gen1 and Gen2 runtime service accounts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STAGING_PROJECT" = "asiye-paystack-staging"
+          PROJECT_NUMBER=$(gcloud projects describe "$STAGING_PROJECT" --format='value(projectNumber)')
+          test "$PROJECT_NUMBER" = "1000800408896"
+          CHECK_FAILED=0
+          for identity_type in gen1 gen2; do
+            if [ "$identity_type" = gen1 ]; then
+              EMAIL="${STAGING_PROJECT}@appspot.gserviceaccount.com"
+              DESC="Gen1 App Engine runtime"
+            else
+              EMAIL="${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+              DESC="Gen2 Compute Engine runtime"
+            fi
+            ERR_FILE="$RUNNER_TEMP/asiye-runtime-identity-${identity_type}.err"
+            if gcloud iam service-accounts describe "$EMAIL" --project "$STAGING_PROJECT" --format="value(email)" > /dev/null 2> "$ERR_FILE"; then
+              echo "Runtime service account exists: $DESC"
+            elif grep -Eiq 'NOT_FOUND|not found|404' "$ERR_FILE"; then
+              echo "::error::Required $DESC account is missing from the staging project. Check default service-account provisioning before deploying functions."
+              CHECK_FAILED=1
+            elif grep -Eiq 'PERMISSION_DENIED|permission denied|403|does not have permission' "$ERR_FILE"; then
+              echo "::error::Cannot inspect $DESC identity. Grant the GitHub deployer Service Account Viewer (read-only) on staging to complete this preflight."
+              CHECK_FAILED=1
+            else
+              echo "::error::Cannot verify $DESC account in staging. Inspect the project's IAM Service Accounts page."
+              CHECK_FAILED=1
+            fi
+            rm -f "$ERR_FILE"
+          done
+          if [ "$CHECK_FAILED" -ne 0 ]; then
+            echo "First-generation Firebase functions default to an App Engine runtime account; second-generation functions default to a Compute Engine runtime account."
+            echo "No identities were created, modified or granted permissions by this check."
+            exit 1
+          fi
+          echo "Staging Gen1 and Gen2 runtime identities were found."
       - name: Read-only staging Realtime Database instance visibility
         shell: bash
         run: |
