@@ -47,7 +47,7 @@ function main() {
   if (pkg.main !== "index.js") throw Error("Refusing to replace an unexpected Functions entrypoint");
   const entryFile = path.join(root, "functions", "staging-index.generated.cjs");
   if (fs.existsSync(entryFile)) throw Error("Staging entrypoint already exists");
-  fs.writeFileSync(entryFile, renderEntry(manifest), {flag:"wx", mode:0o600});
+  fs.writeFileSync(entryFile, renderEntry(manifest), {flag:"wx", mode:0o644});
   pkg.main = "staging-index.generated.cjs";
   fs.writeFileSync(pkgFile, JSON.stringify(pkg,null,2)+"\n");
   console.log("Isolated staging Functions entrypoint restricted to " + manifest.length + " reviewed exports.");
