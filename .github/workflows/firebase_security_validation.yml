@@ -118,4 +118,6 @@ jobs:
 
       - name: Run Firebase Realtime Database security tests
         working-directory: test/security
-        run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json "npm test"
+        # Keep all security assertions but run suites serially: concurrent RTDB transactions
+        # from different files can exhaust emulator maxretry and time out unrelated suites.
+        run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json "node --test --test-timeout=45000 --test-concurrency=1 *.test.cjs"
