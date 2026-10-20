@@ -102,9 +102,26 @@ async function main() {
       process.env.FIREBASE_STAGING_PROJECT === 'asiye-80386') {
     report.blockers.push('Staging must be a valid project separate from production asiye-80386.');
   } else {
-    try { report.staging.inventory = await firebaseInventory(process.env.FIREBASE_STAGING_CREDS, process.env.FIREBASE_STAGING_PROJECT); }
-    catch (_) { report.blockers.push('Staging inventory could not be verified.'); }
+    try {
+      report.staging.inventory = await firebaseInventory(
+        process.env.FIREBASE_STAGING_CREDS, process.env.FIREBASE_STAGING_PROJECT
+      );
+      if (report.staging.inventory.missingOrInactiveFunctions.length) {
+        report.blockers.push('Staging does not have all reviewed secure endpoints active.');
+      }
+      if (report.staging.inventory.rulesMatchReviewedSource !== true) {
+        report.blockers.push('Staging database rules do not match reviewed source or could not be inspected.');
+      }
+    } catch (_) {
+      report.staging.inventoryVerified = false;
+      report.blockers.push('Staging inventory could not be verified.');
+    }
   }
+  // Inventory cannot establish the deployed implementation's exact source SHA,
+  // prove a real provider webhook/refund, or replace written merchant approval.
+  report.sourceRevisionVerified = false;
+  report.actualProviderAndDeviceAcceptanceVerified = false;
+  report.liveCardActivationApproved = false;
   report.manualAcceptanceRequired = [
     'Real Paystack TEST checkout, authenticated webhook, refund and device acceptance evidence.',
     'Written merchant activation approval and legacy Wallet reconciliation before enabling live Card processing.'
@@ -115,7 +132,7 @@ main().catch(() => report.blockers.push('Technical readiness check could not fin
   const output = path.join(root, 'paystack-readiness');
   fs.mkdirSync(output, {recursive: true});
   fs.writeFileSync(path.join(output, 'technical-readiness.json'), JSON.stringify(report, null, 2) + '\n');
-  const summary = 'Paystack technical readiness — read-only\n' +
+  const summary = 'Paystack technical readiness — read-only (not live activation approval)\n' +
     report.blockers.map(item => '- BLOCKED: ' + item).join('\n') + '\n' +
     (report.manualAcceptanceRequired || []).map(item => '- Acceptance still required: ' + item).join('\n') + '\n';
   console.log(summary);
