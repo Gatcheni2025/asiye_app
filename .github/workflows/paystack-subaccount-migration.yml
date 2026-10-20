@@ -38,6 +38,16 @@ jobs:
           node --check assets/member-pages.js
       - name: Isolated staging project and payment-endpoint regressions
         run: node --test test/staging-web-boundary.test.cjs
+      - name: Dry-run the full staging web bundle with synthetic public Firebase identifiers
+        env:
+          FIREBASE_STAGING_PROJECT: asiye-ci-preview
+          FIREBASE_STAGING_WEB_CONFIG: '{"apiKey":"AIzaXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX","authDomain":"asiye-ci-preview.firebaseapp.com","databaseURL":"https://asiye-ci-preview-default-rtdb.firebaseio.com","projectId":"asiye-ci-preview","storageBucket":"asiye-ci-preview.firebasestorage.app","messagingSenderId":"123456789012","appId":"1:123456789012:web:abcdefab12"}'
+        run: |
+          node scripts/build_staging_web_preview.cjs
+          test -f staging-preview/passenger-v2/js/firebase.js
+          test -f staging-preview/driver-v2/js/firebase.js
+          test -f firebase.staging.generated.json
+          echo 'A synthetic preview was built only in the ephemeral CI runner, not deployed.'
       - name: New Paystack 80/20 and no-wallet regression checks
         run: node --test test/paystack-subaccount-migration.test.cjs test/paystack-payment-safety.test.cjs
       - name: Full simulated Go Work Parcel Paystack charge flow
