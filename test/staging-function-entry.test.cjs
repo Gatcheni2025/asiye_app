@@ -39,7 +39,7 @@ test("staging export generator fails closed when Firebase database URL is missin
       GITHUB_REF_NAME:"fix/paystack-subaccounts-cash-card-no-wallet",FIREBASE_CONFIG:"{}"}
   });
   assert.notEqual(run.status,0);
-  assert.match(run.stderr,/staging Firebase WEB config|staging Firebase runtime configuration/i);
+  assert.match(run.stderr,/staging Firebase WEB config|staging Firebase runtime configuration|Staging web project must exactly match the isolated FIREBASE_STAGING_PROJECT/i);
 });
 test("workflow supplies staging DB URL only to scoped function generation and deployment", () => {
   const fs=require("node:fs");
