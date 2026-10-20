@@ -8,6 +8,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const manifest = require("./paystack_function_manifest.json");
+const {requireStagingConfig} = require("./build_staging_web_preview.cjs");
 
 const NAME_RE = /^[A-Za-z][A-Za-z0-9]*$/;
 function verifyNames(names) {
@@ -41,6 +42,15 @@ function main() {
       process.env.GITHUB_REF_NAME !== "fix/paystack-subaccounts-cash-card-no-wallet") {
     throw Error("Function scope preparation is restricted to the isolated staging workflow");
   }
+  // A bare Node require() has no Firebase CLI-generated FIREBASE_CONFIG.
+  // Explicitly verify that its database URL is the isolated staging RTDB.
+  let stagingConfig;
+  try {
+    stagingConfig = JSON.parse(process.env.FIREBASE_CONFIG || "{}");
+  } catch (_) {
+    throw Error("Missing or invalid staging Firebase runtime configuration");
+  }
+  requireStagingConfig(stagingConfig, process.env.STAGING_PROJECT);
   verifyNames(manifest);
   const pkgFile = path.join(root, "functions", "package.json");
   const pkg = JSON.parse(fs.readFileSync(pkgFile, "utf8"));
