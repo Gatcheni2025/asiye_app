@@ -2,6 +2,8 @@
   "createEftSmsTopup",
   "initializePaystackWalletTopup",
   "verifyPaystackWalletTopup",
+  "exchangeNativeAuthSession",
+  "uploadProfileImageProxy",
   "configureDriverCardPayout",
   "prepareTripPayment",
   "verifyTripCardPayment",
