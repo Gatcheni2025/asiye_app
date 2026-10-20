@@ -13,6 +13,8 @@ test("Firebase deploy diagnostics report failing API without printing bearer tok
       "[debug] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/asiye-paystack-staging/services/cloudfunctions.googleapis.com?token=DO_NOT_LEAK",
       "[debug] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/asiye-paystack-staging/services/cloudfunctions.googleapis.com?token=DO_NOT_LEAK 404",
       "[debug] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/asiye-paystack-staging/services/cloudfunctions.googleapis.com { \"secret\": \"DO_NOT_LEAK\" }",
+      "[debug] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/asiye-paystack-staging/secrets/TWILIO_ACCOUNT_SID?token=DO_NOT_LEAK 404",
+      "[debug] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/asiye-paystack-staging/secrets/PRIVATE_DO_NOT_LEAK?token=DO_NOT_LEAK 404",
       "[debug] Authorization: Bearer DO_NOT_LEAK",
       "Error: Permission denied, DO_NOT_LEAK",
     ].join("\n"));
@@ -21,6 +23,7 @@ test("Firebase deploy diagnostics report failing API without printing bearer tok
     assert.match(output.stderr, /cloudfunctions\.googleapis\.com/);
     assert.match(output.stderr, /HTTP 404/);
     assert.match(output.stderr, /permission error/i);
+    assert.match(output.stderr, /Known missing secret IDs \(names only\): TWILIO_ACCOUNT_SID/);
     assert.doesNotMatch(output.stderr, /DO_NOT_LEAK|Bearer|token=/i);
   } finally { fs.rmSync(folder, {force: true, recursive: true}); }
 });
