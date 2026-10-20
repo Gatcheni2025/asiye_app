@@ -115,7 +115,7 @@ jobs:
           # Asiye uses Firebase v2 database triggers (Eventarc) and
           # expireClubWaiting onSchedule (Cloud Scheduler + Pub/Sub).
           # Fail before writing rules/secrets if their deployment services are absent.
-          REQUIRED_APIS=(cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com eventarc.googleapis.com cloudscheduler.googleapis.com pubsub.googleapis.com)
+          REQUIRED_APIS=(cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com eventarc.googleapis.com cloudscheduler.googleapis.com pubsub.googleapis.com firebaseextensions.googleapis.com)
           MISSING=0
           for service in "${REQUIRED_APIS[@]}"; do
             if grep -Fxq "$service" "$RUNNER_TEMP/staging-enabled-apis.txt"; then
@@ -228,6 +228,39 @@ jobs:
             echo "No IAM roles were changed. Live Card and production remain disabled and untouched."
             exit 1
           fi
+      - name: Check Runtime Config and Paystack secret permissions before deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STAGING_PROJECT" = 'asiye-paystack-staging'
+          # Metadata checks only; never read a secret version's payload.
+          TOKEN=$(gcloud auth print-access-token)
+          export TOKEN
+          RESP=$(mktemp "$RUNNER_TEMP/asiye-functions-metadata.XXXXXX")
+          trap 'rm -f "$RESP"; unset TOKEN' EXIT
+          status_only() {
+            local name="$1" url="$2" status
+            if ! status=$(curl --silent --show-error --output "$RESP" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${TOKEN}" \
+              "$url" 2>/dev/null); then
+              echo "::error::$name metadata check failed due to a connection issue."
+              return 1
+            fi
+            if [ "$status" != 200 ]; then
+              echo "::error::$name metadata returned HTTP $status for the staging deployer."
+              return 1
+            fi
+            echo "$name metadata access passed."
+          }
+          status_only "Runtime Config" "https://runtimeconfig.googleapis.com/v1beta1/projects/${STAGING_PROJECT}/configs?pageSize=1" || {
+            echo "::error::For HTTP 403, add Runtimeconfig Viewer (roles/runtimeconfig.viewer) in staging only; do not grant Owner."
+            exit 1
+          }
+          status_only "Paystack TEST secret" "https://secretmanager.googleapis.com/v1/projects/${STAGING_PROJECT}/secrets/PAYSTACK_SECRET_KEY" || {
+            echo "::error::Verify that PAYSTACK_SECRET_KEY exists in the staging Secret Manager; never upload a secret to GitHub logs."
+            exit 1
+          }
       - name: Read-only staging Realtime Database instance visibility
         shell: bash
         run: |
