@@ -1,0 +1,66 @@
+name: Restore TAVORA registered Android upload key
+
+on:
+  push:
+    branches: ['repair/tavora-registered-upload-key-20261020']
+    paths: ['.github/workflows/tavora-registered-android-key-transfer.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transfer:
+    if: github.repository == 'Gatcheni2025/asiye_app' && github.ref == 'refs/heads/repair/tavora-registered-upload-key-20261020'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Verify registered certificate and restore only TAVORA Android secrets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.TAVORA_SECRETS_WRITE_PAT }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          set +x
+          umask 077
+          for name in GH_TOKEN KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Required Asiye signing/transfer secret is absent: $name. No Tavora secret has been changed."
+              exit 1
+            fi
+          done
+          KEY_PATH="$RUNNER_TEMP/tavora-registered-upload-key.jks"
+          CERT_PATH="$RUNNER_TEMP/tavora-registered-upload-certificate.pem"
+          trap 'rm -f "$KEY_PATH" "$CERT_PATH"' EXIT
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$KEY_PATH"
+          keytool -exportcert -rfc -keystore "$KEY_PATH" -alias "$KEY_ALIAS" \
+            -storepass:env KEYSTORE_PASSWORD -file "$CERT_PATH" >/dev/null
+          ACTUAL_SHA1="$(openssl x509 -in "$CERT_PATH" -noout -fingerprint -sha1 | sed 's/.*=//' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          ACTUAL_SHA256="$(openssl x509 -in "$CERT_PATH" -noout -fingerprint -sha256 | sed 's/.*=//' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          if [ "$ACTUAL_SHA1" != '3ef548f3174cedc5bf767f46a91a61a6b31f5108' ] || \
+             [ "$ACTUAL_SHA256" != '8e72a01ad73956b4e21dc9e4f73ac044b2c3c770e367ba01deebb354b21180cf' ]; then
+            echo '::error::Source signing key does not match the certificate Google Play requires for TAVORA. No Tavora secret has been changed.'
+            exit 1
+          fi
+          # This dedicated token was already established for secure Asiye-to-Tavora secret transfer.
+          # Check the fixed destination before making any writes. Secret values only travel via stdin.
+          gh api --silent repos/Gatcheni2025/tavora_mobile/actions/secrets/public-key
+          printf '%s' "$KEYSTORE_PASSWORD" | gh secret set KEYSTORE_PASSWORD --repo Gatcheni2025/tavora_mobile
+          printf '%s' "$KEY_ALIAS" | gh secret set KEY_ALIAS --repo Gatcheni2025/tavora_mobile
+          printf '%s' "$KEY_PASSWORD" | gh secret set KEY_PASSWORD --repo Gatcheni2025/tavora_mobile
+          printf '%s' "$KEYSTORE_BASE64" | gh secret set ANDROID_KEYSTORE_BASE64 --repo Gatcheni2025/tavora_mobile
+          for name in KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD ANDROID_KEYSTORE_BASE64; do
+            gh api --silent "repos/Gatcheni2025/tavora_mobile/actions/secrets/$name"
+          done
+          echo 'TAVORA Android signing secrets restored using the registered upload certificate.'
+          printf 'Registered upload SHA-1: %s\nRegistered upload SHA-256: %s\n' \
+            "$ACTUAL_SHA1" "$ACTUAL_SHA256" >> "$GITHUB_STEP_SUMMARY"
