@@ -181,6 +181,52 @@ jobs:
             exit 1
           fi
           echo "Staging Gen1 and Gen2 runtime identities were found."
+      - name: Verify staging function deployer can act as runtime identities (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STAGING_PROJECT" = 'asiye-paystack-staging'
+          PROJECT_NUMBER=$(gcloud projects describe "$STAGING_PROJECT" --format='value(projectNumber)')
+          test "$PROJECT_NUMBER" = '1000800408896'
+          # Google IAM testIamPermissions only checks the current identity; it
+          # neither grants permissions nor impersonates the service account.
+          # The token and full response must never appear in the job log.
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          export ACCESS_TOKEN
+          umask 077
+          RESP_FILE=$(mktemp "$RUNNER_TEMP/asiye-actas.XXXXXX")
+          trap 'rm -f "$RESP_FILE"; unset ACCESS_TOKEN' EXIT
+          FAILED=0
+          for spec in "gen1:${STAGING_PROJECT}@appspot.gserviceaccount.com" "gen2:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"; do
+            KIND=${spec%%:*}
+            EMAIL=${spec#*:}
+            if ! STATUS=$(curl --silent --show-error --request POST \
+              --output "$RESP_FILE" --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${ACCESS_TOKEN}" \
+              --header 'Content-Type: application/json' \
+              --data '{"permissions":["iam.serviceAccounts.actAs"]}' \
+              "https://iam.googleapis.com/v1/projects/-/serviceAccounts/${EMAIL}:testIamPermissions" 2>/dev/null); then
+              echo "::error::Cannot test staging $KIND runtime actAs permission (transport failure)."
+              FAILED=1
+            elif [ "$STATUS" != 200 ]; then
+              echo "::error::Cannot test staging $KIND runtime actAs permission (HTTP $STATUS)."
+              FAILED=1
+            elif node - "$RESP_FILE" <<'JS'
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          process.exit(Array.isArray(p.permissions) && p.permissions.includes('iam.serviceAccounts.actAs') ? 0 : 1);
+          JS
+            then
+              echo "Staging deployer has iam.serviceAccounts.actAs on $KIND runtime."
+            else
+              echo "::error::Staging deployer lacks iam.serviceAccounts.actAs on $KIND runtime. Grant Service Account User on that specific runtime service account only (not the whole project)."
+              FAILED=1
+            fi
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "No IAM roles were changed. Live Card and production remain disabled and untouched."
+            exit 1
+          fi
       - name: Read-only staging Realtime Database instance visibility
         shell: bash
         run: |
