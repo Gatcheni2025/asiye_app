@@ -269,6 +269,14 @@ jobs:
           # This is metadata-only; it must not write client/user data.
           echo "Checking deployment account's staging RTDB instance visibility..."
           ./test/security/node_modules/.bin/firebase database:instances:list --project "$STAGING_PROJECT"
+      - name: Generate reviewed staging-only Cloud Functions entrypoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prepare_staging_function_scope.cjs
+          node --check functions/staging-index.generated.cjs
+          # Fail before any staging resource writes if a selected export is missing.
+          node -e "const assert=require('node:assert/strict');const manifest=require('./scripts/paystack_function_manifest.json');const exports=Object.keys(require('./functions/staging-index.generated.cjs'));assert.deepEqual(exports,manifest);console.log('Scoped Functions discovery matches all '+manifest.length+' reviewed exports.')"
       - name: Configure only the staging TEST secret
         shell: bash
         run: |
