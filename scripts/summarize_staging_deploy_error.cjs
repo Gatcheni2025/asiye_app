@@ -15,6 +15,8 @@ console.error("Firebase " + step + " failed. Sanitized diagnostics only.");
 const httpFailures = new Set();
 const codes = new Set();
 const services = new Set();
+// Only report identifiers from an explicit, non-sensitive secret-name allowlist.
+const knownMissingSecrets = new Set();
 function redactApiPath(pathname) {
   // Restrict output to allowlisted *service names*, never arbitrary paths.
   const match = pathname.match(/\/services\/([a-z0-9.-]+\.googleapis\.com)(?:\/|$)/i);
@@ -36,6 +38,10 @@ for (const line of lines) {
     if (!host.endsWith(".googleapis.com")) continue;
     const code = m[2];
     codes.add(code);
+    if (host === "secretmanager.googleapis.com" && code === "404") {
+      const secretName = uri.pathname.match(/\/secrets\/(PAYSTACK_SECRET_KEY|TWILIO_ACCOUNT_SID|TWILIO_AUTH_TOKEN|TWILIO_FROM_NUMBER)(?:\/|$)/i);
+      if (secretName) knownMissingSecrets.add(secretName[1].toUpperCase());
+    }
     httpFailures.add(host + " " + redactApiPath(uri.pathname) + " -> HTTP " + code);
   } catch (_) { /* Keep diagnostics fail-closed */ }
 }
@@ -51,6 +57,7 @@ for (const line of lines) {
 console.error("HTTP failures: " + (codes.size ? [...codes].join(", ") : "Firebase CLI did not expose a status"));
 console.error("Failing API endpoints: " + ([...httpFailures].slice(-10).join("; ") || "not exposed"));
 console.error("Google services checked: " + ([...services].join(", ") || "not exposed"));
+if (knownMissingSecrets.size) console.error("Known missing secret IDs (names only): " + [...knownMissingSecrets].join(", "));
 const hints = [
   [/\bPERMISSION_DENIED\b|permission denied|not authorized|does not have permission/i,
    "An IAM permission error was present; inspect staging-only Cloud Functions Developer and runtime service-account access."],
