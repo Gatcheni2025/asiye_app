@@ -128,6 +128,7 @@ async function main() {
   ];
 }
 
+if (require.main === module) {
 main().catch(() => report.blockers.push('Technical readiness check could not finish.')).finally(() => {
   const output = path.join(root, 'paystack-readiness');
   fs.mkdirSync(output, {recursive: true});
@@ -139,3 +140,6 @@ main().catch(() => report.blockers.push('Technical readiness check could not fin
   if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   if (report.blockers.length) process.exitCode = 1;
 });
+}
+
+module.exports = {firebaseInventory};
