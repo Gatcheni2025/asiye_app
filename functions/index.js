@@ -11,6 +11,30 @@ if (admin.apps.length === 0) {
   admin.initializeApp();
 }
 
+// All payment callbacks, tracking and storage paths must resolve to the
+// running Firebase project. A staging deployment must never fall back to
+// production for its external links or uploaded driver documents.
+function runtimeFirebaseProjectId() {
+  const configured = (() => {
+    try { return JSON.parse(process.env.FIREBASE_CONFIG || "{}"); }
+    catch (_) { return {}; }
+  })();
+  const project = String(admin.app().options.projectId ||
+    process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT ||
+    configured.projectId || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project)) {
+    throw new Error("Firebase project identity is not configured.");
+  }
+  return project;
+}
+function runtimeHostingOrigin() {
+  return `https://${runtimeFirebaseProjectId()}.web.app`;
+}
+function runtimeWebOrigins() {
+  const project = runtimeFirebaseProjectId();
+  return [`https://${project}.web.app`, `https://${project}.firebaseapp.com`];
+}
+
 // =================================================================
 // --- NATIVE FIREBASE AUTH -> WEBVIEW SESSION BRIDGE ---
 // =================================================================
@@ -22,13 +46,11 @@ function nativeAuthCors(request, response) {
   const origin =
     request.get("origin") || "";
 
-  const allowedOrigins =
-    new Set([
-      "https://asiye.cloud",
-      "https://www.asiye.cloud",
-      "https://app.asiye.cloud",
-      "https://asiye-80386.web.app",
-      "https://asiye-80386.firebaseapp.com",
+  const allowedOrigins = new Set([
+      ...runtimeWebOrigins(),
+      ...(runtimeFirebaseProjectId() === "asiye-80386"
+        ? ["https://asiye.cloud", "https://www.asiye.cloud", "https://app.asiye.cloud"]
+        : []),
       "https://appassets.androidplatform.net"
     ]);
 
@@ -195,13 +217,11 @@ function walletSmsCors(request, response) {
   const origin =
     request.get("origin") || "";
 
-  const allowedOrigins =
-    new Set([
-      "https://asiye.cloud",
-      "https://www.asiye.cloud",
-      "https://app.asiye.cloud",
-      "https://asiye-80386.web.app",
-      "https://asiye-80386.firebaseapp.com"
+  const allowedOrigins = new Set([
+      ...runtimeWebOrigins(),
+      ...(runtimeFirebaseProjectId() === "asiye-80386"
+        ? ["https://asiye.cloud", "https://www.asiye.cloud", "https://app.asiye.cloud"]
+        : [])
     ]);
 
   if (
@@ -9092,7 +9112,8 @@ exports.confirmTripWalletReady =
 // LiteSpeed 404 page seen on-device. Writing through Admin SDK also guarantees
 // the profile URL is allocated to the correct commuter/taxi record.
 const PROFILE_STORAGE_BUCKET =
-  "asiye-80386.firebasestorage.app";
+  admin.app().options.storageBucket ||
+  `${runtimeFirebaseProjectId()}.firebasestorage.app`;
 
 function safeProfileId(value) {
   const id =
@@ -9979,7 +10000,7 @@ const PAYSTACK_API =
   "https://api.paystack.co";
 
 const PAYSTACK_CALLBACK_URL =
-  `https://us-central1-${admin.app().options.projectId || process.env.GCLOUD_PROJECT || "asiye-80386"}.cloudfunctions.net/paystackPaymentReturn`;
+  `https://us-central1-${runtimeFirebaseProjectId()}.cloudfunctions.net/paystackPaymentReturn`;
 
 function paystackReference() {
   return `ASIYE-${Date.now().toString(36)}-${paystackCrypto.randomBytes(16).toString("hex")}`;
@@ -10153,7 +10174,7 @@ function firebaseDatabaseBaseUrl() {
 
   return String(
     configured.databaseURL ||
-    "https://asiye-80386-default-rtdb.firebaseio.com"
+    `https://${runtimeFirebaseProjectId()}-default-rtdb.firebaseio.com`
   ).replace(/\/$/, "");
 }
 
@@ -14272,7 +14293,7 @@ exports.createTripShareToken = onRequest(
                 previous.expiresAt
               ),
             liveTrackingUrl:
-              `https://asiye-80386.web.app/track.html?share=${encodeURIComponent(reusableToken)}`
+              `${runtimeHostingOrigin()}/track.html?share=${encodeURIComponent(reusableToken)}`
           });
       }
 
@@ -14333,7 +14354,7 @@ exports.createTripShareToken = onRequest(
           shareToken,
           expiresAt,
           liveTrackingUrl:
-            `https://asiye-80386.web.app/track.html?share=${encodeURIComponent(shareToken)}`
+            `${runtimeHostingOrigin()}/track.html?share=${encodeURIComponent(shareToken)}`
         });
 
     } catch (error) {
