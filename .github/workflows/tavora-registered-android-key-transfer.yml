@@ -23,7 +23,7 @@ jobs:
       - name: Verify registered certificate and restore only TAVORA Android secrets
         shell: bash
         env:
-          GH_TOKEN: ${{ secrets.TAVORA_SECRETS_WRITE_PAT }}
+          GH_TOKEN: ${{ secrets.TAVORA_SECRETS_WRITE_PAT || secrets.GH_PAT }}
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -51,7 +51,7 @@ jobs:
             echo '::error::Source signing key does not match the certificate Google Play requires for TAVORA. No Tavora secret has been changed.'
             exit 1
           fi
-          # This dedicated token was already established for secure Asiye-to-Tavora secret transfer.
+          # Prefer the dedicated transfer token; otherwise reuse the existing GitHub PAT used by Asiye release signing.
           # Check the fixed destination before making any writes. Secret values only travel via stdin.
           gh api --silent repos/Gatcheni2025/tavora_mobile/actions/secrets/public-key
           printf '%s' "$KEYSTORE_PASSWORD" | gh secret set KEYSTORE_PASSWORD --repo Gatcheni2025/tavora_mobile
