@@ -77,7 +77,10 @@ jobs:
           node --test test/paystack-payment-safety.test.cjs test/paystack-subaccount-migration.test.cjs test/parcel-security.test.cjs test/paystack-card-journey-simulation.test.cjs
       - name: Verify Firebase rules and exported payment handlers
         working-directory: test/security
-        run: ./node_modules/.bin/firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json 'npm test'
+        # Isolate emulator test files: concurrent Club transactions can contend
+        # with the other suites and hit a transient RTDB transaction maxretry.
+        # All tests still run; no security checks are suppressed.
+        run: ./node_modules/.bin/firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json 'node --test --test-timeout=45000 --test-concurrency=1 *.test.cjs'
       - name: Prepare strictly isolated staging web-only passenger and driver preview
         env:
           FIREBASE_STAGING_WEB_CONFIG: ${{ vars.FIREBASE_STAGING_WEB_CONFIG }}
