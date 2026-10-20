@@ -1,7 +1,4 @@
 [
-  "createEftSmsTopup",
-  "initializePaystackWalletTopup",
-  "verifyPaystackWalletTopup",
   "exchangeNativeAuthSession",
   "uploadProfileImageProxy",
   "configureDriverCardPayout",
