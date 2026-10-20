@@ -29,6 +29,7 @@ jobs:
           PAYSTACK_TEST_DRIVER_SUBACCOUNT: ${{ vars.PAYSTACK_TEST_DRIVER_SUBACCOUNT }}
           FIREBASE_CREDS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}
           FIREBASE_STAGING_PROJECT: ${{ vars.FIREBASE_STAGING_PROJECT }}
+          FIREBASE_STAGING_WEB_CONFIG: ${{ vars.FIREBASE_STAGING_WEB_CONFIG }}
           FIREBASE_STAGING_CREDS: ${{ secrets.FIREBASE_STAGING_SERVICE_ACCOUNT }}
         run: node scripts/paystack_technical_readiness.cjs
       - uses: actions/upload-artifact@v4
