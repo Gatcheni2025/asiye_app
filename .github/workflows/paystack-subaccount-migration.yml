@@ -26,6 +26,7 @@ jobs:
           node --check functions/paystack-payment-safety.js
           node --check scripts/paystack_technical_readiness.cjs
           node --check scripts/verify_paystack_staging.cjs
+          node --check scripts/build_staging_web_preview.cjs
           node --check assets/passenger-v2/js/app.js
           node --check assets/passenger-v2/js/state.js
           node --check assets/passenger-v2/js/club.js
@@ -35,6 +36,8 @@ jobs:
           node --check assets/driver-v2/js/requests.js
           node --check assets/driver-v2/js/trip-controller.js
           node --check assets/member-pages.js
+      - name: Isolated staging project and payment-endpoint regressions
+        run: node --test test/staging-web-boundary.test.cjs
       - name: New Paystack 80/20 and no-wallet regression checks
         run: node --test test/paystack-subaccount-migration.test.cjs test/paystack-payment-safety.test.cjs
       - name: Full simulated Go Work Parcel Paystack charge flow
