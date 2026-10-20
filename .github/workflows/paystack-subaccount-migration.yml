@@ -27,6 +27,7 @@ jobs:
           node --check scripts/paystack_technical_readiness.cjs
           node --check scripts/verify_paystack_staging.cjs
           node --check scripts/build_staging_web_preview.cjs
+          node --check scripts/summarize_staging_deploy_error.cjs
           node --check assets/passenger-v2/js/app.js
           node --check assets/passenger-v2/js/state.js
           node --check assets/passenger-v2/js/club.js
