@@ -66,3 +66,16 @@ jobs:
           SELECTOR=$(node -e "console.log(require('./scripts/paystack_function_manifest.json').map(n=>'functions:'+n).join(','))")
           npx --yes firebase-tools@latest deploy --project "$STAGING_PROJECT" --only "$SELECTOR,database" --non-interactive
           printf 'Reviewed source: %s\nIsolated project: %s\nLive payments remain gated. No production deployment was performed.\n' "$GITHUB_SHA" "$STAGING_PROJECT" >> "$GITHUB_STEP_SUMMARY"
+      - name: Read back active staging functions and database rules
+        env:
+          STAGING_PROJECT: ${{ vars.FIREBASE_STAGING_PROJECT }}
+          STAGING_CREDS: ${{ secrets.FIREBASE_STAGING_SERVICE_ACCOUNT }}
+        run: node scripts/verify_paystack_staging.cjs
+      - name: Preserve staging verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: asiye-paystack-staging-verification
+          path: paystack-readiness/staging-verification.json
+          if-no-files-found: warn
+          retention-days: 14
