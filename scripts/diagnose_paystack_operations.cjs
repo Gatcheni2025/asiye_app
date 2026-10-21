@@ -70,7 +70,9 @@ async function main() {
     for(let i=0;i<6;i++){
       const u=new URL('https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+'/locations/'+REGION+'/operations');
       u.searchParams.set('pageSize','100');
-      u.searchParams.set('filter','project:'+PROJECT+',latest:true');
+      // Cloud Functions v2 uses a standard optional list filter.
+      // Do not send the legacy v1-only 'project:...,latest:true' expression:
+      // it causes HTTP 400 on the v2 operations endpoint.
       if(nextToken) u.searchParams.set('pageToken',nextToken);
       const response=await fetch(u.toString(),{
         method:'GET',headers:{
@@ -79,7 +81,9 @@ async function main() {
         },redirect:'error',signal:AbortSignal.timeout(35000)
       });
       if (!response.ok) {
-        console.log('Cloud Functions operation API unavailable: HTTP '+response.status+' (response body withheld)');
+        console.log('Cloud Functions operation API returned HTTP '+response.status+' (response body withheld)');
+        if(response.status===400) console.log('The request may be unsupported for this API/tenant; no error cause is assumed.');
+        if(response.status===403) console.log('The read-only operation listing may require additional access; do not grant roles without inspecting privately.');
         console.log('No resources changed; use the offline log and bounded recovery if this API is unavailable.');
         return;
       }
