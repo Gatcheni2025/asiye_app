@@ -307,6 +307,42 @@ jobs:
           # This is metadata-only; it must not write client/user data.
           echo "Checking deployment account's staging RTDB instance visibility..."
           ./test/security/node_modules/.bin/firebase database:instances:list --project "$STAGING_PROJECT"
+      - name: Read-only Cloud Billing API state as GitHub deployer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STAGING_PROJECT" = "asiye-paystack-staging"
+          PROJECT_NUMBER=$(gcloud projects describe "$STAGING_PROJECT" --format='value(projectNumber)')
+          test "$PROJECT_NUMBER" = "1000800408896"
+          # Firebase checks Service Usage by project number. Compare the
+          # exact caller/API/project view against the staging Console.
+          ACCESS_TOKEN=$(gcloud auth print-access-token)
+          RESP=$(mktemp "$RUNNER_TEMP/asiye-billing-api-state.XXXXXX")
+          trap 'rm -f "$RESP"; unset ACCESS_TOKEN' EXIT
+          for PROJECT_REF in "$STAGING_PROJECT" "$PROJECT_NUMBER"; do
+            if ! HTTP_CODE=$(curl --silent --show-error \
+              --output "$RESP" --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${ACCESS_TOKEN}" \
+              --header "x-goog-user-project: ${PROJECT_REF}" \
+              "https://serviceusage.googleapis.com/v1/projects/${PROJECT_REF}/services/cloudbilling.googleapis.com" 2>/dev/null); then
+              echo "::error::Cloud Billing API read-only check failed to connect for isolated staging."
+              exit 1
+            fi
+            if [ "$HTTP_CODE" != 200 ]; then
+              echo "::error::Cloud Billing API metadata returned HTTP $HTTP_CODE to staging deployer; check serviceusage.services.get (no API enable or new roles performed)."
+              exit 1
+            fi
+            if ! node - "$RESP" <<'JS'
+          const fs = require('node:fs');
+          const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          process.exit(value.state === 'ENABLED' ? 0 : 1);
+          JS
+            then
+              echo "::error::Cloud Billing API is not reported ENABLED to the staging deployer for $([ "$PROJECT_REF" = "$STAGING_PROJECT" ] && echo 'staging ID' || echo 'staging number'). Check project targeting before modifying IAM."
+              exit 1
+            fi
+            echo "Cloud Billing API ENABLED for isolated $([ "$PROJECT_REF" = "$STAGING_PROJECT" ] && echo 'staging project ID' || echo 'staging project number') (read-only)."
+          done
       - name: Generate reviewed staging-only Cloud Functions entrypoint
         shell: bash
         env:
