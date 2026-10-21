@@ -31,6 +31,8 @@ jobs:
           node --check scripts/diagnose_paystack_staging.cjs
           node --check scripts/diagnose_paystack_deploy_log.cjs
           node --check scripts/diagnose_paystack_operations.cjs
+          node --check scripts/diagnose_staging_rtdb_trigger.cjs
+          node --test test/staging-rtdb-trigger-diagnosis.test.cjs
           node --test test/staging-log-offline-diagnosis.test.cjs
           node --test test/staging-operations-diagnosis.test.cjs
           node --check scripts/recover_missing_paystack_staging.cjs
