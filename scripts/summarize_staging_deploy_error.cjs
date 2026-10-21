@@ -23,13 +23,39 @@ function projectLabel(raw) {
   if (raw === "asiye-80386") return "PRODUCTION";
   return "OTHER (redacted)";
 }
-
+// Cloud Resource Manager appends RPC operation suffixes after the project ID,
+// e.g. /v1/projects/{id}:getIamPolicy. Never mistake those for a different
+// project. Keep only an allowlisted operation label in the output.
+function resourceManagerProject(pathname) {
+  let decoded;
+  try { decoded = decodeURIComponent(pathname); }
+  catch (_) { return null; }
+  const match = decoded.match(/^\/v1\/projects\/([^/:]+)(?::([^/]+))?$/);
+  if (!match) return null;
+  const knownMethods = new Map([
+    ["testIamPermissions", "testIamPermissions"],
+    ["getIamPolicy", "getIamPolicy"],
+    ["setIamPolicy", "setIamPolicy"],
+    ["getAncestry", "getAncestry"]
+  ]);
+  return {
+    project: projectLabel(match[1]),
+    operation: match[2] ? (knownMethods.get(match[2]) || "OTHER_RPC (redacted)") : "getProject"
+  };
+}
 function redactApiPath(host, pathname) {
   // Only known literal endpoint families are displayed; never raw resource IDs,
   // query parameters, tokens, paths or response bodies.
   if (host === "cloudresourcemanager.googleapis.com") {
-    if (/^\/v1\/projects\/[^/]+:testIamPermissions$/.test(pathname)) return "project IAM permission probe";
-    if (/^\/v1\/projects\/[^/]+$/.test(pathname)) return "project metadata";
+    const target = resourceManagerProject(pathname);
+    if (target) {
+      return target.operation === "getProject" ? "project metadata" :
+        target.operation === "testIamPermissions" ? "project IAM permission probe" :
+        target.operation === "getIamPolicy" ? "project IAM policy read" :
+        target.operation === "setIamPolicy" ? "project IAM policy write" :
+        target.operation === "getAncestry" ? "project ancestry read" :
+        "project RPC (redacted)";
+    }
   }
   if (host === "compute.googleapis.com") {
     if (/^\/compute\/v1\/projects\/[^/]+$/.test(pathname)) return "compute project metadata";
@@ -56,9 +82,10 @@ for (const line of lines) {
     const code = m[2];
     codes.add(code);
     if (host === "cloudresourcemanager.googleapis.com" && code === "403") {
-      // Report only source-defined project labels; never arbitrary ids.
-      const project = uri.pathname.match(/^\/v1\/projects\/([^/]+)$/);
-      if (project) crossProjectLookups.add(m[0].split(" ")[0] + " " + projectLabel(decodeURIComponent(project[1])));
+      // Distinguish staging/production from a suffix-style Resource Manager
+      // operation. No raw project identifiers or unrecognized RPC names.
+      const target = resourceManagerProject(uri.pathname);
+      if (target) crossProjectLookups.add(m[0].split(" ")[0] + " " + target.project + " " + target.operation);
     }
     if (host === "secretmanager.googleapis.com" && code === "404") {
       const secretName = uri.pathname.match(/\/secrets\/(PAYSTACK_SECRET_KEY|TWILIO_ACCOUNT_SID|TWILIO_AUTH_TOKEN|TWILIO_FROM_NUMBER)(?:\/|$)/i);
