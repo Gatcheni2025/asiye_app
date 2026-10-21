@@ -162,4 +162,24 @@ for (const [pattern, hint] of hints) if (pattern.test(raw)) {
 }
 if (codes.has("404")) console.error("Diagnostic: HTTP 404 could mean a missing service, API, or runtime identity. Inspect the *failing* endpoint above before changing IAM.");
 if (!hintsFound && !codes.size) console.error("The Firebase CLI returned an unclassified error.");
+// Recognize only fixed, non-sensitive error categories. Do not reproduce
+// arbitrary Firebase CLI text, which may contain URLs, tokens, or user data.
+// Search the final diagnostic section preferentially to avoid false positives
+// from CLI command echoes.
+const terminal = lines.slice(-180).join("\\n");
+const terminalPatterns = [
+  [/Must enable required APIs to deploy/i, "Firebase refused missing required API(s)"],
+  [/not on the Blaze|must be on the Blaze|billing account.*(?:disabled|missing)/i, "Firebase billing-plan requirement"],
+  [/Failed to load function definition|Functions codebase could not be analyzed/i, "Cloud Functions code discovery failed"],
+  [/Cannot find module|ERR_MODULE_NOT_FOUND|MODULE_NOT_FOUND/i, "Cloud Functions runtime dependency missing"],
+  [/Cannot determine Firebase Database URL|Can't determine Firebase Database URL/i, "Firebase Database runtime URL missing"],
+  [/Failed to parse.*(?:environment|config)|Invalid value.*environment/i, "Functions environment configuration invalid"],
+  [/Failed to grant IAM roles|failed to modify the IAM policy/i, "Project IAM role bootstrap failed"],
+  [/Missing required permission|permission denied to enable service/i, "Insufficient staging deployer permissions"],
+  [/Failed to create .*\bfunction|Failed to update .*\bfunction/i, "Cloud Functions resource create or update failed"],
+  [/Cloud Functions deployment.*failed|Error deploying functions/i, "Cloud Functions deployment failed after preparation"],
+  [/Error:.*(?:timeout|ECONNRESET|ETIMEDOUT)/i, "Firebase CLI network timeout"],
+];
+const categories = [...new Set(terminalPatterns.filter(([pattern]) => pattern.test(terminal)).map(([,label]) => label))];
+console.error("Firebase terminal error category: " + (categories.length ? categories.slice(0,3).join("; ") : "unclassified; inspect the restricted debug log privately"));
 console.error("Raw Firebase debug output is withheld and discarded after this step.");
