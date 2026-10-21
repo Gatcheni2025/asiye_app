@@ -41,6 +41,8 @@ jobs:
           node --test test/staging-hosting-only-deploy.test.cjs
           node --check scripts/diagnose_paystack_hosting.cjs
           node --test test/staging-hosting-diagnosis.test.cjs
+          node --check scripts/diagnose_staging_hosting_upload.cjs
+          node --test test/staging-hosting-upload-diagnosis.test.cjs
           node --test test/staging-deploy-diagnostics.test.cjs
           node --test test/staging-function-scope.test.cjs
           node --test test/staging-function-entry.test.cjs
