@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {inventory,plan,reconcileBatch,PRIORITY,BASE_ACTIVE}=require('../scripts/recover_missing_paystack_staging.cjs');
+const {inventory,plan,selectBatch,reconcileBatch,PRIORITY,BASE_ACTIVE}=require('../scripts/recover_missing_paystack_staging.cjs');
 const manifest=require('../scripts/paystack_function_manifest.json');
 const entry=name=>({name:'projects/asiye-paystack-staging/locations/us-central1/functions/'+name,state:'ACTIVE'});
 test('staging recovery chooses only the first three currently absent endpoints',()=>{
@@ -76,4 +76,29 @@ test('prior active function regression blocks completion regardless of CLI exit'
   const result=reconcileBatch(batch,before,after,true);
   assert.equal(result.status,'INVESTIGATE_STATE_CHANGE');
   assert.deepEqual(result.lost,[BASE_ACTIVE[0]]);
+});
+
+test('single-endpoint staging recovery selects only continueGoAfterPayment',()=>{
+  const currentlyActive=manifest.filter(n=>![
+    'disburseCompletedCardTrips','continueGoAfterPayment','getClubPickupPin',
+    'clubDriverActionSecure','synchronizeClubBooking','expireClubWaiting',
+    'submitWorkEarlyDepartureOffer','refreshClubPaymentReadinessAfterSafetyShare',
+    'createTripShareToken','getTripShare'].includes(n));
+  const current=inventory(currentlyActive.map(entry));
+  assert.equal(current.active.length,27);
+  assert.deepEqual(selectBatch(current,'--deploy-one'),['continueGoAfterPayment']);
+  assert.deepEqual(selectBatch(current,'--deploy-first-batch'),
+    ['continueGoAfterPayment','getClubPickupPin','clubDriverActionSecure']);
+  assert.deepEqual(selectBatch(current,'--plan'),
+    ['continueGoAfterPayment','getClubPickupPin','clubDriverActionSecure']);
+});
+test('targeted deployment checks Cloud Functions agent binding and deploys one target',()=>{
+  const source=fs.readFileSync('scripts/recover_missing_paystack_staging.cjs','utf8');
+  assert.match(source,/function confirmFunctionServiceAgentBinding/);
+  assert.match(source,/roles\/cloudfunctions\.serviceAgent/);
+  assert.match(source,/gcf-admin-robot\.iam\.gserviceaccount\.com/);
+  assert.match(source,/if\(batch\.includes\('continueGoAfterPayment'\)\)confirmFunctionServiceAgentBinding\(\)/);
+  assert.match(source,/mode==='--deploy-one' \? candidates\.slice\(0,1\)/);
+  assert.match(source,/const check=selectBatch\(now,flag\)/);
+  assert.doesNotMatch(source,/add-iam-policy-binding|set-iam-policy|gcloud services enable/);
 });
