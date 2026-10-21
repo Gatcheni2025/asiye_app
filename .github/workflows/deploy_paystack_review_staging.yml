@@ -262,6 +262,44 @@ jobs:
             echo "::error::Verify that PAYSTACK_SECRET_KEY exists in the staging Secret Manager; never upload a secret to GitHub logs."
             exit 1
           }
+      - name: Read-only Compute and Resource Manager metadata access checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$STAGING_PROJECT" = "asiye-paystack-staging"
+          TOKEN=$(gcloud auth print-access-token)
+          RESP=$(mktemp "$RUNNER_TEMP/asiye-staging-project-metadata.XXXXXX")
+          trap 'rm -f "$RESP"; unset TOKEN' EXIT
+          # GET checks use the same staging identity and project as Functions
+          # deployment. Never print OAuth tokens, response bodies or URLs.
+          status_only() {
+            local name="$1" url="$2" status
+            if ! status=$(curl --silent --show-error --output "$RESP" \
+              --write-out '%{http_code}' \
+              --header "Authorization: Bearer ${TOKEN}" \
+              "$url" 2>/dev/null); then
+              echo "::error::$name metadata probe failed due to a connection issue."
+              return 1
+            fi
+            if [ "$status" != 200 ]; then
+              echo "::error::$name project metadata returned HTTP $status for staging deployer."
+              return 1
+            fi
+            echo "$name project metadata access passed."
+          }
+          FAILED=0
+          status_only "Compute Engine" "https://compute.googleapis.com/compute/v1/projects/${STAGING_PROJECT}" || {
+            echo "::error::If denied (HTTP 403), review compute.projects.get in staging. Compute Viewer (roles/compute.viewer) is a read-only predefined option; a custom role with that permission is narrower."
+            FAILED=1
+          }
+          status_only "Cloud Resource Manager" "https://cloudresourcemanager.googleapis.com/v1/projects/${STAGING_PROJECT}" || {
+            echo "::error::If denied (HTTP 403), review resourcemanager.projects.get in staging. Browser (roles/browser) is a read-only predefined option; a custom role with that permission is narrower."
+            FAILED=1
+          }
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::No project resources or IAM policies were changed. Only change permissions on the isolated staging project."
+            exit 1
+          fi
       - name: Read-only staging Realtime Database instance visibility
         shell: bash
         run: |
