@@ -38,12 +38,12 @@ test("Firebase deploy diagnostics report failing API without printing bearer tok
     assert.match(output.stderr, /permission error/i);
     assert.match(output.stderr, /Known missing secret IDs \(names only\): TWILIO_ACCOUNT_SID/);
     assert.match(output.stderr, /compute.googleapis.com compute project metadata -> HTTP 403/);
-    assert.match(output.stderr,/Denied Service Usage operations \\(sanitized\\):/);
+    assert.ok(output.stderr.includes("Denied Service Usage operations (sanitized):"));
     assert.ok(output.stderr.includes("POST staging enable cloudbilling.googleapis.com"));
     assert.ok(output.stderr.includes("GET staging getService cloudbuild.googleapis.com"));
     assert.ok(output.stderr.includes("POST PRODUCTION batchEnable unspecified"));
     assert.ok(output.stderr.includes("GET OTHER (redacted) getService OTHER_API (redacted)"));
-    assert.doesNotMatch(output.stderr,/private-do-not-leak\\.googleapis\\.com/);
+    assert.doesNotMatch(output.stderr,/private-do-not-leak|UNKNOWN_PROJECT_PRIVATE_ID/);
     assert.match(output.stderr, /cloudresourcemanager.googleapis.com project IAM permission probe -> HTTP 403/);
     assert.doesNotMatch(output.stderr,/asiye-paystack-staging:testIamPermissions/);
     assert.match(output.stderr,/Denied Resource Manager lookup targets \(redacted\):/);
