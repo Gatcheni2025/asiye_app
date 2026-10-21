@@ -39,3 +39,12 @@ test('Operations classifier handles common safe categories',()=>{
   assert.equal(reason('CLOUD_RUN startup revision not ready'),'CLOUD_RUN_STARTUP');
   assert.equal(reason(''),'UNCLASSIFIED');
 });
+test('Cloud Functions v2 operations query does not send incompatible legacy v1 filter',()=>{
+  const fs=require('node:fs');
+  const content=fs.readFileSync('scripts/diagnose_paystack_operations.cjs','utf8');
+  assert.match(content,/cloudfunctions\.googleapis\.com\/v2\/projects\//);
+  assert.match(content,/u\.searchParams\.set\('pageSize','100'\)/);
+  assert.doesNotMatch(content,/u\.searchParams\.set\('filter'/);
+  assert.match(content,/gcloud\(\['config','get-value','project'\]\)/);
+  assert.match(content,/gcloud\(\['projects','describe',PROJECT/);
+});
