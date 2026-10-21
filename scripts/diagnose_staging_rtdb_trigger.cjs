@@ -36,53 +36,103 @@ function summarizeOperation(entry){
   const code=Number.isInteger(detail.code)?detail.code:'unknown';
   return {code,category:reasons(text),completed:entry.done===true};
 }
-async function request(url,token){
-  const response=await fetch(url,{
-    headers:{Authorization:'Bearer '+token,'x-goog-user-project':PROJECT},
-    redirect:'error',signal:AbortSignal.timeout(30000)
-  });
-  if(!response.ok)throw Error('Read-only Google API call returned HTTP '+response.status+'; response body withheld.');
-  return response.json();
+// Never expose an API response body. A failing RTDB metadata endpoint must
+// not prevent inspection of the already-recorded Cloud Functions operation.
+async function readOnlyGet(url,token) {
+  try {
+    const response=await fetch(url,{
+      method:'GET',
+      headers:{Authorization:'Bearer '+token,'x-goog-user-project':PROJECT},
+      redirect:'error',signal:AbortSignal.timeout(30000)
+    });
+    if(!response.ok)return {ok:false,status:response.status};
+    return {ok:true,status:200,data:await response.json()};
+  }catch(_){
+    return {ok:false,status:'NETWORK_ERROR'};
+  }
+}
+function validInstance(input) {
+  const n=String(input?.name||'');
+  const m=n.match(/^projects\/(\d+)\/locations\/([a-z0-9-]+)\/instances\/([a-z0-9-]+)$/);
+  if(!m||m[1]!==NUMBER||m[3]!==INSTANCE)return null;
+  return {location:m[2],state:['ACTIVE','DISABLED','DELETED'].includes(input.state)?input.state:'OTHER'};
+}
+async function databaseMetadata(token) {
+  const get='https://firebasedatabase.googleapis.com/v1beta/projects/-/locations/-/instances/'+INSTANCE;
+  const result=await readOnlyGet(get,token);
+  if(result.ok){
+    const item=validInstance(result.data);
+    if(item)return {found:true,...item,source:'GET'};
+    return {found:false,reason:'UNEXPECTED_RESPONSE'};
+  }
+  // Documented list-across-all-regions method. It sometimes works when the
+  // single-instance wildcard GET encounters a transient backend error.
+  const list='https://firebasedatabase.googleapis.com/v1beta/projects/'+NUMBER+'/locations/-/instances';
+  const fallback=await readOnlyGet(list,token);
+  if(fallback.ok){
+    const items=Array.isArray(fallback.data.instances)?fallback.data.instances:[];
+    const match=items.map(validInstance).filter(Boolean);
+    if(match.length===1 && !fallback.data.nextPageToken){
+      return {found:true,...match[0],source:'LIST_FALLBACK'};
+    }
+    return {found:false,reason:match.length===0?'INSTANCE_NOT_RETURNED':'AMBIGUOUS_OR_PAGINATED'};
+  }
+  return {found:false,reason:'GET_HTTP_'+result.status+'; LIST_HTTP_'+fallback.status};
+}
+async function operationMetadata(token) {
+  const operations=[];
+  let next='';
+  for(let i=0;i<5;i++){
+    const u=new URL('https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+'/locations/'+REGION+'/operations');
+    u.searchParams.set('pageSize','100');
+    if(next)u.searchParams.set('pageToken',next);
+    const response=await readOnlyGet(u.toString(),token);
+    if(!response.ok)return {ok:false,status:response.status};
+    const result=response.data;
+    if(!Array.isArray(result.operations))return {ok:false,status:'UNEXPECTED_RESPONSE'};
+    operations.push(...result.operations);
+    next=String(result.nextPageToken||'');
+    if(!next)break;
+  }
+  const target='projects/'+PROJECT+'/locations/'+REGION+'/functions/'+FUNCTION;
+  const matches=operations.filter(x=>String(x.metadata?.target||'')===target)
+    .sort((a,b)=>String(b.metadata?.createTime||'').localeCompare(String(a.metadata?.createTime||'')));
+  return {ok:true,matches,paginated:!!next};
 }
 async function main(){
   if(cmd(['config','get-value','project'])!==PROJECT||
      cmd(['projects','describe',PROJECT,'--format=value(projectNumber)'])!==NUMBER)throw Error('BLOCKED: wrong project.');
   let token=cmd(['auth','print-access-token']);
   try{
-    const url='https://firebasedatabase.googleapis.com/v1beta/projects/-/locations/-/instances/'+INSTANCE;
-    const instance=await request(url,token);
-    const full=String(instance.name||'');
-    const m=full.match(/^projects\/(\d+)\/locations\/([a-z0-9-]+)\/instances\/([a-z0-9-]+)$/);
-    if(!m||m[1]!==NUMBER||m[3]!==INSTANCE)throw Error('Instance metadata does not match reviewed staging project (raw response withheld).');
-    const dbRegion=m[2];
-    console.log('Asiye staging RTDB trigger prerequisite — READ ONLY');
-    console.log('Staging database location: '+dbRegion+' | function region: '+REGION);
-    console.log('Region compatibility: '+(dbRegion===REGION?'MATCH':'MISMATCH — do not retry until reviewed'));
-    console.log('Database state: '+(['ACTIVE','DISABLED','DELETED'].includes(instance.state)?instance.state:'OTHER'));
-    const operations=[];
-    let next='';
-    for(let i=0;i<5;i++){
-      const u=new URL('https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+'/locations/'+REGION+'/operations');
-      u.searchParams.set('pageSize','100');
-      if(next)u.searchParams.set('pageToken',next);
-      const result=await request(u.toString(),token);
-      operations.push(...(Array.isArray(result.operations)?result.operations:[]));
-      next=String(result.nextPageToken||'');
-      if(!next)break;
+    console.log('Asiye staging RTDB event-trigger diagnosis — READ ONLY');
+    console.log('Project: '+PROJECT+' | function: '+FUNCTION+' | region: '+REGION);
+    // Operations are queried FIRST, independently from RTDB metadata availability.
+    const operations=await operationMetadata(token);
+    if(operations.ok){
+      console.log('Matching Cloud Functions operations: '+operations.matches.length);
+      for(const op of operations.matches.slice(0,5)){
+        const summary=summarizeOperation(op);
+        const t=String(op.metadata?.createTime||'');
+        const stamp=/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(t)?t.slice(0,19)+'Z':'unknown';
+        console.log('Operation '+stamp+' | completed: '+summary.completed+
+          ' | gRPC: '+summary.code+' | categories: '+summary.category.join(', '));
+        if(summary.code===9)console.log('gRPC 9 = FAILED_PRECONDITION; permission details are not yet confirmed.');
+      }
+      if(operations.paginated)console.log('Operation listing pagination limit reached; older operations may be missing.');
+    }else{
+      console.log('Cloud Functions operations unavailable: '+operations.status+' (no raw response exposed)');
     }
-    const matches=operations.filter(x=>{
-      const target=String(x.metadata?.target||'');
-      return target==='projects/'+PROJECT+'/locations/'+REGION+'/functions/'+FUNCTION;
-    }).sort((a,b)=>String(b.metadata?.createTime||'').localeCompare(String(a.metadata?.createTime||'')));
-    console.log('Matching function operations: '+matches.length);
-    for(const op of matches.slice(0,5)){
-      const s=summarizeOperation(op);
-      const t=String(op.metadata?.createTime||'');
-      console.log('Time: '+(/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(t)?t.slice(0,19)+'Z':'unknown')+
-        ' | completed: '+s.completed+' | gRPC: '+s.code+' | categories: '+s.category.join(', '));
+    const database=await databaseMetadata(token);
+    if(database.found){
+      console.log('RTDB instance: '+INSTANCE+' | state: '+database.state);
+      console.log('Database region: '+database.location+' | region compatibility: '+
+        (database.location===REGION?'MATCH':'MISMATCH — review trigger location'));
+      console.log('Metadata source: '+database.source);
+    }else{
+      console.log('Database metadata unavailable: '+database.reason);
+      console.log('RTDB location is UNVERIFIED; do not infer a mismatch.');
     }
-    if(!matches.length)console.log('No matching operation visible. Absence of evidence does not prove success.');
-    console.log('Read-only: no database writes, roles, secrets or functions were modified.');
+    console.log('No database writes, IAM changes, or function deployments were attempted.');
   }finally{token='';}
 }
 if(require.main===module)main().catch(e=>{console.error('BLOCKED: '+e.message);process.exitCode=1;});
