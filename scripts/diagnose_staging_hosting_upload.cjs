@@ -83,6 +83,32 @@ function versionSummary(response){
   paginated:!!response?.nextPageToken
  };
 }
+// The Hosting API exposes only expected/uploaded file states. Never log
+// individual paths, hashes, upload URLs, version IDs or HTTP error bodies.
+function statusCounts(rows, expected) {
+ const files=Array.isArray(rows?.files)?rows.files:[];
+ return files.filter(item=>String(item?.status||'')===expected).length;
+}
+async function countFiles(versionPath,token,status){
+ if(!/^sites\/asiye-paystack-staging\/versions\/[A-Za-z0-9_-]+$/.test(versionPath))
+  throw Error('Unrecognized staging Hosting draft name; refusing file inspection.');
+ let count=0,pages=0,next='',truncated=false;
+ for(let i=0;i<10;i++){
+  const u=new URL('https://firebasehosting.googleapis.com/v1beta1/'+versionPath+'/files');
+  u.searchParams.set('status',status);
+  u.searchParams.set('pageSize','1000');
+  if(next)u.searchParams.set('pageToken',next);
+  const result=await getJson(u.toString(),token);
+  if(!result.ok)return {ok:false,status:result.status};
+  count+=statusCounts(result.data,status);
+  pages++;
+  next=String(result.data.nextPageToken||'');
+  if(!next)break;
+ }
+ truncated=!!next;
+ return {ok:true,count,pages,truncated};
+}
+
 async function main(){
  if(process.argv.length>3)throw Error('Usage: node scripts/diagnose_staging_hosting_upload.cjs [log-basename]');
  if(gcloud(['config','get-value','project'])!==PROJECT||
@@ -104,8 +130,29 @@ async function main(){
   console.log('Visible Hosting versions: '+s.count+(s.paginated?' (more pages exist)':''));
   console.log('Version states (newest request page): '+(s.states.join(', ')||'NONE'));
   console.log('Latest version creation time: '+s.latestTime);
+  const versions=(Array.isArray(result.data.versions)?result.data.versions:[])
+    .filter(x=>/^sites\/asiye-paystack-staging\/versions\/[A-Za-z0-9_-]+$/.test(String(x.name||'')))
+    .sort((a,b)=>String(b.createTime||'').localeCompare(String(a.createTime||'')));
+  if(versions.length) {
+    const version=versions[0];
+    console.log('Latest draft state: '+(['CREATED','FINALIZED'].includes(version.status)?version.status:'OTHER'));
+    const expected=await countFiles(version.name,token,'EXPECTED');
+    const active=await countFiles(version.name,token,'ACTIVE');
+    if(expected.ok && active.ok){
+      console.log('Files still awaiting upload: '+expected.count+(expected.truncated?' (incomplete listing)':''));
+      console.log('Files already uploaded: '+active.count+(active.truncated?' (incomplete listing)':''));
+      console.log('Draft file state interpretation: '+
+        (expected.truncated||active.truncated?'INCOMPLETE_LISTING':
+        expected.count>0?'UPLOAD_PENDING':
+        active.count>0?'FILES_PRESENT_NOT_FINALIZED_OR_RELEASED':
+        'NO_FILES_REGISTERED_OR_NO_FILE_RESULTS'));
+    }else{
+      console.log('Draft file inspection: EXPECTED_HTTP_'+(expected.ok?'OK':expected.status)+
+        ' ACTIVE_HTTP_'+(active.ok?'OK':active.status)+' (response bodies withheld)');
+    }
+  }
   console.log('No Hosting resources, IAM permissions, Functions, secrets or payments were changed.');
  }finally{token='';}
 }
 if(require.main===module)main().catch(e=>{console.error('BLOCKED: '+e.message);process.exitCode=1;});
-module.exports={inspectLog,versionSummary};
+module.exports={inspectLog,versionSummary,statusCounts};
