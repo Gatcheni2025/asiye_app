@@ -112,6 +112,18 @@ function plan(state){
   if(state.nonactive.length)throw Error('Non-ACTIVE resources exist. Investigate before deploying.');
   return expectedMissing.slice(0,MAX_BATCH);
 }
+function reconcileBatch(batch,before,after,cliOk){
+  const verified=batch.filter(n=>after.active.includes(n));
+  const remaining=batch.filter(n=>!after.active.includes(n));
+  const lost=before.active.filter(n=>!after.active.includes(n));
+  const unexpected=after.nonactive.filter(n=>before.missing.includes(n));
+  const safelyActive=remaining.length===0 && lost.length===0 && unexpected.length===0;
+  return {
+    verified,remaining,lost,unexpected,
+    status:safelyActive ? (cliOk?'COMPLETE':'ACTIVE_WITH_CLI_WARNING') :
+      (lost.length||unexpected.length?'INVESTIGATE_STATE_CHANGE':'INCOMPLETE')
+  };
+}
 async function main(){
   const flag=process.argv[2]||'--plan';
   if(!['--plan','--deploy-first-batch'].includes(flag)||process.argv.length>3)
@@ -151,22 +163,38 @@ async function main(){
         ...process.env,GCLOUD_PROJECT:PROJECT,GCP_PROJECT:PROJECT
       }});
   }finally{fs.closeSync(handle);}
-  if(proc.error||proc.status!==0){
-    console.error('Partial deployment failed or timed out. Private Firebase log: '+logfile);
-    console.error('Do NOT post the raw log. Inspect it using diagnose_paystack_deploy_log.cjs.');
+  const cliOk=!proc.error&&proc.status===0;
+  console.log('Firebase CLI process: '+(cliOk?'exit 0':
+    'nonzero exit or interrupted (status='+ (Number.isInteger(proc.status)?proc.status:'unknown') +
+    ', signal=' + (/^SIG[A-Z0-9]+$/.test(String(proc.signal||''))?proc.signal:'none')+')'));
+  // Always reconcile real resources, even when Firebase CLI exits nonzero.
+  // An errored CLI can still have provisioned all requested functions.
+  let after;
+  try {after=getInventory();}
+  catch(err) {
+    console.error('Cannot verify post-deployment inventory. STOP; do not redeploy this batch blindly.');
+    console.error('Private Firebase log: '+logfile+' (never post raw log).');
     process.exitCode=1;return;
   }
-  const after=getInventory();
-  const still=batch.filter(n=>!after.active.includes(n));
+  const outcome=reconcileBatch(batch,before,after,cliOk);
   console.log('Active after batch: '+after.active.length+' / '+manifest.length);
-  console.log('Batch verified ACTIVE: '+batch.filter(n=>after.active.includes(n)).join(', '));
-  if(still.length){
-    console.error('Not ACTIVE after deploy: '+still.join(', '));
+  console.log('Batch verified ACTIVE: '+(outcome.verified.join(', ')||'none'));
+  console.log('Recovery status: '+outcome.status);
+  if(outcome.remaining.length)console.error('Not ACTIVE: '+outcome.remaining.join(', '));
+  if(outcome.lost.length)console.error('Previously ACTIVE functions changed state: '+outcome.lost.join(', '));
+  if(outcome.unexpected.length)console.error('New non-ACTIVE resources: '+outcome.unexpected.join(', '));
+  if(outcome.status==='ACTIVE_WITH_CLI_WARNING'){
+    console.error('All requested functions are ACTIVE, but Firebase CLI did not exit successfully.');
+    console.error('This is not proof of successful end-to-end payment/booking or clean CLI completion.');
+    console.error('Review only sanitized diagnostics before the next batch.');
+    process.exitCode=2;
+  } else if(outcome.status!=='COMPLETE'){
+    console.error('Batch not complete. Run the read-only --plan again; do not rerun this selection blindly.');
     process.exitCode=1;
   }else{
     console.log('Batch completed. Rerun --plan before considering another batch.');
   }
-  console.log('Raw deploy output stored privately at '+logfile);
+  console.log('Private Firebase log: '+logfile+' (never post the raw log).');
 }
 if(require.main===module)main().catch(e=>{console.error('BLOCKED: '+e.message);process.exitCode=1;});
-module.exports={inventory,plan,PRIORITY,BASE_ACTIVE};
+module.exports={inventory,plan,reconcileBatch,PRIORITY,BASE_ACTIVE};
