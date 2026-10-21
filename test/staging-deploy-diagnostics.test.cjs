@@ -39,11 +39,11 @@ test("Firebase deploy diagnostics report failing API without printing bearer tok
     assert.match(output.stderr,/Denied Resource Manager lookup targets \(redacted\):/);
     assert.match(output.stderr,/GET staging/);
     assert.match(output.stderr,/GET PRODUCTION/);
-    assert.match(output.stderr,/GET OTHER \\(redacted\\) getProject/);
-    assert.match(output.stderr,/POST staging getIamPolicy/);
-    assert.match(output.stderr,/POST staging testIamPermissions/);
-    assert.match(output.stderr,/POST PRODUCTION getIamPolicy/);
-    assert.match(output.stderr,/POST OTHER \\(redacted\\) OTHER_RPC \\(redacted\\)/);
+    assert.ok(output.stderr.includes("GET OTHER (redacted) getProject"), "expected safe classification: GET OTHER (redacted) getProject");
+    assert.ok(output.stderr.includes("POST staging getIamPolicy"), "expected safe classification: POST staging getIamPolicy");
+    assert.ok(output.stderr.includes("POST staging testIamPermissions"), "expected safe classification: POST staging testIamPermissions");
+    assert.ok(output.stderr.includes("POST PRODUCTION getIamPolicy"), "expected safe classification: POST PRODUCTION getIamPolicy");
+    assert.ok(output.stderr.includes("POST OTHER (redacted) OTHER_RPC (redacted)"), "expected safe classification: POST OTHER (redacted) OTHER_RPC (redacted)");
     assert.match(output.stderr,/project IAM policy read -> HTTP 403/);
     assert.doesNotMatch(output.stderr,/UNRELATED_PROJECT_PRIVATE_ID|UNKNOWN_PROJECT_PRIVATE_ID|unknownRpcPrivateSuffix|asiye-80386|1000800408896/);
     assert.doesNotMatch(output.stderr, /DO_NOT_LEAK|Bearer|token=/i);
