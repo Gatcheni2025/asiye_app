@@ -18,6 +18,29 @@ const services = new Set();
 // Only report identifiers from an explicit, non-sensitive secret-name allowlist.
 const knownMissingSecrets = new Set();
 const crossProjectLookups = new Set();
+const deniedServiceUsageRequests = new Set();
+function serviceUsageTarget(pathname) {
+  // Firebase CLI may GET service metadata or POST to an API-enable RPC.
+  // Print only the allowlisted service name and project class.
+  let decoded;
+  try { decoded = decodeURIComponent(pathname); }
+  catch (_) { return null; }
+  const match = decoded.match(/^\/v1(?:beta1)?\/projects\/([^/]+)\/services(?:(?:\/([a-z0-9.-]+\\.googleapis\\.com))?(?::(enable|disable|batchEnable|batchGet))?)?$/i);
+  if (!match) return null;
+  const knownServices = new Set([
+    "cloudbilling.googleapis.com", "cloudfunctions.googleapis.com",
+    "cloudbuild.googleapis.com", "artifactregistry.googleapis.com",
+    "run.googleapis.com", "eventarc.googleapis.com", "pubsub.googleapis.com",
+    "firebaseextensions.googleapis.com"
+  ]);
+  const service = (match[2] || "").toLowerCase();
+  return {
+    project: projectLabel(match[1]),
+    service: knownServices.has(service) ? service : service ? "OTHER_API (redacted)" : "unspecified",
+    operation: match[3] || (match[2] ? "getService" : "listServices")
+  };
+}
+
 function projectLabel(raw) {
   if (raw === "asiye-paystack-staging" || raw === "1000800408896") return "staging";
   if (raw === "asiye-80386") return "PRODUCTION";
@@ -46,6 +69,10 @@ function resourceManagerProject(pathname) {
 function redactApiPath(host, pathname) {
   // Only known literal endpoint families are displayed; never raw resource IDs,
   // query parameters, tokens, paths or response bodies.
+  if (host === "serviceusage.googleapis.com") {
+    const target = serviceUsageTarget(pathname);
+    if (target) return "Service Usage " + target.operation + " " + target.service + " (" + target.project + ")";
+  }
   if (host === "cloudresourcemanager.googleapis.com") {
     const target = resourceManagerProject(pathname);
     if (target) {
@@ -87,6 +114,11 @@ for (const line of lines) {
       const target = resourceManagerProject(uri.pathname);
       if (target) crossProjectLookups.add(m[0].split(" ")[0] + " " + target.project + " " + target.operation);
     }
+    if (host === "serviceusage.googleapis.com" && code === "403") {
+      const target = serviceUsageTarget(uri.pathname);
+      if (target) deniedServiceUsageRequests.add(m[0].split(" ")[0] + " " +
+        target.project + " " + target.operation + " " + target.service);
+    }
     if (host === "secretmanager.googleapis.com" && code === "404") {
       const secretName = uri.pathname.match(/\/secrets\/(PAYSTACK_SECRET_KEY|TWILIO_ACCOUNT_SID|TWILIO_AUTH_TOKEN|TWILIO_FROM_NUMBER)(?:\/|$)/i);
       if (secretName) knownMissingSecrets.add(secretName[1].toUpperCase());
@@ -107,6 +139,7 @@ console.error("HTTP failures: " + (codes.size ? [...codes].join(", ") : "Firebas
 console.error("Failing API endpoints: " + ([...httpFailures].slice(-10).join("; ") || "not exposed"));
 console.error("Google services checked: " + ([...services].join(", ") || "not exposed"));
 if (crossProjectLookups.size) console.error("Denied Resource Manager lookup targets (redacted): " + [...crossProjectLookups].join(", "));
+if (deniedServiceUsageRequests.size) console.error("Denied Service Usage operations (sanitized): " + [...deniedServiceUsageRequests].join(", "));
 if (knownMissingSecrets.size) console.error("Known missing secret IDs (names only): " + [...knownMissingSecrets].join(", "));
 const hints = [
   [/\bPERMISSION_DENIED\b|permission denied|not authorized|does not have permission/i,
