@@ -70,6 +70,7 @@ async function main() {
     for(let i=0;i<6;i++){
       const u=new URL('https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+'/locations/'+REGION+'/operations');
       u.searchParams.set('pageSize','100');
+      u.searchParams.set('filter','project:'+PROJECT+',latest:true');
       if(nextToken) u.searchParams.set('pageToken',nextToken);
       const response=await fetch(u.toString(),{
         method:'GET',headers:{
