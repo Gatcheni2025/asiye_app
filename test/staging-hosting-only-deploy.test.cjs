@@ -25,6 +25,11 @@ test('only Hosting may be deployed; production identifiers, API secrets and raw 
   assert.match(src,/--only','hosting'/);
   assert.match(src,/firebase\.staging\.generated\.json/);
   assert.match(src,/DEPLOY-STAGING-HOSTING/);
+  assert.match(src,/HOSTING_UPLOAD_CONCURRENCY='5'/);
+  assert.match(src,/FIREBASE_HOSTING_UPLOAD_CONCURRENCY:HOSTING_UPLOAD_CONCURRENCY/);
+  assert.match(src,/--only','hosting'/);
+  assert.doesNotMatch(src,/\['deploy','--only','functions'/);
+
   assert.match(src,/if\(before\.match\).*Skipping deployment/);
   assert.match(src,/active\.length!==37/);
   assert.match(src,/digest\(remote\)!==digest\(local\)/);
