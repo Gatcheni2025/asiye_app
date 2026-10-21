@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {inventory,plan,PRIORITY,BASE_ACTIVE}=require('../scripts/recover_missing_paystack_staging.cjs');
+const {inventory,plan,reconcileBatch,PRIORITY,BASE_ACTIVE}=require('../scripts/recover_missing_paystack_staging.cjs');
 const manifest=require('../scripts/paystack_function_manifest.json');
 const entry=name=>({name:'projects/asiye-paystack-staging/locations/us-central1/functions/'+name,state:'ACTIVE'});
 test('staging recovery chooses only the first three currently absent endpoints',()=>{
@@ -44,4 +44,36 @@ test('deployment is gated, noninteractive is scoped, and logged privately',()=>{
   assert.match(s,/BASE_ACTIVE\.some/);
   assert.match(s,/fs\.openSync\(logfile,'wx',0o600\)/);
   assert.doesNotMatch(s,/firebase deploy --only functions(?!:)/);
+});
+test('provisioned batch is recognized even if Firebase CLI exits nonzero',()=>{
+  const before=inventory(BASE_ACTIVE.map(entry));
+  const batch=plan(before);
+  const after=inventory([...BASE_ACTIVE,...batch].map(entry));
+  const result=reconcileBatch(batch,before,after,false);
+  assert.equal(result.status,'ACTIVE_WITH_CLI_WARNING');
+  assert.deepEqual(result.verified,batch);
+  assert.deepEqual(result.remaining,[]);
+  assert.deepEqual(result.lost,[]);
+});
+test('clean CLI exit and all ACTIVE functions produces COMPLETE',()=>{
+  const before=inventory(BASE_ACTIVE.map(entry));
+  const batch=plan(before);
+  const after=inventory([...BASE_ACTIVE,...batch].map(entry));
+  assert.equal(reconcileBatch(batch,before,after,true).status,'COMPLETE');
+});
+test('partial provisioning remains incomplete and never assumes full success',()=>{
+  const before=inventory(BASE_ACTIVE.map(entry));
+  const batch=plan(before);
+  const after=inventory([...BASE_ACTIVE,batch[0]].map(entry));
+  const result=reconcileBatch(batch,before,after,false);
+  assert.equal(result.status,'INCOMPLETE');
+  assert.deepEqual(result.remaining,batch.slice(1));
+});
+test('prior active function regression blocks completion regardless of CLI exit',()=>{
+  const before=inventory(BASE_ACTIVE.map(entry));
+  const batch=plan(before);
+  const after=inventory([...BASE_ACTIVE.slice(1),...batch].map(entry));
+  const result=reconcileBatch(batch,before,after,true);
+  assert.equal(result.status,'INVESTIGATE_STATE_CHANGE');
+  assert.deepEqual(result.lost,[BASE_ACTIVE[0]]);
 });
