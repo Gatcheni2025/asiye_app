@@ -136,4 +136,4 @@ async function main(){
   }finally{token='';}
 }
 if(require.main===module)main().catch(e=>{console.error('BLOCKED: '+e.message);process.exitCode=1;});
-module.exports={reasons,summarizeOperation};
+module.exports={reasons,summarizeOperation,validInstance};
