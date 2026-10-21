@@ -17,7 +17,17 @@ const codes = new Set();
 const services = new Set();
 // Only report identifiers from an explicit, non-sensitive secret-name allowlist.
 const knownMissingSecrets = new Set();
-function redactApiPath(pathname) {
+function redactApiPath(host, pathname) {
+  // Only known literal endpoint families are displayed; never raw resource IDs,
+  // query parameters, tokens, paths or response bodies.
+  if (host === "cloudresourcemanager.googleapis.com") {
+    if (/^\/v1\/projects\/[^/]+:testIamPermissions$/.test(pathname)) return "project IAM permission probe";
+    if (/^\/v1\/projects\/[^/]+$/.test(pathname)) return "project metadata";
+  }
+  if (host === "compute.googleapis.com") {
+    if (/^\/compute\/v1\/projects\/[^/]+$/.test(pathname)) return "compute project metadata";
+    if (/^\/compute\/v1\/projects\/[^/]+\//.test(pathname)) return "compute resource metadata";
+  }
   // Restrict output to allowlisted *service names*, never arbitrary paths.
   const match = pathname.match(/\/services\/([a-z0-9.-]+\.googleapis\.com)(?:\/|$)/i);
   if (match) return "service=" + match[1].toLowerCase();
@@ -42,7 +52,7 @@ for (const line of lines) {
       const secretName = uri.pathname.match(/\/secrets\/(PAYSTACK_SECRET_KEY|TWILIO_ACCOUNT_SID|TWILIO_AUTH_TOKEN|TWILIO_FROM_NUMBER)(?:\/|$)/i);
       if (secretName) knownMissingSecrets.add(secretName[1].toUpperCase());
     }
-    httpFailures.add(host + " " + redactApiPath(uri.pathname) + " -> HTTP " + code);
+    httpFailures.add(host + " " + redactApiPath(host, uri.pathname) + " -> HTTP " + code);
   } catch (_) { /* Keep diagnostics fail-closed */ }
 }
 for (const line of lines) {
