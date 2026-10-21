@@ -25,7 +25,7 @@ function serviceUsageTarget(pathname) {
   let decoded;
   try { decoded = decodeURIComponent(pathname); }
   catch (_) { return null; }
-  const match = decoded.match(/^\/v1(?:beta1)?\/projects\/([^/]+)\/services(?:(?:\/([a-z0-9.-]+\\.googleapis\\.com))?(?::(enable|disable|batchEnable|batchGet))?)?$/i);
+  const match = decoded.match(/^\/v1(?:beta1)?\/projects\/([^/]+)\/services(?:(?:\/([a-z0-9.-]+\.googleapis\.com))?(?::(enable|disable|batchEnable|batchGet))?)?$/i);
   if (!match) return null;
   const knownServices = new Set([
     "cloudbilling.googleapis.com", "cloudfunctions.googleapis.com",
