@@ -2,7 +2,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
-const {inspectLog,versionSummary}=require('../scripts/diagnose_staging_hosting_upload.cjs');
+const {inspectLog,versionSummary,statusCounts}=require('../scripts/diagnose_staging_hosting_upload.cjs');
 test('sanitizes upload failure stages and HTTP codes',()=>{
  const privateLog=[
    '[debug] >>> [apiv2][query] POST https://firebasehosting.googleapis.com/v1beta1/sites/asiye-paystack-staging/versions',
@@ -38,4 +38,25 @@ test('source is only GETs, with hard staging project guards',()=>{
  assert.match(s,/method:'GET'/);
  assert.match(s,/\/versions\?pageSize=10/);
  assert.doesNotMatch(s,/method:'POST'|add-iam-policy-binding|firebase deploy|hosting:sites:create/);
+});
+
+test('draft file status counts classify only matching records and do not echo paths',()=>{
+  const data={files:[
+    {path:'/private-user.txt',hash:'do-not-leak',status:'EXPECTED'},
+    {path:'/index.html',hash:'do-not-leak-again',status:'ACTIVE'},
+    {path:'/other.txt',status:'EXPECTED'}
+  ]};
+  assert.equal(statusCounts(data,'EXPECTED'),2);
+  assert.equal(statusCounts(data,'ACTIVE'),1);
+  assert.equal(statusCounts(data,'DELETED'),0);
+  assert.equal(statusCounts({},'EXPECTED'),0);
+});
+test('draft-file inspection is read-only and only logs counts, not file paths or hashes',()=>{
+  const src=fs.readFileSync('scripts/diagnose_staging_hosting_upload.cjs','utf8');
+  assert.match(src,/countFiles\(version\.name,token,'EXPECTED'\)/);
+  assert.match(src,/countFiles\(version\.name,token,'ACTIVE'\)/);
+  assert.match(src,/awaiting upload/);
+  assert.match(src,/already uploaded/);
+  assert.match(src,/method:'GET'/);
+  assert.doesNotMatch(src,/console\.log\(\s*item\.path|console\.log\(\s*item\.hash|method:'POST'|method:'PATCH'/);
 });
