@@ -70,3 +70,21 @@ test("staging filtered exports reject missing SDK params registry", () => {
     module:{exports:{}}
   }),/registry is unavailable/);
 });
+
+test("staging workflow checks Compute and Resource Manager metadata before any resource writes", () => {
+  const fs=require("node:fs");
+  const yaml=fs.readFileSync(".github/workflows/deploy_paystack_review_staging.yml","utf8");
+  const metadata=yaml.indexOf("      - name: Read-only Compute and Resource Manager metadata access checks");
+  const secretWrite=yaml.indexOf("      - name: Configure only the staging TEST secret");
+  const functionsWrite=yaml.indexOf("      - name: Deploy reviewed secure Cloud Functions to isolated staging");
+  assert.ok(metadata>=0 && secretWrite>metadata && functionsWrite>metadata, "metadata preflight must precede staging writes");
+  const next=yaml.indexOf("      - name:",metadata+12);
+  const step=yaml.slice(metadata,next<0?undefined:next);
+  assert.match(step,/test "\\$STAGING_PROJECT" = "asiye-paystack-staging"/);
+  assert.match(step,/compute\\.googleapis\\.com\\/compute\\/v1\\/projects/);
+  assert.match(step,/cloudresourcemanager\\.googleapis\\.com\\/v1\\/projects/);
+  assert.match(step,/roles\\/compute\\.viewer/);
+  assert.match(step,/roles\\/browser/);
+  assert.doesNotMatch(step,/roles\\/(owner|editor|compute\\.admin)/);
+  assert.match(step,/--output "\\$RESP"/); 
+});
