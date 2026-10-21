@@ -20,7 +20,7 @@ function reasons(message){
     ['EVENTARC_EVENT_RECEIVER',/roles\/eventarc\.eventReceiver|eventarc\.events\.receiveEvent/i],
     ['EVENTARC_SERVICE_AGENT',/roles\/eventarc\.serviceAgent|eventarc service agent/i],
     ['GCF_SERVICE_AGENT',/roles\/cloudfunctions\.serviceAgent|cloud functions service agent|gcf-admin-robot/i],
-    ['RTDB_SOURCE_LOCATION',/(?:database|instance|firebase).{0,90}(?:region|location).{0,90}(?:not found|does not exist|mismatch|different|invalid)|(?:region|location).{0,90}(?:database|instance).{0,90}(?:not found|does not exist|mismatch|different|invalid)/i],
+    ['RTDB_SOURCE_LOCATION',/(?:database|instance|firebase).{0,90}(?:region|location).{0,90}(?:not found|does not exist|mismatch|different|invalid)|(?:database|instance|firebase).{0,90}(?:not found|does not exist|mismatch).{0,90}(?:region|location)|(?:region|location).{0,90}(?:database|instance).{0,90}(?:not found|does not exist|mismatch|different|invalid)/i],
     ['RTDB_SOURCE_MISSING',/(?:database instance|realtime database|rtdb).{0,90}(?:not found|does not exist|missing)/i],
     ['EVENTARC_TRIGGER',/eventarc|event trigger|trigger validation/i],
     ['PUBSUB_PREREQUISITE',/pubsub|pub\/sub/i],
