@@ -102,6 +102,11 @@ test("one-time staging Cloud Shell bootstrap is syntactically valid and fail-clo
   assert.ok(content.includes('[[ "$STAGING_PROJECT" != "$PROD_PROJECT" ]]'));
   assert.ok(content.includes('sk_test_'));
   assert.ok(content.includes('DEPLOY-STAGING'));
+  assert.ok(content.includes('x-goog-user-project: $STAGING_PROJECT'), "Firebase API must use isolated staging for quota");
+  assert.ok(content.includes('Firebase Management API HTTP %s; category: %s'), "403 diagnostics must be safely classified");
+  assert.ok(content.includes('APP_RESPONSE="$(mktemp'), "Raw Firebase API replies stay in private temp files");
+  assert.ok(content.includes('trap '), "Temporary Firebase replies must be cleaned");
+  assert.ok(!content.includes('curl --fail --silent --show-error --header "Authorization: Bearer $ACCESS_TOKEN"'), "Old opaque Firebase 403 path must not recur");
   assert.ok(content.includes('--only "$SELECTOR"'));
   assert.ok(content.includes('node scripts/prepare_staging_function_scope.cjs'));
   assert.ok(content.includes('node scripts/build_staging_web_preview.cjs'));
