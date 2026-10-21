@@ -19,6 +19,16 @@ const services = new Set();
 const knownMissingSecrets = new Set();
 const crossProjectLookups = new Set();
 const deniedServiceUsageRequests = new Set();
+const safeGoogleServices = new Set([
+  "cloudbilling.googleapis.com", "cloudfunctions.googleapis.com",
+  "cloudbuild.googleapis.com", "artifactregistry.googleapis.com",
+  "run.googleapis.com", "eventarc.googleapis.com", "pubsub.googleapis.com",
+  "firebaseextensions.googleapis.com", "runtimeconfig.googleapis.com",
+  "cloudscheduler.googleapis.com", "storage.googleapis.com",
+  "secretmanager.googleapis.com", "serviceusage.googleapis.com",
+  "iam.googleapis.com", "compute.googleapis.com",
+  "cloudresourcemanager.googleapis.com", "firebasedatabase.googleapis.com"
+]);
 function serviceUsageTarget(pathname) {
   // Firebase CLI may GET service metadata or POST to an API-enable RPC.
   // Print only the allowlisted service name and project class.
@@ -27,16 +37,10 @@ function serviceUsageTarget(pathname) {
   catch (_) { return null; }
   const match = decoded.match(/^\/v1(?:beta1)?\/projects\/([^/]+)\/services(?:(?:\/([a-z0-9.-]+\.googleapis\.com))?(?::(enable|disable|batchEnable|batchGet))?)?$/i);
   if (!match) return null;
-  const knownServices = new Set([
-    "cloudbilling.googleapis.com", "cloudfunctions.googleapis.com",
-    "cloudbuild.googleapis.com", "artifactregistry.googleapis.com",
-    "run.googleapis.com", "eventarc.googleapis.com", "pubsub.googleapis.com",
-    "firebaseextensions.googleapis.com"
-  ]);
   const service = (match[2] || "").toLowerCase();
   return {
     project: projectLabel(match[1]),
-    service: knownServices.has(service) ? service : service ? "OTHER_API (redacted)" : "unspecified",
+    service: safeGoogleServices.has(service) ? service : service ? "OTHER_API (redacted)" : "unspecified",
     operation: match[3] || (match[2] ? "getService" : "listServices")
   };
 }
@@ -133,7 +137,7 @@ for (const line of lines) {
   // Read service identifiers only, not URLs, JSON error bodies or paths.
   if (!/serviceusage\.googleapis\.com/i.test(line)) continue;
   const match = line.match(/\/services\/([a-z0-9.-]+\.googleapis\.com)(?:\b|\/)/i);
-  if (match) services.add(match[1].toLowerCase());
+  if (match && safeGoogleServices.has(match[1].toLowerCase())) services.add(match[1].toLowerCase());
 }
 console.error("HTTP failures: " + (codes.size ? [...codes].join(", ") : "Firebase CLI did not expose a status"));
 console.error("Failing API endpoints: " + ([...httpFailures].slice(-10).join("; ") || "not exposed"));
