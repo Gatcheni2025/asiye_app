@@ -17,6 +17,13 @@ const codes = new Set();
 const services = new Set();
 // Only report identifiers from an explicit, non-sensitive secret-name allowlist.
 const knownMissingSecrets = new Set();
+const crossProjectLookups = new Set();
+function projectLabel(raw) {
+  if (raw === "asiye-paystack-staging" || raw === "1000800408896") return "staging";
+  if (raw === "asiye-80386") return "PRODUCTION";
+  return "OTHER (redacted)";
+}
+
 function redactApiPath(host, pathname) {
   // Only known literal endpoint families are displayed; never raw resource IDs,
   // query parameters, tokens, paths or response bodies.
@@ -48,6 +55,11 @@ for (const line of lines) {
     if (!host.endsWith(".googleapis.com")) continue;
     const code = m[2];
     codes.add(code);
+    if (host === "cloudresourcemanager.googleapis.com" && code === "403") {
+      // Report only source-defined project labels; never arbitrary ids.
+      const project = uri.pathname.match(/^\/v1\/projects\/([^/]+)$/);
+      if (project) crossProjectLookups.add(m[0].split(" ")[0] + " " + projectLabel(decodeURIComponent(project[1])));
+    }
     if (host === "secretmanager.googleapis.com" && code === "404") {
       const secretName = uri.pathname.match(/\/secrets\/(PAYSTACK_SECRET_KEY|TWILIO_ACCOUNT_SID|TWILIO_AUTH_TOKEN|TWILIO_FROM_NUMBER)(?:\/|$)/i);
       if (secretName) knownMissingSecrets.add(secretName[1].toUpperCase());
@@ -67,6 +79,7 @@ for (const line of lines) {
 console.error("HTTP failures: " + (codes.size ? [...codes].join(", ") : "Firebase CLI did not expose a status"));
 console.error("Failing API endpoints: " + ([...httpFailures].slice(-10).join("; ") || "not exposed"));
 console.error("Google services checked: " + ([...services].join(", ") || "not exposed"));
+if (crossProjectLookups.size) console.error("Denied Resource Manager lookup targets (redacted): " + [...crossProjectLookups].join(", "));
 if (knownMissingSecrets.size) console.error("Known missing secret IDs (names only): " + [...knownMissingSecrets].join(", "));
 const hints = [
   [/\bPERMISSION_DENIED\b|permission denied|not authorized|does not have permission/i,
