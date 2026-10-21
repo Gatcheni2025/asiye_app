@@ -117,9 +117,19 @@ async function main(){
   const log=path.join(os.homedir(),'asiye-staging-hosting.'+Date.now()+'.log');
   const fd=fs.openSync(log,'wx',0o600);
   let result;
+  // Reduce Hosting upload fan-out for Cloud Shell. Firebase CLI documents
+  // FIREBASE_HOSTING_UPLOAD_CONCURRENCY; default concurrency can overwhelm
+  // individual network paths. Keep the value pinned, rather than inherited.
+  const HOSTING_UPLOAD_CONCURRENCY='5';
+  console.log('Staging Hosting upload concurrency: '+HOSTING_UPLOAD_CONCURRENCY);
   try{
     result=spawnSync(cli,['deploy','--project',PROJECT,'--config','firebase.staging.generated.json',
-      '--only','hosting','--non-interactive'],{cwd:root,stdio:['ignore',fd,fd],timeout:600000});
+      '--only','hosting','--non-interactive'],{
+        cwd:root,
+        stdio:['ignore',fd,fd],
+        timeout:600000,
+        env:{...process.env,FIREBASE_HOSTING_UPLOAD_CONCURRENCY:HOSTING_UPLOAD_CONCURRENCY}
+      });
   }finally{fs.closeSync(fd);}
   console.log('Firebase CLI result: '+(result.status===0&&!result.error?'EXIT_0':'CLI_WARNING'));
   const after=await hostedMatches(preview);
