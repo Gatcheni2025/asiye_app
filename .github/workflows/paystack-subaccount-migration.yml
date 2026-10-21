@@ -37,6 +37,8 @@ jobs:
           node --test test/staging-operations-diagnosis.test.cjs
           node --check scripts/recover_missing_paystack_staging.cjs
           node --test test/staging-bounded-recovery.test.cjs
+          node --check scripts/deploy_paystack_staging_hosting_only.cjs
+          node --test test/staging-hosting-only-deploy.test.cjs
           node --test test/staging-deploy-diagnostics.test.cjs
           node --test test/staging-function-scope.test.cjs
           node --test test/staging-function-entry.test.cjs
