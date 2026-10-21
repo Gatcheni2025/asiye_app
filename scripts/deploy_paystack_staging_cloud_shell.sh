@@ -63,19 +63,43 @@ npm --prefix functions install --no-audit --no-fund
 # Obtain PUBLIC staging Web SDK identifiers via Firebase Management API;
 # never paste API keys or account credentials into the terminal/chat.
 ACCESS_TOKEN="$(gcloud auth print-access-token)"
-APP_LIST="$(curl --fail --silent --show-error --header "Authorization: Bearer $ACCESS_TOKEN" \
- "https://firebase.googleapis.com/v1beta1/projects/$STAGING_PROJECT/webApps")" ||
-  fail "Unable to list staging Firebase Web apps."
-APP_NAME="$(printf '%s' "$APP_LIST" | jq -r '.apps[0].name // empty')"
+# Charge/read API usage against staging, not the OAuth client's quota project.
+# Never print raw response bodies, Web API keys, or OAuth tokens.
+firebase_get() {
+  local url="$1" outfile="$2" status reason
+  status="$(curl --silent --show-error --max-time 30 \
+    --header "Authorization: Bearer $ACCESS_TOKEN" \
+    --header "x-goog-user-project: $STAGING_PROJECT" \
+    --output "$outfile" --write-out '%{http_code}' "$url")" ||
+    fail "Firebase Management API request failed (network)."
+  if [[ "$status" != 200 ]]; then
+    reason="$(jq -r '[.error.details[]? | .reason?] | unique | join(",")' "$outfile" 2>/dev/null || true)"
+    case "$reason" in
+      SERVICE_DISABLED) reason="SERVICE_DISABLED (check firebase.googleapis.com enabled in staging)";;
+      USER_PROJECT_DENIED) reason="USER_PROJECT_DENIED (check serviceusage.services.use on staging)";;
+      ACCESS_TOKEN_SCOPE_INSUFFICIENT) reason="ACCESS_TOKEN_SCOPE_INSUFFICIENT";;
+      *) reason="unclassified";;
+    esac
+    printf 'Firebase Management API HTTP %s; category: %s\n' "$status" "$reason" >&2
+    fail "Staging Firebase Web app read-only lookup failed. No deployment attempted."
+  fi
+}
+APP_RESPONSE="$(mktemp "$HOME/asiye-firebase-app-list.XXXXXX")"
+SDK_RESPONSE="$(mktemp "$HOME/asiye-firebase-sdk.XXXXXX")"
+chmod 600 "$APP_RESPONSE" "$SDK_RESPONSE"
+trap 'rm -f "$APP_RESPONSE" "$SDK_RESPONSE"; unset ACCESS_TOKEN' EXIT
+firebase_get "https://firebase.googleapis.com/v1beta1/projects/$STAGING_PROJECT/webApps" "$APP_RESPONSE"
+APP_NAME="$(jq -r '.apps[0].name // empty' "$APP_RESPONSE")"
 [[ "$APP_NAME" == projects/$STAGING_PROJECT/webApps/* ]] ||
   fail "No isolated staging Firebase WEB app found."
 APP_SUFFIX="$(printf '%s' "$APP_NAME" | cut -d / -f 4)"
 [[ "$APP_SUFFIX" == 1:$STAGING_NUMBER:web:* ]] ||
   fail "Staging Firebase WEB app ID does not match the staging project number."
-SDK_JSON="$(curl --fail --silent --show-error --header "Authorization: Bearer $ACCESS_TOKEN" \
- "https://firebase.googleapis.com/v1beta1/$APP_NAME/config")" ||
-  fail "Unable to fetch staging Firebase WEB SDK configuration."
-unset ACCESS_TOKEN APP_LIST
+firebase_get "https://firebase.googleapis.com/v1beta1/$APP_NAME/config" "$SDK_RESPONSE"
+SDK_JSON="$(cat "$SDK_RESPONSE")"
+rm -f "$APP_RESPONSE" "$SDK_RESPONSE"
+unset ACCESS_TOKEN
+trap - EXIT
 
 export STAGING_PROJECT
 export GITHUB_REF_NAME="$REVIEW_BRANCH"
