@@ -17,6 +17,10 @@ test("Firebase deploy diagnostics report failing API without printing bearer tok
       "[debug] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/asiye-paystack-staging/secrets/PRIVATE_DO_NOT_LEAK?token=DO_NOT_LEAK 404",
       "[debug] <<< [apiv2][status] GET https://compute.googleapis.com/compute/v1/projects/asiye-paystack-staging?auth=DO_NOT_LEAK 403",
       "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/asiye-paystack-staging:testIamPermissions?auth=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/asiye-paystack-staging:getIamPolicy?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/1000800408896:testIamPermissions?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/asiye-80386:getIamPolicy?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/UNKNOWN_PROJECT_PRIVATE_ID:unknownRpcPrivateSuffix?token=DO_NOT_LEAK 403",
       "[debug] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/asiye-paystack-staging?token=DO_NOT_LEAK 403",
       "[debug] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/asiye-80386?token=DO_NOT_LEAK 403",
       "[debug] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/UNRELATED_PROJECT_PRIVATE_ID?token=DO_NOT_LEAK 403",
@@ -35,8 +39,13 @@ test("Firebase deploy diagnostics report failing API without printing bearer tok
     assert.match(output.stderr,/Denied Resource Manager lookup targets \(redacted\):/);
     assert.match(output.stderr,/GET staging/);
     assert.match(output.stderr,/GET PRODUCTION/);
-    assert.match(output.stderr,/GET OTHER \(redacted\)/);
-    assert.doesNotMatch(output.stderr,/UNRELATED_PROJECT_PRIVATE_ID|asiye-80386/);
+    assert.match(output.stderr,/GET OTHER \\(redacted\\) getProject/);
+    assert.match(output.stderr,/POST staging getIamPolicy/);
+    assert.match(output.stderr,/POST staging testIamPermissions/);
+    assert.match(output.stderr,/POST PRODUCTION getIamPolicy/);
+    assert.match(output.stderr,/POST OTHER \\(redacted\\) OTHER_RPC \\(redacted\\)/);
+    assert.match(output.stderr,/project IAM policy read -> HTTP 403/);
+    assert.doesNotMatch(output.stderr,/UNRELATED_PROJECT_PRIVATE_ID|UNKNOWN_PROJECT_PRIVATE_ID|unknownRpcPrivateSuffix|asiye-80386|1000800408896/);
     assert.doesNotMatch(output.stderr, /DO_NOT_LEAK|Bearer|token=/i);
   } finally { fs.rmSync(folder, {force: true, recursive: true}); }
 });
