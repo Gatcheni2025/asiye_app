@@ -30,7 +30,9 @@ jobs:
           node --check scripts/summarize_staging_deploy_error.cjs
           node --check scripts/diagnose_paystack_staging.cjs
           node --check scripts/diagnose_paystack_deploy_log.cjs
+          node --check scripts/diagnose_paystack_operations.cjs
           node --test test/staging-log-offline-diagnosis.test.cjs
+          node --test test/staging-operations-diagnosis.test.cjs
           node --test test/staging-deploy-diagnostics.test.cjs
           node --test test/staging-function-scope.test.cjs
           node --test test/staging-function-entry.test.cjs
