@@ -59,3 +59,34 @@ test("Firebase deploy diagnostics report failing API without printing bearer tok
     assert.doesNotMatch(output.stderr, /DO_NOT_LEAK|Bearer|token=/i);
   } finally { fs.rmSync(folder, {force: true, recursive: true}); }
 });
+
+test("safely classifies non-HTTP Firebase CLI failures without emitting raw debug lines", () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "asiye-deploy-diagnostic-"));
+  const file = path.join(folder, "functions-debug.log");
+  try {
+    fs.writeFileSync(file, [
+      "Error: Must enable required APIs to deploy.",
+      "Error: Cloud Functions codebase could not be analyzed. Secret=DO_NOT_LEAK"
+    ].join("\n"));
+    const output = spawnSync(process.execPath, ["scripts/summarize_staging_deploy_error.cjs",file,"Cloud Functions"],{encoding:"utf8"});
+    assert.equal(output.status, 0, output.stderr);
+    assert.match(output.stderr,/Firebase terminal error category: Firebase refused missing required API/);
+    assert.match(output.stderr,/Cloud Functions code discovery failed/);
+    assert.doesNotMatch(output.stderr,/DO_NOT_LEAK|Secret=/);
+  } finally { fs.rmSync(folder,{force:true,recursive:true}); }
+});
+test("staging Cloud Billing API preflight checks exact project ID and number without writes", () => {
+  const yaml=fs.readFileSync(".github/workflows/deploy_paystack_review_staging.yml","utf8");
+  const start=yaml.indexOf("      - name: Read-only Cloud Billing API state as GitHub deployer");
+  const write=yaml.indexOf("      - name: Configure only the staging TEST secret");
+  assert.ok(start>=0 && write>start, "Cloud Billing preflight must run before any secret or deployment writes");
+  const next=yaml.indexOf("      - name:",start+12);
+  const step=yaml.slice(start,next);
+  assert.ok(step.includes('test "$STAGING_PROJECT" = "asiye-paystack-staging"'));
+  assert.ok(step.includes('test "$PROJECT_NUMBER" = "1000800408896"'));
+  assert.ok(step.includes('for PROJECT_REF in "$STAGING_PROJECT" "$PROJECT_NUMBER"'));
+  assert.ok(step.includes("value.state === 'ENABLED'"));
+  assert.ok(step.includes("serviceusage.googleapis.com/v1/projects/"));
+  assert.ok(!step.includes("services:enable") && !step.includes(":enable"));
+  assert.ok(!step.includes("gcloud services enable"));
+});
