@@ -116,7 +116,7 @@ jobs:
           # Asiye uses Firebase v2 database triggers (Eventarc) and
           # expireClubWaiting onSchedule (Cloud Scheduler + Pub/Sub).
           # Fail before writing rules/secrets if their deployment services are absent.
-          REQUIRED_APIS=(cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com eventarc.googleapis.com cloudscheduler.googleapis.com pubsub.googleapis.com firebaseextensions.googleapis.com)
+          REQUIRED_APIS=(cloudfunctions.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com run.googleapis.com eventarc.googleapis.com cloudscheduler.googleapis.com pubsub.googleapis.com firebaseextensions.googleapis.com compute.googleapis.com cloudresourcemanager.googleapis.com)
           MISSING=0
           for service in "${REQUIRED_APIS[@]}"; do
             if grep -Fxq "$service" "$RUNNER_TEMP/staging-enabled-apis.txt"; then
@@ -135,7 +135,7 @@ jobs:
           done
           rm -f "$RUNNER_TEMP/staging-enabled-apis.txt"
           if [ "$MISSING" -ne 0 ]; then
-            echo "::error::Enable the listed APIs in the staging Google Cloud console before running deploy."
+            echo "::error::Enable missing APIs only in the isolated asiye-paystack-staging Google Cloud project, then start a new staging run."
             exit 1
           fi
           echo "Required Cloud Functions APIs are enabled for isolated staging."
