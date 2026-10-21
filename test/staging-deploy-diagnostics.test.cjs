@@ -90,3 +90,21 @@ test("staging Cloud Billing API preflight checks exact project ID and number wit
   assert.ok(!step.includes("services:enable") && !step.includes(":enable"));
   assert.ok(!step.includes("gcloud services enable"));
 });
+
+test("one-time staging Cloud Shell bootstrap is syntactically valid and fail-closed", () => {
+  const script = "scripts/deploy_paystack_staging_cloud_shell.sh";
+  const syntax = spawnSync("bash", ["-n", script], {encoding:"utf8"});
+  assert.equal(syntax.status, 0, syntax.stderr);
+  const content = fs.readFileSync(script, "utf8");
+  assert.ok(content.includes('readonly STAGING_PROJECT="asiye-paystack-staging"'));
+  assert.ok(content.includes('readonly STAGING_NUMBER="1000800408896"'));
+  assert.ok(content.includes('readonly REVIEW_BRANCH="fix/paystack-subaccounts-cash-card-no-wallet"'));
+  assert.ok(content.includes('[[ "$STAGING_PROJECT" != "$PROD_PROJECT" ]]'));
+  assert.ok(content.includes('sk_test_'));
+  assert.ok(content.includes('DEPLOY-STAGING'));
+  assert.ok(content.includes('--only "$SELECTOR"'));
+  assert.ok(content.includes('node scripts/prepare_staging_function_scope.cjs'));
+  assert.ok(content.includes('node scripts/build_staging_web_preview.cjs'));
+  assert.ok(content.includes('Cloud Shell'));
+  assert.ok(!content.includes('sk_live_') && !content.includes('firebase deploy --project asiye-80386'));
+});
