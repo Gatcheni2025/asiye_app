@@ -112,6 +112,19 @@ function plan(state){
   if(state.nonactive.length)throw Error('Non-ACTIVE resources exist. Investigate before deploying.');
   return expectedMissing.slice(0,MAX_BATCH);
 }
+function confirmFunctionServiceAgentBinding(){
+  const policy=JSON.parse(cmd('gcloud',['projects','get-iam-policy',PROJECT,'--format=json']));
+  const member='serviceAccount:service-'+NUMBER+'@gcf-admin-robot.iam.gserviceaccount.com';
+  const binding=Array.isArray(policy.bindings) && policy.bindings.some(b=>
+    b.role==='roles/cloudfunctions.serviceAgent' &&
+    !b.condition && Array.isArray(b.members) && b.members.includes(member));
+  if(!binding)throw Error('Cloud Functions Service Agent binding not confirmed; no deployment.');
+  console.log('Cloud Functions Service Agent: DIRECT ROLE PRESENT');
+}
+function selectBatch(state,mode){
+  const candidates=plan(state);
+  return mode==='--deploy-one' ? candidates.slice(0,1) : candidates;
+}
 function reconcileBatch(batch,before,after,cliOk){
   const verified=batch.filter(n=>after.active.includes(n));
   const remaining=batch.filter(n=>!after.active.includes(n));
@@ -126,11 +139,11 @@ function reconcileBatch(batch,before,after,cliOk){
 }
 async function main(){
   const flag=process.argv[2]||'--plan';
-  if(!['--plan','--deploy-first-batch'].includes(flag)||process.argv.length>3)
-    throw Error('Usage: node scripts/recover_missing_paystack_staging.cjs [--plan|--deploy-first-batch]');
+  if(!['--plan','--deploy-first-batch','--deploy-one'].includes(flag)||process.argv.length>3)
+    throw Error('Usage: node scripts/recover_missing_paystack_staging.cjs [--plan|--deploy-first-batch|--deploy-one]');
   const cli=verifyLocal();
   const before=getInventory();
-  const batch=plan(before);
+  const batch=selectBatch(before,flag);
   console.log('Asiye Paystack TEST staging | '+(flag==='--plan'?'READ-ONLY PLAN':'BOUNDED DEPLOY'));
   console.log('Expected='+manifest.length+' | ACTIVE='+before.active.length+
     ' | MISSING='+before.missing.length+' | NONACTIVE='+before.nonactive.length);
@@ -140,6 +153,7 @@ async function main(){
     console.log('No resources changed.');
     return;
   }
+  if(batch.includes('continueGoAfterPayment'))confirmFunctionServiceAgentBinding();
   const secret=cmd('gcloud',['secrets','versions','access','latest',
     '--secret=PAYSTACK_SECRET_KEY','--project='+PROJECT]);
   if(!/^sk_test_[A-Za-z0-9]+$/.test(secret))throw Error('Staging secret is not a Paystack TEST key.');
@@ -151,7 +165,7 @@ async function main(){
   if(response.trim()!=='DEPLOY-MISSING-STAGING')throw Error('Cancelled without changes.');
   // Query again after approval to guard against concurrent deployment changes.
   const now=getInventory();
-  const check=plan(now);
+  const check=selectBatch(now,flag);
   if(JSON.stringify(check)!==JSON.stringify(batch))throw Error('Inventory changed; rerun --plan.');
   const logfile=path.join(os.homedir(),'asiye-staging-functions.'+Date.now()+'.log');
   const handle=fs.openSync(logfile,'wx',0o600);
@@ -197,4 +211,4 @@ async function main(){
   console.log('Private Firebase log: '+logfile+' (never post the raw log).');
 }
 if(require.main===module)main().catch(e=>{console.error('BLOCKED: '+e.message);process.exitCode=1;});
-module.exports={inventory,plan,reconcileBatch,PRIORITY,BASE_ACTIVE};
+module.exports={inventory,plan,selectBatch,reconcileBatch,PRIORITY,BASE_ACTIVE};
