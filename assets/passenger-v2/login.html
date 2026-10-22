@@ -249,7 +249,7 @@
         <!-- ONE-TIME PHONE VERIFICATION AFTER GOOGLE / APPLE -->
         <div id="verifyPhoneStep" class="login-step">
             <h2>Verify your mobile number</h2>
-            <p class="login-subtitle">Your Google or Apple sign-in is complete. Verify your number once by SMS to secure this Asiye account. Future sign-ins will not ask again.</p>
+            <p class="login-subtitle" id="phoneLinkExplanation">You're signed in. Verify your phone once to finish securing this Asiye passenger account. You won't need another SMS on future sign-ins with this linked account.</p>
             <label class="login-label" for="socialPhoneInput">Mobile number</label>
             <div class="phone-wrapper">
                 <div class="country-code">🇿🇦 <strong>+27</strong></div>
@@ -258,6 +258,13 @@
             <p class="login-subtitle">A verification SMS may be sent to this number. Standard message rates may apply.</p>
             <div id="socialPhoneError" class="login-error" role="alert"></div>
             <button id="socialSendOtpButton" class="primary-button" type="button">Send verification code</button>
+            <div class="alternate-method-panel">
+                <p class="login-subtitle">Want to use another account or sign-in method?</p>
+                <button id="switchPassengerSignInButton" class="secondary-button" type="button">
+                    <i class="fas fa-arrow-left"></i>
+                    Choose Google, Apple or phone
+                </button>
+            </div>
         </div>
 
         <!-- OTP -->
@@ -323,6 +330,11 @@
 
             </button>
 
+
+            <button id="switchPassengerOtpMethodButton" class="secondary-button" type="button">
+                <i class="fas fa-arrow-left"></i>
+                Use another sign-in method
+            </button>
 
             <button
                 id="resendOtpButton"
