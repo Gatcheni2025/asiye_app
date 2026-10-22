@@ -39,6 +39,10 @@ jobs:
           node --test test/staging-bounded-recovery.test.cjs
           node --check scripts/deploy_paystack_staging_hosting_only.cjs
           node --test test/staging-hosting-only-deploy.test.cjs
+          node --check scripts/rebuild_staging_auth_preview.cjs
+          node --check assets/passenger-v2/js/login.js
+          node --check assets/driver-v2/js/login.js
+          node --test test/staging-auth-recaptcha.test.cjs
           node --check scripts/diagnose_paystack_hosting.cjs
           node --test test/staging-hosting-diagnosis.test.cjs
           node --check scripts/diagnose_staging_hosting_upload.cjs
