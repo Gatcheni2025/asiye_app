@@ -16,7 +16,7 @@ const REVIEW='8cbd56d';
 const REGION='us-central1';
 const PROD='asiye-80386';
 const FILES=['passenger-v2/index.html','passenger-v2/login.html',
-  'passenger-v2/js/login.js','passenger-v2/js/firebase.js',
+  'passenger-v2/css/login.css','passenger-v2/js/login.js','passenger-v2/js/firebase.js',
   'passenger-v2/js/wallet.js','driver-v2/index.html',
   'driver-v2/js/login.js','driver-v2/js/firebase.js'];
 const manifest=require('./paystack_function_manifest.json');
@@ -78,6 +78,7 @@ function localChecks(){
     .split('\n').filter(Boolean);
   const allowedAuthChanges=new Set([
     'assets/passenger-v2/login.html',
+    'assets/passenger-v2/css/login.css',
     'assets/passenger-v2/js/login.js',
     'assets/driver-v2/js/login.js'
   ]);
