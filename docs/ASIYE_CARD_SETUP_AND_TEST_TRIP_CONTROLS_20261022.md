@@ -19,7 +19,13 @@ The later Cloud Shell screenshot shows a partial vehicle-policy deployment. `rev
 
 The screenshot shows the final two function operations succeeded, the cleanup-policy-only warning was handled, and immutable source verification matched 22 functions. `synchronizeClubBooking` is the reviewed first-generation database trigger. The former selected-source checker required second-generation `BuildConfig` fields and rejected it before looking up its actual source.
 
-The corrected checker reads that trigger's v1 deployment metadata, verifies the exact staging function identity, ACTIVE state, Node 22 runtime and handler name, then uses its successful Cloud Build's immutable Storage object generation. The downloaded code, package and generated entrypoint must still match every reviewed byte. Gen2 checks remain strict. Wrong code, failed builds, unknown/mutable source generations, wrong projects and access denials do not pass.
+The next screenshot advances to `GEN1_BUILD_SOURCE_GENERATION_UNAVAILABLE`: the checker can now resolve that trigger's successful build, but its build response omits an immutable Storage object generation. This is a source-proof limitation, not evidence that the function failed or that its source matches. Hosting and the test-admin role grant have not run.
+
+The checker reads the trigger's v1 deployment metadata and verifies its exact staging identity, ACTIVE state, Node 22 runtime and handler name. It uses the successful Cloud Build's immutable Storage object generation when available. If that successful build omits its generation, it instead calls Google's `generateDownloadUrl` API with the function's explicit positive `versionId`. It downloads the source from that version-specific signed Google Storage URL, compares the reviewed code, package and generated entrypoint, and freshly rechecks the function's identity and active version after downloading. The URL and OAuth token remain in memory; neither appears in reports, and the token is not sent with the signed URL. Redirects are blocked.
+
+API reference: https://docs.cloud.google.com/functions/docs/reference/rest/v1/projects.locations.functions/generateDownloadUrl
+
+This fallback does not substitute the latest mutable Storage object or assume a missing source generation is a pass. Missing version IDs, changed deployments, wrong code, failed builds, wrong projects and access denials still stop before Hosting. Gen2 provenance checks remain strict.
 
 This correction changes audit code/tests only; backend and website source files are unchanged. Resume at the source check and publish Hosting only after **23/23** matches:
 
@@ -30,7 +36,7 @@ node scripts/deploy_staging_card_test_tools.cjs --resume-after-functions &&
 node scripts/grant_staging_trip_tester.cjs --self
 ```
 
-This command skips all function deployments. The target remains **23/23** source matches, **43/43 ACTIVE**, **46/46 hosted files**, matching rules and **STAGING_INFRASTRUCTURE_READBACK: PASS**. These are expected results; the 22/23 screenshot does not yet prove the remaining trigger's deployed code. A new `BUILD_METADATA_HTTP_403` or source mismatch stops before Hosting and should be diagnosed from its safe category.
+This command skips all function deployments. The target remains **23/23** source matches, **43/43 ACTIVE**, **46/46 hosted files**, matching rules and **STAGING_INFRASTRUCTURE_READBACK: PASS**. These are expected results; the 22/23 screenshot does not yet prove the remaining trigger's deployed code. A new `BUILD_METADATA_HTTP_403`, `GEN1_VERSION_SOURCE_HTTP_403` or source mismatch stops before Hosting and should be diagnosed from its safe category. Do not change IAM or deploy functions to bypass a denied source read.
 
 ## Apply the complete staging correction
 

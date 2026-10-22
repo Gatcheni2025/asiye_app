@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 import urllib.error
 import zipfile
-from scripts.audit_staging_admin_function_source import verify_inventory, PROJECT, NUMBER
+from scripts.audit_staging_admin_function_source import download_gen1_version, verify_inventory, PROJECT, NUMBER
 
 
 class MixedCardTestSourceTests(unittest.TestCase):
@@ -28,7 +28,8 @@ class MixedCardTestSourceTests(unittest.TestCase):
 
     def legacy(self):
         return {'name': f'projects/{PROJECT}/locations/us-central1/functions/{self.gen1}',
-                'status': 'ACTIVE', 'runtime': 'nodejs22', 'entryPoint': self.gen1, 'buildName': self.build}
+                'status': 'ACTIVE', 'runtime': 'nodejs22', 'entryPoint': self.gen1,
+                'buildName': self.build, 'versionId': '17'}
 
     def build_metadata(self):
         return {'status': 'SUCCESS', 'sourceProvenance': {'resolvedStorageSource': {
@@ -125,6 +126,106 @@ class MixedCardTestSourceTests(unittest.TestCase):
         self.assertFalse(report['ok'])
         self.assertEqual(report['blocked'][0]['reason'], 'BUILD_METADATA_HTTP_403')
         self.assertNotIn('PRIVATE_AUTH_DETAIL', str(report))
+
+    def generationless_build(self):
+        return {'status': 'SUCCESS', 'source': {'storageSource': {
+            'bucket': 'gcf-sources-' + NUMBER, 'object': 'mutable-current.zip'}}}
+
+    def version_download(self, stale=False, current=None, url=None, error=None, calls=None):
+        current = self.legacy() if current is None else current
+        url = 'https://storage.googleapis.com/google-managed-source/version-17.zip?Signature=PRIVATE' if url is None else url
+        def open_url(request, timeout):
+            if calls is not None:
+                calls.append(request)
+            if request.get_method() == 'POST':
+                return io.BytesIO(json.dumps({'downloadUrl': url}).encode())
+            if error:
+                raise error
+            return io.BytesIO(self.archive(stale))
+        def read(name, version):
+            return download_gen1_version(name, version, 'PRIVATE_OAUTH_TOKEN',
+                lambda _: current, open_url)
+        return read
+
+    def test_screenshot_generationless_gen1_build_matches_only_with_exact_version_download(self):
+        calls = []
+        report = self.verify(get_json=self.metadata(build=self.generationless_build()),
+                             read_version_archive=self.version_download(calls=calls))
+        self.assertTrue(report['ok'])
+        self.assertEqual(len(report['matched']), 23)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0].full_url, f'https://cloudfunctions.googleapis.com/v1/projects/{PROJECT}/locations/us-central1/functions/{self.gen1}:generateDownloadUrl')
+        self.assertEqual(json.loads(calls[0].data), {'versionId': '17'})
+        self.assertEqual(calls[0].get_header('Authorization'), 'Bearer PRIVATE_OAUTH_TOKEN')
+        self.assertIsNone(calls[1].get_header('Authorization'), 'OAuth must never be forwarded to the signed URL')
+        self.assertNotIn('PRIVATE', str(report))
+
+    def test_version_pinned_download_still_compares_code_package_and_generated_entrypoint(self):
+        report = self.verify(get_json=self.metadata(build=self.generationless_build()),
+                             read_version_archive=self.version_download(stale=True))
+        self.assertFalse(report['ok'])
+        self.assertEqual(report['mismatched'], [{'name': self.gen1, 'files': ['index.js']}])
+        for changed in ('package.json', 'staging-index.generated.cjs'):
+            expected = {**self.expected, changed: b'{"main":"old.js"}' if changed == 'package.json' else b'old entrypoint'}
+            report = verify_inventory(self.inventory(), self.names, expected, lambda *args: self.archive(),
+                self.metadata(build=self.generationless_build()), self.version_download())
+            self.assertFalse(report['ok'])
+            self.assertIn({'name': self.gen1, 'files': [changed]}, report['mismatched'])
+
+    def test_no_version_or_reader_never_substitutes_a_mutable_storage_object(self):
+        report = self.verify(get_json=self.metadata(build=self.generationless_build()))
+        self.assertEqual(report['blocked'], [{'name': self.gen1, 'reason': 'GEN1_VERSION_SOURCE_READER_UNAVAILABLE'}])
+        for version in (None, '', '0', 'latest', '-1', '17.0'):
+            calls = []
+            report = self.verify(get_json=self.metadata(legacy={**self.legacy(), 'versionId': version},
+                build=self.generationless_build()), read_version_archive=self.version_download(calls=calls))
+            self.assertFalse(report['ok'])
+            self.assertEqual(report['blocked'][0]['reason'], 'GEN1_DEPLOYED_VERSION_UNAVAILABLE')
+            self.assertEqual(calls, [])
+
+    def test_deployment_change_during_version_download_cannot_pass(self):
+        for patch, reason in (({'versionId': '18'}, 'GEN1_DEPLOYMENT_CHANGED_DURING_AUDIT'),
+                              ({'status': 'DEPLOY_IN_PROGRESS'}, 'GEN1_ACTIVE_REVIEWED_RUNTIME_OR_ENTRYPOINT_UNAVAILABLE'),
+                              ({'runtime': 'nodejs20'}, 'GEN1_ACTIVE_REVIEWED_RUNTIME_OR_ENTRYPOINT_UNAVAILABLE'),
+                              ({'name': f'projects/production/locations/us-central1/functions/{self.gen1}'},
+                               'GEN1_ACTIVE_REVIEWED_RUNTIME_OR_ENTRYPOINT_UNAVAILABLE')):
+            with self.subTest(patch=patch):
+                report = self.verify(get_json=self.metadata(build=self.generationless_build()),
+                    read_version_archive=self.version_download(current={**self.legacy(), **patch}))
+                self.assertFalse(report['ok'])
+                self.assertEqual(report['blocked'][0]['reason'], reason)
+
+    def test_signed_download_is_google_storage_https_only_and_kept_out_of_diagnostics(self):
+        for url in ('', 'http://storage.googleapis.com/a.zip', 'https://example.com/private.zip?Signature=PRIVATE',
+                    'https://storage.googleapis.com.evil.test/a.zip', 'https://storage.googleapis.com@evil.test/a.zip',
+                    'https://storage.googleapis.com:8443/a.zip', 'https://storage.googleapis.com/a.zip#PRIVATE'):
+            calls = []
+            report = self.verify(get_json=self.metadata(build=self.generationless_build()),
+                read_version_archive=self.version_download(url=url, calls=calls))
+            self.assertFalse(report['ok'])
+            self.assertEqual(report['blocked'][0]['reason'], 'GEN1_SOURCE_DOWNLOAD_URL_INVALID')
+            self.assertEqual(len(calls), 1, 'No request is sent to an invalid source URL')
+            self.assertNotIn('PRIVATE', str(report))
+        self.assertTrue(self.verify(get_json=self.metadata(build=self.generationless_build()),
+            read_version_archive=self.version_download(url='https://managed-source.storage.googleapis.com/a.zip?Signature=PRIVATE'))['ok'])
+
+    def test_version_source_denial_or_archive_failure_blocks_with_safe_reason(self):
+        for error, reason in ((urllib.error.HTTPError('https://storage.googleapis.com/private?Signature=PRIVATE',
+                                  403, 'PRIVATE_AUTH_DETAIL', {}, None), 'GEN1_VERSION_SOURCE_HTTP_403'),
+                              (ValueError('PRIVATE_DOWNLOAD_DETAILS'), 'GEN1_VERSION_SOURCE_READ_FAILED'),
+                              (ValueError('GEN1_SOURCE_DOWNLOAD_REDIRECT_BLOCKED'), 'GEN1_SOURCE_DOWNLOAD_REDIRECT_BLOCKED')):
+            report = self.verify(get_json=self.metadata(build=self.generationless_build()),
+                read_version_archive=self.version_download(error=error))
+            self.assertFalse(report['ok'])
+            self.assertEqual(report['blocked'][0]['reason'], reason)
+            self.assertNotIn('PRIVATE', str(report))
+
+    def test_download_helper_rejects_default_version_and_another_function_before_api_call(self):
+        def forbidden(*args, **kwargs):
+            self.fail('Invalid version/function must not contact the API')
+        for name, version in ((self.gen1, '0'), (self.gen1, ''), ('prepareTripPayment', '17')):
+            with self.assertRaisesRegex(ValueError, 'GEN1_DEPLOYED_VERSION_UNAVAILABLE'):
+                download_gen1_version(name, version, 'PRIVATE', forbidden, forbidden)
 
 
 if __name__ == '__main__':
