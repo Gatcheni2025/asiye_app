@@ -29,7 +29,11 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   for(const width of [320,390,580]){
    await page.setViewportSize({width,height:844});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-   if(width===390)await page.screenshot({path:'../../ui-review/go-searching-mobile.png'});
+   if(width===390){
+    const cancel=await page.locator('[data-trip-cancel]').boundingBox();
+    assert.ok(cancel.y+cancel.height<=844,'Fare and cancellation fit the initial mobile screen');
+    await page.screenshot({path:'../../ui-review/go-searching-mobile.png'});
+   }
   }
   await page.setViewportSize({width:390,height:844});await page.evaluate(()=>window.__renderSearch(true));
   assert.equal(await page.locator('h2').innerText(),'Driver found');
@@ -40,6 +44,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   assert.equal(await page.locator('.go-search-ring').first().evaluate(n=>getComputedStyle(n).animationName),'none');
   const driver=await browser.newPage({viewport:{width:390,height:844}});driver.on('pageerror',e=>errors.push(e.message));
   await driver.setContent('<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><h1>Driver dashboard</h1></body></html>');
+  await driver.addStyleTag({path:'../../assets/driver-v2/css/app.css'});
   await driver.addStyleTag({path:'../../assets/member-pages.css'});
   await driver.evaluate(()=>{
    window.__saved=[];window.firebase={auth:()=>({currentUser:null})};
@@ -48,8 +53,9 @@ const assert=require('node:assert/strict'),fs=require('node:fs');
   });
   await driver.addScriptTag({path:'../../assets/member-pages.js'});
   await driver.evaluate(()=>AsiyePages.open('safety',{setup:true}));
+  assert.equal(await driver.locator('[data-family-later]').evaluate(n=>getComputedStyle(n).backgroundColor),'rgb(238, 244, 236)');
   await driver.screenshot({path:'../../ui-review/driver-optional-contact-mobile.png'});
-  await driver.locator('[data-family-later]').click();assert.equal(await driver.locator('dialog').count(),0);
+  await driver.locator('[data-family-later]').click();await driver.waitForFunction(()=>!document.querySelector('dialog'));
   await driver.evaluate(()=>AsiyePages.open('safety',{setup:true}));
   await driver.locator('[name=name]').fill('Trusted Person');await driver.locator('[name=relationship]').selectOption({label:'Sibling'});
   await driver.locator('[name=phone]').fill('0821234567');await driver.getByRole('button',{name:'Save and continue',exact:true}).click();

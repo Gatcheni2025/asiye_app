@@ -742,7 +742,9 @@
                 }
 
                 const promptKey = `asiye-contact-later:${role}:${id}`;
-                if (sessionStorage.getItem(promptKey) === 'true') return true;
+                try {
+                    if (sessionStorage.getItem(promptKey) === 'true') return true;
+                } catch (_) { /* Optional preference storage must not block the dashboard. */ }
 
                 await window.AsiyePages
                     ?.open?.(
@@ -2766,7 +2768,9 @@ window.AsiyePages = {
                 body.querySelector('[data-family-form]');
 
             body.querySelector('[data-family-later]').onclick = () => {
-                sessionStorage.setItem(`asiye-contact-later:${context.role}:${id}`, 'true');
+                try {
+                    sessionStorage.setItem(`asiye-contact-later:${context.role}:${id}`, 'true');
+                } catch (_) { /* Native/limited browsers can still continue without saving this hint. */ }
                 dialog.close();dialog.remove();
             };
 

@@ -103,3 +103,17 @@ test('driver map initializes without GPS and exposes load failures instead of a 
   assert.equal(w.document.getElementById('driverMapStatus').hidden,true);
  } finally {d.window.close();}
 });
+
+test('Add later still closes setup when browser storage is unavailable',async()=>{
+ const d=dom(),w=d.window;
+ try {
+  w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};w.HTMLDialogElement.prototype.close=function(){this.open=false;};
+  w.ASIYE_DRIVER={state:{driverId:'driver',driver:{}},ui:{toast(){}}};w.firebase={auth:()=>({currentUser:null})};
+  w.AsiyeSafetyContact={getMembers:async()=>[]};load(w,'assets/member-pages.js');
+  Object.defineProperty(w,'sessionStorage',{get(){throw Error('Storage unavailable');}});
+  assert.equal(await w.AsiyeSafetyContact.ensure({role:'driver'}),true);
+  const dialog=w.AsiyePages.dialog;assert.equal(dialog.isConnected,true);
+  assert.doesNotThrow(()=>dialog.querySelector('[data-family-later]').onclick());
+  assert.equal(dialog.isConnected,false);
+ }finally{d.window.close();}
+});

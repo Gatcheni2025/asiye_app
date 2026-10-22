@@ -1078,6 +1078,7 @@ ASIYE.ride = {
                             : 'Looking for an available driver near your pickup. Your request stays open while we search.'}</p>
                     </div>
                     <div class="go-search-live"><span></span>${driverFound ? 'Waiting for a response' : 'Searching nearby'}<span class="go-search-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
+                    ${driverFound ? `<p class="go-search-driver-detail">${escape(driverDetail)}</p>` : ''}
                 </div>
                 ${driverDeclined ? `<p class="go-search-note" role="status">${escape(fareDecision.driverName || 'A driver')} declined your R${offer.toFixed(0)} offer. We are checking other drivers.</p>` : ''}
                 <ol class="go-search-steps" aria-label="Booking progress">
