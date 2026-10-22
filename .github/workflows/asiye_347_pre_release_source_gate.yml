@@ -11,6 +11,8 @@ on:
       - 'assets/driver-v2/**'
       - 'test/passenger-booking-face.test.cjs'
       - 'scripts/deploy_staging_auth_booking_flow.cjs'
+      - 'scripts/audit_staging_auth_function_source.py'
+      - 'test/test_staging_auth_source.py'
       - 'scripts/auth_booking_staging_functions.json'
       - 'test/security/**'
       - 'assets/passenger-v2/login.html'
@@ -72,6 +74,8 @@ jobs:
         run: |
           node --check scripts/audit_347_staging_readonly.cjs
           node --test test/audit-347-staging-readonly.test.cjs
+      - name: Validate staging resume source readback without Google API calls
+        run: python3 -m unittest discover -s test -p 'test_staging_auth_source.py'
       - name: Run auth, booking, Parcel and Paystack failure regressions
         run: |
           node --test \

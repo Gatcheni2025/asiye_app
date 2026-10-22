@@ -77,3 +77,16 @@ test('staging rollout accepts only the known old generated package edit, preserv
  assert.equal(isGeneratedPackageChange(['assets/passenger-v2/js/login.js'],generated,reviewed),false);
  assert.equal(isGeneratedPackageChange(['functions/package.json'],{...generated,engines:{node:'18'}},reviewed),false);
 });
+
+test('only the exact post-deploy cleanup error can continue to independent source verification',()=>{
+ const {FUNCTIONS,cleanupOnlyFailure,resumeRequested}=require('../scripts/deploy_staging_auth_booking_flow.cjs');
+ const success=FUNCTIONS.map((n,i)=>`✔ functions[${n}(us-central1)] Successful ${i<2?'create':'update'} operation.`).join('\n');
+ const error='Error: Functions successfully deployed but could not set up cleanup policy in location us-central1. Pass the --force option to automatically set up a cleanup policy';
+ assert.equal(cleanupOnlyFailure({status:1,stdout:success,stderr:error}),true);
+ assert.equal(cleanupOnlyFailure({status:1,stdout:success.split('\n').slice(1).join('\n'),stderr:error}),false);
+ assert.equal(cleanupOnlyFailure({status:1,stdout:success,stderr:'Error: Source upload failed.\n'+error}),false);
+ assert.equal(cleanupOnlyFailure({status:1,stdout:success,stderr:'Error: Permission denied.'}),false);
+ assert.equal(cleanupOnlyFailure({status:1,stdout:success,stderr:error,error:new Error('Timeout')}),false);
+ assert.equal(resumeRequested([]),false);assert.equal(resumeRequested(['--resume-after-functions']),true);
+ assert.throws(()=>resumeRequested(['--force']),/Usage/);
+});

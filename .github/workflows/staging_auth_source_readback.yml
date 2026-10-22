@@ -1,0 +1,29 @@
+name: Verify deployed staging auth and booking source
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths:
+      - '.github/workflows/staging_auth_source_readback.yml'
+      - 'scripts/audit_staging_auth_function_source.py'
+      - 'test/test_staging_auth_source.py'
+permissions:
+  contents: read
+jobs:
+  deployed-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check source verification without Google access
+        run: python3 -m unittest discover -s test -p 'test_staging_auth_source.py'
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: asiye-paystack-staging
+          credentials_json: ${{ secrets.FIREBASE_STAGING_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Read seven active deployed build archives (no deployments or IAM changes)
+        run: python3 scripts/audit_staging_auth_function_source.py

@@ -20,6 +20,18 @@ node scripts/deploy_staging_auth_booking_flow.cjs
 
 The script checks the branch, clean tracked source (or the exact generated staging entrypoint left by the earlier deployment), staging project ID and number, public staging SDK and existing TEST key without printing credentials. The 37-function payment baseline omitted the two driver enrollment endpoints; this patch explicitly includes them, bringing expected staging inventory to 39. It deploys only the seven named endpoints from an isolated copy, then rules and Hosting, and runs the read-only audit. It does not change IAM, Auth providers, production, store releases or payment transactions. Do not paste Firebase debug logs or tokens into chat.
 
+## Resume after the container-image cleanup-policy message
+
+If all seven Functions reported successful create/update but Firebase stopped with “Functions successfully deployed but could not set up cleanup policy”, Functions are deployed. Rules and Hosting have not run yet. Update this checkout, then resume:
+
+```bash
+cd ~/asiye-staging-review
+git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet
+node scripts/deploy_staging_auth_booking_flow.cjs --resume-after-functions
+```
+
+Resume does not redeploy Functions or change the artifact cleanup policy. It checks all seven are ACTIVE and compares the JS, package and generated entrypoint against the immutable deployed build source. It stops on stale code, missing provenance or read denial. Once matched, it publishes the rules and Hosting, then audits all 39 expected staging Functions and hosted assets. Normal deployments also recognise only the specific cleanup-only exit after all seven successful operations, and require the same independent source check before proceeding.
+
 ## Staging acceptance still required
 
 1. Fresh browser session: each passenger provider enters home with no phone or camera prompt.

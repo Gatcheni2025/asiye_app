@@ -17,7 +17,31 @@ function isGeneratedPackageChange(paths,current,reviewed){
   current.main==='staging-index.generated.cjs' && reviewed.main==='index.js' &&
   require('node:util').isDeepStrictEqual({...current,main:reviewed.main},reviewed);
 }
+function resumeRequested(args){
+ if(args.length===0)return false;
+ if(args.length===1&&args[0]==='--resume-after-functions')return true;
+ throw Error('Usage: node scripts/deploy_staging_auth_booking_flow.cjs [--resume-after-functions]');
+}
+function cleanupOnlyFailure(result){
+ if(result.error||result.signal||result.status!==1)return false;
+ const clean=String(result.stdout||'')+'\n'+String(result.stderr||'');
+ const text=clean.replace(/\x1b\[[0-9;]*m/g,'');
+ const errors=text.split('\n').filter(line=>/^Error:/.test(line.trim()));
+ return errors.length===1 &&
+  /^Error: Functions successfully deployed but could not set up cleanup policy in location us-central1\./.test(errors[0].trim()) &&
+  FUNCTIONS.every(name=>text.includes('functions['+name+'(us-central1)] Successful create operation.') ||
+    text.includes('functions['+name+'(us-central1)] Successful update operation.'));
+}
+function deployFunctions(cli,args,options){
+ const result=spawnSync(cli,args,{...options,encoding:'utf8',stdio:'pipe',timeout:20*60*1000,maxBuffer:16*1024*1024});
+ if(result.stdout)process.stdout.write(result.stdout);
+ if(result.stderr)process.stderr.write(result.stderr);
+ if(result.status===0&&!result.error)return;
+ if(!cleanupOnlyFailure(result))throw Error('Functions deployment failed; rules and Hosting were not attempted.');
+ console.log('Functions reported success; cleanup-policy setup was skipped. Verifying all seven deployed source archives before continuing.');
+}
 async function main(){
+ const resume=resumeRequested(process.argv.slice(2));
  if(process.cwd()!==ROOT)throw Error('Run from the Asiye repository root.');
  if(run('gcloud',['config','get-value','project'],{quiet:true})!==PROJECT ||
     run('gcloud',['projects','describe',PROJECT,'--format=value(projectNumber)'],{quiet:true})!==NUMBER)
@@ -51,6 +75,7 @@ async function main(){
  const cli=path.join(cliDir,'node_modules','.bin','firebase');
  if(!fs.existsSync(cli))run('npm',['--prefix',cliDir,'install','--no-audit','--no-fund','--no-save','firebase-tools@15.34.0']);
  run(cli,['projects:list','--json'],{quiet:true});
+ if(!resume){
  // Archive reviewed source to an isolated temporary directory; leave tracked files untouched.
  const temp=fs.mkdtempSync(path.join(os.tmpdir(),'asiye-staging-auth-'));
  try{
@@ -65,12 +90,17 @@ async function main(){
   pkg.main='staging-index.generated.cjs';fs.writeFileSync(pkgPath,JSON.stringify(pkg,null,2)+'\n');
   run('npm',['--prefix',path.join(temp,'functions'),'install','--no-audit','--no-fund']);
   const env={...process.env,FIREBASE_CONFIG:JSON.stringify(config),STAGING_PROJECT:PROJECT};
-  run(cli,['deploy','--project',PROJECT,'--config',path.join(temp,'firebase.json'),'--only',FUNCTIONS.map(n=>'functions:'+n).join(','),'--non-interactive'],{cwd:temp,env});
-  run(cli,['deploy','--project',PROJECT,'--config',path.join(ROOT,'firebase.json'),'--only','database','--non-interactive']);
-  run(cli,['deploy','--project',PROJECT,'--config',result.generatedConfig,'--only','hosting','--non-interactive']);
-  run('node',['scripts/audit_347_staging_readonly.cjs']);
-  console.log('Staging patch deployed. Test passenger first booking and driver OTP in a fresh browser session. Native binaries still require a new build.');
+  deployFunctions(cli,['deploy','--project',PROJECT,'--config',path.join(temp,'firebase.json'),'--only',FUNCTIONS.map(n=>'functions:'+n).join(','),'--non-interactive'],{cwd:temp,env});
  }finally{fs.rmSync(temp,{recursive:true,force:true});}
+ }
+ // A successful deploy or screenshot alone is not enough for future resumes:
+ // prove ACTIVE state and exact reviewed JS/package/wrapper bytes from the
+ // immutable build generation. This operation only reads Google resources.
+ run('python3',['scripts/audit_staging_auth_function_source.py']);
+ run(cli,['deploy','--project',PROJECT,'--config',path.join(ROOT,'firebase.json'),'--only','database','--non-interactive']);
+ run(cli,['deploy','--project',PROJECT,'--config',result.generatedConfig,'--only','hosting','--non-interactive']);
+ run('node',['scripts/audit_347_staging_readonly.cjs']);
+ console.log('Staging patch deployed. Test passenger first booking and driver OTP in a fresh browser session. Native binaries still require a new build.');
 }
 if(require.main===module)main().catch(error=>{console.error('BLOCKED: '+error.message);process.exitCode=1;});
-module.exports={FUNCTIONS,isGeneratedPackageChange};
+module.exports={FUNCTIONS,isGeneratedPackageChange,resumeRequested,cleanupOnlyFailure};
