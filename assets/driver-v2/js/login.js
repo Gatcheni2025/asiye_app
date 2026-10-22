@@ -323,82 +323,49 @@ window.ASIYE_DRIVER_LOGIN = {
        RECAPTCHA
        ======================================================== */
 
+    // Reuse one Firebase verifier for the entire page lifecycle. Firebase's
+    // asynchronous render must finish before signInWithPhoneNumber consumes it.
     prepareRecaptcha() {
+        if (this.recaptchaRenderPromise) return this.recaptchaRenderPromise;
+        if (this.recaptchaVerifier) return Promise.resolve(this.recaptchaVerifier);
+        if (!document.getElementById('recaptcha-container')) return Promise.resolve(null);
 
+        let verifier;
         try {
-
-            if (
-                this.recaptchaVerifier
-            ) {
-
-                try {
-                    this.recaptchaVerifier.clear();
-                } catch (_) {}
-
-                this.recaptchaVerifier = null;
-            }
-
-
-            const container =
-                document.getElementById('recaptcha-container');
-
-            if (container) {
-                container.innerHTML = '';
-            }
-
-
-            this.recaptchaVerifier =
-
-                new firebase.auth
-                    .RecaptchaVerifier(
-
-                        'recaptcha-container',
-
-                        {
-
-                            size:
-                                'invisible',
-
-                            callback:
-                                () => {
-
-                                    console.log(
-                                        '✅ Driver reCAPTCHA passed'
-                                    );
-                                },
-
-                            'expired-callback':
-                                () => {
-
-                                    console.warn(
-                                        'Driver reCAPTCHA expired, resetting verifier.'
-                                    );
-
-                                    this.prepareRecaptcha();
-                                }
-                        }
-                    );
-
-
-            this.recaptchaVerifier
-                .render()
-                .catch(
-                    error => {
-
-                        console.warn(
-                            'reCAPTCHA render warning:',
-                            error
-                        );
+            verifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                size: 'invisible',
+                callback: () => console.log('✅ Driver reCAPTCHA passed'),
+                'expired-callback': () => this.resetRecaptchaWidget()
+            });
+            this.recaptchaVerifier = verifier;
+            this.recaptchaRenderPromise = verifier.render()
+                .then(widgetId => {
+                    if (this.recaptchaVerifier === verifier) this.recaptchaWidgetId = widgetId;
+                    return verifier;
+                })
+                .catch(error => {
+                    console.warn('Driver reCAPTCHA render warning:', error);
+                    if (this.recaptchaVerifier === verifier) {
+                        this.recaptchaVerifier = null;
+                        this.recaptchaRenderPromise = null;
+                        this.recaptchaWidgetId = null;
+                        try { verifier.clear(); } catch (_) {}
                     }
-                );
-
-
+                    return null;
+                });
+            return this.recaptchaRenderPromise;
         } catch (error) {
+            console.error('Driver reCAPTCHA setup failed:', error);
+            this.recaptchaVerifier = null;
+            this.recaptchaRenderPromise = null;
+            this.recaptchaWidgetId = null;
+            return Promise.resolve(null);
+        }
+    },
 
-            console.error(
-                'Could not create reCAPTCHA:',
-                error
-            );
+    resetRecaptchaWidget() {
+        if (Number.isInteger(this.recaptchaWidgetId)) {
+            try { window.grecaptcha?.reset(this.recaptchaWidgetId); } catch (_) {}
         }
     },
 
@@ -532,15 +499,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
         try {
 
-            if (
-                !this.recaptchaVerifier
-            ) {
+            const verifier = await this.prepareRecaptcha();
+            if (!verifier) throw new Error('Security verification is unavailable. Reload the page.');
 
-                this.prepareRecaptcha();
-            }
-
-
-            this.confirmationResult =
+this.confirmationResult =
 
                 await firebase
                     .auth()
@@ -548,7 +510,7 @@ window.ASIYE_DRIVER_LOGIN = {
 
                         phone,
 
-                        this.recaptchaVerifier
+                        verifier
                     );
 
 
@@ -601,7 +563,9 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-            this.prepareRecaptcha();
+            if (['auth/captcha-check-failed', 'auth/invalid-app-credential'].includes(error?.code)) {
+                this.resetRecaptchaWidget();
+            }
 
 
         } finally {
@@ -1641,7 +1605,8 @@ window.ASIYE_DRIVER_LOGIN = {
         }
 
 
-        this.prepareRecaptcha();
+        // Keep the rendered verifier when resending an OTP.
+
 
 
         const input =
@@ -1866,6 +1831,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 break;
 
+
+            case 'auth/operation-not-allowed':
+                message = 'SMS verification is not enabled for this Firebase project or region. Please choose another sign-in method.';
+                break;
 
             case 'auth/captcha-check-failed':
 
