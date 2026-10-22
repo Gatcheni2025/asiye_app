@@ -11,7 +11,7 @@ const PROJECT='asiye-paystack-staging';
 const NUMBER='1000800408896';
 const BRANCH='fix/paystack-subaccounts-cash-card-no-wallet';
 const REVIEW='8cbd56d';
-const ALLOWED=new Set(['assets/passenger-v2/login.html','assets/passenger-v2/js/login.js','assets/driver-v2/js/login.js']);
+const ALLOWED=new Set(['assets/passenger-v2/login.html','assets/passenger-v2/css/login.css','assets/passenger-v2/js/login.js','assets/driver-v2/js/login.js']);
 function run(args,name='git'){
  const p=spawnSync(name,args,{cwd:ROOT,encoding:'utf8',maxBuffer:1024*1024,timeout:60000});
  if(p.error||p.status!==0)throw Error('Read-only prerequisite failed: '+name);
