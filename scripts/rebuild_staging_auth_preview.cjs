@@ -11,7 +11,7 @@ const PROJECT='asiye-paystack-staging';
 const NUMBER='1000800408896';
 const BRANCH='fix/paystack-subaccounts-cash-card-no-wallet';
 const REVIEW='8cbd56d';
-const ALLOWED=new Set(['assets/passenger-v2/js/login.js','assets/driver-v2/js/login.js']);
+const ALLOWED=new Set(['assets/passenger-v2/login.html','assets/passenger-v2/js/login.js','assets/driver-v2/js/login.js']);
 function run(args,name='git'){
  const p=spawnSync(name,args,{cwd:ROOT,encoding:'utf8',maxBuffer:1024*1024,timeout:60000});
  if(p.error||p.status!==0)throw Error('Read-only prerequisite failed: '+name);
@@ -36,7 +36,7 @@ function main(){
  run(['merge-base','--is-ancestor',REVIEW,'HEAD']);
  const modified=run(['diff','--name-only',REVIEW,'HEAD','--','assets']).split('\n').filter(Boolean);
  if(modified.some(x=>!ALLOWED.has(x)) || modified.length===0)
-   throw Error('Only the reviewed two login files can differ from the baseline.');
+   throw Error('Only the reviewed passenger login page and two login scripts can differ from the baseline.');
  if(run(['diff','--name-only','HEAD','--','assets']))throw Error('Uncommitted asset edits.');
  const preview=path.join(ROOT,'staging-preview');
  const configPath=path.join(preview,'passenger-v2/js/firebase.js');
