@@ -246,6 +246,20 @@
         </div>
 
 
+        <!-- ONE-TIME PHONE VERIFICATION AFTER GOOGLE / APPLE -->
+        <div id="verifyPhoneStep" class="login-step">
+            <h2>Verify your mobile number</h2>
+            <p class="login-subtitle">Your Google or Apple sign-in is complete. Verify your number once by SMS to secure this Asiye account. Future sign-ins will not ask again.</p>
+            <label class="login-label" for="socialPhoneInput">Mobile number</label>
+            <div class="phone-wrapper">
+                <div class="country-code">🇿🇦 <strong>+27</strong></div>
+                <input id="socialPhoneInput" type="tel" inputmode="numeric" maxlength="10" autocomplete="tel-national" placeholder="82 123 4567">
+            </div>
+            <p class="login-subtitle">A verification SMS may be sent to this number. Standard message rates may apply.</p>
+            <div id="socialPhoneError" class="login-error" role="alert"></div>
+            <button id="socialSendOtpButton" class="primary-button" type="button">Send verification code</button>
+        </div>
+
         <!-- OTP -->
 
         <div
