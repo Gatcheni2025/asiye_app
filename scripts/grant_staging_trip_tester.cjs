@@ -16,6 +16,27 @@ function testerClaims(user,email){
  if(Buffer.byteLength(JSON.stringify(claims))>1000)throw Error('The account claims exceed the Firebase size limit.');
  return claims;
 }
+async function grantTesterRole(api,email){
+ const found=await api('lookup',{email:[email]});
+ if(found.users?.length!==1)throw Error('Sign in to https://'+PROJECT+'.web.app/admin/ with '+email+' once, then rerun this command.');
+ const user=found.users[0];testerClaims(user,email);
+ async function readSameAccount(){
+  const result=await api('lookup',{localId:[user.localId]});
+  if(result.users?.length!==1||result.users[0].localId!==user.localId)
+   throw Error('The selected staging test account could not be confirmed.');
+  const current=result.users[0];testerClaims(current,email);return current;
+ }
+ if(JSON.parse(user.customAttributes||'{}').stagingTripTester!==true){
+  // Preserve roles changed since the email lookup, including approval access.
+  const latest=await readSameAccount();
+  if(JSON.parse(latest.customAttributes||'{}').stagingTripTester!==true)
+   await api('update',{localId:user.localId,customAttributes:JSON.stringify(testerClaims(latest,email))});
+ }
+ const saved=await readSameAccount();
+ if(JSON.parse(saved.customAttributes||'{}').stagingTripTester!==true)
+  throw Error('Staging trip-test access could not be confirmed.');
+ return {uid:saved.localId,email:saved.email};
+}
 async function main(){
  const args=process.argv.slice(2);
  if(!(args.length===1&&args[0]==='--self')&&!(args.length===2&&args[0]==='--email'))
@@ -34,20 +55,10 @@ async function main(){
   if(!response.ok)throw Error('Staging Firebase Auth '+action+' blocked (HTTP '+response.status+'). No raw authentication response is printed.');
   return response.json();
  }
- const found=await api('lookup',{email:[email]});
- if(found.users?.length!==1)throw Error('Sign in to https://'+PROJECT+'.web.app/admin/ with '+email+' once, then rerun this command.');
- const user=found.users[0];testerClaims(user,email);
- if(JSON.parse(user.customAttributes||'{}').enrollmentReviewer!==true){
-  // Re-read to preserve any claims changed since lookup.
-  const latest=(await api('lookup',{localId:[user.localId]})).users?.[0];
-  const updated=testerClaims(latest,email);
-  await api('update',{localId:user.localId,customAttributes:JSON.stringify(updated)});
- }
- const saved=(await api('lookup',{localId:[user.localId]})).users?.[0];
- if(!saved||JSON.parse(saved.customAttributes||'{}').enrollmentReviewer!==true)throw Error('Reviewer access could not be confirmed.');
+ await grantTesterRole(api,email);
  console.log('STAGING_TRIP_TESTER: READY | '+email);
  console.log('Scope: staging TEST subaccount linking and test-trip cancellation only. Existing account claims are preserved.');
  console.log('Open /admin/testing.html and click Check access again to refresh your session.');
 }
 if(require.main===module)main().catch(error=>{console.error('BLOCKED: '+error.message);process.exitCode=1;});
-module.exports={testerClaims};
+module.exports={testerClaims,grantTesterRole};

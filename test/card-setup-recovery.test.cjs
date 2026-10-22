@@ -56,6 +56,68 @@ test('staging test claim preserves existing roles without granting finance or en
  for(const patch of [{disabled:true},{emailVerified:false},{email:'other@example.test'}])
   assert.throws(()=>testerClaims({...user,...patch},user.email));
 });
+function testAuthority(user,{beforeReread,dropUpdate=false,rejectUpdate=false,afterUpdate}={}){
+ let saved=structuredClone(user),lookups=0;const calls=[];
+ const api=async(action,body)=>{
+  calls.push({action,body:structuredClone(body)});
+  if(action==='lookup'){
+   lookups++;if(lookups===2&&beforeReread)saved=beforeReread(saved);
+   if(body.email)assert.deepEqual(body.email,[user.email]);
+   else assert.deepEqual(body.localId,[user.localId]);
+   return {users:[structuredClone(saved)]};
+  }
+  assert.equal(action,'update');assert.equal(body.localId,user.localId);
+  if(rejectUpdate)throw Error('Staging Firebase Auth update blocked (HTTP 403).');
+  if(!dropUpdate)saved={...saved,customAttributes:body.customAttributes};
+  if(afterUpdate)saved=afterUpdate(saved);
+  return {};
+ };
+ return {api,calls,saved:()=>saved};
+}
+const testAdmin=claims=>({localId:'staging-admin',email:'admin@example.test',emailVerified:true,
+ customAttributes:JSON.stringify(claims)});
+test('an existing driver reviewer receives and verifies the separate trip-test role',async()=>{
+ const {grantTesterRole}=require('../scripts/grant_staging_trip_tester.cjs');
+ const user=testAdmin({enrollmentReviewer:true,existing:'kept'}),h=testAuthority(user);
+ assert.deepEqual(await grantTesterRole(h.api,user.email),{uid:user.localId,email:user.email});
+ assert.deepEqual(JSON.parse(h.saved().customAttributes),{enrollmentReviewer:true,existing:'kept',stagingTripTester:true});
+ assert.deepEqual(h.calls.map(c=>c.action),['lookup','lookup','update','lookup']);
+});
+test('trip-test access does not require or add enrollment or finance privileges',async()=>{
+ const {grantTesterRole}=require('../scripts/grant_staging_trip_tester.cjs');
+ const user=testAdmin({existing:'kept'}),h=testAuthority(user);
+ await grantTesterRole(h.api,user.email);
+ assert.deepEqual(JSON.parse(h.saved().customAttributes),{existing:'kept',stagingTripTester:true});
+});
+test('grant retries are idempotent and preserve freshly read roles',async()=>{
+ const {grantTesterRole}=require('../scripts/grant_staging_trip_tester.cjs');
+ const user=testAdmin({enrollmentReviewer:true}),h=testAuthority(user,{
+  beforeReread:current=>({...current,customAttributes:JSON.stringify({enrollmentReviewer:true,newRole:'preserved'})})
+ });
+ await grantTesterRole(h.api,user.email);await grantTesterRole(h.api,user.email);
+ assert.deepEqual(JSON.parse(h.saved().customAttributes),{enrollmentReviewer:true,newRole:'preserved',stagingTripTester:true});
+ assert.equal(h.calls.filter(c=>c.action==='update').length,1);
+});
+test('READY cannot be reported when the actual trip-test claim was not saved or the write was denied',async()=>{
+ const {grantTesterRole}=require('../scripts/grant_staging_trip_tester.cjs');
+ const user=testAdmin({enrollmentReviewer:true});
+ for(const options of [{dropUpdate:true},{rejectUpdate:true}]){
+  const h=testAuthority(user,options);
+  await assert.rejects(grantTesterRole(h.api,user.email),options.dropUpdate?/trip-test access could not be confirmed/:/HTTP 403/);
+  assert.equal(JSON.parse(h.saved().customAttributes).stagingTripTester,undefined);
+ }
+});
+test('grant validates the same verified enabled account before writing and on readback',async()=>{
+ const {grantTesterRole}=require('../scripts/grant_staging_trip_tester.cjs');
+ const user=testAdmin({enrollmentReviewer:true});
+ for(const patch of [{localId:'someone-else'},{email:'other@example.test'},{emailVerified:false},{disabled:true}]){
+  const before=testAuthority(user,{beforeReread:current=>({...current,...patch})});
+  await assert.rejects(grantTesterRole(before.api,user.email));
+  assert.equal(before.calls.some(c=>c.action==='update'),false);
+  const after=testAuthority(user,{afterUpdate:current=>({...current,...patch})});
+  await assert.rejects(grantTesterRole(after.api,user.email));
+ }
+});
 test('partial-deployment recovery uses bounded function batches and audits both payment setup pages',()=>{
  const {NAMES,batches}=require('../scripts/deploy_staging_card_test_tools.cjs');
  assert.equal(NAMES.length,23);assert.deepEqual(batches(NAMES).flat(),NAMES);assert.ok(batches(NAMES).every(batch=>batch.length<=3));

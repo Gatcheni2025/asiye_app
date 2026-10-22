@@ -64,6 +64,22 @@ STAGING_TRIP_TESTER: READY
 
 If a function fails again, retain its actual error above the final summary. Do not change IAM or redeploy production to address a staging error.
 
+## Testing-admin sign-in succeeds but access is denied
+
+The new admin screenshots show the correct staging account signed in, followed by the callable's HTTP 403 and `Staging trip-test access has not been assigned to this account.` The original grant script incorrectly used `enrollmentReviewer` for its skip-write and success checks. An existing driver reviewer could therefore receive `STAGING_TRIP_TESTER: READY` without the required `stagingTripTester` claim being assigned. That earlier READY output was not proof of testing access.
+
+The corrected script checks and grants only `stagingTripTester:true`, preserves all existing roles using a fresh account read before writing, and verifies the exact same enabled, verified account and actual saved claim before printing READY. Regression coverage exercises the lookup, update and readback together, including an existing reviewer, a tester without reviewer access, retries, changed roles, denied writes and failed persistence.
+
+Hosting, function source and database rules already passed in the preceding screenshot. Apply only this account-role correction:
+
+```bash
+cd ~/asiye-staging-review &&
+git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet &&
+node scripts/grant_staging_trip_tester.cjs --self
+```
+
+Once it reports READY, return to `/admin/testing.html` and click **Check access again**. This refreshes the ID token before the server checks the role. There is no need to deploy functions/Hosting or change IAM for this correction. Popup-policy warnings and blocked developer-tool source maps do not explain the application's explicit missing-role response.
+
 ## Test the actual journey
 
 1. Open `https://asiye-paystack-staging.web.app/admin/testing.html`, sign in with the account assigned above and click **Check access again** if already signed in. The same account retains its separate driver-review role at `/admin/`.
