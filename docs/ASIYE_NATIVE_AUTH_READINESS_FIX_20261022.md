@@ -56,6 +56,19 @@ and independently reads back all 17 files plus RTDB rules afterwards. It never
 deploys functions/rules or supplies Paystack keys. Check its result before using
 the Cloud Shell fallback; do not repeat a successful deployment.
 
+The first run, **39753441553**, passed the source, preview, identity and
+37-function preflight. Publishing Hosting was blocked by **HTTP 403** for the
+GitHub staging service account. No IAM changes were attempted. Use the existing
+human-authenticated Cloud Shell session for the Hosting-only fallback below;
+do not grant Cloud Functions/runtime roles to resolve a Hosting write failure.
+
+The separate `staging_function_source_readback.yml` workflow reads immutable
+Cloud Functions build-archive generations and compares the 23 reviewed
+JavaScript files, package metadata and generated staging entrypoint. It never
+deploys or prints archive contents, environment files, tokens or customer data.
+It reports code differences and source-read permissions separately; dependency
+resolution and the managed runtime are outside this code comparison.
+
 ## Cloud Shell fallback: update only the corrected shared auth asset
 
 Use the existing isolated staging checkout and validated preview configuration:

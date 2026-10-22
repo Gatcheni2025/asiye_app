@@ -23,7 +23,7 @@ the production Firebase project and must not be mistaken for staging builds.
 | Gate | Evidence needed | Status 22 Oct |
 | --- | --- | --- |
 | Staging function inventory | Exactly 37 expected functions ACTIVE | **Independent PASS**, run 39752616083 (names/state only) |
-| Hosting | Published passenger/driver preview digest matches local staging preview, no production config | **Observed PASS** |
+| Hosting | Published passenger/driver preview digest matches local staging preview, no production config | Prior preview **PASS**; corrected shared native bridge update pending (GitHub Hosting publish HTTP 403, run 39753441553) |
 | Staging database rules | Read back deployed RTDB rules; digest matches reviewed `database.rules.json` | **Independent PASS**, run 39752616083 |
 | Staging backend revision | Prove function builds are from intended reviewed SHA, not just ACTIVE | **UNVERIFIED** |
 | Passenger authentication | Google, Apple, Phone OTP; first-time one-off SMS link; returning dashboard; face/name onboarding; linked-UID preservation; already-linked number conflict | **Source tests pass; device UAT missing** |
