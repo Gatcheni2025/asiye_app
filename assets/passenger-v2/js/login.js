@@ -556,7 +556,7 @@ window.ASIYE_PASSENGER_LOGIN = {
             this.showStep(linking ? 'verifyPhoneStep' : 'loginStep');
             return;
         }
-        const code = String(input?.value || '').replace(/\\D/g,'');
+        const code = String(input?.value || '').replace(/\D/g,'');
         if (code.length !== 6) {
             if (errorElement) errorElement.textContent = 'Enter the 6-digit verification code.';
             return;
