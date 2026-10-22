@@ -1,3 +1,5 @@
+> Authentication policy update: see [Passenger signup, first-booking photo and driver OTP](ASIYE_AUTH_FIRST_BOOKING_20261022.md). That policy supersedes passenger phone OTP and face-at-signup instructions below.
+
 # Asiye 347 — native OTP correction and candidate rebuild
 
 ## Corrected behavior

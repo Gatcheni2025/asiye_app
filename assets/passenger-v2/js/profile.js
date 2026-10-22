@@ -148,113 +148,40 @@ ASIYE.profile = {
     },
 
 
-    async saveFace(blob, userId = ASIYE.state?.userId) {
-        if (!userId) {
-            throw new Error('Passenger account is not loaded.');
-        }
-
-        if (!window.AsiyePhpImageUpload) {
-            throw new Error('Profile image service is unavailable.');
-        }
-
-        const uploaded = await AsiyePhpImageUpload.upload(
-            blob,
-            {
-                userId,
-                purpose: 'passenger-profile',
-                filename: 'passenger-profile.jpg'
-            }
-        );
-
-        const url = uploaded.url;
-        const patch = {
-            profileImageUrl: url,
-            profile_picture_url: url,
-            profilePhotoUrl: url,
-            photoURL: url,
-            passengerProfileImageUrl: url,
-            faceScanCompleted: true,
-            faceScanVerifiedAt:
-                firebase.database.ServerValue.TIMESTAMP,
-            profilePhotoUpdatedAt:
-                firebase.database.ServerValue.TIMESTAMP
-        };
-
-        /*
-         * uploadProfileImageProxy already writes these canonical fields to
-         * commuters/{userId} with Admin SDK. Mirror them from the WebView when
-         * permitted, but never report a failed scan after the server saved it.
-         */
-        await firebase.database()
-            .ref(`commuters/${userId}`)
-            .update(patch)
-            .catch(error => {
-                console.warn(
-                    'Passenger profile image was saved server-side; client mirror update was skipped:',
-                    error
-                );
-            });
-
-        ASIYE.state.user = ASIYE.state.user || {};
-        Object.assign(ASIYE.state.user, patch);
-
-        const authUser = firebase.auth().currentUser;
-        if (authUser?.updateProfile) {
-            try {
-                await authUser.updateProfile({ photoURL: url });
-            } catch (error) {
-                console.warn('Passenger Auth profile image was not updated:', error);
-            }
-        }
-
-        this.refreshUI(
-            ASIYE.state.user
-        );
-
-        return url;
+    async saveFace(dataUrl, fullName, userId = ASIYE.state?.userId) {
+        const user = firebase.auth().currentUser;
+        if (!userId || !user) throw new Error('Sign in again before saving your picture.');
+        const response = await fetch('https://us-central1-asiye-80386.cloudfunctions.net/uploadProfileImageProxy', {
+            method: 'POST', headers: {Authorization: `Bearer ${await user.getIdToken(true)}`, 'Content-Type': 'application/json'},
+            body: JSON.stringify({userId, purpose: 'passenger-profile', fullName, completeSignup: true, dataUrl})
+        });
+        const uploaded = await response.json().catch(() => ({}));
+        if (!response.ok || !/^https:\/\//.test(uploaded.url || ''))
+            throw new Error(uploaded.error || 'Could not save your picture. Please retry.');
+        // Read back server-owned completion, never manufacture it in local state.
+        const profile = (await firebase.database().ref(`commuters/${userId}`).once('value')).val();
+        if (profile?.bookingFaceAuthUid !== user.uid || !profile.bookingFaceSavedAt || !this.getUrl(profile))
+            throw new Error('Your picture was uploaded but profile confirmation is pending. Tap Save again.');
+        ASIYE.state.user = profile;
+        this.refreshUI(profile);
+        return uploaded.url;
     },
 
-    async scanAndSave(statusEl = null) {
-        if (!window.AsiyeFaceCapture) {
-            throw new Error('Live face scan is unavailable in this build.');
-        }
-
-        if (statusEl) {
-            statusEl.textContent = 'Opening front camera…';
-        }
-
-        const result = await AsiyeFaceCapture.capture('passenger-profile');
-        const blob = AsiyePhpImageUpload.toBlob(result);
-
-        if (statusEl) {
-            statusEl.textContent = 'Saving profile picture…';
-        }
-
-        const url = await this.saveFace(blob);
-
-        if (statusEl) {
-            statusEl.textContent = 'Face scan saved. Your profile is ready for bookings.';
-        }
-
-        return url;
+    scanAndSave() {
+        if (!window.AsiyePassengerOnboarding) throw new Error('Reopen Asiye to load the camera.');
+        return window.AsiyePassengerOnboarding.open({name: ASIYE.state?.user?.name || firebase.auth().currentUser?.displayName || '',
+            save: (photo, name) => this.saveFace(photo, name)});
     },
 
     async ensureRequired() {
-        const user = ASIYE.state?.user || {};
-        const existing = this.getUrl(user);
-        const faceScanCompleted =
-            user.faceScanCompleted === true ||
-            user.faceScanVerified === true;
-
-        // Never open a camera or upload an image from within a payment or
-        // booking request. Phone signup has a dedicated face capture step.
-        // Re-scanning, if needed, is done explicitly in the Account panel.
-        if (existing && faceScanCompleted && String(user.name || '').trim().length >= 2) {
-            return existing;
-        }
-        throw new Error(
-            'Your passenger profile needs a saved face photo before booking. Open Account, tap Scan face, then retry the ride.'
-        );
+        const userId = ASIYE.state?.userId;
+        const auth = firebase.auth().currentUser;
+        if (!userId || !auth) throw new Error('Please sign in before booking.');
+        const profile = (await firebase.database().ref(`commuters/${userId}`).once('value')).val() || {};
+        ASIYE.state.user = profile;
+        if (profile.bookingFaceAuthUid === auth.uid && Number(profile.bookingFaceSavedAt) > 0 &&
+            String(profile.name || '').trim().length >= 2 && this.getUrl(profile)) return this.getUrl(profile);
+        return await this.scanAndSave();
     },
 
     bindAccount(container) {

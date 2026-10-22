@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 
-function setup({installed = true, role = 'passenger'} = {}) {
+function setup({installed = true, role = 'driver'} = {}) {
   const elements = new Map(), values = new Map(), posted = [];
   const element = id => {
     if (!elements.has(id)) elements.set(id, {value: '', textContent: '', disabled: false,
@@ -16,7 +16,7 @@ function setup({installed = true, role = 'passenger'} = {}) {
   const calls = {tokens: 0, completed: 0, switched: 0, webOtp: 0, errors: []};
   const auth = {currentUser: user, setPersistence: async()=>{}, signOut: async()=>{},
     signInWithCustomToken: async()=>{calls.tokens++; user.phoneNumber = '+27821234567'; return {user};}};
-  const login = {awaitingPhoneLink: role === 'passenger', pendingUser: user,
+  const login = {awaitingPhoneLink: role === 'driver', pendingUser: user,
     normalizePhone: raw => /^0\d{9}$/.test(raw || '') ? '+27' + raw.slice(1) : null,
     sendOtp: async()=>{calls.webOtp++;}, afterAuthentication: async()=>{calls.completed++;},
     verifyDriverProfile: async()=>{calls.completed++;},
@@ -35,23 +35,22 @@ function setup({installed = true, role = 'passenger'} = {}) {
 test('installed social OTP reads social input and sends original UID for native linking', async()=>{
   const x = setup();
   x.element('passengerPhoneInput').value = '0830000000';
-  x.element('socialPhoneInput').value = '0821234567';
+  x.element('driverPhoneInput').value = '0821234567';
   await x.login.sendOtp();
   assert.equal(x.posted.length, 1);
   assert.deepEqual(x.posted[0], {action:'startPhoneSignIn', phone:'+27821234567', linkUid:x.user.uid});
-  assert.equal(x.element('socialSendOtpButton').disabled, true);
+  assert.equal(x.element('sendOtpButton').disabled, true);
   assert.equal(x.values.get('asiyePendingPhoneAuthLinkUid'), x.user.uid);
   await x.login.resendOtp();
   assert.equal(x.posted[1].linkUid, x.user.uid);
 });
 
-test('regular passenger and driver phone login send no social linking intent', async()=>{
+test('phone authentication cannot begin before driver social sign-in or for passengers', async()=>{
   for (const role of ['passenger','driver']) {
     const x = setup({role}); x.login.awaitingPhoneLink = false;
-    x.element(role === 'driver' ? 'driverPhoneInput' : 'passengerPhoneInput').value = '0821234567';
+    x.element('driverPhoneInput').value = '0821234567';
     await x.login.sendOtp();
-    assert.equal(x.posted[0].linkUid, null);
-    assert.equal(x.posted[0].phone, '+27821234567');
+    assert.equal(x.posted.length, 0);
   }
 });
 
@@ -64,7 +63,7 @@ test('a phone callback for another UID cannot replace the current social session
   assert.equal(x.auth.currentUser.uid, x.user.uid);
 });
 
-test('same-UID native phone session completes passenger flow and clears link recovery state', async()=>{
+test('same-UID native phone session completes driver flow and clears link recovery state', async()=>{
   const x = setup();
   x.values.set('asiyePendingPhoneAuthLinkUid', x.user.uid);
   await x.window.onNativeAuthSession({provider:'phone', customToken:'linked-token', uid:x.user.uid});
@@ -75,18 +74,18 @@ test('same-UID native phone session completes passenger flow and clears link rec
 
 test('a changed social session sends no native OTP request', async()=>{
   const x = setup(); x.auth.currentUser = {uid:'different-user'};
-  x.element('socialPhoneInput').value = '0821234567';
+  x.element('driverPhoneInput').value = '0821234567';
   await x.login.sendOtp();
   assert.equal(x.posted.length, 0);
-  assert.match(x.element('socialPhoneError').textContent, /session changed/);
+  assert.match(x.element('phoneError').textContent, /session changed/);
 });
 
 test('native phone-link failure resets the social button and shows its own error', async()=>{
   const x = setup();
-  x.element('socialSendOtpButton').disabled = true;
+  x.element('sendOtpButton').disabled = true;
   x.window.onNativePhoneAuthError('This phone belongs to another Asiye account.');
-  assert.equal(x.element('socialSendOtpButton').disabled, false);
-  assert.match(x.element('socialPhoneError').textContent, /another Asiye account/);
+  assert.equal(x.element('sendOtpButton').disabled, false);
+  assert.match(x.element('phoneError').textContent, /another Asiye account/);
 });
 
 test('chooser waits for successful native sign-out and ignores stale acknowledgements', async()=>{

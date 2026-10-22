@@ -3,165 +3,71 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
-const src=fs.readFileSync('assets/passenger-v2/js/login.js','utf8');
-const html=fs.readFileSync('assets/passenger-v2/login.html','utf8');
-const {rewrite}=require('../scripts/build_staging_web_preview.cjs');
-function setup(user){
-  const nodes=new Map();
-  const element=id=>{
-    if(!nodes.has(id))nodes.set(id,{id,value:'',textContent:'',disabled:false,innerHTML:'',
-      classList:{add(){},remove(){}},addEventListener(){},focus(){}});
-    return nodes.get(id);
-  };
-  const auth={currentUser:user,
-    signInWithPhoneNumber:async()=>{throw Error('Direct phone call not configured');}};
-  const fbauth=()=>auth;
-  fbauth.RecaptchaVerifier=class {};
-  const window={};
-  const scope={window,document:{getElementById:element,querySelectorAll:()=>[],addEventListener(){}},
-    firebase:{auth:fbauth},console:{log(){},warn(){},error(){}},
-    localStorage:{setItem(){},getItem(){return null;}},setTimeout(){},clearTimeout(){},
-    setInterval(){return 1;},clearInterval(){},Image:class {}};
-  vm.runInNewContext(src,scope,{filename:'passenger-login.js'});
-  const login=window.ASIYE_PASSENGER_LOGIN;
-  let step='',completed=0;
-  login.showStep=id=>{step=id;};
-  login.toast=()=>{};
-  login.prepareRecaptcha=async()=>({kind:'test-recaptcha'});
-  login.startResendTimer=()=>{};
-  login.storedFaceAvailable=async()=>true;
-  login.resolvePassengerProfile=async()=>({id:user.uid,data:{
-    name:'Verified Passenger',profileImageUrl:'https://example.invalid/photo.jpg'}});
-  login.completeLogin=async()=>{completed++;};
-  return {login,auth,nodes,element,get step(){return step;},get completed(){return completed;}};
+function setup(role, user) {
+ const nodes=new Map(), stored=new Map(), calls={created:0,completed:0,linked:0,direct:0};
+ const element=id=>{if(!nodes.has(id))nodes.set(id,{value:'',textContent:'',disabled:false,classList:{add(){},remove(){}},addEventListener(){},focus(){}});return nodes.get(id);};
+ const auth={currentUser:user, signOut:async()=>{auth.currentUser=null;}, signInWithPhoneNumber:async()=>{calls.direct++;throw Error('Must not replace UID');}};
+ const profile={authUid:user.uid,name:user.displayName||''};
+ const firebase={auth:Object.assign(()=>auth,{Auth:{Persistence:{LOCAL:'LOCAL'}}}),database:Object.assign(()=>({ref:()=>({
+   once:async()=>({exists:()=>true,val:()=>profile}),
+   transaction:async fn=>{calls.created++;Object.assign(profile,fn(null));return {snapshot:{val:()=>profile}};}
+ })}),{ServerValue:{TIMESTAMP:1}})};
+ const scope={window:{location:{replace(){}}},document:{getElementById:element,querySelectorAll:()=>[],addEventListener(){}},firebase,
+ localStorage:{setItem:(k,v)=>stored.set(k,v),removeItem:k=>stored.delete(k)},console:{log(){},warn(){},error(){}},setTimeout,clearTimeout,setInterval:()=>1,clearInterval,queueMicrotask};
+ vm.runInNewContext(fs.readFileSync(`assets/${role}-v2/js/login.js`,'utf8'),scope);
+ const login=scope.window[`ASIYE_${role.toUpperCase()}_LOGIN`];let step='';
+ login.showStep=id=>{step=id;};login.toast=()=>{};
+ return {login,auth,element,calls,stored,profile,get step(){return step;}};
 }
-test('social sign-in requires one-time OTP even if cached profile has a phone field',async()=>{
-  const user={uid:'social-uid',phoneNumber:null,providerData:[{providerId:'google.com'}]};
-  const x=setup(user);
-  await x.login.afterAuthentication(user);
-  assert.equal(x.step,'verifyPhoneStep');
-  assert.equal(x.completed,0);
-  assert.equal(x.login.awaitingPhoneLink,true);
-});
-test('Google/Apple OTP links same UID, never calls signInWithPhoneNumber, then unlocks existing profile',async()=>{
+test('Google and Apple passengers without phone or picture enter their existing account',async()=>{
  for(const providerId of ['google.com','apple.com']){
-   const user={uid:'social-uid',phoneNumber:null,providerData:[{providerId}],
-     async reload(){}};
-   const x=setup(user);let linked=0,signed=0;
-   x.auth.signInWithPhoneNumber=async()=>{signed++;throw Error('Do not switch UID');};
-   user.linkWithPhoneNumber=async(number,verifier)=>{
-     assert.equal(number,'+27821234567');assert.ok(verifier);
-     linked++;
-     return {confirm:async code=>{
-       assert.equal(code,'123456');user.phoneNumber='+27821234567';
-       return {user};
-     }};
-   };
-   await x.login.afterAuthentication(user);
-   x.element('socialPhoneInput').value='0821234567';
-   await x.login.sendOtp();
-   assert.equal(x.step,'otpStep');
-   x.element('passengerOtpInput').value='123456';
-   await x.login.verifyOtp();
-   assert.equal(linked,1);assert.equal(signed,0);
-   assert.equal(x.completed,1);
-   assert.equal(x.login.awaitingPhoneLink,false);
-   assert.equal(x.login.pendingUser.uid,'social-uid');
- }
-});
-test('phone sign-in verifies OTP directly and does not request a second OTP for completed profile',async()=>{
- const user={uid:'phone-uid',phoneNumber:null,providerData:[{providerId:'phone'}]};
- const x=setup(user);let direct=0,linked=0;
- x.auth.signInWithPhoneNumber=async(phone)=>{
-   direct++;
-   return {confirm:async code=>{assert.equal(code,'123456');user.phoneNumber=phone;return {user};}};
- };
- user.linkWithPhoneNumber=async()=>{linked++;throw Error('Should not link');};
- x.element('passengerPhoneInput').value='0821234567';
- await x.login.sendOtp();
- x.element('passengerOtpInput').value='123456';
- await x.login.verifyOtp();
- assert.equal(direct,1);assert.equal(linked,0);assert.equal(x.completed,1);
- await x.login.afterAuthentication(user);
- assert.equal(x.completed,2);assert.equal(x.login.awaitingPhoneLink,false);
-});
-test('first-time verified phone user still needs required name and face scan',async()=>{
- const user={uid:'first-time-uid',phoneNumber:'+27821234567'};
- const x=setup(user);
- x.login.resolvePassengerProfile=async()=>null;
- await x.login.afterAuthentication(user);
- assert.equal(x.step,'newPassengerStep');
- assert.equal(x.completed,0);
-});
-test('UID changes or already-linked phone credentials cannot silently log in',async()=>{
- const user={uid:'original-social-uid',phoneNumber:null,providerData:[{providerId:'apple.com'}],
-   async reload(){}};
- const x=setup(user);
- await x.login.afterAuthentication(user);
- user.linkWithPhoneNumber=async()=>({
-  confirm:async()=>({user:{uid:'WRONG-UID',phoneNumber:'+27821234567'}})
- });
- x.element('socialPhoneInput').value='0821234567';
- await x.login.sendOtp();
- x.element('passengerOtpInput').value='123456';
- await x.login.verifyOtp();
- assert.equal(x.completed,0);
- assert.equal(x.login.awaitingPhoneLink,true);
- assert.equal(x.auth.currentUser.uid,'original-social-uid');
-});
-test('social phone view is part of passenger UI with separate input and OTP buttons',()=>{
- for(const id of ['verifyPhoneStep','socialPhoneInput','socialPhoneError','socialSendOtpButton',
-                  'passengerPhoneInput','otpStep','newPassengerStep']){
-  assert.match(html,new RegExp('id="'+id+'"'));
- }
- assert.match(src,/current\.linkWithPhoneNumber\(phone, verifier\)/);
- assert.match(src,/firebase\.auth\(\)\.signInWithPhoneNumber\(phone, verifier\)/);
- assert.doesNotMatch(src,/await this\.completeLogin\(\s*authUser\.uid,/);
- const clean=src.slice(src.indexOf('async afterAuthentication('),src.indexOf('async resolvePassengerProfile('));
- assert.ok(clean.indexOf("if (!user.phoneNumber)")<clean.indexOf("this.resolvePassengerProfile("));
-});
-
-test('persisted Apple/Google session can switch to the visible Google Apple Phone chooser',async()=>{
-  for(const providerId of ['apple.com','google.com']){
-    const user={uid:'unverified-social',phoneNumber:null,providerData:[{providerId}]};
-    const x=setup(user);
-    let signouts=0;
-    x.auth.signOut=async()=>{signouts++; x.auth.currentUser=null;};
-    await x.login.afterAuthentication(user);
-    assert.equal(x.step,'verifyPhoneStep');
-    assert.match(x.element('phoneLinkExplanation').textContent,
-      providerId==='apple.com'?/Apple/:/Google/);
-    await x.login.useAnotherSignInMethod();
-    assert.equal(signouts,1);
-    assert.equal(x.step,'loginStep');
-    assert.equal(x.login.awaitingPhoneLink,false);
-    assert.equal(x.login.pendingUser,null);
-    assert.equal(x.login.confirmationResult,null);
-    assert.equal(x.completed,0);
-  }
-});
-test('failed Firebase sign-out keeps current phone-link verification gate',async()=>{
-  const user={uid:'unverified-social',phoneNumber:null,providerData:[{providerId:'google.com'}]};
-  const x=setup(user);
-  x.auth.signOut=async()=>{throw Object.assign(Error('Signout blocked'),{code:'auth/network-request-failed'});};
+  const user={uid:'social',phoneNumber:null,providerData:[{providerId}]};const x=setup('passenger',user);
+  x.login.resolvePassengerProfile=async()=>({id:user.uid,data:{authUid:user.uid}});
+  x.login.completeLogin=async()=>{x.calls.completed++;};
   await x.login.afterAuthentication(user);
-  await x.login.useAnotherSignInMethod();
-  assert.equal(x.step,'verifyPhoneStep');
-  assert.equal(x.login.pendingUser.uid,user.uid);
-  assert.equal(x.login.awaitingPhoneLink,true);
-  assert.equal(x.completed,0);
+  assert.equal(x.calls.completed,1);assert.equal(x.login.awaitingPhoneLink,false);
+  await x.login.sendOtp();assert.equal(x.calls.direct,0);
+ }
 });
-test('passenger-only login chooser and corrected phone input remain visible in shipped markup',()=>{
-  const css=fs.readFileSync('assets/passenger-v2/css/login.css','utf8');
-  for(const id of ['loginStep','googleLoginButton','appleLoginButton','passengerPhoneInput',
-   'verifyPhoneStep','switchPassengerSignInButton','switchPassengerOtpMethodButton'])
-    assert.match(html,new RegExp('id="'+id+'"'));
-  assert.match(html,/Choose Google, Apple or phone/);
-  assert.match(css,/#passengerPhoneInput,\s*#socialPhoneInput\s*\{/);
-  assert.match(src,/await firebase\.auth\(\)\.signOut\(\)/);
-  assert.match(src,/this\.showStep\('loginStep'\)/);
-  const deploy=fs.readFileSync('scripts/deploy_paystack_staging_hosting_only.cjs','utf8');
-  assert.match(deploy,/'passenger-v2\/css\/login\.css'/);
-  assert.match(deploy,/'assets\/passenger-v2\/css\/login\.css'/);
-  assert.doesNotMatch(deploy,/--only','functions'/);
+test('first passenger signup creates one owned profile without phone or image',async()=>{
+ const user={uid:'new-social',displayName:'Mandla',providerData:[{providerId:'google.com'}]};const x=setup('passenger',user);
+ x.login.resolvePassengerProfile=async()=>null;x.login.completeLogin=async()=>{x.calls.completed++;};
+ await x.login.afterAuthentication(user);assert.equal(x.calls.created,1);assert.equal(x.calls.completed,1);
+ assert.equal(x.profile.authUid,user.uid);assert.equal(x.profile.phone,undefined);assert.equal(x.profile.faceScanCompleted,undefined);
+});
+test('passenger cannot claim another profile or use phone-only authentication',async()=>{
+ const user={uid:'social',providerData:[{providerId:'apple.com'}]};const x=setup('passenger',user);
+ await assert.rejects(()=>x.login.completeLogin('other',{authUid:'other'},user),/ownership/);
+ await x.login.afterAuthentication({uid:'phone-only',providerData:[{providerId:'phone'}],phoneNumber:'+27821234567'});
+ assert.equal(x.step,'loginStep');assert.equal(x.calls.created,0);
+});
+test('driver sees social chooser first, then phone verification only when needed',()=>{
+ const user={uid:'driver',providerData:[{providerId:'google.com'}]};const x=setup('driver',user);
+ assert.equal(x.login.driverIdentityReady({uid:'phone-only',phoneNumber:'+27821234567'}),false);assert.equal(x.step,'loginStep');
+ assert.equal(x.login.driverIdentityReady(user),false);assert.equal(x.step,'phoneStep');assert.equal(x.login.pendingUser.uid,user.uid);
+ user.phoneNumber='+27821234567';assert.equal(x.login.driverIdentityReady(user),true);assert.equal(x.login.awaitingPhoneLink,false);
+});
+test('web driver OTP links Google/Apple UID, never signs into a separate phone account',async()=>{
+ for(const providerId of ['google.com','apple.com']){
+  const user={uid:'driver',providerData:[{providerId}]};const x=setup('driver',user);x.login.driverIdentityReady(user);
+  x.login.prepareRecaptcha=async()=>({});x.login.startResendTimer=()=>{};
+  user.linkWithPhoneNumber=async phone=>{x.calls.linked++;return {confirm:async()=>{user.phoneNumber=phone;return {user};}};};
+  x.element('driverPhoneInput').value='0821234567';await x.login.sendOtp();assert.equal(x.step,'otpStep');
+  x.login.verifyDriverProfile=async u=>{assert.equal(u.uid,user.uid);x.calls.completed++;};
+  x.element('driverOtpInput').value='123456';await x.login.verifyOtp();
+  assert.equal(x.calls.linked,1);assert.equal(x.calls.direct,0);assert.equal(x.calls.completed,1);
+ }
+});
+test('driver session changes or phone credential collisions do not complete login',async()=>{
+ const user={uid:'driver',providerData:[{providerId:'google.com'}]};const x=setup('driver',user);x.login.driverIdentityReady(user);
+ x.login.prepareRecaptcha=async()=>({});x.element('driverPhoneInput').value='0821234567';
+ user.linkWithPhoneNumber=async()=>{throw {code:'auth/credential-already-in-use'};};
+ await x.login.sendOtp();assert.match(x.element('phoneError').textContent,/another Asiye account/);assert.equal(x.calls.completed,0);
+ x.auth.currentUser={uid:'changed'};await x.login.sendOtp();assert.equal(x.step,'loginStep');assert.equal(x.calls.direct,0);
+});
+test('passenger signup markup has only social methods; driver phone is a later step',()=>{
+ const passenger=fs.readFileSync('assets/passenger-v2/login.html','utf8'), driver=fs.readFileSync('assets/driver-v2/login.html','utf8');
+ assert.doesNotMatch(passenger,/id="(?:passengerPhoneInput|verifyPhoneStep|newPassengerStep)"/);
+ for(const id of ['googleLoginButton','appleLoginButton'])assert.ok(passenger.includes(`id="${id}"`));
+ assert.match(driver,/id="loginStep" class="login-step active"/);assert.match(driver,/id="phoneStep"\s+class="login-step"/);
 });

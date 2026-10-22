@@ -1,9 +1,12 @@
 /* ============================================================
    ASIYE DRIVER V2
-   PHONE LOGIN / OTP
+   GOOGLE / APPLE, THEN DRIVER PHONE OTP
    ============================================================ */
 
 window.ASIYE_DRIVER_LOGIN = {
+
+    pendingUser: null,
+    awaitingPhoneLink: false,
 
     confirmationResult:
         null,
@@ -69,7 +72,7 @@ window.ASIYE_DRIVER_LOGIN = {
             );
         } catch (_) {}
 
-        this.prepareRecaptcha();
+        // reCAPTCHA is created only when a signed-in driver requests SMS.
 
         await this.checkExistingSession();
     },
@@ -152,6 +155,9 @@ window.ASIYE_DRIVER_LOGIN = {
        ======================================================== */
 
     bindEvents() {
+        document.getElementById('switchDriverSignInButton')?.addEventListener('click', () =>
+            this.useAnotherSignInMethod().catch(() => this.toast('Could not switch accounts. Please try again.')));
+
 
         document
             .getElementById(
@@ -423,6 +429,14 @@ window.ASIYE_DRIVER_LOGIN = {
        ======================================================== */
 
     async sendOtp() {
+        const current = firebase.auth().currentUser;
+        if (!this.awaitingPhoneLink || !this.pendingUser || current?.uid !== this.pendingUser.uid ||
+            !current.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
+            this.showStep('loginStep');
+            this.toast('Sign in with Google or Apple before verifying your driver phone.');
+            return;
+        }
+
 
         const input =
             document.getElementById(
@@ -502,17 +516,7 @@ window.ASIYE_DRIVER_LOGIN = {
             const verifier = await this.prepareRecaptcha();
             if (!verifier) throw new Error('Security verification is unavailable. Reload the page.');
 
-this.confirmationResult =
-
-                await firebase
-                    .auth()
-                    .signInWithPhoneNumber(
-
-                        phone,
-
-                        verifier
-                    );
-
+            this.confirmationResult = await current.linkWithPhoneNumber(phone, verifier);
 
             const display =
                 document.getElementById(
@@ -688,6 +692,10 @@ this.confirmationResult =
                     );
 
             authUser = result.user;
+            if (authUser?.uid !== this.pendingUser?.uid || !authUser?.phoneNumber) {
+                throw new Error('Phone verification did not preserve your Google or Apple account. Please try again.');
+            }
+            this.awaitingPhoneLink = false;
 
         } catch (error) {
 
@@ -1023,7 +1031,34 @@ this.confirmationResult =
        4. Email matching for Google / Apple
        ======================================================== */
 
+    driverIdentityReady(user) {
+        if (!user?.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
+            this.showStep('loginStep');
+            this.toast('Sign in with Google or Apple first.');
+            return false;
+        }
+        this.pendingUser = user;
+        if (!user.phoneNumber) {
+            this.awaitingPhoneLink = true;
+            this.showStep('phoneStep');
+            return false;
+        }
+        this.awaitingPhoneLink = false;
+        return true;
+    },
+
+    async useAnotherSignInMethod() {
+        await firebase.auth().signOut();
+        this.pendingUser = null;
+        this.awaitingPhoneLink = false;
+        this.confirmationResult = null;
+        clearInterval(this.resendInterval);
+        this.showStep('loginStep');
+    },
+
     async verifyDriverProfile(user) {
+        if (!this.driverIdentityReady(user)) return;
+
 
         try {
 
@@ -1454,6 +1489,7 @@ this.confirmationResult =
         driverData,
         authUser
     ) {
+        if (!this.driverIdentityReady(authUser)) return;
         const account = await AsiyeEnrollment.getStatus(authUser);
         if (account.state !== 'approved') {
             window.location.replace('./enrollment.html');
@@ -1832,6 +1868,13 @@ this.confirmationResult =
                 break;
 
 
+            case 'auth/credential-already-in-use':
+            case 'auth/phone-number-already-exists':
+                message = 'This number is linked to another Asiye account. Use its Google or Apple account, or contact Asiye Support to link it securely.';
+                break;
+            case 'auth/provider-already-linked':
+                message = 'Your phone is already linked. Sign in again with the same Google or Apple account.';
+                break;
             case 'auth/operation-not-allowed':
                 message = 'SMS verification is not enabled for this Firebase project or region. Please choose another sign-in method.';
                 break;

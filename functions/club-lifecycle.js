@@ -1,3 +1,4 @@
+const {assertPassengerBookingProfile} = require('./passenger-booking-profile');
 "use strict";
 const crypto = require("node:crypto");
 const WAIT_MS = 30 * 60 * 1000;
@@ -671,6 +672,7 @@ function registerClubLifecycle(deps) {
   const create = endpoint(async (user, body) => {
     const requestId = idOf(body);
     const profile = await resolvePassenger(user);
+    assertPassengerBookingProfile(profile, user);
     profile.id = profile.id || user.uid;
     const p = memberDetails(user, profile, body);
     for (const key of ["routeDistanceKm", "routeDurationMinutes"])
@@ -760,6 +762,7 @@ function registerClubLifecycle(deps) {
   const join = endpoint(async (user, body) => {
     const requestId = idOf(body);
     const profile = await resolvePassenger(user);
+    assertPassengerBookingProfile(profile, user);
     profile.id = profile.id || user.uid;
     const p = memberDetails(user, profile, body);
     await reservePassenger(profile.id, requestId);

@@ -38,10 +38,10 @@ beforeEach(async () => {
     const db = context.database();
     await set(ref(db), {
       commuters: {
-        p1: { authUid: 'passenger-auth', name: 'Passenger One' },
-        p2: { authUid: 'attacker-auth', name: 'Other Passenger' },
-        club2: { authUid: 'club-auth', name: 'Club Two' },
-        club3: { authUid: 'club-join-auth', name: 'Club Three' }
+        p1: { authUid: 'passenger-auth', bookingFaceAuthUid: 'passenger-auth', bookingFaceSavedAt: 1, name: 'Passenger One' },
+        p2: { authUid: 'attacker-auth', bookingFaceAuthUid: 'attacker-auth', bookingFaceSavedAt: 1, name: 'Other Passenger' },
+        club2: { authUid: 'club-auth', bookingFaceAuthUid: 'club-auth', bookingFaceSavedAt: 1, name: 'Club Two' },
+        club3: { authUid: 'club-join-auth', bookingFaceAuthUid: 'club-join-auth', bookingFaceSavedAt: 1, name: 'Club Three' }
       },
       taxis: {
         'driver-record': {

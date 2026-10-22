@@ -252,7 +252,7 @@ ASIYE.booking = {
         await this.pruneEndedBooking(uid);
 
 
-        const user =
+        let user =
             passenger.data || {};
 
 
@@ -300,6 +300,7 @@ ASIYE.booking = {
         const profileImageUrl =
             await ASIYE.profile
                 .ensureRequired();
+        user = ASIYE.state.user || user;
 
 
         if (

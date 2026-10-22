@@ -30,7 +30,7 @@ function harness({phone='+27821234567',storedOwner=uid,existing=null,verifiedTax
  let saved=existing;
  const admin={
    auth:()=>({verifyIdToken:async()=>({uid,phone_number:phone}),
-      getUser:async()=>({phoneNumber:phone})}),
+      getUser:async()=>({phoneNumber:phone,providerData:[{providerId:'google.com'}]})}),
    database:Object.assign(()=>({ref:path=>{
       if(path==='driverEnrollments/'+uid) return {
         once:async()=>({val:()=>saved}),
@@ -95,16 +95,14 @@ test('the enrollment frontend posts to the server, not directly to protected RTD
  assert.doesNotMatch(part,/\.ref\(`driverEnrollments\/\$\{user.uid\}\`\)/);
  assert.match(part,/Authorization:/);
 });
-test('new passenger with no phone is sent to actual OTP screen instead of false completion',()=>{
+test('passenger signup and picture saving do not require a phone',()=>{
  const src=fs.readFileSync('assets/passenger-v2/js/login.js','utf8');
- assert.match(src,/if \(!user\.phoneNumber\) \{/);
- assert.match(src,/this\.showStep\('loginStep'\)/);
- assert.match(src,/uploaded\.code === 'phone-otp-required'/);
+ assert.doesNotMatch(src,/if \(!user\.phoneNumber\)/);
  const backend=fs.readFileSync('functions/index.js','utf8');
- assert.match(backend,/admin\.auth\(\)\.getUser\(decoded\.uid\)/);
- assert.match(backend,/phone: verifiedPhone/);
+ const upload=backend.slice(backend.indexOf('exports.uploadProfileImageProxy ='),backend.indexOf('exports.submitDriverEnrollmentSecure ='));
+ assert.doesNotMatch(upload,/phone-otp-required|phone: verifiedPhone/);
+ assert.match(upload,/bookingFaceSavedAt: now/);
 });
-
 
 test('passenger signup backend accepts ordinary names and rejects control characters',()=>{
  const backend=fs.readFileSync('functions/index.js','utf8');

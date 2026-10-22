@@ -83,12 +83,10 @@
         5 * 60 * 1000;
 
     let sessionPromise = null;
-    const phoneLinkUid = () => role === 'passenger' ?
+    const phoneLinkUid = () => role === 'driver' ?
         (login.awaitingPhoneLink ? login.pendingUser?.uid : null) ||
         localStorage.getItem(pendingLinkUidKey) || null : null;
-    const phoneControls = () => role === 'passenger' && login.awaitingPhoneLink ?
-        {phone: 'socialPhoneInput', error: 'socialPhoneError', send: 'socialSendOtpButton'} :
-        {phone: ids.phone, error: 'phoneError', send: ids.send};
+    const phoneControls = () => ({phone: ids.phone, error: 'phoneError', send: ids.send});
 
     const original = {
         prepareRecaptcha:
@@ -189,6 +187,7 @@
         phone,
         verificationId
     ) => {
+        if (role !== 'driver' || !phoneLinkUid()) { clearPendingPhoneState(); return; }
         if (phone) {
             login.currentPhone =
                 phone;
@@ -300,7 +299,12 @@
     const restorePendingPhoneState =
         state => {
 
-            if (state?.linkUid && role === 'passenger') {
+            if (role !== 'driver') { clearPendingPhoneState(); return; }
+            const restoredUid = state?.linkUid || localStorage.getItem(pendingLinkUidKey);
+            if (!restoredUid || firebase.auth().currentUser?.uid !== restoredUid) {
+                clearPendingPhoneState(); return;
+            }
+            if (state?.linkUid && role === 'driver') {
                 localStorage.setItem(pendingLinkUidKey, state.linkUid);
                 login.awaitingPhoneLink = true;
                 if (firebase.auth().currentUser?.uid === state.linkUid)
@@ -566,6 +570,9 @@
             // Reject a native sign-in fallback before it can replace the
             // WebView's original Apple/Google identity.
             const expectedLinkUid = phoneLinkUid();
+            if (payload.provider === 'phone' && (role !== 'driver' || !expectedLinkUid)) {
+                throw new Error('Use Google or Apple to sign in. Phone verification is for signed-in drivers only.');
+            }
             if (expectedLinkUid && payload.uid !== expectedLinkUid) {
                 throw new Error('Phone verification did not preserve your original account. Choose a sign-in method and try again.');
             }
@@ -668,7 +675,8 @@
 
     login.sendOtp =
         async function () {
-
+            if (role !== 'driver') { clearPendingPhoneState(); return; }
+            if (!this.awaitingPhoneLink || !this.pendingUser) { this.showStep('loginStep'); return; }
             if (
                 !isInstalledApp()
             ) {
@@ -700,7 +708,7 @@
             }
 
             const linkUid = phoneLinkUid();
-            if (role === 'passenger' && this.awaitingPhoneLink &&
+            if (role === 'driver' && this.awaitingPhoneLink &&
                 (!linkUid || firebase.auth().currentUser?.uid !== linkUid)) {
                 showError({provider: 'phone', message: 'Your Apple or Google session changed. Choose a sign-in method and try again.'});
                 return;
@@ -758,6 +766,7 @@
 
     login.resendOtp =
         async function () {
+            if (role !== 'driver' || !phoneLinkUid() || firebase.auth().currentUser?.uid !== phoneLinkUid()) { clearPendingPhoneState(); return; }
 
             if (
                 !isInstalledApp()
@@ -798,6 +807,7 @@
 
     login.verifyOtp =
         async function () {
+            if (role !== 'driver' || !phoneLinkUid() || firebase.auth().currentUser?.uid !== phoneLinkUid()) { clearPendingPhoneState(); return; }
 
             if (
                 !isInstalledApp()

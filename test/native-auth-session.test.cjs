@@ -116,12 +116,12 @@ function createContext(role = 'passenger', options = {}) {
     };
 }
 
-test('native phone custom token completes passenger login and clears pending OTP state', async () => {
+test('native Google custom token completes passenger login and clears pending OTP state', async () => {
     const { context, storage, calls, firebaseUser } =
         createContext('passenger');
 
     await context.window.onNativeAuthSession({
-        provider: 'phone',
+        provider: 'google',
         customToken: 'custom-token-1',
         uid: firebaseUser.uid
     });

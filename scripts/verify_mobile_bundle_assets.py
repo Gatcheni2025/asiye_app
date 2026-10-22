@@ -7,8 +7,10 @@ import re
 import zipfile
 
 REQUIRED = (
+    'passenger-v2/index.html', 'passenger-v2/js/app.js', 'passenger-v2/js/profile.js', 'passenger-v2/css/booking-face.css',
     'passenger-v2/login.html', 'passenger-v2/js/login.js',
     'passenger-v2/js/firebase.js', 'passenger-v2/css/login.css',
+    'driver-v2/js/enrollment.js', 'driver-v2/js/enrollment-gate.js',
     'driver-v2/login.html', 'driver-v2/js/login.js', 'driver-v2/js/firebase.js',
     'native-auth-session.js', 'passenger-v2/js/onboarding.js',
     'passenger-v2/js/booking.js', 'passenger-v2/js/ride-controller.js',

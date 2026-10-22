@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const vm=require('node:vm');
 const {parseConfig}=require('../scripts/rebuild_staging_auth_preview.cjs');
-const repoPaths=['assets/passenger-v2/js/login.js','assets/driver-v2/js/login.js'];
+const repoPaths=['assets/driver-v2/js/login.js'];
 function scenario(filepath){
  const src=fs.readFileSync(filepath,'utf8');
  const start=src.indexOf('    prepareRecaptcha() {');
@@ -42,7 +42,7 @@ for(const file of repoPaths){
   const {src}=scenario(file);
   const fn=src.slice(src.indexOf('    async sendOtp() {'),src.indexOf('    async verifyOtp() {'));
   assert.match(fn,/await this\.prepareRecaptcha\(\)/);
-  assert.match(fn,/signInWithPhoneNumber\([\s\S]*?phone,[\s\S]*?verifier/);
+  assert.match(fn,/current\.linkWithPhoneNumber\(phone, verifier\)/);
   assert.match(fn,/this\.resetRecaptchaWidget\(\)/);
   assert.match(src,/case 'auth\/operation-not-allowed':/);
   const resend=src.slice(src.indexOf('    resendOtp() {')>=0?

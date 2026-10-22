@@ -55,9 +55,9 @@ before(async () => {
 beforeEach(async () => {
   await db.ref().set({
     commuters: {
-      p0: { authUid: "p0", name: "First Passenger" },
-      p1: { authUid: "p1", name: "Second Passenger" },
-      p2: { authUid: "p2", name: "Third Passenger" },
+      p0: { authUid: "p0", bookingFaceAuthUid: "p0", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "First Passenger" },
+      p1: { authUid: "p1", bookingFaceAuthUid: "p1", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "Second Passenger" },
+      p2: { authUid: "p2", bookingFaceAuthUid: "p2", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "Third Passenger" },
     },
     taxis: {
       driver: {

@@ -1,3 +1,4 @@
+const {assertPassengerBookingProfile} = require('./passenger-booking-profile');
 const functions = require("firebase-functions/v1");
 const { onRequest } = require("firebase-functions/v2/https");
 const { onValueUpdated } = require("firebase-functions/v2/database");
@@ -6488,6 +6489,9 @@ exports.submitGoFareOffer =
             });
         }
 
+        const bookingProfile = (await admin.database().ref(`commuters/${context.trip.commuterId}`).once('value')).val();
+        assertPassengerBookingProfile(bookingProfile, decoded);
+
         if (String(context.trip.paymentMethod || "cash").toLowerCase() === "wallet") {
           return response.status(409).json({
             error:"Wallet payments are discontinued. Choose Cash or Card before offering."
@@ -8372,6 +8376,7 @@ exports.createParcelRequestSecure = onRequest(
       const passenger=await resolvePassengerForWallet(user);
       if(!passenger?.id || !await profileOwnedByAuth("commuters",passenger.id,user.uid))
         return res.status(403).json({error:"Passenger account is not verified."});
+      assertPassengerBookingProfile(passenger, user);
       const data=passenger.data||{};
       passengerId=passenger.id;
       const ref=admin.database().ref("requests").push();
@@ -9309,27 +9314,21 @@ exports.uploadProfileImageProxy =
             });
         }
 
-        // During phone signup, validate a complete name before committing
-        // both identity and face photo with the Admin SDK. Client-side
-        // Realtime Database writes can be blocked on legacy commuter IDs.
-        const fullName = String(request.body?.fullName || "").trim();
-        const signup = role === "passenger" && request.body?.completeSignup === true;
-        // Firebase custom-token sessions can omit phone_number. Verify the
-        // phone attached to the SAME Firebase Auth UID; never trust form text.
-        const verifiedPhone = signup
-          ? String((await admin.auth().getUser(decoded.uid)).phoneNumber || "").trim()
-          : "";
-        if (signup && (
-          !verifiedPhone ||
+        // Passengers sign in with Google/Apple; no passenger SMS is required.
+        // Validate the name and save the booking gate with the picture atomically.
+        const passengerUpload = role === "passenger";
+        const account = passengerUpload ? await admin.auth().getUser(decoded.uid) : null;
+        if (passengerUpload && !account.providerData?.some(p => ["google.com", "apple.com"].includes(p.providerId))) {
+          return response.status(403).json({error: "Sign in with Google or Apple before saving your passenger picture."});
+        }
+        const existingProfile = passengerUpload
+          ? (await admin.database().ref(`${rootName}/${userId}`).once("value")).val() || {} : {};
+        const fullName = String(request.body?.fullName || existingProfile.name || account?.displayName || "").trim();
+        if (passengerUpload && (
           fullName.length < 2 || fullName.length > 100 ||
           /[<>\u0000-\u001f]/.test(fullName)
         )) {
-          return response.status(422).json({
-            code: !verifiedPhone ? "phone-otp-required" : "name-required",
-            error: !verifiedPhone
-              ? "This Firebase account has no verified mobile number. Complete SMS OTP before saving the profile."
-              : "Enter your full name before saving."
-          });
+          return response.status(422).json({code: "name-required", error: "Enter your name before saving."});
         }
 
         const dataUrl =
@@ -9511,14 +9510,15 @@ exports.uploadProfileImageProxy =
                     url
                 }
               : {
-                  ...(signup ? {
-                    name: fullName,
-                    phone: verifiedPhone,
+                  name: fullName,
+                  bookingFaceAuthUid: decoded.uid,
+                  bookingFaceSavedAt: now,
+                  ...{
                     authUid: decoded.uid,
                     onboardingCompleted: true,
                     profileSetupPending: false,
                     profileCompletedAt: now
-                  } : {}),
+                  },
                   profileImageUrl:
                     url,
                   profile_picture_url:
@@ -9616,7 +9616,9 @@ exports.uploadDriverEnrollmentDocument = onRequest(
       const match=String(request.get("authorization")||"").match(/^Bearer (.+)$/);
       if(!match) return response.status(401).json({error:"Sign in first."});
       const actor=await admin.auth().verifyIdToken(match[1]);
-      if(!actor.phone_number) return response.status(403).json({error:"Phone OTP verification required."});
+      const driverAccount = await admin.auth().getUser(actor.uid);
+      if (!driverAccount.phoneNumber || !driverAccount.providerData?.some(p => ["google.com", "apple.com"].includes(p.providerId)))
+        return response.status(403).json({error:"Sign in with Google or Apple, then verify your driver phone by OTP."});
       const uid=safeProfileId(actor.uid);
       const submission=String(request.body?.submissionId||"");
       const kind=String(request.body?.kind||"");

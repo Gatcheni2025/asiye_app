@@ -516,6 +516,7 @@ ASIYE.club = {
     ) {
 
         this.ensureFirebase();
+        await ASIYE.profile.ensureRequired();
 
 
         const uid =
@@ -704,6 +705,7 @@ ASIYE.club = {
     ) {
 
         this.ensureFirebase();
+        await ASIYE.profile.ensureRequired();
 
 
         const uid =

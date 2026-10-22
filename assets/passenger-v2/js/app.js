@@ -2848,24 +2848,10 @@ document.addEventListener(
             }
         }
 
-        // Phone sign-up is not finished until a full name AND a saved face
-        // image exist. A user navigating directly to index.html must also be
-        // sent back to the profile completion step.
-        if (authUser.phoneNumber && !(
-            String(commuter.name || '').trim().length >= 2 &&
-            (commuter.profileImageUrl || commuter.profile_picture_url ||
-             commuter.passengerProfileImageUrl)
-        )) {
-            window.location.replace('./login.html');
-            return;
-        }
-
-
-        if (authUser.phoneNumber && ASIYE.profile?.photoAvailable &&
-            !(await ASIYE.profile.photoAvailable(commuter))) {
-            console.warn('Passenger image URL returned 404 or could not load. Require profile rescan.');
-            window.location.replace('./login.html');
-            return;
+        // A passenger can browse immediately after Google/Apple sign-in.
+        // The one-time picture is collected only when starting a booking.
+        if (!authUser.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
+            window.location.replace('./login.html'); return;
         }
 
         ASIYE.setUser(

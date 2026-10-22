@@ -260,6 +260,9 @@
     };
     const check = async () => {
         if (!user || busy) return;
+        if (!user.phoneNumber || !user.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
+            window.location.replace('./login.html'); return;
+        }
         status.textContent = 'Checking registration and admin approval…';
         form.hidden = true;
         pendingPanel.hidden = true;
@@ -288,7 +291,7 @@
             }
             if (state.state === 'new') {
                 if (!user.phoneNumber) {
-                    status.textContent = 'Your mobile number must be verified with an OTP before driver registration. Log out and sign in using your phone number.';
+                    status.textContent = 'Your mobile number must be verified with an OTP before driver registration. Sign in with Google or Apple, then verify your driver phone by OTP.';
                     return;
                 }
                 verifiedPhone.value = user.phoneNumber;
@@ -297,7 +300,7 @@
                 status.textContent = 'Complete the seven steps once. Your application will then wait for administrator approval.';
                 return;
             }
-            status.textContent = 'Sign in using your verified mobile number.';
+            status.textContent = 'Sign in with Google or Apple, then verify your driver mobile number.';
         } catch (error) {
             console.warn('Driver enrollment status read failed:', error.code || error.message);
             status.textContent = 'Unable to check your existing enrollment. Please retry while connected to the internet. Your registration has not been reset.';

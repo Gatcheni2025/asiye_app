@@ -68,15 +68,13 @@ test('new Card fares use direct subaccounts without an Asiye-funded bank transfe
  assert.match(read('assets/driver-v2/payout.html'),/Paystack/);
 });
 
-test('passenger phone registration requires saved name and face photo',()=>{
+test('passenger face capture is required at booking, after social signup',()=>{
  const login=read('assets/passenger-v2/js/login.js');
- const app=read('assets/passenger-v2/js/app.js');
- assert.match(login,/AsiyePassengerOnboarding\?\.photo/);
- assert.match(login,/uploadProfileImageProxy/);
- assert.match(login,/onboardingCompleted: true/);
- assert.match(login,/this\.showStep\('newPassengerStep'\)/);
- assert.match(app,/authUser\.phoneNumber && !/);
- assert.match(read('assets/passenger-v2/login.html'),/scanPassengerFace/);
+ const profile=read('assets/passenger-v2/js/profile.js');
+ assert.doesNotMatch(login,/uploadProfileImageProxy|phone-otp-required/);
+ assert.match(profile,/uploadProfileImageProxy/);
+ assert.match(profile,/bookingFaceAuthUid === auth.uid/);
+ assert.match(profile,/return await this.scanAndSave\(\)/);
 });
 
 test('private Paystack bank tokens and card transfer records reject client writes',()=>{
