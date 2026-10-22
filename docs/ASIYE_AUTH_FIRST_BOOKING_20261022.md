@@ -18,7 +18,7 @@ git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet
 node scripts/deploy_staging_auth_booking_flow.cjs
 ```
 
-The script checks the branch, clean tracked source, staging project ID and number, public staging SDK and existing TEST key without printing credentials. The 37-function payment baseline omitted the two driver enrollment endpoints; this patch explicitly includes them, bringing expected staging inventory to 39. It deploys only the seven named endpoints from an isolated copy, then rules and Hosting, and runs the read-only audit. It does not change IAM, Auth providers, production, store releases or payment transactions. Do not paste Firebase debug logs or tokens into chat.
+The script checks the branch, clean tracked source (or the exact generated staging entrypoint left by the earlier deployment), staging project ID and number, public staging SDK and existing TEST key without printing credentials. The 37-function payment baseline omitted the two driver enrollment endpoints; this patch explicitly includes them, bringing expected staging inventory to 39. It deploys only the seven named endpoints from an isolated copy, then rules and Hosting, and runs the read-only audit. It does not change IAM, Auth providers, production, store releases or payment transactions. Do not paste Firebase debug logs or tokens into chat.
 
 ## Staging acceptance still required
 

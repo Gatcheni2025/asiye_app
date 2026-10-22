@@ -68,3 +68,12 @@ test('staging rollout selects only seven existing auth/booking functions and nev
  const allowed=[...require('../scripts/paystack_function_manifest.json'),'submitDriverEnrollmentSecure','uploadDriverEnrollmentDocument'];
  for(const name of FUNCTIONS)assert.ok(allowed.includes(name));
 });
+
+test('staging rollout accepts only the known old generated package edit, preserving custom edits',()=>{
+ const {isGeneratedPackageChange}=require('../scripts/deploy_staging_auth_booking_flow.cjs');
+ const reviewed={main:'index.js',engines:{node:'22'},dependencies:{example:'1.0.0'}};
+ const generated={...reviewed,main:'staging-index.generated.cjs'};
+ assert.equal(isGeneratedPackageChange(['functions/package.json'],generated,reviewed),true);
+ assert.equal(isGeneratedPackageChange(['assets/passenger-v2/js/login.js'],generated,reviewed),false);
+ assert.equal(isGeneratedPackageChange(['functions/package.json'],{...generated,engines:{node:'18'}},reviewed),false);
+});

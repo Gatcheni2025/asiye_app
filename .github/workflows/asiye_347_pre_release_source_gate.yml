@@ -10,6 +10,8 @@ on:
       - 'assets/passenger-v2/**'
       - 'assets/driver-v2/**'
       - 'test/passenger-booking-face.test.cjs'
+      - 'scripts/deploy_staging_auth_booking_flow.cjs'
+      - 'scripts/auth_booking_staging_functions.json'
       - 'test/security/**'
       - 'assets/passenger-v2/login.html'
       - 'assets/passenger-v2/js/login.js'

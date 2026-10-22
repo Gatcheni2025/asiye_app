@@ -12,13 +12,26 @@ function run(name,args,{cwd=ROOT,env=process.env,quiet=false}={}){
  if(result.status!==0||result.error)throw Error('Command failed: '+name+' '+args.slice(0,2).join(' ')+'. Stop here; do not continue other deploy commands.');
  return String(result.stdout||'').trim();
 }
+function isGeneratedPackageChange(paths,current,reviewed){
+ return paths.length===1 && paths[0]==='functions/package.json' &&
+  current.main==='staging-index.generated.cjs' && reviewed.main==='index.js' &&
+  require('node:util').isDeepStrictEqual({...current,main:reviewed.main},reviewed);
+}
 async function main(){
  if(process.cwd()!==ROOT)throw Error('Run from the Asiye repository root.');
  if(run('gcloud',['config','get-value','project'],{quiet:true})!==PROJECT ||
     run('gcloud',['projects','describe',PROJECT,'--format=value(projectNumber)'],{quiet:true})!==NUMBER)
   throw Error('Choose the isolated staging project first: gcloud config set project '+PROJECT);
  if(run('git',['branch','--show-current'],{quiet:true})!==BRANCH)throw Error('Wrong review branch.');
- if(run('git',['status','--porcelain','--untracked-files=no'],{quiet:true}))throw Error('Commit or discard tracked edits before deployment.');
+ const changed=run('git',['diff','--name-only','HEAD'],{quiet:true}).split('\n').filter(Boolean);
+ if(changed.length){
+  // Older staging setup generated this one entrypoint change. It is never used
+  // for deployment here: the backend comes from the exact archived HEAD below.
+  const current=JSON.parse(fs.readFileSync(path.join(ROOT,'functions/package.json'),'utf8'));
+  const reviewed=JSON.parse(run('git',['show','HEAD:functions/package.json'],{quiet:true}));
+  if(!isGeneratedPackageChange(changed,current,reviewed))throw Error('Commit or discard tracked edits before deployment.');
+  console.log('Preserving the earlier generated staging entrypoint; deploying archived reviewed source.');
+ }
  const account=run('gcloud',['config','get-value','account'],{quiet:true});
  if(!account||account.endsWith('gserviceaccount.com'))throw Error('Use the human staging administrator already signed into Cloud Shell.');
  const secret=run('gcloud',['secrets','versions','access','latest','--secret=PAYSTACK_SECRET_KEY','--project='+PROJECT],{quiet:true});
@@ -60,4 +73,4 @@ async function main(){
  }finally{fs.rmSync(temp,{recursive:true,force:true});}
 }
 if(require.main===module)main().catch(error=>{console.error('BLOCKED: '+error.message);process.exitCode=1;});
-module.exports={FUNCTIONS};
+module.exports={FUNCTIONS,isGeneratedPackageChange};
