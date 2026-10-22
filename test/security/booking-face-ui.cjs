@@ -26,6 +26,8 @@ const assert=require('node:assert/strict');
    document.getElementById('book').onclick=window.startBooking;
   });
   await page.click('#book');
+  const card=await page.locator('.passenger-face-card').boundingBox();
+  assert.ok(card.x>=12 && card.x+card.width<=390-12,'Camera dialog fits the mobile viewport');
   assert.equal(await page.locator('[data-face-save]').isDisabled(),true);
   await page.click('[data-face-open]');await page.waitForSelector('[data-face-shutter]:not([hidden]):not([disabled])');
   assert.equal(await page.locator('[data-face-save]').isDisabled(),true);

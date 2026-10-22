@@ -78,6 +78,7 @@ jobs:
             test/passenger-booking-face.test.cjs \
             test/registration-submission.test.cjs \
             test/login-otp.test.cjs \
+            test/driver-enrollment-v2.test.cjs \
             test/native-auth-session.test.cjs \
             test/staging-auth-recaptcha.test.cjs \
             test/go-fare-negotiation.test.cjs \

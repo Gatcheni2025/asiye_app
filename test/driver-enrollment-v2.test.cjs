@@ -7,7 +7,7 @@ const read = p => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
 
 function gate({ enrollment = null, approval = null, taxi = null, fails = false } = {}) {
   const location = { pathname: '/driver-v2/index.html', href: '', replace(value) { this.href = value; } };
-  const user = { uid: 'driver-auth', phoneNumber: '+27821234567' };
+  const user = { uid: 'driver-auth', phoneNumber: '+27821234567', providerData: [{providerId: 'google.com'}] };
   const firebase = {
     auth: () => ({ currentUser: user }),
     database: () => ({
@@ -111,7 +111,7 @@ test('registration uploads all five documents once, locks pending and permits lo
   assert.match(source, /residentialAddress: String/);
   assert.match(source, /form\.hidden = true/);
   assert.match(source, /logoutEnrollment/);
-  assert.match(source, /firebase\.auth\(\)\.signOut\(\)/);
+  assert.match(source, /AsiyeSession\.logout/);
   assert.match(source, /AsiyeEnrollment\.getStatus\(user\)/);
 });
 
@@ -124,4 +124,12 @@ test('admin shows new enrollments and cannot approve missing documents', () => {
   assert.match(releaseAdmin, /Proof of address/);
   assert.match(backend, /enrollment\.documents\?\.identity/);
   assert.match(backend, /enrollment\.documents\?\.address/);
+});
+
+test('even an approved driver must use social sign-in and a linked phone before dashboard access',async()=>{
+ for(const missing of ['phone','social']){
+  const x=gate({taxi:{authUid:'driver-auth',verificationStatus:'verified',vehicleApproved:true}});
+  if(missing==='phone')x.user.phoneNumber=null;else x.user.providerData=[{providerId:'phone'}];
+  assert.equal(await x.gate.requireApproval(),false);assert.equal(x.location.href,'./login.html');
+ }
 });

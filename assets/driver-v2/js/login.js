@@ -1776,6 +1776,8 @@ window.ASIYE_DRIVER_LOGIN = {
     showStep(
         stepId
     ) {
+        // A profile read failure must not send an already-verified driver back to OTP.
+        if (stepId === 'phoneStep' && !this.awaitingPhoneLink) stepId = 'loginStep';
 
         document
             .querySelectorAll(

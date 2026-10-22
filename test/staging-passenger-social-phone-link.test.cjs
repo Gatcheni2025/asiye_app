@@ -71,3 +71,14 @@ test('passenger signup markup has only social methods; driver phone is a later s
  for(const id of ['googleLoginButton','appleLoginButton'])assert.ok(passenger.includes(`id="${id}"`));
  assert.match(driver,/id="loginStep" class="login-step active"/);assert.match(driver,/id="phoneStep"\s+class="login-step"/);
 });
+
+test('a verified driver profile read failure returns to social chooser, not another OTP',()=>{
+ const user={uid:'driver',phoneNumber:'+27821234567',providerData:[{providerId:'google.com'}]};
+ const x=setup('driver',user);assert.equal(x.login.driverIdentityReady(user),true);
+ // Run the real showStep with recorded DOM activation.
+ const source=fs.readFileSync('assets/driver-v2/js/login.js','utf8');
+ const window={};let activated='';
+ vm.runInNewContext(source,{window,document:{querySelectorAll:()=>[],getElementById:id=>({classList:{add(){activated=id;}}}),addEventListener(){}},console});
+ window.ASIYE_DRIVER_LOGIN.awaitingPhoneLink=false;window.ASIYE_DRIVER_LOGIN.showStep('phoneStep');
+ assert.equal(activated,'loginStep');
+});

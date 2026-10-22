@@ -447,7 +447,7 @@
 
         } catch (error) {
             if (error.code === 'storage/unauthorized') {
-                status.textContent = 'Document upload authorization failed. Please sign out and sign in with OTP again.';
+                status.textContent = 'Document upload authorization failed. Please sign in with Google or Apple, then verify your driver phone.';
             } else if (/permission.?denied/i.test(String(error.code || error.message))) {
                 status.textContent = 'Firebase could not confirm the submission. Refresh the approval status before trying again; your details are still here.';
             } else {
