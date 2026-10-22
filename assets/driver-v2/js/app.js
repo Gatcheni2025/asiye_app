@@ -4523,21 +4523,6 @@ async function (
 
 
         /*
-         * One-time safety setup.
-         * A verified driver must save one trusted family member
-         * before going online or receiving bookings.
-         */
-        if (
-            window.AsiyeSafetyContact &&
-            !await AsiyeSafetyContact.ensure({
-                role: 'driver'
-            })
-        ) {
-            return;
-        }
-
-
-        /*
          * ====================================================
          * SINGLE LIVE DRIVER PROFILE LISTENER
          * ====================================================
@@ -4696,6 +4681,14 @@ async function (
         console.log(
             '✅ Asiye Driver V2 ready'
         );
+
+        // Optional contacts must never stop the map, GPS, restored trips or
+        // incoming offers. Show setup only after the dashboard is ready.
+        if (restoredTrip === false && !ASIYE_DRIVER.state.availability.isOnline && window.AsiyeSafetyContact) {
+            void AsiyeSafetyContact.ensure({role: 'driver'}).catch(error => {
+                console.warn('Optional trusted-contact setup:', error.message);
+            });
+        }
 
 
         const signalReady = () => {

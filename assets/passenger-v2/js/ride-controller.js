@@ -39,7 +39,7 @@ ASIYE.ride = {
     driverSearchRetryCount:
         0,
 
-    driverSearchRetryMax:
+    driverSearchFastRetries:
         6,
 
     isActiveBooking(request, passengerId = ASIYE.state.userId) {
@@ -585,7 +585,7 @@ ASIYE.ride = {
                     <div class="ride-match-stop"><span class="ride-match-location" aria-hidden="true"></span><div><span>Pickup</span><p>${pickup}</p></div></div>
                     <div class="ride-match-stop"><span class="ride-match-location ride-match-location--destination" aria-hidden="true"></span><div><span>Destination</span><p>${destination}</p></div></div>
                 </div>
-                <div class="ride-match-fare"><div><span>Agreed fare</span><small>${method === 'cash' ? 'Cash · pay after your trip' : escape(method === 'card' ? 'Card payment' : method)}</small></div><strong>R${fare}</strong></div>
+                <div class="ride-match-fare"><div><span>${request.negotiationEnabled && request.fareStatus !== 'agreed' ? 'Your offer' : 'Agreed fare'}</span><small>${method === 'cash' ? 'Cash · pay after your trip' : escape(method === 'card' ? 'Card payment' : method)}</small></div><strong>R${fare}</strong></div>
                 ${arrival ? '' : '<button type="button" class="ride-match-cancel" data-trip-cancel>Cancel booking</button>'}`;
         } else {
             summary.innerHTML = `<p><strong>Pickup:</strong> ${pickup}<br>
@@ -746,86 +746,41 @@ ASIYE.ride = {
        GO SEARCHING
        ======================================================== */
 
-    scheduleGoDriverSearchRetry(
-        request
-    ) {
+    isGoDriverSearchActive(request) {
+        return Boolean(request && request.type !== 'club' && !request.taxiId &&
+            request.fareStatus !== 'driver_counter' &&
+            ['pending', 'searching'].includes(request.status));
+    },
 
-        if (
-            !request ||
-            request.type ===
-                'club' ||
-            request.fareStatus === 'driver_counter' ||
-            !['pending', 'searching', 'driver_busy'].includes(request.status) ||
-            request.taxiId ||
-            Number(
-                request.driverFoundCount ||
-                0
-            ) > 0 ||
-            String(
-                request.driverSearchStatus ||
-                ''
-            ).startsWith(
-                'driver_found'
-            )
-        ) {
-
-            if (
-                this.driverSearchRetryTimer
-            ) {
-                clearTimeout(
-                    this.driverSearchRetryTimer
-                );
-
-                this.driverSearchRetryTimer =
-                    null;
+    scheduleGoDriverSearchRetry(request) {
+        if (!this.isGoDriverSearchActive(request)) {
+            if (this.driverSearchRetryTimer) clearTimeout(this.driverSearchRetryTimer);
+            this.driverSearchRetryTimer = null;
+            return;
+        }
+        if (this.driverSearchRetryTimer) return;
+        const requestId = request.requestId || this.requestId;
+        const generation = this._generation;
+        // Keep an active offer searchable when a driver comes online later.
+        // After six quick checks, slow down rather than silently stopping.
+        const delay = Number(request.driverFoundCount || 0) > 0 ||
+            this.driverSearchRetryCount >= this.driverSearchFastRetries ? 20000 : 8000;
+        this.driverSearchRetryTimer = setTimeout(async () => {
+            this.driverSearchRetryTimer = null;
+            if (this.requestId !== requestId || this._generation !== generation) return;
+            const current = ASIYE.state.booking?.request || request;
+            if (!this.isGoDriverSearchActive(current)) return;
+            this.driverSearchRetryCount += 1;
+            try {
+                await ASIYE.booking?.notifyGoDrivers?.(requestId, current);
+            } catch (error) {
+                console.warn('Go driver search retry failed:', error);
+            } finally {
+                if (this.requestId === requestId && this._generation === generation) {
+                    this.scheduleGoDriverSearchRetry(ASIYE.state.booking?.request || current);
+                }
             }
-
-            return;
-        }
-
-
-        if (
-            this.driverSearchRetryTimer ||
-            this.driverSearchRetryCount >=
-                this.driverSearchRetryMax
-        ) {
-            return;
-        }
-
-
-        this.driverSearchRetryTimer =
-            setTimeout(
-                async () => {
-
-                    this.driverSearchRetryTimer =
-                        null;
-
-                    this.driverSearchRetryCount +=
-                        1;
-
-
-                    try {
-                        await ASIYE.booking
-                            ?.notifyGoDrivers?.(
-                                request.requestId ||
-                                this.requestId,
-                                request
-                            );
-
-                    } catch (error) {
-                        console.warn(
-                            'Go driver search retry failed:',
-                            error
-                        );
-                        // An HTTP failure emits no database update to schedule
-                        // the next attempt. Keep retrying the same active offer.
-                        const current = ASIYE.state.booking?.request;
-                        if (this.requestId === request.requestId && current)
-                            this.scheduleGoDriverSearchRetry(current);
-                    }
-                },
-                8000
-            );
+        }, delay);
     },
 
 
@@ -1091,217 +1046,47 @@ ASIYE.ride = {
 
 
     renderGoSearching(request) {
-
-        const container =
-            document.getElementById(
-                'sheetContent'
-            );
-
-
+        const container = document.getElementById('sheetContent');
         if (!container) return;
-
-
-        const searchStatus =
-            String(
-                request.driverSearchStatus ||
-                ''
-            );
-
-
-        const foundCount =
-            Number(
-                request.driverFoundCount ||
-                request.driverDispatchCount ||
-                0
-            );
-
-
-        const driverFound =
-            foundCount > 0 ||
-            searchStatus.startsWith(
-                'driver_found'
-            );
-
-
-        const distanceKm =
-            Number(
-                request.nearestDriverDistanceKm ||
-                0
-            );
-
-
-        if (driverFound) {
-
-            if (
-                this.driverSearchRetryTimer
-            ) {
-                clearTimeout(
-                    this.driverSearchRetryTimer
-                );
-
-                this.driverSearchRetryTimer =
-                    null;
-            }
-
-            this.driverSearchRetryCount =
-                0;
-
-        } else {
-
-            this.scheduleGoDriverSearchRetry(
-                request
-            );
-        }
-
-
-        const driverDetail =
-            distanceKm > 0
-                ? `Nearest available driver is about ${distanceKm.toFixed(1)} km from your pickup.`
-                : foundCount > 1
-                    ? `${foundCount} nearby drivers have received your request.`
-                    : 'A nearby driver has received your request.';
-
+        const foundCount = Number(request.driverFoundCount || request.driverDispatchCount || 0);
+        const driverFound = foundCount > 0 || String(request.driverSearchStatus || '').startsWith('driver_found');
+        const distanceKm = Number(request.nearestDriverDistanceKm || 0);
+        const escape = value => ASIYE.ui.escape(String(value || ''));
         const fareDecision = request.lastGoFareDecision;
         const driverDeclined = fareDecision?.action === 'declined' &&
             Number(fareDecision.offerRound) === Number(request.passengerOfferRound || 1);
         const offer = Number(request.passengerOffer || request.finalAmount || 0);
-
-
+        const driverDetail = distanceKm > 0
+            ? `Nearest available driver is about ${distanceKm.toFixed(1)} km from your pickup.`
+            : foundCount > 1 ? `${foundCount} nearby drivers have received your request.`
+                : 'A nearby driver has received your request.';
+        this.scheduleGoDriverSearchRetry(request);
         container.innerHTML = `
-
-            <div class="asiye-row">
-
-                <div class="
-                    asiye-status-icon
-                    asiye-search-icon
-                    ${driverFound ? 'asiye-driver-found-icon' : ''}
-                ">
-                    <i class="fas fa-${driverFound ? 'check' : 'car-side'}"></i>
-                </div>
-
-                <div>
-
-                    <div class="home-kicker">
-                        Asiye Go
+            <section class="ride-match go-driver-search ${driverFound ? 'go-driver-search--found' : ''}">
+                <div class="go-search-hero">
+                    <span class="go-search-service">ASIYE GO <span>PRIVATE RIDE</span></span>
+                    <div class="go-search-radar" aria-hidden="true">
+                        <span class="go-search-ring"></span><span class="go-search-ring"></span><span class="go-search-ring"></span>
+                        <span class="go-search-car">${driverFound
+                            ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m5 12 4 4L19 6"/></svg>'
+                            : '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m7 13 3-6h12l3 6 2 3v8H5v-8l2-3Z"/><path d="M7 13h18M9 24v3m14-3v3"/><path d="M8 18h5m6 0h5"/></svg>'}</span>
                     </div>
-
-                    <h2 class="sheet-page-title">
-                        ${
-                            driverFound
-                            ? 'Driver found'
-                            : 'Searching for a nearby driver'
-                        }
-                    </h2>
-
-                    <div class="home-greeting">
-                        ${
-                            driverFound
+                    <div role="status" aria-live="polite" aria-atomic="true">
+                        <h2 class="go-search-title">${driverFound ? 'Driver found' : 'Searching for a nearby driver'}</h2>
+                        <p class="go-search-copy">${driverFound
                             ? 'Waiting for a driver to accept your fare or make a counter-offer.'
-                            : 'Checking active Asiye drivers around your pickup. We will keep searching automatically.'
-                        }
+                            : 'Looking for an available driver near your pickup. Your request stays open while we search.'}</p>
                     </div>
-
+                    <div class="go-search-live"><span></span>${driverFound ? 'Waiting for a response' : 'Searching nearby'}<span class="go-search-dots" aria-hidden="true"><i></i><i></i><i></i></span></div>
                 </div>
-
-            </div>
-
-            ${driverDeclined ? `<p class="go-fare-protection-note" role="status">${ASIYE.ui.escape(fareDecision.driverName || 'A driver')} declined your R${offer.toFixed(0)} offer. Your booking stays open for other drivers.</p>` : ''}
-
-            ${request.negotiationEnabled ? `<p class="go-fare-protection-note">Your offer: <strong>R${offer.toFixed(0)}</strong>. Drivers decide whether to accept, decline or counter. No payment is taken until a fare is agreed.</p>` : ''}
-
-            <div class="asiye-request-activity">
-
-                <div class="asiye-request-step done">
-                    <span><i class="fas fa-check"></i></span>
-                    <div>
-                        <strong>Ride request created</strong>
-                        <small>Your route and payment are ready.</small>
-                    </div>
-                </div>
-
-                <div class="asiye-request-step ${driverFound ? 'done' : 'active'}">
-                    <span>
-                        <i class="fas fa-${driverFound ? 'check' : 'location-crosshairs'}"></i>
-                    </span>
-                    <div>
-                        <strong>
-                            ${driverFound ? 'Driver found' : 'Finding a driver'}
-                        </strong>
-                        <small>
-                            ${
-                                driverFound
-                                ? ASIYE.ui.escape(driverDetail)
-                                : 'Scanning online drivers near your pickup.'
-                            }
-                        </small>
-                    </div>
-                </div>
-
-                <div class="asiye-request-step ${driverFound ? 'active' : ''}">
-                    <span><i class="fas fa-hand-pointer"></i></span>
-                    <div>
-                        <strong>Driver acceptance</strong>
-                        <small>
-                            ${
-                                driverFound
-                                ? 'Your request is with nearby drivers. Waiting for one to accept.'
-                                : 'This starts as soon as an available driver is located.'
-                            }
-                        </small>
-                    </div>
-                </div>
-
-            </div>
-
-            <div class="asiye-search-progress">
-                <span></span>
-            </div>
-
-            <div class="asiye-route-summary">
-
-                <div style="
-                    color:#888;
-                    font-size:9px;
-                    font-weight:800;
-                    text-transform:uppercase;
-                ">
-                    Destination
-                </div>
-
-                <strong style="
-                    display:block;
-                    margin-top:3px;
-                    font-size:12px;
-                ">
-                    ${ASIYE.ui.escape(
-                        request.destination
-                    )}
-                </strong>
-
-            </div>
-
-            <button
-                id="cancelCurrentRideBtn"
-                class="secondary-button"
-                style="margin-top:12px;"
-            >
-                Cancel request
-            </button>
-        `;
-
-
-        document
-            .getElementById(
-                'cancelCurrentRideBtn'
-            )
-            ?.addEventListener(
-                'click',
-                () => {
-
-                    ASIYE.booking
-                        ?.cancelCurrentRide?.();
-                }
-            );
+                ${driverDeclined ? `<p class="go-search-note" role="status">${escape(fareDecision.driverName || 'A driver')} declined your R${offer.toFixed(0)} offer. We are checking other drivers.</p>` : ''}
+                <ol class="go-search-steps" aria-label="Booking progress">
+                    <li class="done"><span class="go-search-step-icon">✓</span><div><strong>Request created</strong><small>Your pickup and destination are saved.</small></div></li>
+                    <li class="${driverFound ? 'done' : 'active'}"><span class="go-search-step-icon">${driverFound ? '✓' : '2'}</span><div><strong>${driverFound ? 'Driver found' : 'Finding your driver'}</strong><small>${driverFound ? escape(driverDetail) : 'Checking available drivers around you.'}</small></div></li>
+                    <li class="${driverFound ? 'active' : ''}"><span class="go-search-step-icon">3</span><div><strong>Driver response</strong><small>${driverFound ? 'Your driver can accept, decline or counter.' : 'We will let you know when a driver responds.'}</small></div></li>
+                </ol>
+                ${request.negotiationEnabled ? '<p class="go-search-note">Your offer goes directly to nearby drivers. No payment is taken until a fare is agreed.</p>' : ''}
+            </section>`;
     },
 
 

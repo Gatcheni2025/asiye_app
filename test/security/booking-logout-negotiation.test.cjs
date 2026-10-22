@@ -291,9 +291,10 @@ test('driver search retries a transport failure without creating a second bookin
   const ride=w.ASIYE.ride;ride.requestId=request.requestId;
   ride.scheduleGoDriverSearchRetry(request);
   await timers[0]();assert.equal(calls,1);assert.equal(timers.length,2);
-  await timers[1]();assert.equal(calls,2);assert.equal(timers.length,2);
+  await timers[1]();assert.equal(calls,2);assert.equal(timers.length,3,'An open offer continues searching after reconnecting');
   ride.scheduleGoDriverSearchRetry({...request,fareStatus:'driver_counter'});
-  assert.equal(timers.length,2,'A counter awaiting passenger acceptance must not be rebroadcast');
+  assert.equal(timers.length,3,'A counter awaiting passenger acceptance must not be rebroadcast');
+  assert.equal(ride.driverSearchRetryTimer,null);
  }finally{dom.window.close();}
 });
 
@@ -325,7 +326,8 @@ test('the passenger live listener displays a new driver counter immediately and 
    on:(event,fn)=>{listener=fn;return fn;},off:()=>{}})})};
   load(w,'assets/passenger-v2/js/ride-controller.js');
   await w.ASIYE.ride.start('ride',request);
-  assert.match(w.document.getElementById('sheetContent').textContent,/Your offer:\s*R40/);
+  assert.match(w.document.querySelector('.ride-match-fare').textContent,/Your offer/);
+  assert.equal(w.document.querySelector('.ride-match-fare > strong').textContent,'R40.00');
   const counter={...request,fareStatus:'driver_counter',driverCounterFare:80,negotiationDriverName:'Sipho',negotiationDriverId:'driver',negotiationRound:2};
   listener({val:()=>counter});
   assert.match(w.document.getElementById('sheetContent').textContent,/Driver counter: R80/);
@@ -333,7 +335,7 @@ test('the passenger live listener displays a new driver counter immediately and 
   assert.deepEqual(calls,[['ride',80,2]]);
   w.document.getElementById('cancelGoFareRequest').click();await flush();assert.equal(cancelled,1);
   listener({val:()=>({...request,lastGoFareDecision:{action:'declined',driverName:'Sipho',offerRound:1}})});
-  assert.match(w.document.querySelector('[role="status"]').textContent,/Sipho declined your R40 offer/);
+  assert.match(w.document.querySelector('.go-search-note[role="status"]').textContent,/Sipho declined your R40 offer/);
  }finally{dom.window.close();}
 });
 

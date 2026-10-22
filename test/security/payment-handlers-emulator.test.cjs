@@ -6,6 +6,8 @@
 const {test,before,beforeEach,after}=require('node:test');
 const assert=require('node:assert/strict');
 const crypto=require('node:crypto');
+const fs=require('node:fs');
+const {JSDOM,VirtualConsole}=require('jsdom');
 const admin=require('../../functions/node_modules/firebase-admin');
 const projectId='demo-asiye-payment-handlers';
 const secret='sk_test_EMULATOR_ONLY_NO_NETWORK';
@@ -360,6 +362,46 @@ async function lowGoOffer(requestId='go-low-offer-reference'){
   assert.equal((await read(`notifications/taxis/driver/${requestId}`)).passengerOffer,65,'Submission itself delivers the 65% offer');
   return requestId;
 }
+
+test('a driver who comes online later receives the open offer in the real client listener and can accept it',async()=>{
+  const requestId='go-late-online-driver';
+  await db.ref('taxis/driver').update({isOnline:false,isBroadcasting:false,latitude:null,longitude:null});
+  await db.ref('taxis/otherDriver').update({isOnline:false,isBroadcasting:false});
+  await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+    paymentMethod:'cash',negotiationEnabled:true,fareStatus:'passenger_offer',routeDistanceKm:10,routeDurationMinutes:0,
+    commuterLocation:pickup,destinationCoords:destination});
+  const submitted=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
+  assert.equal(submitted.status,200);assert.equal(submitted.body.dispatch.mode,'none');
+  assert.equal((await read('requests/'+requestId)).driverFoundCount,0);
+  const dom=new JSDOM('',{url:'https://example.test/',runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+  const w=dom.window;let displayed;let opened;
+  const incoming=new Promise(resolve=>{opened=resolve;});
+  try {
+    await db.ref('taxis/driver').update({...pickup,isOnline:true,isBroadcasting:true,lastSeen:Date.now()});
+    w.AsiyeEnrollment={requireApproval:async()=>true};
+    w.firebase={database:()=>db,auth:()=>({currentUser:{uid:'driver-auth'}})};
+    w.ASIYE_DRIVER={state:{driverId:'driver',driver:await read('taxis/driver')},
+      ui:{hasApprovedVehicle:()=>true,showIncomingRequest:request=>{displayed=request;opened();},closeIncomingRequest(){},toast(){}},
+      trip:{start(){}}};
+    w.eval(fs.readFileSync('../../assets/driver-v2/js/requests.js','utf8'));
+    const client=w.ASIYE_DRIVER.requests;client.playRequestSound=()=>{};
+    client.postNegotiation=async(endpoint,body)=>{
+      const result=await call(endpoint,'driver-auth',body);
+      assert.equal(result.status,200,JSON.stringify(result.body));return result.body;
+    };
+    client.listenToNotifications('driver');
+    const dispatched=await call('dispatchGoRideRequest','sender-auth',{requestId});
+    assert.equal(dispatched.status,200);assert.equal(dispatched.body.mode,'broadcast');
+    let timer;try{await Promise.race([incoming,new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('Driver popup not delivered')),8000);})]);}finally{clearTimeout(timer);}
+    assert.equal(displayed.requestId,requestId);assert.equal(displayed.passengerOffer,65);
+    assert.equal((await read('requests/'+requestId)).driverFoundCount,1);
+    const accepted=await client.accept(requestId);assert.equal(accepted.ok,true);
+    assert.equal((await read('requests/'+requestId)).taxiId,'driver');
+    assert.equal((await read('requests/'+requestId)).fareStatus,'agreed');
+    assert.equal(await read('taxis/driver/currentRequest'),requestId);
+    assert.equal(initializations.length,0);
+  }finally{w.ASIYE_DRIVER?.requests?.stop();dom.window.close();}
+});
 
 test('Cash and Card offers at 65% are delivered during submission without a second client call',async()=>{
   for(const paymentMethod of ['cash','card']) {

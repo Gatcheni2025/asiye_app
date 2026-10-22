@@ -9,6 +9,9 @@ on:
       - 'docs/ASIYE_347_STAGING_TO_RELEASE_ACCEPTANCE_20261022.md'
       - 'assets/admin/**'
       - 'assets/admin-login.html'
+      - 'assets/member-pages.js'
+      - 'assets/member-pages.css'
+      - 'scripts/deploy_staging_driver_search_ui.cjs'
       - 'scripts/deploy_staging_driver_admin.cjs'
       - 'scripts/grant_staging_driver_reviewer.cjs'
       - 'test/admin-login.test.cjs'
@@ -89,6 +92,8 @@ jobs:
             test/passenger-booking-face.test.cjs \
             test/admin-login.test.cjs \
             test/admin-portal.test.cjs \
+            test/request-search-awareness.test.cjs \
+            test/member-pages.test.cjs \
             test/registration-submission.test.cjs \
             test/login-otp.test.cjs \
             test/driver-enrollment-v2.test.cjs \
@@ -167,6 +172,7 @@ jobs:
         run: |
           node booking-face-ui.cjs
           node admin-login-ui.cjs
+          node driver-search-ui.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

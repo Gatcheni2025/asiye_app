@@ -24,6 +24,9 @@ const FILES=[
   'passenger-v2/js/club.js',
   'passenger-v2/js/parcels.js',
   'driver-v2/js/requests.js',
+  'driver-v2/index.html', 'driver-v2/js/app.js', 'driver-v2/js/map.js',
+  'driver-v2/js/location.js', 'driver-v2/css/app.css',
+  'passenger-v2/css/app.css', 'member-pages.js', 'member-pages.css',
   'driver-v2/js/trip-controller.js',
   'club-live.js',
   'payment-status.html'

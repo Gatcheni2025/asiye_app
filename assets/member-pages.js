@@ -741,16 +741,15 @@
                     return true;
                 }
 
-                app?.ui?.toast?.(
-                    'Add one trusted person before continuing.'
-                );
+                const promptKey = `asiye-contact-later:${role}:${id}`;
+                if (sessionStorage.getItem(promptKey) === 'true') return true;
 
-                window.AsiyePages
+                await window.AsiyePages
                     ?.open?.(
-                        'safety'
+                        'safety', {setup: true}
                     );
 
-                return false;
+                return true;
             };
     }
 
@@ -1494,7 +1493,7 @@ window.AsiyePages = {
         return payload;
     },
 
-    async open(page) {
+    async open(page, options = {}) {
         if (page === 'wallet') {
             window.alert('Asiye Wallet is discontinued. Contact support about existing funds.');
             return;
@@ -2662,10 +2661,10 @@ window.AsiyePages = {
                         <i class="fas fa-shield-heart"></i>
                     </div>
                     <div>
-                        <small>DRIVER SAFETY</small>
+                        <small>${driver ? 'DRIVER' : 'PASSENGER'} SAFETY · OPTIONAL</small>
                         <h2>Trusted family & live location</h2>
                         <p>
-                            Keep people you trust connected to your driving account
+                            Keep people you trust connected to your account
                             and share your active trip location when you need to.
                         </p>
                     </div>
@@ -2673,8 +2672,12 @@ window.AsiyePages = {
 
                 <p class="member-note member-section-intro">
                     Your primary safety contact stays connected to your Asiye
-                    account. You can add more trusted people at any time.
+                    account. You can add someone now or return here later from Safety.
                 </p>
+
+                <button type="button" class="member-primary member-secondary" data-family-later>
+                    ${options.setup ? 'Add later — go to dashboard' : 'Back to dashboard'}
+                </button>
 
                 <div data-family-list>
                     ${
@@ -2700,7 +2703,7 @@ window.AsiyePages = {
                 </div>
 
                 <form data-family-form class="member-family-form">
-                    <h3>Add another trusted person</h3>
+                    <h3>${members.length ? 'Add another trusted person' : 'Add a trusted person'}</h3>
 
                     <button
                         type="button"
@@ -2746,7 +2749,7 @@ window.AsiyePages = {
                     </p>
 
                     <button class="member-primary" type="submit">
-                        Save trusted person
+                        ${options.setup ? 'Save and continue' : 'Save trusted person'}
                     </button>
                 </form>
 
@@ -2761,6 +2764,11 @@ window.AsiyePages = {
 
             const familyForm =
                 body.querySelector('[data-family-form]');
+
+            body.querySelector('[data-family-later]').onclick = () => {
+                sessionStorage.setItem(`asiye-contact-later:${context.role}:${id}`, 'true');
+                dialog.close();dialog.remove();
+            };
 
             body.querySelector(
                 '[data-family-pick-contact]'
@@ -2807,10 +2815,15 @@ window.AsiyePages = {
                         phone: form.elements.phone.value
                     });
 
-                    this.open('safety');
+                    if (options.setup) {
+                        dialog.close();dialog.remove();
+                        app.ui?.toast?.('Trusted person saved. You can manage contacts in Safety.', 'success');
+                    } else {
+                        await this.open('safety');
+                    }
                 } catch (error) {
                     button.disabled = false;
-                    button.textContent = 'Save trusted person';
+                    button.textContent = options.setup ? 'Save and continue' : 'Save trusted person';
 
                     app.ui?.toast?.(
                         error?.message ||
