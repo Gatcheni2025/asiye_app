@@ -164,18 +164,14 @@ test('Passenger completeLogin stores session, notifies Flutter and redirects to 
     assert.equal(context.window.location.href, './index.html');
 });
 
-test('Passenger prepareRecaptcha configures auto-renewing expired-callback and clears container', () => {
+test('Passenger prepareRecaptcha awaits and reuses the verifier with an expiry handler', async () => {
     const { context, getElement } = createMockContext('assets/passenger-v2/js/login.js');
     delete context.window.Asiye;
     delete context.window.Android;
     const login = context.window.ASIYE_PASSENGER_LOGIN;
 
-    const container = getElement('recaptcha-container');
-    container.innerHTML = '<iframe src="old"></iframe>';
-
-    login.prepareRecaptcha();
-
-    assert.equal(container.innerHTML, '');
+    const verifier = await login.prepareRecaptcha();
+    assert.equal(await login.prepareRecaptcha(), verifier);
     assert.ok(login.recaptchaVerifier);
     assert.ok(typeof login.recaptchaVerifier.options['expired-callback'] === 'function');
 });
@@ -217,18 +213,14 @@ test('Driver completeDriverLogin stores session, notifies Flutter and redirects 
     assert.equal(context.window.location.href, './index.html');
 });
 
-test('Driver prepareRecaptcha configures auto-renewing expired-callback and clears container', () => {
+test('Driver prepareRecaptcha awaits and reuses the verifier with an expiry handler', async () => {
     const { context, getElement } = createMockContext('assets/driver-v2/js/login.js');
     delete context.window.Asiye;
     delete context.window.Android;
     const login = context.window.ASIYE_DRIVER_LOGIN;
 
-    const container = getElement('recaptcha-container');
-    container.innerHTML = '<iframe src="old"></iframe>';
-
-    login.prepareRecaptcha();
-
-    assert.equal(container.innerHTML, '');
+    const verifier = await login.prepareRecaptcha();
+    assert.equal(await login.prepareRecaptcha(), verifier);
     assert.ok(login.recaptchaVerifier);
     assert.ok(typeof login.recaptchaVerifier.options['expired-callback'] === 'function');
 });

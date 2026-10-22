@@ -10,6 +10,8 @@ on:
       - 'scripts/paystack*.cjs'
       - 'scripts/paystack_function_manifest.json'
       - '.github/workflows/paystack_technical_readiness.yml'
+      - 'assets/native-auth-session.js'
+      - 'lib/native_phone_auth.dart'
 permissions:
   contents: read
 jobs:

@@ -5,11 +5,20 @@ require 'json'
 default_platform(:ios)
 
 platform :ios do
-  desc "Build the selected Asiye source, sign its IPA and upload it to TestFlight"
+  desc "Build and verify a signed IPA without uploading to TestFlight"
+  lane :candidate do
+    signed_candidate(upload_to_testflight: false)
+  end
+
+  desc "Build, verify and explicitly upload the selected IPA to TestFlight"
   lane :beta do
     unless ENV["ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED"] == "yes"
       UI.user_error!("Upload gate is closed; release confirmation is required.")
     end
+    signed_candidate(upload_to_testflight: true)
+  end
+
+  private_lane :signed_candidate do |options|
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
     setup_ci
@@ -82,13 +91,18 @@ platform :ios do
     validator = File.expand_path("../../scripts/verify_asiye_ios_metadata.py", __dir__)
     UI.user_error!("Missing signed IPA validator at #{validator}") unless File.file?(validator)
     sh("python3 #{Shellwords.escape(validator)} --ipa #{Shellwords.escape(ipa_path.to_s)} --version #{Shellwords.escape(ios_version)} --build #{Shellwords.escape(build_string)}")
+    asset_validator = File.expand_path("../../scripts/verify_mobile_bundle_assets.py", __dir__)
+    sh("python3 #{Shellwords.escape(asset_validator)} --artifact #{Shellwords.escape(ipa_path.to_s)} --expected-project asiye-80386")
     File.write(File.join(export_dir, "release-info.json"), JSON.pretty_generate({
       source_version: source_version,
       source_commit: ENV["GITHUB_SHA"],
       ios_version: ios_version,
       ios_build_number: build_string,
       bundle_identifier: "com.asiyeapp.asiye",
-      distribution: "TestFlight",
+      firebase_project: "asiye-80386",
+      staging_capable: false,
+      distribution: options[:upload_to_testflight] ? "TestFlight-candidate" : "signed-candidate",
+      testflight_uploaded: false,
       live_payments_verified: false
     }))
     if ENV["GITHUB_OUTPUT"]
@@ -99,7 +113,8 @@ platform :ios do
       end
     end
 
-    upload_to_testflight(
+    if options[:upload_to_testflight]
+      upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
       skip_waiting_for_build_processing: false,
@@ -108,6 +123,11 @@ platform :ios do
       distribute_external: false,
       notify_external_testers: false,
       changelog: "Start Go offers at 65 percent of the route reference. Valid offers are sent to nearby drivers during submission for acceptance, decline or counter-offer; notification retries preserve the booking. Release candidate; provider acceptance remains required for live Card activation."
-    )
+      )
+      info_path = File.join(export_dir, "release-info.json")
+      info = JSON.parse(File.read(info_path))
+      info["testflight_uploaded"] = true
+      File.write(info_path, JSON.pretty_generate(info))
+    end
   end
 end

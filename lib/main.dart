@@ -21,6 +21,7 @@ import 'dart:convert';
 
 import 'face_scan_screen.dart';
 import 'vehicle_camera_screen.dart';
+import 'native_phone_auth.dart';
 import 'dart:io' show ContentType, HttpClient, HttpHeaders, Platform;
 
 bool _isFirebaseInitialized = false;
@@ -124,6 +125,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   int? _phoneResendToken;
   String? _phoneVerificationNumber;
   String? _phoneVerificationId;
+  String? _phoneLinkUid;
+  int _phoneAuthEpoch = 0;
   bool _showNativeOtp = false;
   bool _nativeOtpBusy = false;
   String? _nativeOtpError;
@@ -132,23 +135,37 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Future<void> _savePendingPhoneAuth({
     String? phone,
     String? verificationId,
+    String? linkUid,
     bool clear = false,
   }) async {
     final prefs = await SharedPreferences.getInstance();
 
     if (clear) {
+      _phoneAuthEpoch++;
       _phoneVerificationNumber = null;
       _phoneVerificationId = null;
       _phoneResendToken = null;
+      _phoneLinkUid = null;
       await prefs.remove('pendingPhoneAuthNumber');
       await prefs.remove('pendingPhoneAuthVerificationId');
       await prefs.remove('pendingPhoneAuthInProgress');
       await prefs.remove('pendingPhoneAuthStartedAt');
+      await prefs.remove('pendingPhoneAuthLinkUid');
       return;
     }
 
     if (phone != null && phone.isNotEmpty) {
       _phoneVerificationNumber = phone;
+      if (verificationId == null) {
+        _phoneVerificationId = null;
+        await prefs.remove('pendingPhoneAuthVerificationId');
+      }
+      _phoneLinkUid = linkUid;
+      if (linkUid == null) {
+        await prefs.remove('pendingPhoneAuthLinkUid');
+      } else {
+        await prefs.setString('pendingPhoneAuthLinkUid', linkUid);
+      }
       await prefs.setString('pendingPhoneAuthNumber', phone);
       await prefs.setBool('pendingPhoneAuthInProgress', true);
       await prefs.setInt(
@@ -189,6 +206,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       'phone': phone,
       'verificationId': verificationId,
       'inProgress': inProgress,
+      'linkUid': _phoneLinkUid ?? prefs.getString('pendingPhoneAuthLinkUid'),
     });
 
     await _controller?.runJavaScript(
@@ -220,6 +238,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
     _phoneVerificationNumber = phone;
     _phoneVerificationId = verificationId;
+    _phoneLinkUid = prefs.getString('pendingPhoneAuthLinkUid');
 
     if (mounted) {
       setState(() {
@@ -1101,16 +1120,23 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           final Map<String, dynamic> data = jsonDecode(message);
           final action = data['action'];
           if (action == 'startPhoneSignIn') {
-            await _startPhoneSignIn(data['phone']?.toString() ?? '');
+            await _startPhoneSignIn(
+              data['phone']?.toString() ?? '',
+              linkUid: data['linkUid']?.toString(),
+            );
           }
           else if (action == 'resendPhoneOtp') {
             await _startPhoneSignIn(
               data['phone']?.toString() ?? '',
               forceResend: true,
+              linkUid: data['linkUid']?.toString(),
             );
           }
           else if (action == 'verifyPhoneOtp') {
             await _verifyPhoneOtp(data['verificationId']?.toString() ?? '', data['code']?.toString() ?? '');
+          }
+          else if (action == 'resetNativeAuthForSignIn') {
+            await _resetNativeAuthForSignIn(data['requestId']?.toString() ?? '');
           }
           else if (action == 'onUserLoggedIn' || action == 'onSignupSuccess') {
             await _saveSessionAndRedirect(data['uid'], data['type']);
@@ -1180,6 +1206,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           return 'We could not verify this app installation. Please update Asiye or contact support.';
         case 'missing-verification-code':
           return 'Enter the 6-digit verification code from your SMS.';
+        case 'credential-already-in-use':
+        case 'account-exists-with-different-credential':
+          return 'This phone belongs to another Asiye account. Sign in with that number or contact Asiye Support to link your accounts.';
+        case 'phone-link-session-changed':
+          return 'Your Apple or Google session changed. Choose a sign-in method and try again.';
       }
     }
     return 'Phone verification could not be completed. Please try again or contact support.';
@@ -1188,6 +1219,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   Future<void> _startPhoneSignIn(
     String phone, {
     bool forceResend = false,
+    String? linkUid,
   }) async {
     final cleanPhone = phone.trim();
     if (!RegExp(r'^\+27[6-8][0-9]{8}$').hasMatch(cleanPhone)) {
@@ -1197,17 +1229,25 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       return;
     }
 
-    if (_phoneVerificationNumber != cleanPhone) {
+    if (_phoneVerificationNumber != cleanPhone || _phoneLinkUid != linkUid) {
       _phoneVerificationNumber = cleanPhone;
       _phoneResendToken = null;
       _phoneVerificationId = null;
     }
 
     try {
+      if (Firebase.apps.isEmpty) {
+        await Firebase.initializeApp();
+      }
+      _isFirebaseInitialized = Firebase.apps.isNotEmpty;
       final existingUser =
           FirebaseAuth.instance.currentUser;
 
-      if (existingUser != null &&
+      if (linkUid != null &&
+          (linkUid.isEmpty || existingUser == null || existingUser.uid != linkUid)) {
+        throw FirebaseAuthException(code: 'phone-link-session-changed');
+      }
+      if (linkUid == null && existingUser != null &&
           existingUser.phoneNumber != cleanPhone) {
         await FirebaseAuth.instance.signOut();
       }
@@ -1220,32 +1260,26 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         });
       }
 
-      await _savePendingPhoneAuth(phone: cleanPhone);
+      final epoch = ++_phoneAuthEpoch;
+      await _savePendingPhoneAuth(phone: cleanPhone, linkUid: linkUid);
 
       // Recover cleanly if Firebase initialization timed out during app startup.
       // Phone authentication must always use the native Firebase SDK in the
       // installed app; the WebView must never be responsible for app verification.
-      if (Firebase.apps.isEmpty) {
-        await Firebase.initializeApp();
-      }
-      _isFirebaseInitialized = Firebase.apps.isNotEmpty;
-
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: cleanPhone,
         timeout: const Duration(seconds: 60),
         forceResendingToken: forceResend ? _phoneResendToken : null,
         verificationCompleted: (PhoneAuthCredential credential) async {
+          if (epoch != _phoneAuthEpoch) return;
           try {
-            final result =
-                await FirebaseAuth.instance.signInWithCredential(
-              credential,
+            final user = await completeNativePhoneAuth(
+              auth: FirebaseAuth.instance,
+              credential: credential,
+              phone: cleanPhone,
+              linkUid: linkUid,
             );
-            final user = result.user;
-            if (user == null) {
-              throw Exception(
-                'Phone authentication did not return a user.',
-              );
-            }
+            if (epoch != _phoneAuthEpoch) return;
 
             await _sendNativeAuthSessionToWeb(
               user,
@@ -1261,10 +1295,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               });
             }
           } catch (error) {
-            await _sendNativeAuthError('phone', error);
+            await _sendNativeAuthError('phone', Exception(_phoneAuthUserMessage(error)));
           }
         },
         verificationFailed: (FirebaseAuthException error) async {
+          if (epoch != _phoneAuthEpoch) return;
           debugPrint('Phone verification failed: ${error.code}');
           final message = _phoneAuthUserMessage(error);
 
@@ -1286,6 +1321,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           );
         },
         codeSent: (String verificationId, int? resendToken) async {
+          if (epoch != _phoneAuthEpoch) return;
           _phoneVerificationNumber = cleanPhone;
           _phoneVerificationId = verificationId;
           _phoneResendToken = resendToken;
@@ -1295,7 +1331,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           await _savePendingPhoneAuth(
             phone: cleanPhone,
             verificationId: verificationId,
+            linkUid: linkUid,
           );
+          if (epoch != _phoneAuthEpoch) return;
 
           if (mounted) {
             setState(() {
@@ -1315,11 +1353,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           await _restorePendingPhoneAuthToWeb();
         },
         codeAutoRetrievalTimeout: (String verificationId) {
+          if (epoch != _phoneAuthEpoch) return;
           _phoneVerificationId = verificationId;
           unawaited(
             _savePendingPhoneAuth(
               phone: cleanPhone,
               verificationId: verificationId,
+              linkUid: linkUid,
             ),
           );
           _controller?.runJavaScript(
@@ -1364,32 +1404,22 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         throw Exception('Your verification session has expired. Tap Resend code.');
       }
 
-      User? user = FirebaseAuth.instance.currentUser;
-
-      // If the OTP was already accepted natively but the WebView handoff
-      // failed, retry only the session exchange instead of consuming the
-      // verification code a second time.
-      if (user == null ||
-          (_phoneVerificationNumber != null &&
-              user.phoneNumber != _phoneVerificationNumber)) {
-        final credential =
-            PhoneAuthProvider.credential(
+      final phone = _phoneVerificationNumber ??
+          prefs.getString('pendingPhoneAuthNumber') ?? '';
+      if (phone.isEmpty) {
+        throw Exception('Your verification session has expired. Tap Resend code.');
+      }
+      final epoch = _phoneAuthEpoch;
+      final user = await completeNativePhoneAuth(
+        auth: FirebaseAuth.instance,
+        credential: PhoneAuthProvider.credential(
           verificationId: resolvedVerificationId,
           smsCode: digits,
-        );
-
-        final result =
-            await FirebaseAuth.instance.signInWithCredential(
-          credential,
-        );
-        user = result.user;
-      }
-
-      if (user == null) {
-        throw Exception(
-          'Phone authentication did not return a user.',
-        );
-      }
+        ),
+        phone: phone,
+        linkUid: _phoneLinkUid ?? prefs.getString('pendingPhoneAuthLinkUid'),
+      );
+      if (epoch != _phoneAuthEpoch) return;
 
       await _sendNativeAuthSessionToWeb(
         user,
@@ -1668,6 +1698,26 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     );
     await _controller?.loadFlutterAsset(
       'assets/passenger-v2/login.html',
+    );
+  }
+
+  Future<void> _resetNativeAuthForSignIn(String requestId) async {
+    var success = false;
+    try {
+      await _savePendingPhoneAuth(clear: true);
+      await FirebaseAuth.instance.signOut();
+      await _googleSignIn.signOut();
+      if (mounted) {
+        setState(() {
+          _showNativeOtp = false;
+          _nativeOtpBusy = false;
+          _nativeOtpError = null;
+        });
+      }
+      success = true;
+    } catch (_) {}
+    await _controller?.runJavaScript(
+      "window.onNativeSignInReset?.(${jsonEncode({'requestId': requestId, 'success': success})});",
     );
   }
 

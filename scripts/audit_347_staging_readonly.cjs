@@ -13,7 +13,18 @@ const FILES=[
   'passenger-v2/js/firebase.js',
   'driver-v2/login.html',
   'driver-v2/js/login.js',
-  'driver-v2/js/firebase.js'
+  'driver-v2/js/firebase.js',
+  'passenger-v2/css/login.css',
+  'native-auth-session.js',
+  'passenger-v2/js/booking.js',
+  'passenger-v2/js/ride-controller.js',
+  'passenger-v2/js/wallet.js',
+  'passenger-v2/js/club.js',
+  'passenger-v2/js/parcels.js',
+  'driver-v2/js/requests.js',
+  'driver-v2/js/trip-controller.js',
+  'club-live.js',
+  'payment-status.html'
 ];
 function canonical(data){
   if(Array.isArray(data))return data.map(canonical);
@@ -89,11 +100,14 @@ async function auditRules(database){
     return {status:hash(deployed)===hash(local)?'MATCH':'MISMATCH'};
   }catch(e){return {status:e.message.startsWith('HTTP_')?'BLOCKED_'+e.message:'BLOCKED_READ_FAILED'};}
 }
-async function auditHosted(preview){
+async function auditHosted(preview,config=null){
+  const {rewrite,extractProductionWebConfig}=require('./build_staging_web_preview.cjs');
+  const prod=config?extractProductionWebConfig(path.join(root,'assets/passenger-v2/js/firebase.js')):null;
   let matched=0,fail=[];
   for(const relative of FILES){
     try{
-      const local=fs.readFileSync(path.join(preview,relative),'utf8');
+      const source=fs.readFileSync(path.join(preview,relative),'utf8');
+      const local=config?rewrite(source,prod,config):source;
       const r=await get('https://'+PROJECT+'.web.app/'+relative);
       const remote=await r.text();
       if(hash(local)!==hash(remote))throw Error('CONTENT_MISMATCH');
@@ -109,8 +123,27 @@ async function auditHosted(preview){
   }
   return {matched,fail};
 }
+async function auditPublicHosting(){
+  // Firebase SDK config is public; validate its pinned project before using
+  // it to rewrite reviewed source in memory. No local preview or cloud login.
+  const {parseConfig}=require('./rebuild_staging_auth_preview.cjs');
+  const response=await get('https://'+PROJECT+'.web.app/passenger-v2/js/firebase.js');
+  const config=parseConfig(await response.text());
+  if(config.messagingSenderId!==NUMBER)throw Error('STAGING_WEB_CONFIG_NUMBER_MISMATCH');
+  const hosting=await auditHosted(path.join(root,'assets'),config);
+  console.log('PROJECT='+PROJECT+' NUMBER='+NUMBER);
+  console.log('STAGING_HOSTED_FILES: MATCH='+hosting.matched+'/'+FILES.length);
+  for(const item of hosting.fail)console.log('FILE_CHECK: '+item);
+  console.log('STAGING_RTDB_RULES: NOT_CHECKED (authenticated Cloud Shell audit required)');
+  console.log('DEPLOYED_FUNCTION_SOURCE_SHA: NOT_ATTESTED');
+  console.log('PUBLIC_HOSTING_READBACK: '+(hosting.fail.length?'MISMATCH':'PASS'));
+  console.log('No deployments, database writes, customer data reads, IAM changes or payments made.');
+  if(hosting.fail.length)process.exitCode=2;
+}
 async function main(){
   console.log('Asiye 347 isolated staging release audit — READ ONLY');
+  if(process.argv[2]==='--hosting-only' && process.argv.length===3)return auditPublicHosting();
+  if(process.argv.length!==2)throw Error('AUDIT_ARGUMENT_INVALID');
   ensureProject();
   console.log('PROJECT='+PROJECT+' NUMBER='+NUMBER+' REGION='+REGION);
   const names=manifest();
@@ -141,8 +174,8 @@ async function main(){
   }
 }
 if(require.main===module)main().catch(e=>{
-  const categories=['STAGING_PROJECT_IDENTITY_MISMATCH','REVIEW_BRANCH_MISMATCH','FUNCTION_MANIFEST_INVALID','FUNCTION_INVENTORY_INVALID','GCLOUD_READ_FAILED'];
+  const categories=['STAGING_PROJECT_IDENTITY_MISMATCH','REVIEW_BRANCH_MISMATCH','FUNCTION_MANIFEST_INVALID','FUNCTION_INVENTORY_INVALID','GCLOUD_READ_FAILED','AUDIT_ARGUMENT_INVALID','STAGING_WEB_CONFIG_NUMBER_MISMATCH'];
   console.error('STAGING_READINESS_AUDIT: BLOCKED '+(categories.includes(e.message)?e.message:'CHECK_FAILED'));
   process.exitCode=2;
 });
-module.exports={canonical,hash,manifest,FILES,PROJECT,NUMBER,REGION};
+module.exports={canonical,hash,manifest,FILES,PROJECT,NUMBER,REGION,auditHosted,auditPublicHosting};

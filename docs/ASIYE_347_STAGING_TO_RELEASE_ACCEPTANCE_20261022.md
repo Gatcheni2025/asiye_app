@@ -2,6 +2,13 @@
 
 **Release status: NO-GO for public stores and LIVE Card processing.** This is an evidence checklist, not a deployment authorization.
 
+Native bridge/account-link correction, fresh candidate build controls and the
+current Hosting-only update command are recorded in
+[the native authentication follow-up](ASIYE_NATIVE_AUTH_READINESS_FIX_20261022.md).
+The public audit now compares **17** critical files, including the shared
+native bridge and booking/payment scripts. Existing 347 native candidates use
+the production Firebase project and must not be mistaken for staging builds.
+
 ## Reviewed baseline and provenance
 
 - Review branch: `fix/paystack-subaccounts-cash-card-no-wallet` / pull request **#19** (target: `fix/11.0.67-club-booking-arrival-pin-timer`, not `main`).

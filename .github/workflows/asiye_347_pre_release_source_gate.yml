@@ -11,6 +11,10 @@ on:
       - 'assets/passenger-v2/js/login.js'
       - 'assets/passenger-v2/css/login.css'
       - 'assets/driver-v2/js/login.js'
+      - 'assets/native-auth-session.js'
+      - 'lib/**'
+      - 'test/native-social-phone-link.test.cjs'
+      - 'test/native_phone_auth_test.dart'
       - 'test/staging-passenger-social-phone-link.test.cjs'
       - 'test/staging-auth-recaptcha.test.cjs'
       - 'scripts/audit_347_staging_readonly.cjs'
@@ -54,6 +58,7 @@ jobs:
         run: |
           node --check assets/passenger-v2/js/login.js
           node --check assets/driver-v2/js/login.js
+          node --check assets/native-auth-session.js
           node --check functions/index.js
           node --check functions/paystack-payment-safety.js
           node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
@@ -65,6 +70,8 @@ jobs:
         run: |
           node --test \
             test/staging-passenger-social-phone-link.test.cjs \
+            test/native-social-phone-link.test.cjs \
+            test/native-auth-session.test.cjs \
             test/staging-auth-recaptcha.test.cjs \
             test/go-fare-negotiation.test.cjs \
             test/go-continuation.test.cjs \
