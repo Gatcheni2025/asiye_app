@@ -8604,6 +8604,13 @@ exports.parcelTripActionSecure = onRequest(
 
 // Shared by authenticated offer submission and the legacy dispatch endpoint.
 // The suggested fare is guidance only; every valid 65–95% offer can be sent.
+function goVehicleCategoryAllowed(driver = {}) {
+  // Enrollment stores a physical category; older profiles store a service label.
+  // Use the approved vehicle record first, as the profile approval guard does.
+  const category = String(driver.vehicle?.type || driver.vehicleType || driver.carCategory || '').trim().toLowerCase();
+  return ['sedan', 'hatchback', 'suv', 'minibus', 'ehailing', 'e-hailing', 'go', 'car'].includes(category);
+}
+
 async function dispatchGoRideToDrivers(requestId, expectedOwner) {
   const db = admin.database();
   const ref = db.ref(`requests/${requestId}`);
@@ -8637,9 +8644,8 @@ async function dispatchGoRideToDrivers(requestId, expectedOwner) {
         trip.fareCounterDeclinedDrivers?.[child.key] === true ||
         trip.fareOfferDeclinedDrivers?.[child.key]?.offerRound === Number(trip.passengerOfferRound || 1)) return;
     const driverLat = Number(taxi.latitude), driverLng = Number(taxi.longitude);
-    const vehicleType = String(taxi.vehicleType || "").toLowerCase();
     if (!Number.isFinite(driverLat) || !Number.isFinite(driverLng) ||
-        (vehicleType && !["ehailing", "e-hailing", "go", "car"].includes(vehicleType))) return;
+        !goVehicleCategoryAllowed(taxi)) return;
     const distanceKm = haversineKm(lat, lng, driverLat, driverLng);
     if (!Number.isFinite(distanceKm) || distanceKm > 10) return;
     const candidate = {driverId:child.key, distanceKm};

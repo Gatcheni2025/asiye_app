@@ -4,23 +4,27 @@ The 22 October staging screenshots confirm 41 active Functions, matching RTDB ru
 
 ## Findings and changes
 
+The latest staging screenshots confirm the driver map, GPS watch and request listener are working, but no driver is found. The remaining backend filter accepted only legacy service labels (`go`, `ehailing`, `e-hailing`, `car`) while enrollment supplies physical categories (`sedan`, `hatchback`, `suv`, `minibus`). Every newly enrolled category was therefore excluded. The fix accepts the four registration categories and legacy labels, normalizes case/whitespace and uses the approved nested vehicle category first. Existing approval, online, broadcasting, location and distance checks remain enforced.
+
 - `loadDriver` returned before map initialization, GPS, live profile updates and offer setup whenever a trusted contact was missing. Saving the contact reopened Safety without resuming driver startup. Trusted contacts now load after the driver is ready, with **Add later — go to dashboard** and **Save and continue**. An online driver or restored trip is not interrupted by the setup prompt. The driver's own linked OTP phone and enrollment approval are separate authentication requirements.
 - Go retried at eight-second intervals only six times, then silently stopped. Open offers now continue at twenty-second intervals after the initial checks, including when a previously notified driver goes offline. Cancellation, a pending counter or assignment stops the search. A slow or failed HTTP response keeps the same request ID.
 - The Go screen has animated radar and activity dots, real Searching/Driver found states, reduced-motion support, a route summary, the passenger's **offer** rather than an incorrectly labelled agreed fare, and one cancellation control. A matched driver still needs to accept or counter.
 - Driver map startup proceeds independently of optional contacts and location permission. Loading errors show a message and **Retry map** instead of only a grey surface. Live GPS still updates the driver's database location for matching.
 - Browser tests cover contact skip/save and responsive search; emulator tests cover a driver coming online later, receiving the request through the actual Driver V2 notification client and accepting the fare through the actual protected backend handler.
 
-## Staging deployment
+## Current staging update: two Go dispatch functions
 
-This is a Hosting update. The reviewed backend functions and database rules do not require deployment for this fix.
+The earlier UI fix has been deployed and the user screenshot confirms **40/40** hosted files, **41/41** active Functions and matching rules. The category mismatch is in the backend and is corrected in both new-offer submission and continued search.
 
 ```bash
 cd ~/asiye-staging-review
 git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet
-node scripts/deploy_staging_driver_search_ui.cjs
+node scripts/deploy_staging_go_dispatch.cjs
 ```
 
-The helper pins the staging project and review branch, regenerates the preview from the existing public staging SDK configuration, deploys Hosting and runs the read-only audit. Hosted parity now includes the driver startup/map/GPS scripts, both stylesheets and shared contact pages: **40/40** files. Function inventory remains **41/41**.
+This updates only `submitGoFareOffer` and `dispatchGoRideRequest` from an isolated archive of the reviewed commit. It verifies both immutable source archives, then reads back the staging inventory/rules/40 hosted files. It preserves the current website, database rules, driver profiles and roles. Expected result: **STAGING_GO_DISPATCH_FUNCTION_SOURCE: MATCH=2/2**, **41/41 ACTIVE**, **40/40 hosted files** and **STAGING_INFRASTRUCTURE_READBACK: PASS**. A cleanup-policy-only error after two successful operations is followed by independent source verification. Use `--resume-after-functions` if the deployment stopped after both functions finished.
+
+New regression tests derive categories from the actual registration HTML. Emulator cases create an application, approve it through the real reviewer handler, submit and retry a Cash/Card offer, and accept it through the protected driver handler. Earlier fixtures using only legacy `go` labels did not catch this mismatch.
 
 ## Human acceptance
 

@@ -12,6 +12,12 @@ on:
       - 'assets/member-pages.js'
       - 'assets/member-pages.css'
       - 'scripts/deploy_staging_driver_search_ui.cjs'
+      - 'scripts/deploy_staging_go_dispatch.cjs'
+      - 'scripts/go_dispatch_staging_functions.json'
+      - 'scripts/audit_staging_go_dispatch_source.py'
+      - 'scripts/audit_staging_admin_function_source.py'
+      - 'test/go-driver-category.test.cjs'
+      - 'test/test_staging_go_dispatch_source.py'
       - 'scripts/deploy_staging_driver_admin.cjs'
       - 'scripts/grant_staging_driver_reviewer.cjs'
       - 'test/admin-login.test.cjs'
@@ -83,7 +89,9 @@ jobs:
           node --check scripts/audit_347_staging_readonly.cjs
           node --test test/audit-347-staging-readonly.test.cjs
       - name: Validate staging resume source readback without Google API calls
-        run: python3 -m unittest discover -s test -p 'test_staging_auth_source.py'
+        run: |
+          python3 -m unittest discover -s test -p 'test_staging_auth_source.py'
+          python3 -m unittest discover -s test -p 'test_staging_go_dispatch_source.py'
       - name: Run auth, booking, Parcel and Paystack failure regressions
         run: |
           node --test \
@@ -100,6 +108,7 @@ jobs:
             test/native-auth-session.test.cjs \
             test/staging-auth-recaptcha.test.cjs \
             test/go-fare-negotiation.test.cjs \
+            test/go-driver-category.test.cjs \
             test/go-continuation.test.cjs \
             test/club-lifecycle.test.cjs \
             test/parcel-security.test.cjs \

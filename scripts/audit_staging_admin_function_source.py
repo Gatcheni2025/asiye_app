@@ -44,12 +44,12 @@ def verify_inventory(inventory, names, expected, read_archive):
     return report
 
 
-def main():
+def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STAGING_ADMIN_FUNCTION_SOURCE'):
     try:
         if (command(['gcloud', 'config', 'get-value', 'project']) != PROJECT or
                 command(['gcloud', 'projects', 'describe', PROJECT, '--format=value(projectNumber)']) != NUMBER):
             raise ValueError('STAGING_PROJECT_IDENTITY_MISMATCH')
-        names = json.loads((ROOT / 'scripts/staging_driver_admin_functions.json').read_text())
+        names = json.loads((ROOT / manifest_path).read_text())
         expected = {p.name: p.read_bytes() for p in (ROOT / 'functions').glob('*.js')}
         pkg = json.loads((ROOT / 'functions/package.json').read_text())
         pkg['main'] = 'staging-index.generated.cjs'
@@ -73,14 +73,14 @@ def main():
                 raise ValueError('ARCHIVE_SIZE_LIMIT')
             return data
         report = verify_inventory(inventory, names, expected, read_archive)
-        print('STAGING_ADMIN_FUNCTION_SOURCE: MATCH=' + str(len(report['matched'])) + '/2')
+        print(label + ': MATCH=' + str(len(report['matched'])) + '/2')
         for kind in ('blocked', 'mismatched'):
             for item in report[kind]:
                 print('SOURCE_' + kind.upper() + ': ' + item['name'] + ' ' +
                       str(item.get('reason', ','.join(item.get('files', [])))))
         return 0 if report['ok'] else 2
     except Exception as error:
-        print('STAGING_ADMIN_FUNCTION_SOURCE: BLOCKED ' +
+        print(label + ': BLOCKED ' +
               (str(error) if isinstance(error, ValueError) else 'READ_ONLY_SOURCE_CHECK_FAILED'))
         return 2
 
