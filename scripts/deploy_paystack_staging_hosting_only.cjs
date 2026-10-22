@@ -15,8 +15,10 @@ const BRANCH='fix/paystack-subaccounts-cash-card-no-wallet';
 const REVIEW='8cbd56d';
 const REGION='us-central1';
 const PROD='asiye-80386';
-const FILES=['passenger-v2/index.html','passenger-v2/js/firebase.js',
-  'passenger-v2/js/wallet.js','driver-v2/index.html','driver-v2/js/firebase.js'];
+const FILES=['passenger-v2/index.html','passenger-v2/login.html',
+  'passenger-v2/js/login.js','passenger-v2/js/firebase.js',
+  'passenger-v2/js/wallet.js','driver-v2/index.html',
+  'driver-v2/js/login.js','driver-v2/js/firebase.js'];
 const manifest=require('./paystack_function_manifest.json');
 function run(name,args) {
   const p=spawnSync(name,args,{cwd:root,encoding:'utf8',timeout:90000,maxBuffer:6*1024*1024});
@@ -75,6 +77,7 @@ function localChecks(){
   const reviewChanges=run('git',['diff','--name-only',REVIEW,'HEAD','--','assets'])
     .split('\n').filter(Boolean);
   const allowedAuthChanges=new Set([
+    'assets/passenger-v2/login.html',
     'assets/passenger-v2/js/login.js',
     'assets/driver-v2/js/login.js'
   ]);
@@ -94,7 +97,7 @@ function localChecks(){
       throw Error('Staging Firebase config mismatch: '+rel);
     }
   }
-  // Compare the two auth files with a fresh staging rewrite of tracked source.
+  // Compare reviewed authentication files with a fresh staging rewrite of tracked source.
   // Prevents publishing a stale preview that omitted the reCAPTCHA fix.
   const {extractProductionWebConfig,rewrite,requireStagingConfig}=
     require('./build_staging_web_preview.cjs');
