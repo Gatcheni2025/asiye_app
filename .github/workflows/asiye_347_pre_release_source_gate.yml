@@ -154,7 +154,13 @@ jobs:
       - name: Install Chromium
         if: ${{ !cancelled() }}
         working-directory: test/security
-        run: npx playwright install --with-deps chromium --only-shell
+        run: |
+          npx playwright install chromium --only-shell
+          # GitHub's Ubuntu image normally has the runtime libraries already.
+          # Avoid slow optional font downloads unless a browser launch needs them.
+          if ! node -e "require('playwright').chromium.launch({headless:true}).then(b=>b.close()).catch(e=>{console.error(e.message);process.exit(1);})"; then
+            npx playwright install-deps chromium
+          fi
       - name: Test mobile camera capture and failed-upload retry
         if: ${{ !cancelled() }}
         working-directory: test/security
