@@ -102,7 +102,7 @@ function localChecks(){
   const stagingText=fs.readFileSync(path.join(preview,'passenger-v2/js/firebase.js'),'utf8');
   const cfg={};
   for(const key of ['apiKey','authDomain','databaseURL','projectId','storageBucket','messagingSenderId','appId']){
-    const pattern=new RegExp('\\\\b'+key+'\\\\s*:\\\\s*["\\\\x27]([^"\\\\x27]+)["\\\\x27]');
+    const pattern=new RegExp('\\b'+key+'\\s*:\\s*["\\x27]([^"\\x27]+)["\\x27]');
     const match=stagingText.match(pattern);
     if(!match)throw Error('Staging preview web config could not be validated.');
     cfg[key]=match[1];
