@@ -1,114 +1,114 @@
-> Authentication policy update: see [Passenger signup, first-booking photo and driver OTP](ASIYE_AUTH_FIRST_BOOKING_20261022.md). That policy supersedes passenger phone OTP and face-at-signup instructions below.
+# Asiye — final release acceptance review, 22 October 2026
 
-# Asiye 347 — staging to production release acceptance (22 October 2026)
+**Current decision: staging testing may continue; public mobile release and LIVE Card activation still need the evidence below.** This checklist records evidence and remaining work. It does not authorize production changes.
 
-**Release status: NO-GO for public stores and LIVE Card processing.** This is an evidence checklist, not a deployment authorization.
+Reviewed runtime/source head: `b0b2899b508d2412a6e25b6a288114536bd27dfb` on `fix/paystack-subaccounts-cash-card-no-wallet`. Pull request [#19](https://github.com/Gatcheni2025/asiye_app/pull/19) is open and targets `fix/11.0.67-club-booking-arrival-pin-timer`. Production `main` still reports `11.0.49+319`; it is not the reviewed release source. The checklist update itself changes documentation only.
 
-Native bridge/account-link correction, fresh candidate build controls and the
-current Hosting-only update command are recorded in
-[the native authentication follow-up](ASIYE_NATIVE_AUTH_READINESS_FIX_20261022.md).
-The public audit now compares **17** critical files, including the shared
-native bridge and booking/payment scripts. Existing 347 native candidates use
-the production Firebase project and must not be mistaken for staging builds.
+## Confirmed evidence
 
-## Reviewed baseline and provenance
-
-- Review branch: `fix/paystack-subaccounts-cash-card-no-wallet` / pull request **#19** (target: `fix/11.0.67-club-booking-arrival-pin-timer`, not `main`).
-- Flutter version: `11.0.77+347` (Android); iOS candidate marketing version `46522.0.5`.
-- Older signed APK, AAB and IPA created in GitHub Actions run **39131028973** on **18 October 2026**, source `d80dc0a7f015c66b0d0df4e17cffd38a94ac6802`. These files **predate** the passenger Google/Apple/Phone flow edits from 22 October. Rebuild on the final review commit before device release.
-- Staging Firebase `asiye-paystack-staging` project no. `1000800408896`: operator-observed Cloud Functions 37/37 ACTIVE; Hosting deployment reported CLI `EXIT_0` and `HOSTING_MATCHES_LOCAL_PREVIEW`. This confirms a **web-only preview** and active resource names, **not** current backend source SHA, deployed database-rule digest, provider success, native app acceptance, or production readiness.
-- Production project `asiye-80386` is **out of scope** for all current staging actions. Server Paystack LIVE activation must remain disabled.
-- Repo `main` still shows `11.0.49+319`; **never** build, tag, or publish the 347 release from main by accident. Merge and release lineage must be reviewed first.
-
-## Hard release gates (evidence required, not inferred)
-
-| Gate | Evidence needed | Status 22 Oct |
+| Area | Observed result | Evidence and limits |
 | --- | --- | --- |
-| Staging function inventory | Exactly 37 expected functions ACTIVE | **Independent PASS**, run 39752616083 (names/state only) |
-| Hosting | Published passenger/driver preview digest matches local staging preview, no production config | Prior preview **PASS**; corrected shared native bridge update pending (GitHub Hosting publish HTTP 403, run 39753441553) |
-| Staging database rules | Read back deployed RTDB rules; digest matches reviewed `database.rules.json` | **Independent PASS**, run 39752616083 |
-| Staging backend revision | Prove function builds are from intended reviewed source, not just ACTIVE | **32/37** immutable build archives match all 25 reviewed code/package/entrypoint files; five Gen1 triggers lack recorded source generation (run 39755436840); full provenance **UNVERIFIED** |
-| Passenger authentication | Google, Apple, Phone OTP; first-time one-off SMS link; returning dashboard; face/name onboarding; linked-UID preservation; already-linked number conflict | **Source tests pass; device UAT missing** |
-| Driver onboarding | Face, vehicle photo/registration, ID/license/address, bank, approval, pending state, restore on restart | **Device UAT missing** |
-| Go negotiated ride | Passenger offers 65–95% of reference; driver receives 65% offer even below recommendation; accept/counter/decline, pickup and complete | **Device UAT missing** |
-| Club/Work | 30-minute countdown synced; driver waiting/addresses/passenger count; late/early departure negotiation; partial pool | **Device UAT missing** |
-| PIN and safety share | PIN server generated after booking; driver enters at pickup **before** trip starts; sharing offered only after arrival, never blocks trip prematurely | **Device UAT missing** |
-| Cash | Confirm after trip completion, not at booking/pickup; correct both-side restoration and cancellation | **Device UAT missing** |
-| Paystack TEST | Verified approved test-driver `ACCT_...` subaccount, 20% main/80% driver allocation, Asiye fee bearer, real TEST checkout → webhook → callback → captured state | **Prerequisites PASS**, run 39752616083; real journey still **UNVERIFIED** |
-| Payment recovery | Declined/abandoned card, missing/duplicate webhook, retry/idempotency, cancellations/partial Club, authorized refund status, subaccount mismatch | **UNVERIFIED** |
-| Parcel V2 | Accept, private pickup PIN, wrong-PIN lock, payment, completed delivery/cancel, no stale bookings | **Device UAT missing** |
-| Historical Wallet | No new wallet/EFT purchases; outstanding balances and old transfers reconciled and preserved | **Finance sign-off missing** |
-| Android & iOS | New signed candidate; native Google/Apple/Phone/OTP/camera/location/push/deeplink tested on actual devices | **Signed rebuild PASS**, runtime 1f6cb8b, run 39752616110; Android 347, iOS 46522.0.5 (95526); 18 asset hashes match each package; native staging config and device UAT still missing |
-| App store checks | Android signing/SHA, install/update, current Play Console API/16 KB page-size checks; iOS TestFlight processing and metadata/privacy declarations | Signing/SHA/metadata and Android 16 KB binary alignment **PASS**; device/Play Console checks pending; new IPA was **not uploaded** |
-| Merchant/legal | Published policies, facial scan/privacy disclosures, refund policy, registered company, driver compliance; **written Paystack acceptance** | **Awaiting independent acceptance** |
-| Production | Reviewed backend/rules parity, backups/rollback, dedicated release-owner approval; LIVE Card gated separately | **NOT AUTHORIZED** |
+| Latest source checks | PASS | [Source gate 39838523618](https://github.com/Gatcheni2025/asiye_app/actions/runs/39838523618), [Firebase security 39838531790](https://github.com/Gatcheni2025/asiye_app/actions/runs/39838531790), and [Paystack regressions 39838523856](https://github.com/Gatcheni2025/asiye_app/actions/runs/39838523856) all succeeded at `b0b2899`. Provider responses and browser identities in these tests are simulated. |
+| Staging deployment | PASS | Operator screenshot confirms 43/43 expected functions ACTIVE, no missing/nonactive functions, deployed RTDB rules matching the review, 46/46 hosted files matching, and `STAGING_INFRASTRUCTURE_READBACK: PASS`. Project: `asiye-paystack-staging`, number `1000800408896`, region `us-central1`. |
+| Selected changed function source | PASS for the 23-function Card/test-tools scope | Hosting completed only after the selected source gate passed; the helper reported updated tools and source verified. The Gen1 Club trigger uses immutable build provenance or an explicit deployed-version source download. This does not assert that all 43 functions, their dependencies, or production have identical deployed source. The general inventory audit's `DEPLOYED_FUNCTION_SOURCE_SHA: NOT_ATTESTED` line is a separate limitation. |
+| Testing-admin access | User-confirmed working | The corrected role-grant script at `b0b2899` grants and reads back `stagingTripTester:true`, preserving existing roles. The operator reran it successfully and then reported that access works. End-to-end cancellation and provider linkage must be recorded separately. |
+| Cash | User-confirmed working | Keep this result. Repeat a short device regression on the final candidate: PIN at pickup, cash collection after completion, and trip restoration. |
+| Public policy pages | Accessible | Direct HTTPS checks returned HTTP 200 for Terms, Privacy, Refund/Cancellation, Company/Contact and Driver Requirements. Published text describes direct driver subaccount settlement, 80/20 allocation, Asiye fee bearing, facial-photo handling and discontinued Wallet funding. Availability/content review does not equal Paystack's written merchant activation approval. |
+| Paystack TEST prerequisites | Provider check passed | [Technical readiness run 39824510128](https://github.com/Gatcheni2025/asiye_app/actions/runs/39824510128), checked 22 October at 19:39 SAST, confirmed the configured TEST subaccount exists, is active and verified, with 20% Asiye / 80% driver. Its report explicitly leaves the actual Card journey and bank settlement unverified. |
 
-## Safe sequence — Stage 1: Web and account UAT
+The user's latest confirmation follows the testing-admin access repair. Do not treat it as evidence that Card checkout, split allocation, refunds, Club/Parcel or native device tests have all passed.
 
-Use fresh **staging-only**, consented passenger and driver accounts. Do not use real production identities or bank records.
+## Current application contract
 
-1. Passenger first visit (no current Firebase session): sign-in chooser shows Google, Apple, and phone.
-2. Google/Apple successful sign-in with no verified phone: one-time phone verification. Switching methods shows all three methods only after successful Firebase sign-out. A phone credential must link to the **same UID**, not create/switch users; collision must fail without merging accounts.
-3. First-time user completes phone OTP, legal/consent flow and name + face scan; only then dashboard. Returning phone/social users with a completed profile go directly to dashboard without another one-time link.
-4. Google/Apple sessions must survive restart and show correct role, correct single passenger profile, no repeated profile setup.
-5. Driver registers documents, awaits approval; existing approved driver returns to a fully functional driver dashboard.
-6. Record **only** test case ID, result, app build/commit, time, redacted console error code and device OS; no token, phone number, face photo, key or bank data in issues.
+These requirements supersede earlier passenger phone-at-signup instructions in historical documents.
 
-## Safe sequence — Stage 2: Real Go, Club, Cash and Parcel journeys
+- Passenger: Google or Apple sign-in opens the dashboard without requiring a phone number. Collect and save the name and live profile photo at the first booking, including Club joining and Parcel. A failed upload retains the capture for retry and creates no booking. The server owns completion markers; a saved photo is not proof of biometric identity or liveness.
+- Driver: Google or Apple first, then link the driver's own phone by OTP to the same UID. Returning verified drivers keep their enrollment/approval state. A phone collision does not merge accounts.
+- Optional trusted-contact details support **Add later** and must not trap the user before the dashboard.
+- Supported vehicles are Sedan and Hatchback. Minibus and SUV are excluded from registration, approval and booking eligibility.
+- Go: 65% minimum fare offer, driver accepts/declines/counters, and the final agreed fare is authoritative.
+- Card: agreed fare and assigned, verified driver subaccount precede checkout. Verify payment server-side before starting driver pickup navigation. Paystack splits at the transaction; internal `held` status is not escrow or a promise to delay bank settlement until arrival.
+- Cash is collected after the trip. A server-generated PIN is entered by the driver at pickup before departure. Sharing becomes available after driver arrival and does not block valid pickup or departure.
+- Testing-admin cancellation preserves financial records and releases only matching trip locks. Cancelling a Card trip does not itself prove a provider refund.
 
-Two test phones at minimum (passenger and driver), plus two additional passengers for pooled rides. Confirm explicit acceptance checkpoints:
+## Remaining release gates
 
-| Case | Passenger | Driver / backend | Pass rule |
-| --- | --- | --- | --- |
-| GO-01 | Offer 65% reference; booking submitted | Receives exact amount & pickup/destination; can accept | No artificial 90–100% floor |
-| GO-02 | Receives driver counter and accepts | Counter is visible; server finalizes one amount | No auto-charge before agreement |
-| GO-03 | Cash trip | Driver arrives, PIN at pickup, completes; cash recorded after | Cash not treated as prepaid |
-| GO-04 | Restart mid-trip | Both parties restore same active booking and state | Never marooned at `active booking` popup |
-| CLUB-01 | Pool starts countdown immediately | Sees 30-minute clock, member count and destinations | Both sides synchronized |
-| CLUB-02 | Pool incomplete at timeout | Negotiation/early departure offered | Never silently charge missing members |
-| CLUB-03 | Card one member fails | Other member ledger unchanged; pickup blocked if not ready | Fail closed, no duplicate charge |
-| SAFE-01 | Share only on driver arrival | PIN must be verified before start | Sharing doesn't prevent valid pickup |
-| PARCEL-01 | Parcel pickup/arrival/payment | Wrong PIN rejected; correct PIN allows action | Correct server-only completion |
+| Priority | Gate | Acceptance needed |
+| --- | --- | --- |
+| 1 | Real Paystack TEST booking | Two distinct staging passenger/approved-driver accounts. Agree the fare, link/check the correct verified TEST subaccount, complete one real provider TEST checkout, verify the exact amount/ZAR/reference/driver subaccount and authenticated webhook, inspect the provider's gross 80/20 allocation and Asiye fee bearer, and observe automatic pickup navigation only after server confirmation. No real bank settlement is inferred from TEST mode. |
+| 2 | Payment recovery and test cancellation | Declined/abandoned checkout must not start pickup. Retry and duplicate/late webhook delivery must not duplicate charges or move the ledger backward. Cancel a selected staging test trip and confirm both apps release their matching locks, allowing a new booking. Check an eligible TEST refund and its provider status separately from cancellation. |
+| 3 | Full Go, Club/Work and Parcel acceptance | Use distinct accounts/devices. Verify 65% offer delivery, accept/counter/decline, arrival, pickup PIN, completion, restart restoration, driver map and notifications. Club: immediate synchronized 30-minute countdown, member count, timeout/early-departure negotiation and one payer failing. Parcel: accept, private pickup PIN, wrong-PIN rejection/lockout, payment, delivery and cancellation. Record cases rather than inferring them from deployment or simulated tests. |
+| 4 | Fresh mobile configuration and signed candidates | Existing candidate is stale and production-configured. Prepare registered native staging configuration plus matching bundled WebView assets, native auth exchange, OAuth/signing and push setup before claiming native staging acceptance. Freeze the tested runtime SHA; create fresh signed APK/AAB/IPA, verify package source/assets, use the next unused Android versionCode and fresh iOS build number, and test fresh installation plus upgrade on real Android/iOS devices. |
+| 5 | Production backend/rules alignment | Review and approve a controlled promotion of the accepted backend and rules, with backups and rollback. Latest independent report lists six missing/inactive reviewed endpoints and a different deployed rules digest. Read back production source/config/rules after the authorized promotion. Keep LIVE Card disabled through deployment and smoke testing. |
+| 6 | Merchant, finance and store acceptance | Obtain Paystack's final written acceptance of the published documents and activation conditions; reconcile historical Wallet balances/EFTs/refunds without deleting ledgers; confirm support/refund ownership. Run internal Play/TestFlight acceptance, verify store versions, target SDK/native binary checks, permissions, privacy/account-deletion disclosures and store processing. Release-owner approval is required for public rollout; LIVE Card approval is a separate decision. |
 
-## Safe sequence — Stage 3: Paystack TEST (not live)
+## Production findings: not fixed by staging deployment
 
-- Confirm test driver identity and the **correct** verified TEST subaccount (no copying one driver's code to another). Paystack `percentage_charge: 20` gives **20% main/80% subaccount**. Set fees to be paid by Asiye per reviewed contract; inspect actual TEST transaction split and provider verification, not only client ledger.
-- Set **Test Mode webhook** to the reviewed staging function and verify signature, amount, ZAR, reference, domain, driver subaccount and idempotency; test successful/failed/duplicate/late/refund callbacks. Never set the live webhook to staging.
-- Run `Paystack Technical Readiness` and `Paystack Test-Mode Card Preflight` on the reviewed branch: `check`, then `initialize`, then `verify` only for authorized TEST transactions. Card preflight is **not** equivalent to end-to-end booking completion.
-- Save redacted test references privately for finance and engineering signoff; do not paste credentials or personal information into Actions input/issue descriptions.
-- Keep `paymentLaunch/paystack.liveEnabled=false`. Never simulate live authorization or remove subaccount verification checks to make a test pass.
+The downloaded artifact `asiye-paystack-technical-readiness` from run **39824510128** reports production `asiye-80386` missing or not ACTIVE:
 
-## Safe sequence — Stage 4: Mobile build and release
+- `configureDriverCardPayout`
+- `createParcelRequestSecure`
+- `acceptParcelRequestSecure`
+- `cancelParcelBookingSecure`
+- `getParcelPickupPinSecure`
+- `parcelTripActionSecure`
 
-- Freeze the **reviewed SHA** after all source-level and staging tests pass. Confirm 347 release ancestry and current App Store Connect version/build metadata.
-- The existing workflow `.github/workflows/android_paystack_review_apk.yml` supports **manual** candidate builds; leave `upload_to_testflight=no` until a separate authorized TestFlight upload decision.
-- Run candidate jobs and verify attached signed APK/AAB and, as available, IPA; confirm SHA/signature, versions, Firebase project and Google/Apple native auth. Android and iOS use **bundled `assets/passenger-v2` and `assets/driver-v2` WebView files**, so the Oct 22 Hosting update does **not** update existing installed apps.
-- Install **fresh and upgrade** candidates on supported Android and iOS devices. Complete UAT again with production-intended configuration and test-safe payment gating. A Play/TestFlight upload is NOT a public rollout.
-- Confirm Play 16 KB native page-size support and Play target API compliance; verify iOS TestFlight processing, signing and data-collection/privacy declarations.
-- Keep store rollout, production backend rollout and Paystack LIVE activation as three separate release approvals. Verify rollback of backend, RTDB rules and app rollout availability before any production rollout.
+The report successfully read different rule hashes, so this is a confirmed rules difference rather than an assumed IAM problem:
 
-## Operational next actions
+- Production: `195fc06e9b49f37aabf990ebc0de0c24020b5f9dfc15df05c61b56c655a4bf8a`
+- Reviewed/staging: `138b410f8a00bd9e75e319a6c04e993155bfd6703f5bf167579489a094546886`
 
-1. Run staging-only **read-only** rules/source inventory and capture sanitized results, not secrets.
-2. Complete Passenger and Driver web login smoke tests with two staging test accounts.
-3. Perform Cash and Go offer delivery/UAT, then Club countdown and Parcel pickup PIN.
-4. Confirm designated Paystack TEST subaccount; run real TEST checkout and webhook/refund tests.
-5. Create a **new** signed mobile candidate from the frozen SHA; verify fresh installation and upgrade, then TestFlight/internal Play testing.
-6. Obtain Paystack's written approval, support/finance historical-wallet reconciliation and release-owner signoff **before** deciding on production deploy and activation.
+Production deployed source revision was not attested. No production deployment, IAM change, payment transaction or LIVE activation was performed during this review. The earlier report's staging count of 42 is historical; the later operator audit confirms the current 43-function staging inventory.
 
-### Evidence ledger (complete during acceptance)
+Do not run the historical **Final App Readiness Gate** as a harmless staging check. `.github/workflows/final_app_readiness.yml` authenticates to production and calls `production-trip-validation.js`. Use the current source gate and isolated staging test tools for acceptance.
 
-| Test ID | Environment | Build / SHA | Device | Result | Redacted evidence | Tester | Date |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| AUTH-01 | Staging WEB | | | Pending | | | |
-| AUTH-02 | Staging WEB | | | Pending | | | |
-| DRIVER-01 | Staging WEB | | | Pending | | | |
-| GO-01 | Staging | | | Pending | | | |
-| CLUB-01 | Staging | | | Pending | | | |
-| PARCEL-01 | Staging | | | Pending | | | |
-| CARD-TEST-01 | Paystack TEST | | | Pending | | | |
-| REFUND-TEST-01 | Paystack TEST | | | Pending | | | |
-| ANDROID-01 | Internal test | | | Pending | | | |
-| IOS-01 | TestFlight | | | Pending | | | |
+## Mobile build findings
 
-**DO NOT change LIVE payment gating, production database rules or release to app stores based on green simulated CI, web Hosting or 37 ACTIVE function names alone.**
+The latest signed candidate independently identified in the reviewed workflow history is [run 39752616110](https://github.com/Gatcheni2025/asiye_app/actions/runs/39752616110), started **22 October 2026 at 11:04 SAST**, from `1f6cb8b68da5338898b4bd22f4674d0cb8115678`:
+
+| Artifact | Existing candidate | Limitation |
+| --- | --- | --- |
+| Android APK/AAB | 11.0.77 (347), signed artifacts created at approximately 11:14 SAST | Predates the latest signup/photo, driver-map, vehicle-policy, Card pickup and testing-admin fixes. Firebase project is production `asiye-80386`. |
+| iOS IPA | 46522.0.5 (95526), signed candidate | Same earlier source; recorded `testflight_uploaded=false`; not a staging-native build. |
+
+This corrects the older assumption that the only signed artifacts were from 18 October. Today's signed files still predate the current runtime. Hosting updates do not replace packaged WebView files in installed apps.
+
+Use `.github/workflows/android_paystack_review_apk.yml` as the reviewed build lineage. Its default/manual `upload_to_testflight=no` builds without uploading. It currently pins Android 347 and production Firebase, so version/configuration preparation remains necessary. The separate `ios_release.yml` still targets the older 341 repair lineage and must not be used for this release.
+
+Current store checks to apply to the fresh final binary:
+
+- Android: inspect actual target API and Play Console acceptance. Google's current guidance requires API 36 from August 2026. Verify native 16 KB ELF/ZIP alignment and test in a 16 KB environment. Earlier candidate alignment evidence does not certify the next binary. References: [target API guidance](https://developer.android.com/develop/adaptive-apps/guides/app-orientation-aspect-ratio-resizability), [16 KB guide](https://developer.android.com/guide/practices/page-sizes).
+- iOS: App Store Connect uploads require Xcode 26+ and an iOS 26+ SDK; iOS/iPadOS deployment targets must be 13+. Check the fresh IPA's actual SDK/signing, privacy manifests, updated age-rating responses and TestFlight processing. Reference: [Apple requirements](https://developer.apple.com/news/upcoming-requirements/).
+- Native UAT: Google/Apple, driver OTP and same-UID linking, first-booking photo capture/upload/retry, location/map, foreground/background notifications, payment return/deep link, restart restoration, permissions and account-deletion access.
+
+## Published merchant-review links
+
+- https://asiye.cloud/terms-of-service.html
+- https://asiye.cloud/privacy-policy.html
+- https://asiye.cloud/refund-cancellation-policy.html
+- https://asiye.cloud/contact.html
+- https://asiye.cloud/driver-compliance.html
+
+The public homepage also links to these pages and describes Cash/Card, direct 80/20 subaccounts, provider fees and discontinued Wallet funding. Paystack's acceptance of the proposed model in earlier correspondence is not the same as final written activation approval.
+
+## Evidence register
+
+Retain only redacted test IDs/references, environment, runtime SHA, platform/build, result, tester and date. Do not put tokens, keys, bank numbers, phone numbers or face photos in GitHub.
+
+| Test | Current evidence | Remaining result to record |
+| --- | --- | --- |
+| ADMIN-ACCESS | User-confirmed working after the `b0b2899` role repair | None for access; cancellation/linkage are separate cases |
+| CASH-GO | User-confirmed working | Final device-candidate regression |
+| AUTH-PASSENGER | Source/browser coverage passes; earlier Google/Apple staging success reported | Fresh and returning accounts, first-booking photo, final Android/iOS candidates |
+| AUTH-DRIVER | Source/emulator coverage passes | Google/Apple then same-UID OTP and approval restore on final devices |
+| GO-FARE-PIN-RESTORE | Source/emulator coverage passes | Complete observed two-account journey |
+| CLUB-TIMER-PAYMENT | Source/emulator coverage passes | Pool/countdown/timeout/partial-payment device evidence |
+| PARCEL-PIN-COMPLETE | Source/emulator coverage passes | Observed pickup/payment/delivery/cancellation |
+| CARD-TEST-SPLIT | Provider TEST prerequisites pass | Real checkout, exact agreed fare, correct driver split, webhook and pickup |
+| CARD-RECOVERY | Automated failure/idempotency cases pass | Decline/abandon/retry and observed provider TEST refund |
+| ADMIN-CANCEL | Automated role/transaction/browser cases pass | Selected trip cancelled and both apps unlocked |
+| ANDROID-FINAL / IOS-FINAL | Earlier signed candidates exist | Correct configuration, fresh source, install/upgrade and internal distribution |
+| PRODUCTION-PARITY | Missing endpoints and different rules documented | Approved promotion, readback, rollback proof and smoke test |
+| MERCHANT-FINANCE | Required pages accessible; no final activation evidence reviewed | Written Paystack acceptance and legacy-funds reconciliation |
+
+**Next acceptance run:** complete one real staging Paystack TEST Go booking from fare agreement through verified 80/20 allocation, driver pickup navigation, pickup PIN and completion. Record cancellation/refund recovery separately. Then close Club/Parcel and native device gates before scheduling production promotion and public publication.
