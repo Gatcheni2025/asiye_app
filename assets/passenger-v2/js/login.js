@@ -23,6 +23,9 @@ window.ASIYE_PASSENGER_LOGIN = {
     pendingUser:
         null,
 
+    // True only during Google/Apple -> verified phone linking.
+    awaitingPhoneLink: false,
+
 
     /* ========================================================
        INIT
@@ -219,9 +222,7 @@ window.ASIYE_PASSENGER_LOGIN = {
                 'click',
                 () => {
 
-                    this.showStep(
-                        'loginStep'
-                    );
+                    this.showStep(this.awaitingPhoneLink ? 'verifyPhoneStep' : 'loginStep');
                 }
             );
 
@@ -238,6 +239,11 @@ window.ASIYE_PASSENGER_LOGIN = {
                 }
             );
 
+
+        document.getElementById('socialSendOtpButton')?.addEventListener('click', () => this.sendOtp());
+        document.getElementById('socialPhoneInput')?.addEventListener('keydown', event => {
+            if (event.key === 'Enter') this.sendOtp();
+        });
 
         document
             .getElementById(
@@ -489,290 +495,107 @@ window.ASIYE_PASSENGER_LOGIN = {
        ======================================================== */
 
     async sendOtp() {
-
-        const input =
-            document.getElementById(
-                'passengerPhoneInput'
-            );
-
-
-        const errorElement =
-            document.getElementById(
-                'phoneError'
-            );
-
-
-        const button =
-            document.getElementById(
-                'sendOtpButton'
-            );
-
-
-        const phone =
-            this.normalizePhone(
-                input?.value
-            );
-
-
+        const linking = this.awaitingPhoneLink;
+        const input = document.getElementById(linking ? 'socialPhoneInput' : 'passengerPhoneInput');
+        const errorElement = document.getElementById(linking ? 'socialPhoneError' : 'phoneError');
+        const button = document.getElementById(linking ? 'socialSendOtpButton' : 'sendOtpButton');
+        const phone = this.normalizePhone(input?.value);
         if (!phone) {
-
-            if (errorElement) {
-
-                errorElement.textContent =
-                    'Enter a valid South African mobile number.';
-            }
-
+            if (errorElement) errorElement.textContent = 'Enter a valid South African mobile number.';
             return;
         }
-
-
-        this.currentPhone =
-            phone;
-
-
-        if (errorElement) {
-
-            errorElement.textContent =
-                '';
-        }
-
-
-        if (button) {
-
-            button.disabled =
-                true;
-
-            button.innerHTML = `
-
-                <i class="fas fa-circle-notch fa-spin"></i>
-
-                Sending code...
-
-            `;
-        }
-
-
+        this.currentPhone = phone;
+        if (errorElement) errorElement.textContent = '';
+        if (button) { button.disabled = true; button.textContent = 'Sending code...'; }
         try {
-
             const verifier = await this.prepareRecaptcha();
-            if (!verifier) throw new Error('Security verification is unavailable. Reload the page.');
-
-this.confirmationResult =
-
-                await firebase
-                    .auth()
-                    .signInWithPhoneNumber(
-
-                        phone,
-
-                        verifier
-                    );
-
-
-            const display =
-                document.getElementById(
-                    'otpPhoneDisplay'
-                );
-
-
-            if (display) {
-
-                display.textContent =
-                    phone;
+            if (!verifier) throw Error('Security verification is unavailable. Reload the page.');
+            if (linking) {
+                const current = firebase.auth().currentUser;
+                if (!current || !this.pendingUser || current.uid !== this.pendingUser.uid) {
+                    throw Error('Your Apple or Google session changed. Please sign in again.');
+                }
+                // Firebase links the phone credential to the CURRENT social UID.
+                // signInWithPhoneNumber here would create/switch user accounts.
+                this.confirmationResult = await current.linkWithPhoneNumber(phone, verifier);
+            } else {
+                this.confirmationResult = await firebase.auth().signInWithPhoneNumber(phone, verifier);
             }
-
-
-            this.showStep(
-                'otpStep'
-            );
-
-
+            const display = document.getElementById('otpPhoneDisplay');
+            if (display) display.textContent = phone;
+            this.showStep('otpStep');
             this.startResendTimer();
-
-
-            setTimeout(() => {
-                document.getElementById('passengerOtpInput')?.focus();
-            }, 150);
-
-
+            setTimeout(() => document.getElementById('passengerOtpInput')?.focus(), 150);
         } catch (error) {
-
-            console.error(
-                'Passenger OTP send failed:',
-                error
-            );
-
-
-            this.handleAuthError(
-                error,
-                'phone'
-            );
-
-
-            if (['auth/captcha-check-failed', 'auth/invalid-app-credential'].includes(error?.code)) {
+            console.warn('Passenger OTP send failed:', error?.code || error?.message);
+            if (linking && error?.code === 'auth/credential-already-in-use') {
+                const notice = 'This phone number belongs to another account. Sign in using that number or contact Asiye Support to link accounts securely.';
+                if (errorElement) errorElement.textContent = notice;
+                this.toast(notice);
+            } else {
+                this.handleAuthError(error, linking ? 'socialPhone' : 'phone');
+            }
+            if (['auth/captcha-check-failed','auth/invalid-app-credential'].includes(error?.code)) {
                 this.resetRecaptchaWidget();
             }
-
-
         } finally {
-
             if (button) {
-
-                button.disabled =
-                    false;
-
-                button.textContent =
-                    'Continue with phone';
+                button.disabled = false;
+                button.textContent = linking ? 'Send verification code' : 'Continue with phone';
             }
         }
     },
 
-
     async verifyOtp() {
-
-        const input =
-            document.getElementById(
-                'passengerOtpInput'
-            );
-
-
-        const errorElement =
-            document.getElementById(
-                'otpError'
-            );
-
-
-        const button =
-            document.getElementById(
-                'verifyOtpButton'
-            );
-
-
+        const input = document.getElementById('passengerOtpInput');
+        const errorElement = document.getElementById('otpError');
+        const button = document.getElementById('verifyOtpButton');
+        const linking = this.awaitingPhoneLink;
         if (!this.confirmationResult) {
-
-            if (errorElement) {
-                errorElement.textContent =
-                    'Please request a verification code first.';
-            }
-
-            this.showStep('loginStep');
-
+            if (errorElement) errorElement.textContent = 'Please request a verification code first.';
+            this.showStep(linking ? 'verifyPhoneStep' : 'loginStep');
             return;
         }
-
-
-        const code =
-
-            String(
-                input?.value ||
-                ''
-            )
-            .replace(
-                /\D/g,
-                ''
-            );
-
-
-        if (
-            code.length !== 6
-        ) {
-
-            if (errorElement) {
-                errorElement.textContent =
-                    'Enter the 6-digit verification code.';
-            }
-
+        const code = String(input?.value || '').replace(/\\D/g,'');
+        if (code.length !== 6) {
+            if (errorElement) errorElement.textContent = 'Enter the 6-digit verification code.';
             return;
         }
-
-
-        if (errorElement) {
-            errorElement.textContent = '';
-        }
-
-
-        if (button) {
-            button.disabled = true;
-            button.innerHTML = `
-                <i class="fas fa-circle-notch fa-spin"></i>
-                Verifying...
-            `;
-        }
-
-
+        if (errorElement) errorElement.textContent = '';
+        if (button) { button.disabled = true; button.textContent = 'Verifying...'; }
         let authUser = null;
-
         try {
-
-            const result =
-
-                await this
-                    .confirmationResult
-                    .confirm(
-                        code
-                    );
-
+            const originalUid = linking ? this.pendingUser?.uid : null;
+            const result = await this.confirmationResult.confirm(code);
             authUser = result.user;
-
-        } catch (error) {
-
-            console.error(
-                'Passenger OTP confirm failed:',
-                error
-            );
-
-
-            this.handleAuthError(
-                error,
-                'otp'
-            );
-
-
-            if (button) {
-                button.disabled = false;
-                button.textContent = 'Verify & continue';
+            if (linking) {
+                // Never complete onboarding or redirect after a UID switch.
+                if (!originalUid || authUser?.uid !== originalUid ||
+                    firebase.auth().currentUser?.uid !== originalUid) {
+                    throw Error('Verification did not preserve your original account. Contact Asiye Support.');
+                }
+                await authUser.reload();
+                authUser = firebase.auth().currentUser;
+                if (!authUser?.phoneNumber) throw Error('Phone verification did not finish. Please try again.');
+                this.awaitingPhoneLink = false;
             }
-
+            this.confirmationResult = null;
+        } catch (error) {
+            console.warn('Passenger OTP confirm failed:', error?.code || error?.message);
+            this.handleAuthError(error, 'otp');
+            if (button) { button.disabled = false; button.textContent = 'Verify & continue'; }
             return;
         }
-
-
         try {
-
-            this.showStep(
-                'profileCheckStep'
-            );
-
-
-            await this.afterAuthentication(
-                authUser
-            );
-
-
-        } catch (profileError) {
-
-            console.warn(
-                'Post-auth profile setup warning:',
-                profileError
-            );
-
-
-            await this.completeLogin(
-                authUser.uid,
-                {
-                    name: authUser.displayName || 'Passenger',
-                    phone: authUser.phoneNumber || this.currentPhone || ''
-                },
-                authUser
-            );
-
-
+            this.showStep('profileCheckStep');
+            await this.afterAuthentication(authUser);
+        } catch (error) {
+            // No unverified profile fallback — keep the passenger off dashboard.
+            console.warn('Post-auth profile check failed:', error?.code || error?.message);
+            this.pendingUser = authUser;
+            this.toast('Unable to load your Asiye profile. Please try again.');
         } finally {
-
-            if (button) {
-                button.disabled = false;
-                button.textContent = 'Verify & continue';
-            }
+            if (button) { button.disabled = false; button.textContent = 'Verify & continue'; }
         }
     },
 
@@ -981,13 +804,20 @@ this.confirmationResult =
         }
 
 
-        this.pendingUser =
-            user;
+        this.pendingUser = user;
+        this.showStep('profileCheckStep');
 
-
-        this.showStep(
-            'profileCheckStep'
-        );
+        // Firebase phoneNumber is verified by Auth. Ignore editable
+        // profile phone fields and localStorage for this security gate.
+        if (!user.phoneNumber) {
+            this.awaitingPhoneLink = true;
+            this.confirmationResult = null;
+            const notice = document.getElementById('socialPhoneError');
+            if (notice) notice.textContent = '';
+            this.showStep('verifyPhoneStep');
+            return;
+        }
+        this.awaitingPhoneLink = false;
 
 
         const profile =
@@ -1014,17 +844,6 @@ this.confirmationResult =
                 return;
             }
             console.warn('Passenger saved face picture unavailable; prompting rescan.');
-        }
-
-        // Google/Apple accounts do not automatically have an OTP-verified
-        // phone. Complete the phone step BEFORE scanning and saving a new
-        // profile; never claim that typing a number verifies ownership.
-        if (!user.phoneNumber) {
-            this.showStep('loginStep');
-            const phoneError = document.getElementById('phoneError');
-            if (phoneError) phoneError.textContent =
-                'Verify your mobile number by SMS OTP before completing your first Asiye profile. Enter your number and tap Continue with phone.';
-            return;
         }
 
         /*
@@ -1365,10 +1184,10 @@ this.confirmationResult =
         const user = this.pendingUser || firebase.auth().currentUser;
         if (!user) { this.toast('Please sign in again.'); return; }
         if (!user.phoneNumber) {
-            this.showStep('loginStep');
-            const notice = document.getElementById('phoneError');
-            if (notice) notice.textContent =
-                'Your first profile requires a verified mobile number. Complete the SMS OTP step, then take your face picture.';
+            this.awaitingPhoneLink = true;
+            this.showStep('verifyPhoneStep');
+            const notice = document.getElementById('socialPhoneError');
+            if (notice) notice.textContent = 'Verify a phone number by SMS before saving your profile.';
             return;
         }
         const button = document.getElementById('createPassengerProfile');
@@ -1416,8 +1235,9 @@ this.confirmationResult =
                 ({ response, uploaded } = await upload(id));
             }
             if (response.status === 422 && uploaded.code === 'phone-otp-required') {
-                this.showStep('loginStep');
-                const phoneError = document.getElementById('phoneError');
+                this.awaitingPhoneLink = true;
+                this.showStep('verifyPhoneStep');
+                const phoneError = document.getElementById('socialPhoneError');
                 if (phoneError) phoneError.textContent = uploaded.error ||
                     'Verify your number with SMS OTP to complete your profile.';
                 return;
@@ -1463,7 +1283,13 @@ this.confirmationResult =
         commuterData,
         user
     ) {
-        if (user?.phoneNumber && !(
+        if (!user?.phoneNumber) {
+            this.pendingUser = user;
+            this.awaitingPhoneLink = true;
+            this.showStep('verifyPhoneStep');
+            return;
+        }
+        if (!(
             String(commuterData?.name || '').trim().length >= 2 &&
             (commuterData?.profileImageUrl || commuterData?.profile_picture_url ||
              commuterData?.passengerProfileImageUrl)
@@ -1623,10 +1449,9 @@ this.confirmationResult =
 
 
 
-        const input =
-            document.getElementById(
-                'passengerPhoneInput'
-            );
+        const input = document.getElementById(
+            this.awaitingPhoneLink ? 'socialPhoneInput' : 'passengerPhoneInput'
+        );
 
 
         if (input) {
@@ -1636,9 +1461,7 @@ this.confirmationResult =
         }
 
 
-        this.showStep(
-            'loginStep'
-        );
+        this.showStep(this.awaitingPhoneLink ? 'verifyPhoneStep' : 'loginStep');
 
 
         setTimeout(
@@ -1845,11 +1668,8 @@ this.confirmationResult =
         const target =
             document.getElementById(
 
-                area === 'otp'
-
-                ? 'otpError'
-
-                : 'phoneError'
+                area === 'otp' ? 'otpError' :
+                area === 'socialPhone' ? 'socialPhoneError' : 'phoneError'
             );
 
 
