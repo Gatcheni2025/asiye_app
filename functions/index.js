@@ -3085,6 +3085,7 @@ async function handleDriverEnrollmentReview(data, context) {
         approvedVehicle.registration,
       vehicleType:
         approvedVehicle.type,
+      carCategory: approvedVehicle.type,
       vehicleMake:
         approvedVehicle.make,
       vehicleModel:
@@ -4460,6 +4461,7 @@ exports.adminManagePlatform = functions.https.onCall(
         Object.assign(patch, {
           vehicle,
           vehicleType: vehicle.type,
+          carCategory: vehicle.type,
           vehicleMake: vehicle.make,
           vehicleModel: vehicle.model,
           vehicleColor: vehicle.colour,
@@ -5176,6 +5178,7 @@ exports.adminManagePlatform = functions.https.onCall(
               approvedVehicle.registration,
             vehicleType:
               approvedVehicle.type,
+            carCategory: approvedVehicle.type,
             vehicleMake:
               approvedVehicle.make,
             vehicleModel:

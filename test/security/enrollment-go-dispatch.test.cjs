@@ -49,7 +49,7 @@ async function offer(method){
 }
 for(const category of categories)for(const method of ['cash','card'])test(`approved ${category} receives and accepts a ${method} Go offer after real enrollment review`,async()=>{
  const driver=await approve(category);
- assert.equal(driver.vehicleType,category);assert.equal(driver.vehicle.type,category);
+ assert.equal(driver.vehicleType,category);assert.equal(driver.vehicle.type,category);assert.equal(driver.carCategory,category);
  const submitted=await offer(method);assert.equal(submitted.status,200,JSON.stringify(submitted.body));
  assert.equal(submitted.body.dispatch.mode,'broadcast');
  assert.equal((await read('requests/ride')).driverFoundCount,1);
@@ -99,4 +99,11 @@ test('supported vehicle changes submit for review and put the driver offline',as
  assert.equal(updated.status,200,JSON.stringify(updated.body));
  const taxi=await read('taxis/driver');assert.equal(taxi.vehiclePending.type,'hatchback');
  assert.equal(taxi.vehicleApproved,false);assert.equal(taxi.isOnline,false);assert.equal(taxi.isBroadcasting,false);
+});
+
+test('fresh physical approval replaces stale unsupported category mirrors',async()=>{
+ await db.ref('taxis/driver').set({authUid:'driver',carCategory:'minibus',vehicleType:'suv'});
+ const driver=await approve('hatchback');
+ assert.equal(driver.carCategory,'hatchback');assert.equal(driver.vehicleType,'hatchback');
+ const response=await offer('cash');assert.equal(response.status,200);assert.equal(response.body.dispatch.mode,'broadcast');
 });
