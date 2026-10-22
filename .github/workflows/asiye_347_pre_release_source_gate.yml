@@ -26,6 +26,8 @@ on:
       - 'scripts/audit_staging_admin_function_source.py'
       - 'test/go-driver-category.test.cjs'
       - 'test/test_staging_go_dispatch_source.py'
+      - 'test/test_staging_card_test_source.py'
+      - 'test/test_staging_source_readback.py'
       - 'scripts/deploy_staging_driver_admin.cjs'
       - 'scripts/grant_staging_driver_reviewer.cjs'
       - 'test/admin-login.test.cjs'
@@ -100,6 +102,8 @@ jobs:
         run: |
           python3 -m unittest discover -s test -p 'test_staging_auth_source.py'
           python3 -m unittest discover -s test -p 'test_staging_go_dispatch_source.py'
+          python3 -m unittest discover -s test -p 'test_staging_card_test_source.py'
+          python3 -m unittest discover -s test -p 'test_staging_source_readback.py'
       - name: Run auth, booking, Parcel and Paystack failure regressions
         run: |
           node --test \

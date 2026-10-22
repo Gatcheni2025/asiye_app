@@ -1,27 +1,65 @@
 #!/usr/bin/env python3
-"""Read-only proof of the two driver-admin deployments before resuming Hosting."""
+"""Read-only source proof for selected staging functions before resuming Hosting."""
 import json
 from pathlib import Path
+import urllib.error
 import urllib.parse
 import urllib.request
 try:
-    from .audit_staging_function_source import compare_archive, command, ROOT, PROJECT, NUMBER
+    from .audit_staging_function_source import compare_archive, immutable_source, command, ROOT, PROJECT, NUMBER
 except ImportError:
-    from audit_staging_function_source import compare_archive, command, ROOT, PROJECT, NUMBER
+    from audit_staging_function_source import compare_archive, immutable_source, command, ROOT, PROJECT, NUMBER
 
 
-def verify_inventory(inventory, names, expected, read_archive):
+def reviewed_source(item, name, get_json=None):
+    pinned_names = {f'projects/{p}/locations/us-central1/functions/{name}' for p in (PROJECT, NUMBER)}
+    if item.get('name') not in pinned_names or item.get('state') != 'ACTIVE':
+        raise ValueError('ACTIVE_REVIEWED_BUILD_UNAVAILABLE')
+    if name == 'synchronizeClubBooking':
+        # This reviewed export is functions.database.onWrite (Gen1). Its
+        # deployed version is described by v1; the v2 listing may omit both
+        # BuildConfig entrypoint/runtime and resolved source provenance.
+        if item.get('environment') == 'GEN_2':
+            raise ValueError('REVIEWED_GEN1_TRIGGER_HAS_UNEXPECTED_GENERATION')
+        if get_json is None:
+            raise ValueError('GEN1_BUILD_METADATA_READER_UNAVAILABLE')
+        base = ('https://cloudfunctions.googleapis.com/v1/projects/' + PROJECT +
+                '/locations/us-central1/functions/' + name)
+        legacy = get_json(base + '?fields=name,status,runtime,entryPoint,buildName,buildId')
+        if (legacy.get('name') not in pinned_names or legacy.get('status') != 'ACTIVE' or
+                legacy.get('runtime') != 'nodejs22' or legacy.get('entryPoint') != name):
+            raise ValueError('GEN1_ACTIVE_REVIEWED_RUNTIME_OR_ENTRYPOINT_UNAVAILABLE')
+        def deployed_metadata(url):
+            return legacy if url.partition('?')[0] == base else get_json(url)
+        # Reuse the existing Gen1 resolver: the pinned deployment's successful
+        # Cloud Build must identify an immutable Storage object generation.
+        return immutable_source({}, name, deployed_metadata)
+    build = item.get('buildConfig', {})
+    if (item.get('environment') == 'GEN_1' or build.get('entryPoint') != name or
+            build.get('runtime') != 'nodejs22'):
+        raise ValueError('ACTIVE_REVIEWED_BUILD_UNAVAILABLE')
+    return build.get('sourceProvenance', {}).get('resolvedStorageSource', {})
+
+
+def verify_inventory(inventory, names, expected, read_archive, get_json=None):
     by_name = {item.get('name', '').split('/')[-1]: item for item in inventory}
     report = {'matched': [], 'blocked': [], 'mismatched': []}
     cache = {}
     for name in names:
         item = by_name.get(name, {})
-        build = item.get('buildConfig', {})
-        src = build.get('sourceProvenance', {}).get('resolvedStorageSource', {})
+        try:
+            src = reviewed_source(item, name, get_json)
+        except urllib.error.HTTPError as error:
+            report['blocked'].append({'name': name, 'reason': 'BUILD_METADATA_HTTP_' + str(error.code)})
+            continue
+        except ValueError as error:
+            report['blocked'].append({'name': name, 'reason': str(error)})
+            continue
+        except Exception:
+            report['blocked'].append({'name': name, 'reason': 'BUILD_METADATA_READ_FAILED'})
+            continue
         bucket, obj, generation = (str(src.get(k, '')) for k in ('bucket', 'object', 'generation'))
-        if (item.get('name') not in {f'projects/{p}/locations/us-central1/functions/{name}' for p in (PROJECT, NUMBER)} or
-                item.get('state') != 'ACTIVE' or build.get('entryPoint') != name or
-                build.get('runtime') != 'nodejs22' or not bucket or not obj or not generation):
+        if not bucket or not obj or not generation.isdecimal() or int(generation) < 1:
             report['blocked'].append({'name': name, 'reason': 'ACTIVE_REVIEWED_BUILD_UNAVAILABLE'})
             continue
         if NUMBER not in bucket and PROJECT not in bucket:
@@ -61,8 +99,15 @@ def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STA
             "process.stdout.write(require('./scripts/prepare_staging_function_scope.cjs').renderEntry(names));"]).encode() + b'\n'
         inventory = json.loads(command(['gcloud', 'functions', 'list', '--v2', '--regions=us-central1',
             '--project=' + PROJECT,
-            '--format=json(name,state,buildConfig.runtime,buildConfig.entryPoint,buildConfig.sourceProvenance.resolvedStorageSource)']))
+            '--format=json(name,state,environment,buildConfig.runtime,buildConfig.entryPoint,buildConfig.sourceProvenance.resolvedStorageSource)']))
         token = command(['gcloud', 'auth', 'print-access-token'])
+        metadata_cache = {}
+        def get_json(url):
+            if url not in metadata_cache:
+                request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    metadata_cache[url] = json.load(response)
+            return metadata_cache[url]
         def read_archive(bucket, obj, generation):
             url = ('https://storage.googleapis.com/storage/v1/b/' + urllib.parse.quote(bucket, safe='') +
                    '/o/' + urllib.parse.quote(obj, safe='') + '?' +
@@ -73,7 +118,7 @@ def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STA
             if len(data) > 80 * 1024 * 1024:
                 raise ValueError('ARCHIVE_SIZE_LIMIT')
             return data
-        report = verify_inventory(inventory, names, expected, read_archive)
+        report = verify_inventory(inventory, names, expected, read_archive, get_json)
         print(label + ': MATCH=' + str(len(report['matched'])) + '/' + str(len(names)))
         for kind in ('blocked', 'mismatched'):
             for item in report[kind]:

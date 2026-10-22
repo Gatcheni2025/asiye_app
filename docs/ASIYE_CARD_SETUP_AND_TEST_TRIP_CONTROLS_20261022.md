@@ -15,6 +15,23 @@ The later Cloud Shell screenshot shows a partial vehicle-policy deployment. `rev
 - The test administrator may link an existing Paystack TEST subaccount to an approved test driver. The server independently checks the exact code, TEST domain, active/verified status and `percentage_charge:20`. It never replaces a different or unresolved payout destination. This operation creates no transaction.
 - Active Go, Club and Parcel test trips may be cancelled with a reason, expected status and exact trip-ID confirmation. Records and financial ledgers remain available. Matching passenger locks, driver locks, queued offers and notifications are cleared; a newer booking and its availability fields remain untouched. Audit records survive retries. A Card cancellation requests separate TEST refund review; the interface does not claim that a cancellation completed a refund.
 
+## Resume after the 22/23 source-check screenshot
+
+The screenshot shows the final two function operations succeeded, the cleanup-policy-only warning was handled, and immutable source verification matched 22 functions. `synchronizeClubBooking` is the reviewed first-generation database trigger. The former selected-source checker required second-generation `BuildConfig` fields and rejected it before looking up its actual source.
+
+The corrected checker reads that trigger's v1 deployment metadata, verifies the exact staging function identity, ACTIVE state, Node 22 runtime and handler name, then uses its successful Cloud Build's immutable Storage object generation. The downloaded code, package and generated entrypoint must still match every reviewed byte. Gen2 checks remain strict. Wrong code, failed builds, unknown/mutable source generations, wrong projects and access denials do not pass.
+
+This correction changes audit code/tests only; backend and website source files are unchanged. Resume at the source check and publish Hosting only after **23/23** matches:
+
+```bash
+cd ~/asiye-staging-review &&
+git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet &&
+node scripts/deploy_staging_card_test_tools.cjs --resume-after-functions &&
+node scripts/grant_staging_trip_tester.cjs --self
+```
+
+This command skips all function deployments. The target remains **23/23** source matches, **43/43 ACTIVE**, **46/46 hosted files**, matching rules and **STAGING_INFRASTRUCTURE_READBACK: PASS**. These are expected results; the 22/23 screenshot does not yet prove the remaining trigger's deployed code. A new `BUILD_METADATA_HTTP_403` or source mismatch stops before Hosting and should be diagnosed from its safe category.
+
 ## Apply the complete staging correction
 
 This replaces the earlier dispatch-only and vehicle-only commands. It includes the vehicle restriction and recovers all three failed function updates.

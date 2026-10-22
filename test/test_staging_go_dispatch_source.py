@@ -45,9 +45,21 @@ class GoDispatchSourceTests(unittest.TestCase):
         inventory = [{**template, 'name': f'projects/{PROJECT}/locations/us-central1/functions/{name}',
                       'buildConfig': {**template['buildConfig'], 'entryPoint': name}} for name in names]
         self.assertEqual(len(names), 17)
+        gen1 = 'synchronizeClubBooking'
+        for row in inventory:
+            if row['name'].endswith('/' + gen1):
+                row['environment'] = 'GEN_1'
+                row.pop('buildConfig')
+        def metadata(url):
+            if 'cloudfunctions.googleapis.com' in url:
+                return {'name': f'projects/{PROJECT}/locations/us-central1/functions/{gen1}',
+                        'status': 'ACTIVE', 'runtime': 'nodejs22', 'entryPoint': gen1,
+                        'buildName': f'projects/{NUMBER}/locations/us-central1/builds/reviewed-build'}
+            return {'status': 'SUCCESS', 'sourceProvenance': {'resolvedStorageSource': {
+                'bucket': 'gcf-sources-' + NUMBER, 'object': 'source.zip', 'generation': '123'}}}
         read = lambda *args: self.archive()
-        self.assertTrue(verify_inventory(inventory, names, self.expected, read)['ok'])
-        self.assertFalse(verify_inventory(inventory[:-1], names, self.expected, read)['ok'])
+        self.assertTrue(verify_inventory(inventory, names, self.expected, read, metadata)['ok'])
+        self.assertFalse(verify_inventory(inventory[:-1], names, self.expected, read, metadata)['ok'])
         self.assertFalse(verify_inventory([], [], self.expected, read)['ok'])
         self.assertFalse(verify_inventory(inventory, names + [names[0]], self.expected, read)['ok'])
 
