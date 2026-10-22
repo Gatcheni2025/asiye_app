@@ -20,8 +20,20 @@ class StagingSourceReadbackTests(unittest.TestCase):
         self.assertEqual(len(calls), 2)
         self.assertIn('projects/' + PROJECT + '/', calls[0])
         self.assertIn(build, calls[1])
-        self.assertEqual(immutable_source({}, 'synchronizeClubBooking', lambda _: {
-            'status':'ACTIVE','buildName':'projects/asiye-80386/locations/us-central1/builds/test-build-1'}), {})
+        with self.assertRaisesRegex(ValueError, 'PINNED_PROJECT'):
+            immutable_source({}, 'synchronizeClubBooking', lambda _: {
+                'status':'ACTIVE','buildName':'projects/asiye-80386/locations/us-central1/builds/test-build-1'})
+
+    def test_gen1_build_id_only_still_resolves_the_original_source_generation(self):
+        calls=[]
+        source={'bucket':'gcf-sources-' + NUMBER,'object':'source.zip','generation':'123'}
+        def get_json(url):
+            calls.append(url)
+            if 'cloudfunctions.googleapis.com' in url:
+                return {'status':'ACTIVE','buildId':'legacy-build-1'}
+            return {'status':'SUCCESS','source':{'storageSource':source}}
+        self.assertEqual(immutable_source({}, 'synchronizeClubBooking', get_json), source)
+        self.assertIn('/builds/legacy-build-1?', calls[1])
 
     def test_gen2_resolved_source_needs_no_legacy_api_fallback(self):
         source = {'bucket':'gcf-sources-' + NUMBER,'object':'source.zip','generation':'123'}

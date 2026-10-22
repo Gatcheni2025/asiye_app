@@ -56,17 +56,35 @@ def immutable_source(item, name, get_json):
     # Gen1 RTDB triggers have no v2 BuildConfig provenance. Resolve the latest
     # successful deployment's Cloud Build source generation through the v1 API.
     function_url = ('https://cloudfunctions.googleapis.com/v1/projects/' + PROJECT +
-                    '/locations/us-central1/functions/' + name + '?fields=buildName,status')
+                    '/locations/us-central1/functions/' + name + '?fields=buildName,buildId,status')
     legacy = get_json(function_url)
     build = legacy.get('buildName', '')
+    build_id = legacy.get('buildId', '')
+    if not build and re.fullmatch(r'[A-Za-z0-9-]+', build_id):
+        build = 'projects/' + NUMBER + '/locations/us-central1/builds/' + build_id
     allowed = r'projects/(?:' + PROJECT + '|' + NUMBER + r')/locations/(?:us-central1|global)/builds/[A-Za-z0-9-]+'
-    if legacy.get('status') != 'ACTIVE' or not re.fullmatch(allowed, build):
-        return {}
-    result = get_json('https://cloudbuild.googleapis.com/v1/' + build +
-                      '?fields=status,sourceProvenance.resolvedStorageSource')
+    if legacy.get('status') != 'ACTIVE':
+        raise ValueError('GEN1_DEPLOYMENT_NOT_ACTIVE')
+    if not build:
+        raise ValueError('GEN1_DEPLOYMENT_BUILD_ID_UNAVAILABLE')
+    if not re.fullmatch(allowed, build):
+        raise ValueError('GEN1_BUILD_NOT_IN_PINNED_PROJECT_REGION')
+    fields = '?fields=status,sourceProvenance.resolvedStorageSource,source.storageSource'
+    try:
+        result = get_json('https://cloudbuild.googleapis.com/v1/' + build + fields)
+    except urllib.error.HTTPError as error:
+        if error.code != 404 or not build_id:
+            raise
+        # Older Gen1 builds may use the global project collection.
+        result = get_json('https://cloudbuild.googleapis.com/v1/projects/' + NUMBER + '/builds/' + build_id + fields)
     if result.get('status') != 'SUCCESS':
-        return {}
-    return result.get('sourceProvenance', {}).get('resolvedStorageSource', {})
+        raise ValueError('GEN1_LAST_DEPLOYMENT_BUILD_NOT_SUCCESSFUL')
+    resolved = result.get('sourceProvenance', {}).get('resolvedStorageSource', {})
+    if not resolved.get('generation'):
+        resolved = result.get('source', {}).get('storageSource', {})
+    if not resolved.get('generation'):
+        raise ValueError('GEN1_BUILD_SOURCE_GENERATION_UNAVAILABLE')
+    return resolved
 
 
 def main():
@@ -104,6 +122,9 @@ def main():
                 src = immutable_source(item, name, get_json)
             except urllib.error.HTTPError as error:
                 report['blockedFunctions'].append({'name': name, 'reason': 'BUILD_METADATA_HTTP_' + str(error.code)})
+                continue
+            except ValueError as error:
+                report['blockedFunctions'].append({'name': name, 'reason': str(error)})
                 continue
             bucket, obj, generation = (str(src.get(k, '')) for k in ('bucket', 'object', 'generation'))
             if item.get('state') != 'ACTIVE' or not bucket or not obj or not generation:
