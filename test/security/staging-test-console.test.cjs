@@ -2,7 +2,7 @@
 const {test,before,beforeEach,after}=require('node:test');
 const assert=require('node:assert/strict');
 const admin=require('../../functions/node_modules/firebase-admin');
-const {HttpsError}=require('../../functions/node_modules/firebase-functions/v2/https');
+const {HttpsError}=require('node:module').createRequire(require.resolve('../../functions/package.json'))('firebase-functions/v2/https');
 const {makeStagingTestConsole,PROJECT}=require('../../functions/staging-test-console');
 const tester={auth:{uid:'tester',token:{stagingTripTester:true}}};
 let app,db,api,domain,project,provider,providerCalls;

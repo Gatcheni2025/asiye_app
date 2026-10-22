@@ -858,7 +858,7 @@ test('unverified passenger cannot create Parcel or submit a Go offer, lock or ch
 test('agreed Card fare recovers missing TEST subaccount setup, charges the exact split and starts driver pickup after signed confirmation',async()=>{
  const vm=require('node:vm');
  const {makeStagingTestConsole,PROJECT}=require('../../functions/staging-test-console');
- const {HttpsError}=require('../../functions/node_modules/firebase-functions/v2/https');
+ const {HttpsError}=require('node:module').createRequire(require.resolve('../../functions/package.json'))('firebase-functions/v2/https');
  const requestId='go-card-setup-recovery';
  await db.ref('driverPaystackSubaccounts/driver').remove();
  await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
