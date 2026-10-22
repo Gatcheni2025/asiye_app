@@ -3,6 +3,7 @@
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import subprocess
 import tarfile
@@ -48,6 +49,26 @@ def compare_archive(data, expected):
     return differences
 
 
+def immutable_source(item, name, get_json):
+    src = item.get('buildConfig', {}).get('sourceProvenance', {}).get('resolvedStorageSource', {})
+    if src.get('generation'):
+        return src
+    # Gen1 RTDB triggers have no v2 BuildConfig provenance. Resolve the latest
+    # successful deployment's Cloud Build source generation through the v1 API.
+    function_url = ('https://cloudfunctions.googleapis.com/v1/projects/' + PROJECT +
+                    '/locations/us-central1/functions/' + name + '?fields=buildName,status')
+    legacy = get_json(function_url)
+    build = legacy.get('buildName', '')
+    allowed = r'projects/(?:' + PROJECT + '|' + NUMBER + r')/locations/(?:us-central1|global)/builds/[A-Za-z0-9-]+'
+    if legacy.get('status') != 'ACTIVE' or not re.fullmatch(allowed, build):
+        return {}
+    result = get_json('https://cloudbuild.googleapis.com/v1/' + build +
+                      '?fields=status,sourceProvenance.resolvedStorageSource')
+    if result.get('status') != 'SUCCESS':
+        return {}
+    return result.get('sourceProvenance', {}).get('resolvedStorageSource', {})
+
+
 def main():
     report = {'project': PROJECT, 'reviewCommit': command(['git', 'rev-parse', 'HEAD']),
               'readOnly': True, 'matchedFunctions': [], 'blockedFunctions': [],
@@ -69,10 +90,21 @@ def main():
             '--format=json(name,state,buildConfig.sourceProvenance.resolvedStorageSource,buildConfig.entryPoint)']))
         by_name = {item['name'].split('/')[-1]: item for item in inventory}
         token = command(['gcloud', 'auth', 'print-access-token'])
+        metadata_cache = {}
+        def get_json(url):
+            if url not in metadata_cache:
+                request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    metadata_cache[url] = json.load(response)
+            return metadata_cache[url]
         cache = {}
         for name in names:
             item = by_name.get(name, {})
-            src = item.get('buildConfig', {}).get('sourceProvenance', {}).get('resolvedStorageSource', {})
+            try:
+                src = immutable_source(item, name, get_json)
+            except urllib.error.HTTPError as error:
+                report['blockedFunctions'].append({'name': name, 'reason': 'BUILD_METADATA_HTTP_' + str(error.code)})
+                continue
             bucket, obj, generation = (str(src.get(k, '')) for k in ('bucket', 'object', 'generation'))
             if item.get('state') != 'ACTIVE' or not bucket or not obj or not generation:
                 report['blockedFunctions'].append({'name': name, 'reason': 'IMMUTABLE_BUILD_SOURCE_UNAVAILABLE'})
@@ -105,6 +137,7 @@ def main():
             else:
                 report['matchedFunctions'].append(name)
         report['uniqueBuildArchives'] = len(cache)
+        report['archiveSha256'] = sorted({r['archiveSha256'] for r in cache.values() if 'archiveSha256' in r})
         report['reviewedCodeFilesPerArchive'] = len(expected)
         report['reviewedFunctionCodeMatches'] = len(report['matchedFunctions']) == len(names) == 37
     except Exception as error:

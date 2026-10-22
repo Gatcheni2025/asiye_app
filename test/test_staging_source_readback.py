@@ -3,10 +3,33 @@ import json
 import tarfile
 import unittest
 import zipfile
-from scripts.audit_staging_function_source import compare_archive
+from scripts.audit_staging_function_source import compare_archive, immutable_source, PROJECT, NUMBER
 
 
 class StagingSourceReadbackTests(unittest.TestCase):
+    def test_gen1_uses_latest_successful_build_generation_and_stays_in_staging(self):
+        calls = []
+        build = 'projects/' + NUMBER + '/locations/us-central1/builds/test-build-1'
+        source = {'bucket':'gcf-sources-' + NUMBER,'object':'source.zip','generation':'123'}
+        def get_json(url):
+            calls.append(url)
+            if 'cloudfunctions.googleapis.com' in url:
+                return {'status':'ACTIVE','buildName':build}
+            return {'status':'SUCCESS','sourceProvenance':{'resolvedStorageSource':source}}
+        self.assertEqual(immutable_source({}, 'synchronizeClubBooking', get_json), source)
+        self.assertEqual(len(calls), 2)
+        self.assertIn('projects/' + PROJECT + '/', calls[0])
+        self.assertIn(build, calls[1])
+        self.assertEqual(immutable_source({}, 'synchronizeClubBooking', lambda _: {
+            'status':'ACTIVE','buildName':'projects/asiye-80386/locations/us-central1/builds/test-build-1'}), {})
+
+    def test_gen2_resolved_source_needs_no_legacy_api_fallback(self):
+        source = {'bucket':'gcf-sources-' + NUMBER,'object':'source.zip','generation':'123'}
+        def forbidden(_):
+            self.fail('Gen2 provenance must not make legacy metadata calls')
+        self.assertEqual(immutable_source({'buildConfig':{'sourceProvenance':{'resolvedStorageSource':source}}},
+            'prepareTripPayment', forbidden), source)
+
     def test_build_archive_comparison_accepts_json_reordering_but_detects_changed_code(self):
         expected = {'index.js': b'reviewed handler', 'package.json': b'{"main":"index.js","name":"functions"}'}
         for kind in ('zip', 'tar'):

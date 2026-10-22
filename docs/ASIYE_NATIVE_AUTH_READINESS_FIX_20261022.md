@@ -111,3 +111,23 @@ real Paystack TEST split/webhook/refund acceptance in the main checklist.
 
 Public store publication, production backend rollout and Paystack LIVE
 activation remain unapproved and separate from signed candidate builds.
+
+## Fresh signed candidates — independently downloaded and checked
+
+Runtime commit: `1f6cb8b68da5338898b4bd22f4674d0cb8115678`.
+All three jobs in [run 39752616110](https://github.com/Gatcheni2025/asiye_app/actions/runs/39752616110)
+succeeded, including the five native account-link/collision tests. Downloaded
+artifact ZIP SHA-256 digests match GitHub's metadata; all 18 required WebView
+files were also independently compared inside each signed package.
+
+| Candidate | Download | Result |
+| --- | --- | --- |
+| Android 11.0.77 (347), APK + AAB | [Android artifacts](https://github.com/Gatcheni2025/asiye_app/actions/runs/39752616110/artifacts/12413634770) | Existing release signing and Firebase certificate checks pass; 20 bundled 64-bit libraries in each package have at least 16 KB ELF load alignment; uncompressed APK native-library ZIP alignment also passes 16 KB |
+| iOS 46522.0.5 (95526), IPA | [iOS artifact](https://github.com/Gatcheni2025/asiye_app/actions/runs/39752616110/artifacts/12414288190) | Signed IPA and metadata checks pass; `distribution=signed-candidate`, `testflight_uploaded=false` |
+
+These are production-configured mobile candidates, not staging-native apps.
+The Android source remains build 347; do not reuse a versionCode already
+uploaded to Play. Choose the next unused store version after acceptance.
+Binary alignment checks do not replace device tests or Play Console validation.
+The IPA is App Store signed and needs an explicitly authorized TestFlight
+upload for device distribution; it is not an ad-hoc install package.
