@@ -582,7 +582,13 @@ window.ASIYE_PASSENGER_LOGIN = {
             this.confirmationResult = null;
         } catch (error) {
             console.warn('Passenger OTP confirm failed:', error?.code || error?.message);
-            this.handleAuthError(error, 'otp');
+            if (linking && error?.code === 'auth/credential-already-in-use') {
+                const message = 'This phone is already linked to another Asiye account. Sign in with that number or contact Support to merge accounts safely.';
+                if (errorElement) errorElement.textContent = message;
+                this.toast(message);
+            } else {
+                this.handleAuthError(error, 'otp');
+            }
             if (button) { button.disabled = false; button.textContent = 'Verify & continue'; }
             return;
         }
