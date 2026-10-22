@@ -43,6 +43,7 @@ jobs:
           node --check assets/passenger-v2/js/login.js
           node --check assets/driver-v2/js/login.js
           node --test test/staging-auth-recaptcha.test.cjs
+          node --test test/staging-passenger-social-phone-link.test.cjs
           node --check scripts/diagnose_paystack_hosting.cjs
           node --test test/staging-hosting-diagnosis.test.cjs
           node --check scripts/diagnose_staging_hosting_upload.cjs
