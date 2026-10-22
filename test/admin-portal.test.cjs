@@ -40,7 +40,7 @@ test('root admin page is separate from driver and passenger pages',()=>{
  for(const view of ['overview','enrollments','drivers','passengers','bookings','parcels','wallets',
    'payments','earnings','payouts','refunds','support','documents','invitations','audit'])
    assert.ok(html.includes('data-view="'+view+'"'),'Missing '+view);
- assert.match(app,/adminWhoAmI/);
+ assert.match(root('assets/admin/auth.js'),/adminWhoAmI/);
  assert.match(app,/adminFetchData/);
  assert.match(app,/adminManagePlatform/);
  assert.match(app,/reviewDriverEnrollment/);

@@ -10,16 +10,18 @@
    storageBucket:'asiye-80386.firebasestorage.app',
    appId:'1:531902350858:web:f8a4a246bf350d50e3c1f3'
  };
- firebase.initializeApp(firebaseConfig);
- const auth=firebase.auth();
- const callable=name=>firebase.functions().httpsCallable(name);
+ const authClient=window.AsiyeAdminAuth.create(firebase,firebaseConfig);
+ const {auth,callable}=authClient;
+ let accessScope='platform';
  const fetchResource=async resource=>{
-   const result=await callable('adminFetchData')({resource,limit:500});
+   const name=accessScope==='enrollments'?'adminEnrollmentConsole':'adminFetchData';
+   if(accessScope==='enrollments'&&resource!=='driverEnrollments')throw Error('Your access is limited to driver approvals.');
+   const result=await callable(name)({action:'list',resource,limit:500});
    return result.data?.data||{};
  };
  const manage=async payload=>(await callable('adminManagePlatform')(payload)).data;
  const ops=async payload=>(await callable('adminOperations')(payload)).data;
- const review=async payload=>(await callable('reviewDriverEnrollment')(payload)).data;
+ const review=async payload=>(await callable(firebaseConfig.projectId==='asiye-paystack-staging'?'reviewDriverEnrollmentSecure':'reviewDriverEnrollment')(payload)).data;
  const $=id=>document.getElementById(id);
  const el=(tag,cls,text)=>{
    const node=document.createElement(tag);
@@ -78,6 +80,7 @@
  let accessError='';
  function showLogin(message=''){
    authenticated=false;
+   $('drawer').close();$('drawerBody').replaceChildren();$('drawerActions').replaceChildren();
    currentToken++;
    items=[];records={};
    $('shell').hidden=true;$('loginScreen').hidden=false;$('boot').hidden=true;
@@ -89,32 +92,52 @@
    $('loginScreen').hidden=true;$('boot').hidden=true;$('shell').hidden=false;
    authenticated=true;
  }
- async function authorize(user){
-   const result=await callable('adminWhoAmI')({});
-   if(!result.data?.ok||!result.data?.uid||result.data.uid!==user.uid)
-     throw Error('Your account is not an authorized Asiye administrator.');
+ let authEpoch=0;
+ function showAccount(user){
+   $('signedInAccount').hidden=!user;
+   $('signedInIdentity').textContent=user?`${user.email||'Signed-in account'} · Account ID: ${user.uid}`:'';
  }
- auth.onAuthStateChanged(async user=>{
-   if(!user){showLogin();return;}
+ async function checkAccess(user){
+   const epoch=++authEpoch;
+   if(!user){showAccount(null);showLogin();return;}
+   showAccount(user);
+   $('checkAdminAccess').disabled=true;
    try{
-     await authorize(user);
+     const scope=await authClient.authorize(user);
+     if(epoch!==authEpoch||auth.currentUser?.uid!==user.uid)return;
+     accessScope=scope;
+     document.querySelectorAll('.nav[data-view]').forEach(button=>{
+       button.hidden=scope==='enrollments'&&!['enrollments','documents'].includes(button.dataset.view);
+     });
+     if(scope==='enrollments')view='enrollments';
      setUser(user);
      await navigate(view);
-   }catch(err){
-     accessError='Admin access denied. '+(err.code==='functions/permission-denied'?
-       'Your account is not on the Asiye administrator list.':
-       'Please contact an authorized platform administrator.');
-     await auth.signOut();
+   }catch(error){
+     if(epoch!==authEpoch)return;
+     accessError=authClient.errorMessage(error);
      showLogin(accessError);
-   }
- },()=>showLogin('Unable to restore Firebase authentication.'));
+     showAccount(user);
+   }finally{if(epoch===authEpoch)$('checkAdminAccess').disabled=false;}
+ }
+ authClient.ready.then(()=>auth.onAuthStateChanged(checkAccess,()=>showLogin('Unable to restore admin authentication.')))
+  .catch(error=>showLogin(authClient.errorMessage(error)));
+ $('checkAdminAccess').onclick=()=>checkAccess(auth.currentUser);
+ $('switchAdminAccount').onclick=()=>auth.signOut().catch(error=>showLogin(authClient.errorMessage(error)));
+ for(const provider of ['google','apple']){
+   $('admin'+(provider==='google'?'Google':'Apple')+'Login').onclick=async()=>{
+     $('loginError').textContent='';
+     const button=$('admin'+(provider==='google'?'Google':'Apple')+'Login');button.disabled=true;
+     try{await authClient.signIn(provider);}
+     catch(error){$('loginError').textContent=authClient.errorMessage(error);}
+     finally{button.disabled=false;}
+   };
+ }
  $('loginForm').addEventListener('submit',async ev=>{
-   ev.preventDefault();
-   $('loginError').textContent='';
-   $('loginButton').disabled=true;
+   ev.preventDefault();$('loginError').textContent='';$('loginButton').disabled=true;
    try{
+     await authClient.ready;
      await auth.signInWithEmailAndPassword($('loginEmail').value.trim(),$('loginPassword').value);
-   }catch(err){$('loginError').textContent=err.message||'Unable to sign in.';}
+   }catch(error){$('loginError').textContent=authClient.errorMessage(error);}
    finally{$('loginButton').disabled=false;}
  });
  $('resetPassword').onclick=async()=>{
@@ -139,7 +162,7 @@
  }
  function recordRow(id,record){return {id,...(record||{})};}
  async function navigate(next){
-   if(!authenticated||!info[next])return;
+   if(!authenticated||!info[next]||accessScope==='enrollments'&&!['enrollments','documents'].includes(next))return;
    const token=++currentToken;view=next;search='';
    $('search').value='';$('sidebar').classList.remove('open');
    document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===view));

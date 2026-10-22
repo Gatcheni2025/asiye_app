@@ -7,6 +7,11 @@ on:
     paths:
       - '.github/workflows/asiye_347_pre_release_source_gate.yml'
       - 'docs/ASIYE_347_STAGING_TO_RELEASE_ACCEPTANCE_20261022.md'
+      - 'assets/admin/**'
+      - 'assets/admin-login.html'
+      - 'scripts/deploy_staging_driver_admin.cjs'
+      - 'scripts/grant_staging_driver_reviewer.cjs'
+      - 'test/admin-login.test.cjs'
       - 'assets/passenger-v2/**'
       - 'assets/driver-v2/**'
       - 'test/passenger-booking-face.test.cjs'
@@ -82,6 +87,8 @@ jobs:
             test/staging-passenger-social-phone-link.test.cjs \
             test/native-social-phone-link.test.cjs \
             test/passenger-booking-face.test.cjs \
+            test/admin-login.test.cjs \
+            test/admin-portal.test.cjs \
             test/registration-submission.test.cjs \
             test/login-otp.test.cjs \
             test/driver-enrollment-v2.test.cjs \
@@ -151,7 +158,9 @@ jobs:
       - name: Test mobile camera capture and failed-upload retry
         if: ${{ !cancelled() }}
         working-directory: test/security
-        run: node booking-face-ui.cjs
+        run: |
+          node booking-face-ui.cjs
+          node admin-login-ui.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

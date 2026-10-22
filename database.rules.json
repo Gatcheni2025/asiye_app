@@ -286,7 +286,7 @@
       ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid && !data.exists() && !root.child('admins').exists()"
+        ".write": false
       }
     },
     "debitOrderQueue": {
@@ -642,8 +642,7 @@
       },
       ".read": "auth != null && auth.token.enrollmentReviewer === true",
       ".indexOn": [
-        "submittedAt",
-        "status"
+        "submittedAt"
       ]
     },
     "driverApprovals": {

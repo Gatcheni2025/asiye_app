@@ -1,3 +1,5 @@
+> Staging driver approvals: see [22 October admin login and reviewer setup](ASIYE_STAGING_ADMIN_APPROVAL_20261022.md). Staging uses a limited driver-review scope; production operations retain their existing full-admin checks.
+
 # Asiye Operations Console — /admin
 
 New, independent administrator interface with restricted Firebase access.

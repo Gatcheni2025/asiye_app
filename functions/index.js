@@ -1,6 +1,6 @@
 const {assertPassengerBookingProfile} = require('./passenger-booking-profile');
 const functions = require("firebase-functions/v1");
-const { onRequest } = require("firebase-functions/v2/https");
+const { onRequest, onCall } = require("firebase-functions/v2/https");
 const { onValueUpdated } = require("firebase-functions/v2/database");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
@@ -2839,8 +2839,13 @@ exports.adminWhoAmI = functions.https.onCall(
   }
 );
 
-exports.reviewDriverEnrollment = functions.https.onCall(
-  async (data, context) => {
+const enrollmentConsole = require('./admin-enrollment-console').makeEnrollmentConsole({
+  admin, requireReviewer: requireAsiyeEnrollmentReviewer, HttpsError: functions.https.HttpsError
+});
+exports.adminEnrollmentConsole = onCall({region: 'us-central1', invoker: 'public'},
+  request => enrollmentConsole(request.data, request));
+
+async function handleDriverEnrollmentReview(data, context) {
     const actor = await requireAsiyeEnrollmentReviewer(context);
 
     const uid = safeAdminString(data?.uid, 160);
@@ -3223,8 +3228,15 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       status: "approved",
       driverId: uid
     };
+
+}
+exports.reviewDriverEnrollment = functions.https.onCall(handleDriverEnrollmentReview);
+exports.reviewDriverEnrollmentSecure = onCall({region: 'us-central1', invoker: 'public'}, request => {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(request.data?.uid || ''))) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid driver account ID is required.');
   }
-);
+  return handleDriverEnrollmentReview(request.data, request);
+});
 
 exports.adminManagePlatform = functions.https.onCall(
   async (data, context) => {

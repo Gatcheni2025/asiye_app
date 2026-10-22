@@ -8,6 +8,7 @@ const {spawnSync}=require('node:child_process');
 const root=path.resolve(__dirname,'..');
 const PROJECT='asiye-paystack-staging',NUMBER='1000800408896',REGION='us-central1';
 const FILES=[
+  'admin/index.html', 'admin/auth.js', 'admin/console.js', 'admin/console.css', 'admin/redirect.js', 'admin-login.html', 'admin.html', 'create-admin.html',
   'passenger-v2/index.html', 'passenger-v2/js/app.js', 'passenger-v2/js/profile.js', 'passenger-v2/js/onboarding.js', 'passenger-v2/css/booking-face.css',
   'passenger-v2/login.html',
   'passenger-v2/js/login.js',
@@ -54,7 +55,7 @@ function manifest(){
   if(!Array.isArray(names)||names.length!==37||new Set(names).size!==37||
       names.some(n=>typeof n!=='string'||!/^[A-Za-z][A-Za-z0-9]*$/.test(n)))
     throw Error('FUNCTION_MANIFEST_INVALID');
-  return [...new Set([...names, ...require('./auth_booking_staging_functions.json')])];
+  return [...new Set([...names, ...require('./auth_booking_staging_functions.json'), ...require('./staging_driver_admin_functions.json')])];
 }
 function functionInventory(names){
   const items=JSON.parse(gcloud(['functions','list','--v2','--regions='+REGION,'--project='+PROJECT,'--format=json']));

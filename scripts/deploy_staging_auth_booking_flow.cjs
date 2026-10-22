@@ -22,23 +22,23 @@ function resumeRequested(args){
  if(args.length===1&&args[0]==='--resume-after-functions')return true;
  throw Error('Usage: node scripts/deploy_staging_auth_booking_flow.cjs [--resume-after-functions]');
 }
-function cleanupOnlyFailure(result){
+function cleanupOnlyFailure(result,names=FUNCTIONS){
  if(result.error||result.signal||result.status!==1)return false;
  const clean=String(result.stdout||'')+'\n'+String(result.stderr||'');
  const text=clean.replace(/\x1b\[[0-9;]*m/g,'');
  const errors=text.split('\n').filter(line=>/^Error:/.test(line.trim()));
  return errors.length===1 &&
   /^Error: Functions successfully deployed but could not set up cleanup policy in location us-central1\./.test(errors[0].trim()) &&
-  FUNCTIONS.every(name=>text.includes('functions['+name+'(us-central1)] Successful create operation.') ||
+  names.every(name=>text.includes('functions['+name+'(us-central1)] Successful create operation.') ||
     text.includes('functions['+name+'(us-central1)] Successful update operation.'));
 }
-function deployFunctions(cli,args,options){
+function deployFunctions(cli,args,options,names=FUNCTIONS){
  const result=spawnSync(cli,args,{...options,encoding:'utf8',stdio:'pipe',timeout:20*60*1000,maxBuffer:16*1024*1024});
  if(result.stdout)process.stdout.write(result.stdout);
  if(result.stderr)process.stderr.write(result.stderr);
  if(result.status===0&&!result.error)return;
- if(!cleanupOnlyFailure(result))throw Error('Functions deployment failed; rules and Hosting were not attempted.');
- console.log('Functions reported success; cleanup-policy setup was skipped. Verifying all seven deployed source archives before continuing.');
+ if(!cleanupOnlyFailure(result,names))throw Error('Functions deployment failed; rules and Hosting were not attempted.');
+ console.log('Functions reported success; cleanup-policy setup was skipped. Verifying '+names.length+' deployed source archives before continuing.');
 }
 async function main(){
  const resume=resumeRequested(process.argv.slice(2));
@@ -103,4 +103,4 @@ async function main(){
  console.log('Staging patch deployed. Test passenger first booking and driver OTP in a fresh browser session. Native binaries still require a new build.');
 }
 if(require.main===module)main().catch(error=>{console.error('BLOCKED: '+error.message);process.exitCode=1;});
-module.exports={FUNCTIONS,isGeneratedPackageChange,resumeRequested,cleanupOnlyFailure};
+module.exports={FUNCTIONS,isGeneratedPackageChange,resumeRequested,cleanupOnlyFailure,deployFunctions};

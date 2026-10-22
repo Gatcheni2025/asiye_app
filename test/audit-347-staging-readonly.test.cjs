@@ -8,7 +8,7 @@ test('read-only audit pins isolated staging identity',()=>{
   assert.equal(PROJECT,'asiye-paystack-staging');
   assert.equal(NUMBER,'1000800408896');
   assert.equal(REGION,'us-central1');
-  assert.equal(manifest().length,39);
+  assert.equal(manifest().length,41);
 });
 test('canonical RTDB rule hashing is order-insensitive but detects changed rules',()=>{
   const x={rules:{users:{'.read':'auth !== null','.write':false},status:123}};
