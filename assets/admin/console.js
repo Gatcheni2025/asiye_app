@@ -425,7 +425,7 @@
  }
  const changed=async(payload,message)=>{
    await manage(payload);
-   $('drawer').close();banner(message||'Changes saved.');await navigate(view);
+   $('drawer').close();await navigate(view);banner(message||'Changes saved.');
  };
  const ask=(message)=>window.confirm(message);
  const required=(prompt,defaultValue='')=>{
@@ -470,14 +470,14 @@
      actions.push(['Approve driver',async()=>{
        if(!ask('Approve '+(row.fullName||id)+'? Confirm their selfie, ID, licence, address and vehicle are valid.'))return;
        await review({uid:id,decision:'approved'});
-       $('drawer').close();banner('Driver approved.');await navigate(view);
+       $('drawer').close();await navigate(view);banner('Driver approved.');
      },'primary']);
      actions.push(['Reject',async()=>{
        const reason=required('Reason for rejection (required):');
        if(!reason)return;
        if(!ask('Reject this application?'))return;
        await review({uid:id,decision:'rejected',reason});
-       $('drawer').close();banner('Application rejected.');await navigate(view);
+       $('drawer').close();await navigate(view);banner('Application rejected.');
      },'soft danger']);
    } else if(view==='documents'){body.append(docLinks(row));}
    if(view==='support'){
@@ -575,7 +575,7 @@
        const note=required('Audit note / gateway evidence:');
        if(!note)return;
        await ops({action:'updateRefundCase',id,status,note});
-       $('drawer').close();banner('Case status saved; no funds moved.');await navigate(view);
+       $('drawer').close();await navigate(view);banner('Case status saved; no funds moved.');
      },'primary']);
    }
    const title=String(row.fullName||row.name||row.reference||row.id);
@@ -603,7 +603,7 @@
        const payload=Object.fromEntries(Object.entries(fields).map(([k,input])=>[k,input.value.trim()]));
        if(!payload.fullName||!payload.phone)throw Error('Name and phone are required.');
        await ops({action:'inviteUser',...payload});
-       $('drawer').close();banner('Invitation recorded. The user must verify their own mobile with SMS OTP to activate.');await navigate(view);
+       $('drawer').close();await navigate(view);banner('Invitation recorded. The user must verify their own mobile with SMS OTP to activate.');
      },'primary']]);
    }else if(view==='refunds'){
      fields.bookingId=formField(body,'Booking ID (optional if gateway reference)','bookingId','text',false);
@@ -616,7 +616,7 @@
        const payload=Object.fromEntries(Object.entries(fields).map(([k,input])=>[k,input.value.trim()]));
        if(!ask('Create this refund case for manual reconciliation? No payment will be sent.'))return;
        await ops({action:'createRefundCase',...payload});
-       $('drawer').close();banner('Refund case created. No funds were moved.');await navigate(view);
+       $('drawer').close();await navigate(view);banner('Refund case created. No funds were moved.');
      },'primary']]);
    }
  }

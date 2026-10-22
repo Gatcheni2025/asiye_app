@@ -44,6 +44,7 @@ const mock=`(()=>{
   await page.waitForSelector('#shell:not([hidden])');await page.waitForSelector('tbody tr');
   assert.equal(await page.locator('[data-view="payments"]').isVisible(),false);
   assert.equal(await page.locator('[data-view="enrollments"]').isVisible(),true);
+  assert.ok(await page.locator('[data-view="enrollments"]').evaluate(node=>node.getBoundingClientRect().height<60));
   assert.equal(await page.evaluate(()=>firebase.apps[0].passenger),'unchanged');
   await page.locator('tbody tr button').first().click();
   await page.waitForSelector('#drawer[open]');assert.equal(await page.locator('#drawer a[target="_blank"]').count(),5);
@@ -51,8 +52,9 @@ const mock=`(()=>{
   await page.getByRole('button',{name:'Approve driver',exact:true}).click();
   await page.waitForFunction(()=>document.getElementById('notice').textContent.includes('Driver approved'));
   assert.ok(await page.evaluate(()=>window.__calls.some(([name,data])=>name==='reviewDriverEnrollmentSecure'&&data.uid==='driver')));
+  await page.screenshot({path:'../../ui-review/admin-driver-approved-desktop.png'});
   await page.click('#logout');await page.waitForSelector('#loginScreen:not([hidden])');assert.equal(await page.locator('#drawer').isVisible(),false);
-  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'../../ui-review/admin-login-mobile.png'});
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'../../ui-review/admin-login-mobile.png',fullPage:true});
   assert.deepEqual(errors,[]);console.log('PASS isolated admin social login, denied access, refreshed reviewer role, document review, canonical UID approval and logout.');
  }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(error=>{console.error(error);process.exitCode=1;});
