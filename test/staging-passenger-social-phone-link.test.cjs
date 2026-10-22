@@ -120,3 +120,48 @@ test('social phone view is part of passenger UI with separate input and OTP butt
  const clean=src.slice(src.indexOf('async afterAuthentication('),src.indexOf('async resolvePassengerProfile('));
  assert.ok(clean.indexOf("if (!user.phoneNumber)")<clean.indexOf("this.resolvePassengerProfile("));
 });
+
+test('persisted Apple/Google session can switch to the visible Google Apple Phone chooser',async()=>{
+  for(const providerId of ['apple.com','google.com']){
+    const user={uid:'unverified-social',phoneNumber:null,providerData:[{providerId}]};
+    const x=setup(user);
+    let signouts=0;
+    x.auth.signOut=async()=>{signouts++; x.auth.currentUser=null;};
+    await x.login.afterAuthentication(user);
+    assert.equal(x.step,'verifyPhoneStep');
+    assert.match(x.element('phoneLinkExplanation').textContent,
+      providerId==='apple.com'?/Apple/:/Google/);
+    await x.login.useAnotherSignInMethod();
+    assert.equal(signouts,1);
+    assert.equal(x.step,'loginStep');
+    assert.equal(x.login.awaitingPhoneLink,false);
+    assert.equal(x.login.pendingUser,null);
+    assert.equal(x.login.confirmationResult,null);
+    assert.equal(x.completed,0);
+  }
+});
+test('failed Firebase sign-out keeps current phone-link verification gate',async()=>{
+  const user={uid:'unverified-social',phoneNumber:null,providerData:[{providerId:'google.com'}]};
+  const x=setup(user);
+  x.auth.signOut=async()=>{throw Object.assign(Error('Signout blocked'),{code:'auth/network-request-failed'});};
+  await x.login.afterAuthentication(user);
+  await x.login.useAnotherSignInMethod();
+  assert.equal(x.step,'verifyPhoneStep');
+  assert.equal(x.login.pendingUser.uid,user.uid);
+  assert.equal(x.login.awaitingPhoneLink,true);
+  assert.equal(x.completed,0);
+});
+test('passenger-only login chooser and corrected phone input remain visible in shipped markup',()=>{
+  const css=fs.readFileSync('assets/passenger-v2/css/login.css','utf8');
+  for(const id of ['loginStep','googleLoginButton','appleLoginButton','passengerPhoneInput',
+   'verifyPhoneStep','switchPassengerSignInButton','switchPassengerOtpMethodButton'])
+    assert.match(html,new RegExp('id="'+id+'"'));
+  assert.match(html,/Choose Google, Apple or phone/);
+  assert.match(css,/#passengerPhoneInput,\s*#socialPhoneInput\s*\{/);
+  assert.match(src,/await firebase\.auth\(\)\.signOut\(\)/);
+  assert.match(src,/this\.showStep\('loginStep'\)/);
+  const deploy=fs.readFileSync('scripts/deploy_paystack_staging_hosting_only.cjs','utf8');
+  assert.match(deploy,/'passenger-v2\/css\/login\.css'/);
+  assert.match(deploy,/'assets\/passenger-v2\/css\/login\.css'/);
+  assert.doesNotMatch(deploy,/--only','functions'/);
+});
