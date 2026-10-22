@@ -72,7 +72,14 @@ function localChecks(){
   }
   if(run('git',['branch','--show-current'])!==BRANCH)throw Error('BLOCKED: wrong review branch.');
   run('git',['merge-base','--is-ancestor',REVIEW,'HEAD']);
-  if(run('git',['diff','--name-only',REVIEW,'HEAD','--','assets']))throw Error('Reviewed assets changed; rebuild preview before Hosting deployment.');
+  const reviewChanges=run('git',['diff','--name-only',REVIEW,'HEAD','--','assets'])
+    .split('\n').filter(Boolean);
+  const allowedAuthChanges=new Set([
+    'assets/passenger-v2/js/login.js',
+    'assets/driver-v2/js/login.js'
+  ]);
+  if(reviewChanges.some(item=>!allowedAuthChanges.has(item)))
+    throw Error('Unreviewed asset change outside staging authentication patch.');
   if(run('git',['diff','--name-only','HEAD','--','assets']))throw Error('Uncommitted asset edits; refuse stale preview.');
   const file=path.join(root,'firebase.staging.generated.json');
   if(!fs.existsSync(file))throw Error('Staging Hosting config was not generated.');
@@ -86,6 +93,27 @@ function localChecks(){
     if(rel.endsWith('js/firebase.js')&&!text.includes(PROJECT)){
       throw Error('Staging Firebase config mismatch: '+rel);
     }
+  }
+  // Compare the two auth files with a fresh staging rewrite of tracked source.
+  // Prevents publishing a stale preview that omitted the reCAPTCHA fix.
+  const {extractProductionWebConfig,rewrite,requireStagingConfig}=
+    require('./build_staging_web_preview.cjs');
+  const prod=extractProductionWebConfig(path.join(root,'assets/passenger-v2/js/firebase.js'));
+  const stagingText=fs.readFileSync(path.join(preview,'passenger-v2/js/firebase.js'),'utf8');
+  const cfg={};
+  for(const key of ['apiKey','authDomain','databaseURL','projectId','storageBucket','messagingSenderId','appId']){
+    const pattern=new RegExp('\\\\b'+key+'\\\\s*:\\\\s*["\\\\x27]([^"\\\\x27]+)["\\\\x27]');
+    const match=stagingText.match(pattern);
+    if(!match)throw Error('Staging preview web config could not be validated.');
+    cfg[key]=match[1];
+  }
+  requireStagingConfig(cfg,PROJECT);
+  if(cfg.messagingSenderId!==NUMBER)throw Error('Staging project number does not match Firebase web config.');
+  for(const item of allowedAuthChanges){
+    const rel=item.slice('assets/'.length);
+    const expected=rewrite(fs.readFileSync(path.join(root,item),'utf8'),prod,cfg);
+    if(expected!==fs.readFileSync(path.join(preview,rel),'utf8'))
+      throw Error('Staging preview auth script is stale: '+rel+'. Rebuild preview first.');
   }
   const inventory=JSON.parse(run('gcloud',['functions','list','--v2','--regions='+REGION,'--project='+PROJECT,'--format=json']));
   const active=activeFunctions(inventory);
