@@ -49,6 +49,9 @@ function makeEnrollmentSubmission({ admin, bucketName, cors }) {
       const vehicle = input.vehiclePending || {};
       for (const [key,max] of Object.entries({type:35,make:80,model:80,colour:40,registration:20}))
         if (!valid(vehicle[key], 2, max)) bad('Missing vehicle ' + key + '.');
+      const vehicleType = clean(vehicle.type,35).toLowerCase();
+      if (!['sedan', 'hatchback'].includes(vehicleType))
+        bad('Asiye accepts Sedan and Hatchback vehicles only.');
       const year = Number(vehicle.year), seats = Number(vehicle.seats);
       if (!Number.isInteger(year) || year < 1990 || year > 2100 ||
           !Number.isInteger(seats) || seats < 1 || seats > 15)
@@ -111,7 +114,7 @@ function makeEnrollmentSubmission({ admin, bucketName, cors }) {
       }
 
       const vehiclePending = {
-        type:clean(vehicle.type,35), make:clean(vehicle.make,80),
+        type:vehicleType, make:clean(vehicle.make,80),
         model:clean(vehicle.model,80), colour:clean(vehicle.colour,40),
         registration:clean(vehicle.registration,20), year, seats
       };

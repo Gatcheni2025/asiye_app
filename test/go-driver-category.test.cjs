@@ -31,7 +31,7 @@ for(const type of choices)test(`approved enrollment category ${type} receives a 
  assert.equal(trip.driverFoundCount,1);assert.equal(updates['notifications/taxis/driver/ride'].fare,65);
 });
 test('approved nested category wins over a stale legacy category and normalizes case/spacing',async()=>{
- const driver=approved('sedan');driver.vehicle.type=' SUV ';driver.vehicleType='obsolete-category';
+ const driver=approved('sedan');driver.vehicle.type=' HATCHBACK ';driver.vehicleType='obsolete-category';
  assert.equal((await dispatch(driver)).result.mode,'broadcast');
 });
 test('legacy Go labels still work and unavailable, unapproved or unsupported vehicles stay excluded',async()=>{
@@ -47,4 +47,47 @@ test('staging correction deploys both dispatch callers within the existing 41-fu
  assert.deepEqual(NAMES,['submitGoFareOffer','dispatchGoRideRequest']);
  const scope=new Set([...require('../scripts/paystack_function_manifest.json'),...require('../scripts/auth_booking_staging_functions.json'),...require('../scripts/staging_driver_admin_functions.json')]);
  assert.equal(scope.size,41);assert.ok(NAMES.every(name=>scope.has(name)));
+});
+
+
+test('registration offers exactly Sedan and Hatchback',()=>{
+ assert.deepEqual(choices,['sedan','hatchback']);
+});
+const guardSource=source.slice(source.indexOf('function driverProfileCanReceiveRequests('),source.indexOf('async function nearbyWorkDrivers('));
+const canReceive=vm.runInNewContext(guardSource+'\ndriverProfileCanReceiveRequests;');
+const uiSource=fs.readFileSync('assets/driver-v2/js/app.js','utf8');
+const uiStart=uiSource.indexOf('    hasApprovedVehicle(');
+const uiEnd=uiSource.indexOf('    /* ========================================================',uiStart);
+const uiApproved=vm.runInNewContext('({'+uiSource.slice(uiStart,uiEnd)+'}).hasApprovedVehicle;');
+for(const type of ['suv','minibus'])test(`${type} cannot receive Go/Club/Parcel requests or go online, including legacy-field conflicts`,async()=>{
+ for(const field of ['vehicle','vehicleType','carCategory']){
+  const driver=approved('sedan');
+  if(field==='vehicle')driver.vehicle.type=' '+type.toUpperCase()+' ';
+  else driver[field]=' '+type.toUpperCase()+' ';
+  assert.equal((await dispatch(driver)).result.mode,'none');
+  assert.equal(canReceive(driver),false);
+  assert.equal(canReceive(driver,{requiredSeats:4}),false);
+  assert.equal(uiApproved(driver),false);
+ }
+ const legacy={...approved('go'),enrollmentVersion:1};
+ delete legacy.vehicleApproved;delete legacy.vehicleApprovalStatus;legacy.vehicleType=type;
+ assert.equal(canReceive(legacy),false);assert.equal(uiApproved(legacy),false);
+});
+test('supported physical categories pass the dashboard and shared seat-capacity gate',()=>{
+ for(const type of choices){
+  const driver=approved(type);assert.equal(uiApproved(driver),true);
+  assert.equal(canReceive(driver,{requiredSeats:4}),true);
+  assert.equal(canReceive(driver,{requiredSeats:5}),false);
+ }
+});
+
+test('staging vehicle rollout covers submission, approval, matching and acceptance and the protected update endpoint',()=>{
+ const {NAMES}=require('../scripts/deploy_staging_vehicle_eligibility.cjs');
+ const scope=require('../scripts/audit_347_staging_readonly.cjs').manifest();
+ assert.equal(NAMES.length,17);assert.equal(scope.length,42);
+ for(const name of ['submitDriverEnrollmentSecure','reviewDriverEnrollmentSecure','submitDriverVehicleForReview',
+  'submitGoFareOffer','dispatchGoRideRequest','acceptGoFareOffer','acceptGoFareCounter','counterGoFare',
+  'acceptParcelRequestSecure','createClubBookingSecure','joinClubPoolSecure','synchronizeClubBooking','expireClubWaiting'])
+  assert.ok(NAMES.includes(name),name);
+ assert.ok(NAMES.every(name=>scope.includes(name)));
 });

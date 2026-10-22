@@ -37,3 +37,12 @@ test('database errors produce a retry page instead of a false empty history',asy
 test('wallet preserves zero balances and profile text is escaped',()=>{
     const {pages}=load(false);assert.equal(pages.money(0),'R0.00');assert.equal(pages.money(undefined),'Not available');assert.equal(pages.escape('<script>'),'&lt;script&gt;');
 });
+
+test('vehicle updates offer only supported physical categories',async()=>{
+ const {pages}=load(true);await pages.open('vehicle');
+ const html=pages.dialog.querySelector('main').innerHTML;
+ const select=html.match(/<select name="type"[\s\S]*?<\/select>/)[0];
+ assert.deepEqual([...select.matchAll(/<option value="([^"]+)"/g)].map(m=>m[1]),['sedan','hatchback']);
+ assert.doesNotMatch(html,/SUV|Minibus|7-seater/);
+ assert.match(html,/Sedan and Hatchback vehicles only/);
+});

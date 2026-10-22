@@ -13,7 +13,7 @@ const FILES=[
   'passenger-v2/login.html',
   'passenger-v2/js/login.js',
   'passenger-v2/js/firebase.js',
-  'driver-v2/login.html',
+  'driver-v2/login.html', 'driver-v2/enrollment.html',
   'driver-v2/js/login.js', 'driver-v2/js/enrollment.js', 'driver-v2/js/enrollment-gate.js',
   'driver-v2/js/firebase.js',
   'passenger-v2/css/login.css',
@@ -58,7 +58,7 @@ function manifest(){
   if(!Array.isArray(names)||names.length!==37||new Set(names).size!==37||
       names.some(n=>typeof n!=='string'||!/^[A-Za-z][A-Za-z0-9]*$/.test(n)))
     throw Error('FUNCTION_MANIFEST_INVALID');
-  return [...new Set([...names, ...require('./auth_booking_staging_functions.json'), ...require('./staging_driver_admin_functions.json')])];
+  return [...new Set([...names, ...require('./auth_booking_staging_functions.json'), ...require('./staging_driver_admin_functions.json'), ...require('./staging_vehicle_eligibility_functions.json')])];
 }
 function functionInventory(names){
   const items=JSON.parse(gcloud(['functions','list','--v2','--regions='+REGION,'--project='+PROJECT,'--format=json']));

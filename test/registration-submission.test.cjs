@@ -120,3 +120,13 @@ test('passenger signup backend accepts ordinary names and rejects control charac
  }
  assert.match(backend,/fullName\.length < 2 \|\| fullName\.length > 100/);
 });
+
+for(const type of ['suv','minibus','go','bicycle'])test(`new enrollment rejects unsupported physical type ${type} without writing`,async()=>{
+ const h=harness();h.req.body.enrollment.vehiclePending.type=type;await h.handler();
+ assert.equal(h.res.statusCode,422);assert.match(h.res.body.error,/Sedan and Hatchback/);
+ assert.equal(h.writes.count,0);assert.equal(h.writes.taxi,null);
+});
+test('enrollment normalizes a supported physical category',async()=>{
+ const h=harness();h.req.body.enrollment.vehiclePending.type=' HATCHBACK ';await h.handler();
+ assert.equal(h.res.statusCode,200);assert.equal(h.writes.record.vehiclePending.type,'hatchback');
+});

@@ -8,7 +8,7 @@ test('read-only audit pins isolated staging identity',()=>{
   assert.equal(PROJECT,'asiye-paystack-staging');
   assert.equal(NUMBER,'1000800408896');
   assert.equal(REGION,'us-central1');
-  assert.equal(manifest().length,41);
+  assert.equal(manifest().length,42);
 });
 test('canonical RTDB rule hashing is order-insensitive but detects changed rules',()=>{
   const x={rules:{users:{'.read':'auth !== null','.write':false},status:123}};
@@ -19,7 +19,7 @@ test('canonical RTDB rule hashing is order-insensitive but detects changed rules
 });
 test('staging hosted assets include login pages and client scripts for both roles',()=>{
   for(const file of ['passenger-v2/login.html','passenger-v2/js/login.js','passenger-v2/js/firebase.js',
-    'driver-v2/login.html','driver-v2/js/login.js','driver-v2/js/firebase.js'])
+    'driver-v2/login.html','driver-v2/enrollment.html','driver-v2/js/login.js','driver-v2/js/firebase.js'])
     assert.ok(FILES.includes(file),file);
 });
 test('audit only uses read-only Firebase and Hosting calls',()=>{

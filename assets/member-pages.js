@@ -2166,13 +2166,12 @@ window.AsiyePages = {
                 >
                     <label>
                         Vehicle type
-                        <input
-                            name="type"
-                            maxlength="40"
-                            value="${esc(current.type)}"
-                            placeholder="e.g. Sedan, SUV, 7-seater"
-                            required
-                        >
+                        <select name="type" required>
+                            <option value="">Select Sedan or Hatchback</option>
+                            <option value="sedan" ${String(current.type).trim().toLowerCase() === 'sedan' ? 'selected' : ''}>Sedan</option>
+                            <option value="hatchback" ${String(current.type).trim().toLowerCase() === 'hatchback' ? 'selected' : ''}>Hatchback</option>
+                        </select>
+                        <span class="member-note">Asiye accepts Sedan and Hatchback vehicles only.</span>
                     </label>
 
                     <label>
@@ -2465,6 +2464,11 @@ window.AsiyePages = {
                                 )
                             )
                     };
+
+                    if (!['sedan', 'hatchback'].includes(vehiclePending.type)) {
+                        vehicleStatus.textContent = 'Select Sedan or Hatchback. These are the only vehicles Asiye supports.';
+                        return;
+                    }
 
                     if (
                         [

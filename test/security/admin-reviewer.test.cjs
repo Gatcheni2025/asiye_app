@@ -10,7 +10,7 @@ const projectId='demo-asiye-admin-reviewer';
 const reviewer={auth:{uid:'reviewer',token:{enrollmentReviewer:true,email:'reviewer@example.test'}}};
 const enrollment=()=>({version:2,status:'pending',authUid:'driver',fullName:'Test Driver',phone:'+27821234567',phoneVerified:true,
  residentialAddress:'10 Test Road, Durban',vehicleMake:'Toyota',vehicleModel:'Corolla',vehicleColor:'White',vehicleYear:2025,vehicleReg:'ND1234',
- vehiclePending:{type:'go',make:'Toyota',model:'Corolla',colour:'White',year:2025,registration:'ND1234',seats:4},
+ vehiclePending:{type:'sedan',make:'Toyota',model:'Corolla',colour:'White',year:2025,registration:'ND1234',seats:4},
  profileImageUrl:'https://example.test/selfie.jpg',profile_picture_url:'https://example.test/selfie.jpg',vehiclePhoto:'https://example.test/car.jpg',
  documents:{selfie:'owned/selfie',car:'owned/car',identity:'owned/identity',licence:'owned/licence',address:'owned/address'},
  documentUrls:Object.fromEntries(['selfie','car','identity','licence','address'].map(k=>[k,'https://example.test/'+k+'.jpg'])),submittedAt:1});

@@ -27,12 +27,15 @@ async function call(endpoint,uid,body){
  const res={status(n){result.status=n;return this;},set(){return this;},json(data){result.body=data;return this;},send(data){result.body=data;return this;}};
  await handlers[endpoint]({method:'POST',body,headers,get:key=>headers[key.toLowerCase()]||''},res);return result;
 }
-async function approve(type){
+async function seedApplication(type){
  await db.ref('driverEnrollments/driver').set({version:2,status:'pending',authUid:'driver',fullName:'Test Driver',phone:'+27821234567',phoneVerified:true,
  residentialAddress:'10 Test Road, Durban',vehiclePending:{type,make:'Toyota',model:'Test Model',colour:'White',year:2025,registration:'ND12345',seats:4},
  profileImageUrl:'https://example.test/selfie.jpg',vehiclePhoto:'https://example.test/car.jpg',
  documents:Object.fromEntries(['selfie','car','identity','licence','address'].map(k=>[k,'owned/'+k])),
  documentUrls:Object.fromEntries(['selfie','car','identity','licence','address'].map(k=>[k,'https://example.test/'+k+'.jpg'])),submittedAt:1});
+}
+async function approve(type){
+ await seedApplication(type);
  const reviewed=await handlers.reviewDriverEnrollmentSecure.run({auth:{uid:'reviewer',token:{enrollmentReviewer:true}},data:{uid:'driver',decision:'approved'}});
  assert.equal(reviewed.status,'approved');
  await db.ref('taxis/driver').update({...pickup,isOnline:true,isBroadcasting:true,lastSeen:Date.now()});
@@ -69,4 +72,31 @@ test('physical categories never bypass approval or online broadcasting requireme
  await db.ref('taxis/driver').update({vehicleApproved:true,vehicleApprovalStatus:'approved',isBroadcasting:false});
  response=await call('dispatchGoRideRequest','passenger',{requestId:'ride'});assert.equal(response.body.mode,'none');
  assert.equal(await read('notifications/taxis/driver/ride'),null);
+});
+
+for(const type of ['suv','minibus'])test(`${type} cannot be approved, submitted as an update, dispatched or accepted`,async()=>{
+ await seedApplication(type);
+ await assert.rejects(()=>handlers.reviewDriverEnrollmentSecure.run({auth:{uid:'reviewer',token:{enrollmentReviewer:true}},
+  data:{uid:'driver',decision:'approved'}}),e=>e.code==='invalid-argument'&&/Sedan and Hatchback/.test(e.message));
+ assert.equal(await read('driverEnrollments/driver/status'),'pending');
+ assert.equal(await read('taxis/driver'),null);
+ const supported=await approve('sedan');
+ const update=await call('submitDriverVehicleForReview','driver',{driverId:'driver',vehicle:{...supported.vehicle,type}});
+ assert.equal(update.status,400);assert.match(update.body.error,/Sedan and Hatchback/);
+ assert.equal(await read('taxis/driver/vehicle/type'),'sedan');
+ // Older approved records must also be excluded, including a stale service label.
+ await db.ref('taxis/driver').update({vehicle:{...supported.vehicle,type},vehicleType:'go'});
+ const submitted=await offer('cash');assert.equal(submitted.status,200);assert.equal(submitted.body.dispatch.mode,'none');
+ assert.equal(await read('notifications/taxis/driver/ride'),null);
+ const retry=await call('dispatchGoRideRequest','passenger',{requestId:'ride'});
+ assert.equal(retry.body.mode,'none');assert.equal(await read('notifications/taxis/driver/ride'),null);
+ const accepted=await call('acceptGoFareOffer','driver',{requestId:'ride',amount:65});
+ assert.notEqual(accepted.status,200);assert.equal((await read('requests/ride')).taxiId,undefined);
+});
+test('supported vehicle changes submit for review and put the driver offline',async()=>{
+ const driver=await approve('sedan');
+ const updated=await call('submitDriverVehicleForReview','driver',{driverId:'driver',vehicle:{...driver.vehicle,type:' HATCHBACK '}});
+ assert.equal(updated.status,200,JSON.stringify(updated.body));
+ const taxi=await read('taxis/driver');assert.equal(taxi.vehiclePending.type,'hatchback');
+ assert.equal(taxi.vehicleApproved,false);assert.equal(taxi.isOnline,false);assert.equal(taxi.isBroadcasting,false);
 });

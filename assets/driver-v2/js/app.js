@@ -746,6 +746,13 @@ ASIYE_DRIVER.ui = {
             driver.carCategory;
 
 
+        const categories = [vehicle.type, driver.vehicleType, driver.carCategory]
+            .map(value => String(value || '').trim().toLowerCase());
+        if (categories.some(category => ['suv', 'minibus'].includes(category)) ||
+            !['sedan', 'hatchback', 'ehailing', 'e-hailing', 'go', 'car'].includes(categories.find(Boolean) || '')) {
+            return false;
+        }
+
         const make =
             vehicle.make ||
             driver.vehicleMake ||
@@ -974,7 +981,7 @@ ASIYE_DRIVER.ui = {
             !this.hasApprovedVehicle()
         ) {
             this.toast(
-                'Complete your approved driver profile first: selfie, car photo, phone, make, model, colour, year, registration and seats are required before you can go online.',
+                'Asiye supports approved Sedan and Hatchback vehicles only. Complete your selfie, car photo, phone and vehicle details before going online.',
                 'warning'
             );
 

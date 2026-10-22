@@ -39,6 +39,18 @@ class GoDispatchSourceTests(unittest.TestCase):
         self.assertFalse(stale['ok'])
         self.assertEqual(len(stale['mismatched']), 2)
 
+    def test_vehicle_rollout_requires_every_selected_archive_and_rejects_empty_or_duplicate_scope(self):
+        names = json.loads(Path('scripts/staging_vehicle_eligibility_functions.json').read_text())
+        template = self.inventory()[0]
+        inventory = [{**template, 'name': f'projects/{PROJECT}/locations/us-central1/functions/{name}',
+                      'buildConfig': {**template['buildConfig'], 'entryPoint': name}} for name in names]
+        self.assertEqual(len(names), 17)
+        read = lambda *args: self.archive()
+        self.assertTrue(verify_inventory(inventory, names, self.expected, read)['ok'])
+        self.assertFalse(verify_inventory(inventory[:-1], names, self.expected, read)['ok'])
+        self.assertFalse(verify_inventory([], [], self.expected, read)['ok'])
+        self.assertFalse(verify_inventory(inventory, names + [names[0]], self.expected, read)['ok'])
+
     def test_missing_wrong_project_mutable_or_nonactive_build_cannot_pass(self):
         self.assertFalse(verify_inventory(self.inventory()[1:], self.names, self.expected, lambda *args: self.archive())['ok'])
         for mutate in (lambda x: x.update(state='DEPLOYING'),

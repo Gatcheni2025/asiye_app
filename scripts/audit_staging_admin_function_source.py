@@ -40,11 +40,11 @@ def verify_inventory(inventory, names, expected, read_archive):
             report['mismatched'].append({'name': name, 'files': result['differences']})
         else:
             report['matched'].append(name)
-    report['ok'] = len(report['matched']) == len(names) == 2
+    report['ok'] = bool(names) and len(set(names)) == len(names) == len(report['matched'])
     return report
 
 
-def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STAGING_ADMIN_FUNCTION_SOURCE'):
+def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STAGING_ADMIN_FUNCTION_SOURCE', include_selected_in_scope=False):
     try:
         if (command(['gcloud', 'config', 'get-value', 'project']) != PROJECT or
                 command(['gcloud', 'projects', 'describe', PROJECT, '--format=value(projectNumber)']) != NUMBER):
@@ -54,9 +54,10 @@ def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STA
         pkg = json.loads((ROOT / 'functions/package.json').read_text())
         pkg['main'] = 'staging-index.generated.cjs'
         expected['package.json'] = json.dumps(pkg).encode()
+        extra_scope = ',...require(' + json.dumps('./' + manifest_path) + ')' if include_selected_in_scope else ''
         expected[pkg['main']] = command(['node', '-e',
             "const names=[...new Set([...require('./scripts/paystack_function_manifest.json'),"
-            "...require('./scripts/auth_booking_staging_functions.json'),...require('./scripts/staging_driver_admin_functions.json')])];"
+            "...require('./scripts/auth_booking_staging_functions.json'),...require('./scripts/staging_driver_admin_functions.json')" + extra_scope + "])];"
             "process.stdout.write(require('./scripts/prepare_staging_function_scope.cjs').renderEntry(names));"]).encode() + b'\n'
         inventory = json.loads(command(['gcloud', 'functions', 'list', '--v2', '--regions=us-central1',
             '--project=' + PROJECT,
@@ -73,7 +74,7 @@ def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STA
                 raise ValueError('ARCHIVE_SIZE_LIMIT')
             return data
         report = verify_inventory(inventory, names, expected, read_archive)
-        print(label + ': MATCH=' + str(len(report['matched'])) + '/2')
+        print(label + ': MATCH=' + str(len(report['matched'])) + '/' + str(len(names)))
         for kind in ('blocked', 'mismatched'):
             for item in report[kind]:
                 print('SOURCE_' + kind.upper() + ': ' + item['name'] + ' ' +

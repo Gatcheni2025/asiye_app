@@ -1870,6 +1870,7 @@ function driverProfileCanReceiveRequests(
 
   if (
     !vehicleType ||
+    !driverVehicleCategoryAllowed(driver) ||
     !registration ||
     !phone ||
     !profileImage
@@ -1976,6 +1977,17 @@ function driverProfileCanReceiveRequests(
   }
 
   return true;
+}
+
+// New applications and vehicle changes require a physical Sedan/Hatchback type.
+// Retain service labels on existing approved profiles, but never let a known
+// unsupported physical type be hidden behind a legacy label in another field.
+function driverVehicleCategoryAllowed(driver = {}) {
+  const categories = [driver.vehicle?.type, driver.vehicleType, driver.carCategory]
+    .map(value => String(value || '').trim().toLowerCase());
+  if (categories.some(type => ['suv', 'minibus'].includes(type))) return false;
+  const category = categories.find(Boolean) || '';
+  return ['sedan', 'hatchback', 'ehailing', 'e-hailing', 'go', 'car'].includes(category);
 }
 
 async function nearbyWorkDrivers(
@@ -2770,15 +2782,18 @@ function normaliseApprovedVehicle(input = {}, fallback = {}) {
     )
   );
 
+  const type = safeAdminString(
+    source.type ?? source.vehicleType ?? fallback.type ?? fallback.vehicleType,
+    60
+  ).toLowerCase();
+  if (!['sedan', 'hatchback'].includes(type)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument", "Asiye accepts Sedan and Hatchback vehicles only."
+    );
+  }
+
   return {
-    type:
-      safeAdminString(
-        source.type ??
-        source.vehicleType ??
-        fallback.type ??
-        fallback.vehicleType,
-        60
-      ) || "ehailing",
+    type,
     make:
       safeAdminString(
         source.make ??
@@ -3386,6 +3401,15 @@ exports.adminManagePlatform = functions.https.onCall(
               source[field],
               max
             );
+        }
+      }
+
+      if ("vehicleType" in patch) {
+        patch.vehicleType = patch.vehicleType.toLowerCase();
+        if (!["sedan", "hatchback"].includes(patch.vehicleType)) {
+          throw new functions.https.HttpsError(
+            "invalid-argument", "Asiye accepts Sedan and Hatchback vehicles only."
+          );
         }
       }
 
@@ -4400,7 +4424,7 @@ exports.adminManagePlatform = functions.https.onCall(
       const source = data?.vehicle || driver.vehiclePending;
       const clean = (value, max) => safeAdminString(value, max);
       const vehicle = {
-        type: clean(source.type, 40),
+        type: clean(source.type, 40).toLowerCase(),
         make: clean(source.make, 80),
         model: clean(source.model, 80),
         colour: clean(source.colour || source.color, 60),
@@ -4413,6 +4437,9 @@ exports.adminManagePlatform = functions.https.onCall(
           vehicle.year > new Date().getFullYear() + 1 ||
           !Number.isInteger(vehicle.seats) || vehicle.seats < 1 || vehicle.seats > 15) {
         throw new functions.https.HttpsError("invalid-argument", "Vehicle details are incomplete or invalid.");
+      }
+      if (decision === "approved" && !["sedan", "hatchback"].includes(vehicle.type)) {
+        throw new functions.https.HttpsError("invalid-argument", "Asiye accepts Sedan and Hatchback vehicles only.");
       }
       if (decision === "approved" && !String(driver.vehiclePhoto || "").trim()) {
         throw new functions.https.HttpsError("failed-precondition", "A saved car picture is required before approval.");
@@ -8605,10 +8632,7 @@ exports.parcelTripActionSecure = onRequest(
 // Shared by authenticated offer submission and the legacy dispatch endpoint.
 // The suggested fare is guidance only; every valid 65–95% offer can be sent.
 function goVehicleCategoryAllowed(driver = {}) {
-  // Enrollment stores a physical category; older profiles store a service label.
-  // Use the approved vehicle record first, as the profile approval guard does.
-  const category = String(driver.vehicle?.type || driver.vehicleType || driver.carCategory || '').trim().toLowerCase();
-  return ['sedan', 'hatchback', 'suv', 'minibus', 'ehailing', 'e-hailing', 'go', 'car'].includes(category);
+  return driverVehicleCategoryAllowed(driver);
 }
 
 async function dispatchGoRideToDrivers(requestId, expectedOwner) {
@@ -9864,7 +9888,7 @@ exports.submitDriverVehicleForReview =
             cleanText(
               source.type,
               40
-            ),
+            ).toLowerCase(),
           make:
             cleanText(
               source.make,
@@ -9907,6 +9931,12 @@ exports.submitDriverVehicleForReview =
               error:
                 "Complete type, make, model, colour and registration."
             });
+        }
+
+        if (!["sedan", "hatchback"].includes(vehiclePending.type)) {
+          return response.status(400).json({
+            error: "Asiye accepts Sedan and Hatchback vehicles only."
+          });
         }
 
         const currentYear =
