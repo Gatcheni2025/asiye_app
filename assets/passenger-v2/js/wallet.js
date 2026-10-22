@@ -339,13 +339,53 @@ ASIYE.payments = {
                 );
 
         if (!response.ok) {
-            throw new Error(
-                payload.error ||
-                'Payment could not be prepared.'
-            );
+            const error = new Error(payload.error || 'Payment could not be prepared.');
+            error.code = payload.code || 'payment/unavailable';
+            throw error;
         }
 
         return payload;
+    },
+
+    cardFailure: null,
+
+    cardErrorMessage(error) {
+        return error?.code === 'payment/driver-subaccount-required'
+            ? 'Your driver needs to finish card payment setup. Ask the driver to open Card earnings, then try again. Checkout has not opened.'
+            : error?.message || 'Card payment could not be opened. Try again.';
+    },
+
+    paintCardPaymentState() {
+        const node = document.querySelector('[data-card-payment-state]');
+        if (!node) return;
+        const id = node.dataset.requestId;
+        const failure = this.cardFailure?.requestId === id ? this.cardFailure : null;
+        const pending = this.pendingCard()?.requestId === id;
+        node.querySelector('[data-card-payment-message]').textContent = failure
+            ? this.cardErrorMessage(failure)
+            : pending ? 'Complete the secure Paystack checkout. If you have paid, check confirmation below.'
+            : 'Opening secure Paystack checkout for your agreed fare…';
+        const retry = node.querySelector('[data-card-payment-retry]');
+        retry.hidden = !failure && !pending;
+        retry.disabled = this._prepareRequestId === id && !!this._preparePromise;
+        retry.textContent = pending ? 'Continue to Paystack' : 'Try card payment again';
+        retry.onclick = async () => {
+            retry.disabled = true;
+            if (this.cardFailure?.requestId === id) this.cardFailure = null;
+            try {
+                await this.prepare(id);
+            } catch (error) {
+                this.cardFailure = {requestId: id, message: error.message, code: error.code};
+            } finally { this.paintCardPaymentState(); }
+        };
+        const check = node.querySelector('[data-card-payment-check]');
+        check.hidden = !pending;
+        check.onclick = async () => {
+            check.disabled = true;
+            try { await this.handleCardReturn(); }
+            catch (error) { this.cardFailure = {requestId: id, message: error.message, code: error.code}; }
+            finally { check.disabled = false; this.paintCardPaymentState(); }
+        };
     },
 
     async prepare(requestId) {
@@ -446,9 +486,13 @@ ASIYE.payments = {
 
         try {
 
-            return await run;
+            const result = await run;
+            if (this.cardFailure?.requestId === requestId) this.cardFailure = null;
+            return result;
 
-
+        } catch (error) {
+            this.cardFailure = {requestId, message: error.message, code: error.code};
+            throw error;
         } finally {
 
             if (
@@ -461,6 +505,7 @@ ASIYE.payments = {
                 this._prepareRequestId =
                     null;
             }
+            this.paintCardPaymentState();
         }
     },
 
@@ -863,7 +908,7 @@ ASIYE.payments = {
 
                 ASIYE.ui?.toast?.(
                     error.message ||
-                    'Payment is confirmed. Share the trip with a loved one to complete booking.'
+                    'Payment is confirmed. Reopen this booking to resume pickup.'
                 );
             } finally {
                 this._cardSafetyFinalizeActive =
@@ -974,6 +1019,7 @@ ASIYE.payments = {
 
         if (
             method !== 'card' ||
+            this.cardFailure?.requestId === request.requestId ||
             status !== 'payment_required' ||
             !request.taxiId ||
             (request.type === 'club' && (!request.poolReady || !request.driverAcceptedAt))

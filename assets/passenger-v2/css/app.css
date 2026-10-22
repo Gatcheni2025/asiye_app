@@ -3011,3 +3011,5 @@ button:disabled {
 @keyframes go-radar{0%{transform:scale(.8);opacity:.65}100%{transform:scale(1.9);opacity:0}}
 @keyframes go-search-dot{0%,70%,100%{opacity:.3;transform:translateY(0)}35%{opacity:1;transform:translateY(-3px)}}
 @media(prefers-reduced-motion:reduce){.go-search-ring,.go-search-dots i{animation:none}.go-search-ring{width:96px;height:96px;opacity:.25}.go-search-ring:nth-child(n+2){display:none}}
+
+.asiye-card-payment-status{margin:16px 0;padding:14px;border:1px solid #cde3d7;border-radius:16px;background:#f0f8f3;color:#194c35;font-size:13px;line-height:1.5}.asiye-card-payment-status p{margin:0 0 12px}.asiye-card-payment-status button{width:100%}

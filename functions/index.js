@@ -11987,7 +11987,8 @@ exports.prepareTripPayment =
           .json({
             error:
               error?.message ||
-              "Unable to prepare ride payment."
+              "Unable to prepare ride payment.",
+            code: error?.code || "payment/unavailable"
           });
       }
     }
@@ -14662,3 +14663,11 @@ exports.synchronizeClubBooking = functions.database.ref('/requests/{requestId}')
 exports.expireClubWaiting = require('firebase-functions/v2/scheduler').onSchedule(
   { schedule: 'every 1 minutes', region: 'us-central1' }, () => secureClub.expireDue()
 );
+
+// Staging owner tools are separate from enrollment and financial admin roles.
+const stagingTestConsole = require('./staging-test-console').makeStagingTestConsole({
+  admin, projectId: runtimeFirebaseProjectId, paymentDomain: configuredPaystackDomain,
+  paystackRequest, driverEligible: driverProfileCanReceiveRequests, HttpsError: functions.https.HttpsError
+});
+exports.adminStagingTestConsole = onCall({region: 'us-central1', invoker: 'public', secrets: [paystackSecretKey]},
+  request => stagingTestConsole(request.data, {auth: request.auth}));

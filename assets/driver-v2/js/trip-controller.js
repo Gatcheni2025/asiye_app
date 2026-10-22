@@ -155,6 +155,7 @@ ASIYE_DRIVER.trip = {
                 this.renderAccepted(
                     request
                 );
+                void this.resumeConfirmedCardPickup(request);
 
                 break;
 
@@ -182,6 +183,7 @@ ASIYE_DRIVER.trip = {
                 this.renderDriverOnWay(
                     request
                 );
+                void this.resumeConfirmedCardPickup(request);
 
                 break;
 
@@ -348,6 +350,7 @@ ASIYE_DRIVER.trip = {
                       : 'Pickup unlocks when payment is confirmed. Verify the PIN at pickup before departure.'}
                 </div>
                 ${paymentMethod === 'cash' ? '<button class="driver-btn driver-btn-primary" data-cash-pickup>Start cash pickup</button>' : ''}
+                ${paymentMethod === 'card' ? '<a class="driver-btn driver-btn-primary" href="./payout.html">Card earnings · verify payment setup</a><p class="driver-payment-wait-note">If payment setup is incomplete, finish it here. The passenger can then tap Try card payment again.</p>' : ''}
 
             </div>
         `;
@@ -412,6 +415,26 @@ ASIYE_DRIVER.trip = {
     /* ========================================================
        GO — START PICKUP
        ======================================================== */
+
+    async resumeConfirmedCardPickup(request) {
+        const id = this.requestId;
+        if (!id || request.type === 'club' || request.type === 'delivery' ||
+            request.paymentMethod !== 'card' || request.goContinuationVersion !== 2 ||
+            request.fareStatus !== 'agreed' || request.paymentsReady !== true ||
+            !['held', 'captured'].includes(request.paymentStatus) ||
+            !['accepted', 'driver_on_way'].includes(request.status) ||
+            this._cardPickupNavigatedFor === id || this._cardPickupActive) return;
+        this._cardPickupActive = true;
+        try {
+            if (request.status === 'accepted') await this.goAction('onWay');
+            const live = (await this.requestRef.once('value')).val();
+            if (this.requestId !== id || live?.status !== 'driver_on_way' || live.paymentsReady !== true) return;
+            await this.startPickupNavigation(live);
+            this._cardPickupNavigatedFor = id;
+        } catch (error) {
+            ASIYE_DRIVER.ui?.toast?.(error.message || 'Payment confirmed. Tap Start pickup to retry navigation.', 'warning');
+        } finally { this._cardPickupActive = false; }
+    },
 
     async startPickup() {
 

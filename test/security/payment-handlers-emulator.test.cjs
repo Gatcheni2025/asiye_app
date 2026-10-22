@@ -854,3 +854,39 @@ test('unverified passenger cannot create Parcel or submit a Go offer, lock or ch
  assert.equal(offered.status,403);assert.equal(offered.body.code,'passenger-face-required');
  assert.equal(await read('commuters/sender/currentRequest'),null);assert.equal(await read('notifications/taxis'),null);assert.equal(initializations.length,0);
 });
+
+test('agreed Card fare recovers missing TEST subaccount setup, charges the exact split and starts driver pickup after signed confirmation',async()=>{
+ const vm=require('node:vm');
+ const {makeStagingTestConsole,PROJECT}=require('../../functions/staging-test-console');
+ const {HttpsError}=require('../../functions/node_modules/firebase-functions/v2/https');
+ const requestId='go-card-setup-recovery';
+ await db.ref('driverPaystackSubaccounts/driver').remove();
+ await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+  paymentMethod:'card',negotiationEnabled:true,goContinuationRequestedVersion:2,routeDistanceKm:15,routeDurationMinutes:0,
+  commuterLocation:pickup,destinationCoords:destination});
+ const offered=await call('submitGoFareOffer','sender-auth',{requestId,amount:100});
+ assert.equal(offered.status,200,JSON.stringify(offered.body));
+ const accepted=await call('acceptGoFareOffer','driver-auth',{requestId,amount:100});
+ assert.equal(accepted.status,200,JSON.stringify(accepted.body));
+ const blocked=await call('prepareTripPayment','sender-auth',{requestId});
+ assert.equal(blocked.status,409);assert.equal(blocked.body.code,'payment/driver-subaccount-required');assert.equal(initializations.length,0);
+ const src=fs.readFileSync('../../functions/index.js','utf8');
+ const eligible=vm.runInNewContext(src.slice(src.indexOf('function driverProfileCanReceiveRequests('),src.indexOf('async function nearbyWorkDrivers('))+'\ndriverProfileCanReceiveRequests;');
+ const consoleApi=makeStagingTestConsole({admin,projectId:()=>PROJECT,paymentDomain:()=> 'test',HttpsError,driverEligible:eligible,
+  paystackRequest:async path=>(await global.fetch('https://api.paystack.co'+path,{headers:{Authorization:'Bearer '+secret}})).json()});
+ await consoleApi({action:'linkTestSubaccount',driverId:'driver',subaccountCode:account},{auth:{uid:'test-owner',token:{stagingTripTester:true}}});
+ const checkout=await call('prepareTripPayment','sender-auth',{requestId});assert.equal(checkout.status,200,JSON.stringify(checkout.body));
+ assert.equal(initializations.length,1);assert.equal(initializations[0].amount,'10000');assert.equal(initializations[0].subaccount,account);
+ assert.equal((await read('driverPaystackSubaccounts/driver')).platformCommissionPercent,20);
+ assert.equal((await read('requests/'+requestId)).status,'payment_required');
+ assert.equal((await read('requests/'+requestId)).pickupPin,undefined);
+ assert.equal((await webhook(checkout.body.reference)).status,200);
+ const paid=await read('requests/'+requestId);assert.equal(paid.status,'accepted');assert.equal(paid.paymentsReady,true);assert.match(paid.pickupPin,/^\d{4}$/);
+ const browser={console,ASIYE_DRIVER:{state:{},ui:{toast(){}},map:{}},document:{getElementById:()=>null}};browser.window=browser;
+ vm.createContext(browser);vm.runInContext(fs.readFileSync('../../assets/driver-v2/js/trip-controller.js','utf8'),browser);
+ const trip=browser.ASIYE_DRIVER.trip;trip.requestId=requestId;trip.requestRef=db.ref('requests/'+requestId);let navigations=0;
+ trip.goAction=async action=>{const result=await call('goTripActionSecure','driver-auth',{requestId,action});assert.equal(result.status,200,JSON.stringify(result.body));};
+ trip.startPickupNavigation=async live=>{assert.equal(live.status,'driver_on_way');assert.equal(live.commuterLocation.latitude,pickup.latitude);navigations++;};
+ await trip.resumeConfirmedCardPickup(paid);assert.equal(navigations,1);assert.equal((await read('requests/'+requestId)).status,'driver_on_way');
+ await webhook(checkout.body.reference);assert.equal(initializations.length,1);assert.equal((await read('requests/'+requestId)).pickupPin,paid.pickupPin);
+});

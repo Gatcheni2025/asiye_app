@@ -30,6 +30,7 @@ footer a,footer button{flex:1;text-align:center}
 <p>We send your verification details securely to Paystack. Your full bank account and ID numbers are not retained in Asiye's payout account record.</p>
 <button type="submit" id="verifyPayoutBank">Apply for Paystack driver subaccount</button>
 </form>
+<button type="button" id="checkPayoutStatus">Check verification again</button>
 <footer><a href="./index.html">Back to driver app</a><button type="button" id="logoutBank">Log out</button></footer>
 </main>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
@@ -39,62 +40,5 @@ footer a,footer button{flex:1;text-align:center}
 <script src="./js/enrollment-gate.js"></script>
 <script src="./js/presence.js"></script>
 <script src="../session.js"></script>
-<script>
-(async () => {
-const base='https://us-central1-asiye-80386.cloudfunctions.net/configureDriverCardPayout';
-const state=document.getElementById('payoutStatus');
-const form=document.getElementById('payoutForm');
-const user=await new Promise(resolve=>{const off=firebase.auth().onAuthStateChanged(u=>{off();resolve(u);});});
-if(!user){location.replace('./login.html');return;}
-const driverId=localStorage.getItem('driverId') || user.uid;
-const send=async (action,body) => {
- const token=await user.getIdToken(true);
- const url=base+'?driverId='+encodeURIComponent(driverId)+(action?'&action='+encodeURIComponent(action):'');
- const response=await fetch(url,{method:body?'POST':'GET',
-   headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},
-   body:body?JSON.stringify({driverId,...body}):undefined});
- const data=await response.json().catch(()=>({}));
- if(!response.ok)throw Error(data.error||'Could not contact payout service.');
- return data;
-};
-try {
- const [info,banks]=await Promise.all([send('status'),send('banks')]);
- const list=document.getElementById('payoutBank');
- list.replaceChildren(new Option('Choose your bank',''));
- (banks.banks||[]).forEach(bank=>list.add(new Option(bank.name,bank.code)));
- const existing = info.status && info.status !== 'not_configured';
- state.textContent = info.status === 'verified'
-  ? 'Paystack driver subaccount verified. Bank: '+info.bankName+' (ending '+info.accountLast4+'). Your 80% share settles directly through Paystack.'
-  : existing
-  ? 'Paystack subaccount status: '+info.status.replace(/_/g,' ')+'. Contact Asiye support for changes or confirmation.'
-  : 'No Paystack subaccount yet. Complete your banking verification to receive your share of card payments.';
- document.getElementById('payoutName').value=info.accountName||'';
- form.hidden=!!existing;
- } catch(error){state.textContent=error.message+' Please sign in as an approved driver and retry.';form.hidden=true;}
-form.onsubmit=async event=>{
- event.preventDefault();
- const button=document.getElementById('verifyPayoutBank');
- button.disabled=true;state.textContent='Verifying your banking details with Paystack…';
- try {
-   const saved=await send('',{
-     bankCode:document.getElementById('payoutBank').value,
-     accountName:document.getElementById('payoutName').value.trim(),
-     accountNumber:document.getElementById('payoutNumber').value.trim(),
-     accountType:document.getElementById('payoutType').value,
-     documentType:document.getElementById('payoutDocType').value,
-     documentNumber:document.getElementById('payoutDoc').value.trim()
-   });
-   state.textContent=(saved.status==='verified'?'Paystack verified. ':'Paystack review pending. ')+'Subaccount '+saved.subaccountCode+', bank ending '+saved.accountLast4+'.';
-    form.hidden=true;
-   document.getElementById('payoutNumber').value='';
-   document.getElementById('payoutDoc').value='';
- }catch(error){state.textContent=error.message;}
- finally{button.disabled=false;}
-};
-document.getElementById('logoutBank').onclick=async()=>{
- try { await window.AsiyeSession.logout(); }
- catch(error) { state.textContent='Unable to confirm you are offline. Check your connection and retry.'; }
-};
-})();
-</script>
+<script src="./js/payout.js" defer></script>
 </body></html>

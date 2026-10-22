@@ -84,7 +84,7 @@ test('supported physical categories pass the dashboard and shared seat-capacity 
 test('staging vehicle rollout covers submission, approval, matching and acceptance and the protected update endpoint',()=>{
  const {NAMES}=require('../scripts/deploy_staging_vehicle_eligibility.cjs');
  const scope=require('../scripts/audit_347_staging_readonly.cjs').manifest();
- assert.equal(NAMES.length,17);assert.equal(scope.length,42);
+ assert.equal(NAMES.length,17);assert.equal(scope.length,43);
  for(const name of ['submitDriverEnrollmentSecure','reviewDriverEnrollmentSecure','submitDriverVehicleForReview',
   'submitGoFareOffer','dispatchGoRideRequest','acceptGoFareOffer','acceptGoFareCounter','counterGoFare',
   'acceptParcelRequestSecure','createClubBookingSecure','joinClubPoolSecure','synchronizeClubBooking','expireClubWaiting'])

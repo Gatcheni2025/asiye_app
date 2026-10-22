@@ -12,6 +12,7 @@
  };
  const authClient=window.AsiyeAdminAuth.create(firebase,firebaseConfig);
  const {auth,callable}=authClient;
+ document.getElementById('stagingTestTools').hidden=firebaseConfig.projectId!=='asiye-paystack-staging';
  let accessScope='platform';
  const fetchResource=async resource=>{
    const name=accessScope==='enrollments'?'adminEnrollmentConsole':'adminFetchData';

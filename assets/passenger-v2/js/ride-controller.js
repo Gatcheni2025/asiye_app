@@ -719,11 +719,18 @@ ASIYE.ride = {
                     `
                     : ''
             }
+            ${method === 'card' ? `<div class="asiye-card-payment-status" data-card-payment-state data-request-id="${ASIYE.ui.escape(request.requestId)}" role="status" aria-live="polite">
+                <p data-card-payment-message></p>
+                <button type="button" class="asiye-primary-btn" data-card-payment-retry hidden>Try card payment again</button>
+                <button type="button" class="asiye-primary-btn" data-card-payment-check hidden>I have paid · check confirmation</button>
+            </div>` : ''}
         `;
 
+        ASIYE.payments?.paintCardPaymentState?.();
 
         if (
             method === 'card' && request.taxiId &&
+            ASIYE.payments?.cardFailure?.requestId !== request.requestId &&
             !['held', 'captured'].includes(request.paymentStatus) &&
             ASIYE.payments?.pendingCard?.()?.requestId !== request.requestId
         ) {

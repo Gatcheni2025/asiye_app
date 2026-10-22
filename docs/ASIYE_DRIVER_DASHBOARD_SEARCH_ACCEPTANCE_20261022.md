@@ -14,6 +14,8 @@ The latest staging screenshots confirm the driver map, GPS watch and request lis
 
 ## Current staging update: supported vehicle policy
 
+For the latest Card recovery and test-trip controls, use `docs/ASIYE_CARD_SETUP_AND_TEST_TRIP_CONTROLS_20261022.md` and its combined staging command. It includes this vehicle policy and repairs the subsequent partial deployment.
+
 The earlier UI fix was deployed and a user screenshot confirmed **40/40** hosted files, **41/41** active Functions and matching rules. Those results predate this Sedan/Hatchback correction. Use this command instead of the earlier two-function dispatch update:
 
 ```bash

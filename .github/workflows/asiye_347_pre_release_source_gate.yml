@@ -14,6 +14,11 @@ on:
       - 'scripts/deploy_staging_driver_search_ui.cjs'
       - 'scripts/deploy_staging_go_dispatch.cjs'
       - 'scripts/go_dispatch_staging_functions.json'
+      - 'scripts/staging_card_test_functions.json'
+      - 'scripts/deploy_staging_card_test_tools.cjs'
+      - 'scripts/grant_staging_trip_tester.cjs'
+      - 'scripts/audit_staging_card_test_source.py'
+      - 'test/card-setup-recovery.test.cjs'
       - 'scripts/staging_vehicle_eligibility_functions.json'
       - 'scripts/deploy_staging_vehicle_eligibility.cjs'
       - 'scripts/audit_staging_vehicle_eligibility_source.py'
@@ -112,6 +117,7 @@ jobs:
             test/staging-auth-recaptcha.test.cjs \
             test/go-fare-negotiation.test.cjs \
             test/go-driver-category.test.cjs \
+            test/card-setup-recovery.test.cjs \
             test/go-continuation.test.cjs \
             test/club-lifecycle.test.cjs \
             test/parcel-security.test.cjs \
@@ -185,6 +191,7 @@ jobs:
           node booking-face-ui.cjs
           node admin-login-ui.cjs
           node driver-search-ui.cjs
+          node staging-trip-tests-ui.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
