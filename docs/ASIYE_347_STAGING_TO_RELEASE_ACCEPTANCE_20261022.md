@@ -22,9 +22,9 @@ the production Firebase project and must not be mistaken for staging builds.
 
 | Gate | Evidence needed | Status 22 Oct |
 | --- | --- | --- |
-| Staging function inventory | Exactly 37 expected functions ACTIVE | **Observed PASS** (names only) |
+| Staging function inventory | Exactly 37 expected functions ACTIVE | **Independent PASS**, run 39752616083 (names/state only) |
 | Hosting | Published passenger/driver preview digest matches local staging preview, no production config | **Observed PASS** |
-| Staging database rules | Read back deployed RTDB rules; digest matches reviewed `database.rules.json` | **UNVERIFIED** |
+| Staging database rules | Read back deployed RTDB rules; digest matches reviewed `database.rules.json` | **Independent PASS**, run 39752616083 |
 | Staging backend revision | Prove function builds are from intended reviewed SHA, not just ACTIVE | **UNVERIFIED** |
 | Passenger authentication | Google, Apple, Phone OTP; first-time one-off SMS link; returning dashboard; face/name onboarding; linked-UID preservation; already-linked number conflict | **Source tests pass; device UAT missing** |
 | Driver onboarding | Face, vehicle photo/registration, ID/license/address, bank, approval, pending state, restore on restart | **Device UAT missing** |
@@ -32,7 +32,7 @@ the production Firebase project and must not be mistaken for staging builds.
 | Club/Work | 30-minute countdown synced; driver waiting/addresses/passenger count; late/early departure negotiation; partial pool | **Device UAT missing** |
 | PIN and safety share | PIN server generated after booking; driver enters at pickup **before** trip starts; sharing offered only after arrival, never blocks trip prematurely | **Device UAT missing** |
 | Cash | Confirm after trip completion, not at booking/pickup; correct both-side restoration and cancellation | **Device UAT missing** |
-| Paystack TEST | Verified approved test-driver `ACCT_...` subaccount, 20% main/80% driver allocation, Asiye fee bearer, real TEST checkout → webhook → callback → captured state | **UNVERIFIED** |
+| Paystack TEST | Verified approved test-driver `ACCT_...` subaccount, 20% main/80% driver allocation, Asiye fee bearer, real TEST checkout → webhook → callback → captured state | **Prerequisites PASS**, run 39752616083; real journey still **UNVERIFIED** |
 | Payment recovery | Declined/abandoned card, missing/duplicate webhook, retry/idempotency, cancellations/partial Club, authorized refund status, subaccount mismatch | **UNVERIFIED** |
 | Parcel V2 | Accept, private pickup PIN, wrong-PIN lock, payment, completed delivery/cancel, no stale bookings | **Device UAT missing** |
 | Historical Wallet | No new wallet/EFT purchases; outstanding balances and old transfers reconciled and preserved | **Finance sign-off missing** |

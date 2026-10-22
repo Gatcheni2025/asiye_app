@@ -35,12 +35,28 @@ byte-for-byte from its source commit, in addition to existing signing checks.
   use them to claim staging payment/booking acceptance. Separate registered
   staging Android/iOS Firebase configs and OAuth/signing setup remain needed
   for a native staging candidate; a web config alone cannot supply these.
-- No authenticated Firebase inventory/rules access or staging test accounts
-  are available in this editing session. Source hashes do not attest deployed
-  backend code. No real Paystack charge, webhook, refund or bank settlement has
-  been certified by the source tests.
+- The read-only GitHub prerequisites run **39752616083** independently confirms
+  all **37 staging functions ACTIVE**, no missing endpoints, and RTDB rules
+  matching the reviewed source. The designated TEST driver subaccount is active,
+  verified, and configured for 20% Asiye / 80% driver. No checkout was created.
+- That workflow fails on the separate production check: production is missing
+  `configureDriverCardPayout` and all five secure Parcel endpoints, and its
+  deployed RTDB rules differ. This does not block isolated staging acceptance.
+- Source hashes do not attest deployed backend implementation. No real Paystack
+  charge, webhook, refund or bank settlement has been certified by source tests
+  or the prerequisites check. No staging test-account sessions are available.
 
-## Next Cloud Shell action: update only the corrected shared auth asset
+## Automated Hosting-only update
+
+`staging_auth_hosting_only.yml` uses the existing isolated staging service
+account and public SDK variables. Before deployment it verifies the runtime
+matches reviewed commit `1f6cb8b`, authenticates only to the pinned staging
+project, and runs the auth/deployment guard tests. It selects `--only hosting`
+and independently reads back all 17 files plus RTDB rules afterwards. It never
+deploys functions/rules or supplies Paystack keys. Check its result before using
+the Cloud Shell fallback; do not repeat a successful deployment.
+
+## Cloud Shell fallback: update only the corrected shared auth asset
 
 Use the existing isolated staging checkout and validated preview configuration:
 

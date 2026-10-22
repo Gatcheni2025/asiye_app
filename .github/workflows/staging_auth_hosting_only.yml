@@ -1,0 +1,95 @@
+name: Publish reviewed authentication fix to staging Hosting only
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths: ['.github/workflows/staging_auth_hosting_only.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asiye-paystack-staging
+  cancel-in-progress: false
+
+jobs:
+  hosting:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FIREBASE_STAGING_PROJECT: ${{ vars.FIREBASE_STAGING_PROJECT }}
+      FIREBASE_STAGING_WEB_CONFIG: ${{ vars.FIREBASE_STAGING_WEB_CONFIG }}
+      STAGING_CREDS: ${{ secrets.FIREBASE_STAGING_SERVICE_ACCOUNT }}
+      REVIEWED_RUNTIME_SHA: '1f6cb8b68da5338898b4bd22f4674d0cb8115678'
+      FIREBASE_HOSTING_UPLOAD_CONCURRENCY: '5'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.12.0'
+      - name: Require the reviewed runtime, isolated staging identity and public web config
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'fix/paystack-subaccounts-cash-card-no-wallet'
+          git merge-base --is-ancestor "$REVIEWED_RUNTIME_SHA" HEAD
+          git diff --exit-code "$REVIEWED_RUNTIME_SHA" HEAD -- assets lib functions database.rules.json
+          node - <<'JS'
+          const assert=require('node:assert/strict');
+          const {requireStagingConfig}=require('./scripts/build_staging_web_preview.cjs');
+          const project=process.env.FIREBASE_STAGING_PROJECT;
+          assert.equal(project,'asiye-paystack-staging');
+          assert.equal(JSON.parse(process.env.STAGING_CREDS||'{}').project_id,project);
+          const cfg=requireStagingConfig(JSON.parse(process.env.FIREBASE_STAGING_WEB_CONFIG||'{}'),project);
+          assert.equal(cfg.messagingSenderId,'1000800408896');
+          console.log('Reviewed runtime and isolated staging identity match.');
+          JS
+      - name: Verify authentication and staging deployment guards
+        run: >
+          node --test
+          test/native-social-phone-link.test.cjs
+          test/native-auth-session.test.cjs
+          test/staging-passenger-social-phone-link.test.cjs
+          test/staging-auth-recaptcha.test.cjs
+          test/audit-347-staging-readonly.test.cjs
+          test/staging-hosting-only-deploy.test.cjs
+      - name: Install the existing pinned Firebase CLI
+        run: npm --prefix .asiye-staging-cli install --no-audit --no-fund --no-save firebase-tools@15.34.0
+      - name: Generate isolated preview without editing tracked assets
+        run: node scripts/build_staging_web_preview.cjs
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: asiye-paystack-staging
+          credentials_json: ${{ env.STAGING_CREDS }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Validate source, preview, CLI, project number and 37 active functions
+        run: node scripts/deploy_paystack_staging_hosting_only.cjs --plan
+      - name: Publish Hosting only to isolated staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOG_FILE="$RUNNER_TEMP/asiye-auth-hosting-private.log"
+          trap 'rm -f "$LOG_FILE" firebase-debug.log' EXIT
+          if ! ./.asiye-staging-cli/node_modules/.bin/firebase deploy \
+              --project asiye-paystack-staging \
+              --config firebase.staging.generated.json \
+              --only hosting --non-interactive > "$LOG_FILE" 2>&1; then
+            node scripts/summarize_staging_deploy_error.cjs "$LOG_FILE" 'Hosting-only auth patch'
+            exit 1
+          fi
+          echo 'STAGING_HOSTING_CLI: EXIT_0'
+      - name: Independently read back all reviewed hosted files and database rules
+        run: node scripts/audit_347_staging_readonly.cjs
+      - name: Record deployment scope
+        if: always()
+        run: |
+          {
+            echo '### Isolated staging authentication Hosting update'
+            echo '- Runtime source: `1f6cb8b68da5338898b4bd22f4674d0cb8115678`.'
+            echo '- Only Firebase Hosting in `asiye-paystack-staging` is selected for deployment.'
+            echo '- Functions and rules are read back, never deployed by this workflow.'
+            echo '- No Paystack keys, payment operations, IAM grants or production deployment.'
+          } >> "$GITHUB_STEP_SUMMARY"
