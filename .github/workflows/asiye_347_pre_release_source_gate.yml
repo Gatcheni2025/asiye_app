@@ -13,6 +13,8 @@ on:
       - 'assets/driver-v2/js/login.js'
       - 'test/staging-passenger-social-phone-link.test.cjs'
       - 'test/staging-auth-recaptcha.test.cjs'
+      - 'scripts/audit_347_staging_readonly.cjs'
+      - 'test/audit-347-staging-readonly.test.cjs'
       - 'functions/**'
       - 'database.rules.json'
 
@@ -55,6 +57,10 @@ jobs:
           node --check functions/index.js
           node --check functions/paystack-payment-safety.js
           node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
+      - name: Validate read-only isolated staging audit (no Google API calls)
+        run: |
+          node --check scripts/audit_347_staging_readonly.cjs
+          node --test test/audit-347-staging-readonly.test.cjs
       - name: Run auth, booking, Parcel and Paystack failure regressions
         run: |
           node --test \
