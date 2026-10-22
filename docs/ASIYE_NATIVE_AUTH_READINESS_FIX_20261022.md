@@ -69,6 +69,21 @@ deploys or prints archive contents, environment files, tokens or customer data.
 It reports code differences and source-read permissions separately; dependency
 resolution and the managed runtime are outside this code comparison.
 
+Readback run **39755436840** verifies **32/37** deployed functions against all
+25 reviewed code/package/entrypoint files. It found **zero mismatches**. The
+five Gen1 triggers below expose a successful build ID but no recorded immutable
+source generation; the audit leaves their deployed-source proof unresolved
+instead of treating a current mutable archive as the original build input:
+
+- `releaseCancelledGoTripPayment`
+- `releaseCancelledClubPassengerPayment`
+- `disburseCompletedCardTrips`
+- `synchronizeClubBooking`
+- `refreshClubPaymentReadinessAfterSafetyShare`
+
+This is a provenance gap, not evidence that these handlers differ. No backend
+redeployment was made to force the audit green.
+
 ## Cloud Shell fallback: update only the corrected shared auth asset
 
 Use the existing isolated staging checkout and validated preview configuration:

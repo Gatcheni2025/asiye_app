@@ -25,7 +25,7 @@ the production Firebase project and must not be mistaken for staging builds.
 | Staging function inventory | Exactly 37 expected functions ACTIVE | **Independent PASS**, run 39752616083 (names/state only) |
 | Hosting | Published passenger/driver preview digest matches local staging preview, no production config | Prior preview **PASS**; corrected shared native bridge update pending (GitHub Hosting publish HTTP 403, run 39753441553) |
 | Staging database rules | Read back deployed RTDB rules; digest matches reviewed `database.rules.json` | **Independent PASS**, run 39752616083 |
-| Staging backend revision | Prove function builds are from intended reviewed SHA, not just ACTIVE | **UNVERIFIED** |
+| Staging backend revision | Prove function builds are from intended reviewed source, not just ACTIVE | **32/37** immutable build archives match all 25 reviewed code/package/entrypoint files; five Gen1 triggers lack recorded source generation (run 39755436840); full provenance **UNVERIFIED** |
 | Passenger authentication | Google, Apple, Phone OTP; first-time one-off SMS link; returning dashboard; face/name onboarding; linked-UID preservation; already-linked number conflict | **Source tests pass; device UAT missing** |
 | Driver onboarding | Face, vehicle photo/registration, ID/license/address, bank, approval, pending state, restore on restart | **Device UAT missing** |
 | Go negotiated ride | Passenger offers 65–95% of reference; driver receives 65% offer even below recommendation; accept/counter/decline, pickup and complete | **Device UAT missing** |
@@ -36,8 +36,8 @@ the production Firebase project and must not be mistaken for staging builds.
 | Payment recovery | Declined/abandoned card, missing/duplicate webhook, retry/idempotency, cancellations/partial Club, authorized refund status, subaccount mismatch | **UNVERIFIED** |
 | Parcel V2 | Accept, private pickup PIN, wrong-PIN lock, payment, completed delivery/cancel, no stale bookings | **Device UAT missing** |
 | Historical Wallet | No new wallet/EFT purchases; outstanding balances and old transfers reconciled and preserved | **Finance sign-off missing** |
-| Android & iOS | New signed candidate from final commit; native Google/Apple/Phone/OTP/camera/location/push/deeplink tested on actual devices | **Rebuild/device UAT missing** |
-| App store checks | Android signing/SHA, install/update, current Play Console API/16 KB page-size checks; iOS TestFlight processing and metadata/privacy declarations | **UNVERIFIED** |
+| Android & iOS | New signed candidate; native Google/Apple/Phone/OTP/camera/location/push/deeplink tested on actual devices | **Signed rebuild PASS**, runtime 1f6cb8b, run 39752616110; Android 347, iOS 46522.0.5 (95526); 18 asset hashes match each package; native staging config and device UAT still missing |
+| App store checks | Android signing/SHA, install/update, current Play Console API/16 KB page-size checks; iOS TestFlight processing and metadata/privacy declarations | Signing/SHA/metadata and Android 16 KB binary alignment **PASS**; device/Play Console checks pending; new IPA was **not uploaded** |
 | Merchant/legal | Published policies, facial scan/privacy disclosures, refund policy, registered company, driver compliance; **written Paystack acceptance** | **Awaiting independent acceptance** |
 | Production | Reviewed backend/rules parity, backups/rollback, dedicated release-owner approval; LIVE Card gated separately | **NOT AUTHORIZED** |
 
