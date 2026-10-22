@@ -6820,8 +6820,9 @@ exports.submitGoFareOffer =
         );
 
         return response
-          .status(500)
+          .status(error.status || 500)
           .json({
+            ...(error.code ? {code: error.code} : {}),
             error:
               error?.message ||
               "Unable to protect this fare offer."

@@ -138,9 +138,11 @@ jobs:
         working-directory: test/security
         run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json "node --test --test-reporter=tap --test-timeout=45000 --test-concurrency=1 *.test.cjs"
       - name: Install Chromium
+        if: ${{ !cancelled() }}
         working-directory: test/security
         run: npx playwright install --with-deps chromium --only-shell
       - name: Test mobile camera capture and failed-upload retry
+        if: ${{ !cancelled() }}
         working-directory: test/security
         run: node booking-face-ui.cjs
       - uses: actions/upload-artifact@v4

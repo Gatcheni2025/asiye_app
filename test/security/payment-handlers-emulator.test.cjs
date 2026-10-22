@@ -78,8 +78,8 @@ beforeEach(async()=>{
     profileImageUrl:'https://example.test/driver.jpg',phone:'0711234567',isOnline:true,
     isBroadcasting:true,latitude:pickup.latitude,longitude:pickup.longitude,lastSeen:Date.now()};
   await db.ref().set({
-    commuters:{sender:{authUid:'sender-auth',name:'Sender',email:'sender@example.test'},
-      member:{authUid:'member-auth',name:'Member',email:'member@example.test'}},
+    commuters:{sender:{authUid:'sender-auth',bookingFaceAuthUid:'sender-auth',bookingFaceSavedAt:1,profileImageUrl:'https://example.test/face.jpg',name:'Sender',email:'sender@example.test'},
+      member:{authUid:'member-auth',bookingFaceAuthUid:'member-auth',bookingFaceSavedAt:1,profileImageUrl:'https://example.test/face.jpg',name:'Member',email:'member@example.test'}},
     taxis:{driver,otherDriver:{...driver,authUid:'other-driver-auth',userUid:'other-driver-auth'}},
     driverPaystackSubaccounts:{driver:{status:'verified',subaccountCode:account,
       platformCommissionPercent:20,accountLast4:'7890'},otherDriver:{status:'verified',
@@ -799,4 +799,16 @@ test('a Work refund affects only the cancelled member and preserves the other me
   assert.equal((await read(`tripPayments/${requestId}/member`)).status,'held');
   assert.equal((await read(`requests/${requestId}/passengers/member`)).paymentStatus,'held');
   assert.equal(refunds.length,1);assert.equal(refunds[0].amount,6000);
+});
+
+test('unverified passenger cannot create Parcel or submit a Go offer, lock or charge',async()=>{
+ await db.ref('commuters/sender/bookingFaceSavedAt').remove();
+ const rejected=await call('createParcelRequestSecure','sender-auth',{pickup,destination,paymentMethod:'cash'});
+ assert.equal(rejected.status,403);assert.equal(await read('requests'),null);
+ const requestId='go-no-face';
+ await db.ref('requests/'+requestId).set({requestId,type:'ehailing',rideType:'go',commuterId:'sender',status:'pending',
+  paymentMethod:'cash',negotiationEnabled:true,routeDistanceKm:10,routeDurationMinutes:0,commuterLocation:pickup,destinationCoords:destination});
+ const offered=await call('submitGoFareOffer','sender-auth',{requestId,amount:65});
+ assert.equal(offered.status,403);assert.equal(offered.body.code,'passenger-face-required');
+ assert.equal(await read('commuters/sender/currentRequest'),null);assert.equal(await read('notifications/taxis'),null);assert.equal(initializations.length,0);
 });

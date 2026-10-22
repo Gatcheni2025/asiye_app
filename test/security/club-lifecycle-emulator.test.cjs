@@ -363,3 +363,14 @@ test("cancel negotiated membership ends the group and releases everyone for rebo
   assert.equal(await read("taxis/driver/currentRequest"), null);
   assert.equal(await read("commuters/p0/currentRequest"), null);
 });
+
+test('Club create and join cannot reserve an unverified passenger before photo saving',async()=>{
+ await db.ref('commuters/p0/bookingFaceSavedAt').remove();
+ assert.equal((await call(service.create,'p0',body())).status,403);
+ assert.equal(await read('requests/pool-one'),null);assert.equal(await read('commuters/p0/currentRequest'),null);
+ await db.ref('commuters/p0/bookingFaceSavedAt').set(1);
+ await create();
+ await db.ref('commuters/p1/bookingFaceSavedAt').remove();
+ assert.equal((await call(service.join,'p1',body())).status,403);
+ assert.equal(await read('commuters/p1/currentRequest'),null);
+});

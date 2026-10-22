@@ -42,6 +42,16 @@ const assert=require('node:assert/strict');
   await page.click('#book');await page.click('[data-face-open]');await page.waitForSelector('[data-face-shutter]:not([hidden]):not([disabled])');
   await page.click('[data-face-cancel]');assert.equal(await page.evaluate(()=>window.cancelled),'booking-face-cancelled');
   assert.equal(await page.evaluate(()=>window.resumed),1);assert.equal(await page.evaluate(()=>window.streams[1].getTracks().every(t=>t.readyState==='ended')),true);
+  // Cancelling while an upload is in flight may save the picture, but cannot resume a trip.
+  await page.evaluate(()=>{
+   window.startBooking=()=>window.AsiyePassengerOnboarding.open({name:'Mandla',save:()=>new Promise(resolve=>{window.finishUpload=resolve;})})
+     .then(()=>window.resumed++,e=>{window.cancelled=e.code;});
+   document.getElementById('book').onclick=window.startBooking;
+  });
+  await page.click('#book');await page.click('[data-face-open]');await page.waitForSelector('[data-face-shutter]:not([hidden]):not([disabled])');
+  await page.click('[data-face-shutter]');await page.click('[data-face-save]');
+  await page.click('[data-face-cancel]');await page.evaluate(()=>window.finishUpload('https://test.invalid/late.jpg'));
+  await page.evaluate(()=>Promise.resolve());assert.equal(await page.evaluate(()=>window.resumed),1);
   assert.deepEqual(errors,[]);
   console.log('PASS mobile camera preview/capture/save retry/resume/cancel and camera shutdown.');
  }finally{await browser.close();}

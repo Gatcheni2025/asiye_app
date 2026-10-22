@@ -48,7 +48,6 @@
             const stop = () => { stream?.getTracks().forEach(track => track.stop()); stream = null; video.srcObject = null; video.hidden = true; shutter.hidden = true; shutter.disabled = true; };
             const cleanup = () => { closed = true; stop(); overlay.remove(); document.removeEventListener('keydown', onKey); window.removeEventListener('pagehide', cancel); previousFocus?.focus?.(); };
             const cancel = () => {
-                if (session.phase === 'saving') return;
                 session.cancel(); cleanup();
                 const error = new Error('Booking cancelled. Your route and quote are still available.');
                 error.code = 'booking-face-cancelled'; reject(error);
@@ -111,14 +110,16 @@
                 if (!session.canSave) return;
                 const fullName = input.value.trim();
                 if (fullName.length < 2 || /[<>\u0000-\u001f]/.test(fullName)) { status.textContent = 'Enter your name before saving.'; input.focus(); return; }
-                session.saving(); saveButton.disabled = openButton.disabled = input.disabled = el('cancel').disabled = true;
+                session.saving(); saveButton.disabled = openButton.disabled = input.disabled = true;
                 status.textContent = 'Saving your picture…';
                 try {
                     const url = await save(session.photo, fullName);
+                    if (closed) return; // Cancelling a booking never resumes it after a late upload.
                     session.saved(); cleanup(); resolve(url);
                 } catch (error) {
+                    if (closed) return;
                     session.retry(); status.textContent = error.message || 'Picture could not be saved. Please retry.';
-                    saveButton.disabled = openButton.disabled = input.disabled = el('cancel').disabled = false;
+                    saveButton.disabled = openButton.disabled = input.disabled = false;
                 }
             };
             openButton.focus();
