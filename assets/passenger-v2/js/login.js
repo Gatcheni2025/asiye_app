@@ -25,6 +25,7 @@ window.ASIYE_PASSENGER_LOGIN = {
 
     // True only during Google/Apple -> verified phone linking.
     awaitingPhoneLink: false,
+    switchingSignInMethod: false,
 
 
     /* ========================================================
@@ -240,6 +241,15 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
 
 
+        // A remembered Google/Apple session must never trap the passenger in
+        // one-time phone onboarding. Changing method signs out first.
+        document.getElementById('switchPassengerSignInButton')?.addEventListener(
+            'click', () => this.useAnotherSignInMethod()
+        );
+        document.getElementById('switchPassengerOtpMethodButton')?.addEventListener(
+            'click', () => this.useAnotherSignInMethod()
+        );
+
         document.getElementById('socialSendOtpButton')?.addEventListener('click', () => this.sendOtp());
         document.getElementById('socialPhoneInput')?.addEventListener('keydown', event => {
             if (event.key === 'Enter') this.sendOtp();
@@ -341,6 +351,56 @@ window.ASIYE_PASSENGER_LOGIN = {
             );
     },
 
+
+    /* ========================================================
+       PASSENGER SIGN-IN METHOD SWITCH
+       ======================================================== */
+
+    async useAnotherSignInMethod() {
+        if (this.switchingSignInMethod) return;
+        this.switchingSignInMethod = true;
+        const ids = ['switchPassengerSignInButton','switchPassengerOtpMethodButton'];
+        const buttons = ids.map(id => document.getElementById(id)).filter(Boolean);
+        for (const button of buttons) button.disabled = true;
+
+        try {
+            // Firebase Auth LOCAL persistence restores the previous Google/
+            // Apple session on refresh. Explicit sign-out is required before
+            // displaying the chooser, but must not delete that user's account.
+            await firebase.auth().signOut();
+
+            this.awaitingPhoneLink = false;
+            this.pendingUser = null;
+            this.pendingProfileId = null;
+            this.pendingProfile = null;
+            this.confirmationResult = null;
+            this.currentPhone = null;
+            clearInterval(this.resendInterval);
+            this.resendInterval = null;
+
+            const otpInput = document.getElementById('passengerOtpInput');
+            if (otpInput) otpInput.value = '';
+            for (const id of ['phoneError','socialPhoneError','otpError']) {
+                const notice = document.getElementById(id);
+                if (notice) notice.textContent = '';
+            }
+
+            // Clear cached passenger identity, not Firebase profile records,
+            // bookings, existing provider links, or installed driver state.
+            for (const key of ['userId','commuterId','authUid','passengerPhone','userName']) {
+                try { localStorage.removeItem(key); } catch (_) {}
+            }
+            this.showStep('loginStep');
+            this.toast('Choose Google, Apple or phone to sign in.');
+        } catch (error) {
+            console.warn('Passenger sign-out failed:', error?.code || 'UNKNOWN');
+            this.toast('Could not switch sign-in methods. Please try again.');
+            // Leave the existing verification step in place if sign-out fails.
+        } finally {
+            this.switchingSignInMethod = false;
+            for (const button of buttons) button.disabled = false;
+        }
+    },
 
     /* ========================================================
        RECAPTCHA
@@ -816,6 +876,15 @@ window.ASIYE_PASSENGER_LOGIN = {
         // Firebase phoneNumber is verified by Auth. Ignore editable
         // profile phone fields and localStorage for this security gate.
         if (!user.phoneNumber) {
+            const methods = Array.isArray(user.providerData) ?
+                user.providerData.map(info => info?.providerId) : [];
+            const providerName = methods.includes('apple.com') ? 'Apple' :
+                methods.includes('google.com') ? 'Google' : '';
+            const explanation = document.getElementById('phoneLinkExplanation');
+            if (explanation) explanation.textContent = providerName ?
+                'Signed in with ' + providerName +
+                '. Verify your mobile once to finish your Asiye passenger account. To use a different account, choose another sign-in method below.' :
+                'You are signed in. Verify your mobile once to finish your Asiye passenger account, or choose another sign-in method below.';
             this.awaitingPhoneLink = true;
             this.confirmationResult = null;
             const notice = document.getElementById('socialPhoneError');
