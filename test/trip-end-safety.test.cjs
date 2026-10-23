@@ -11,6 +11,15 @@ const request=(trip=base('card'))=>safety.action(trip,'requestEarlyEnd',{warning
 const respond=(trip,p='p',accepted=true,time=now+1)=>safety.action(trip,'respondEarlyEnd',
  {endRequestId:trip.tripEndSafety.id,accepted},{role:'passenger',uid:p+'-auth',passengerId:p},{},time);
 
+test('persisted confirmations and completion claims round-trip as immutable scalars',()=>{
+ const trip=respond(request());const frozen=safety.claim(trip,taxi(),id,uid,'end-one',now+2);
+ const stored=safety.encode(frozen);
+ assert.equal(typeof stored.tripEndSafety,'string');assert.equal(typeof stored.tripCompletion,'string');
+ assert.deepEqual(safety.decode(stored),frozen);
+ assert.deepEqual(safety.decode([1,2]),[1,2]);
+ assert.throws(()=>safety.decode({tripEndSafety:'broken json'}));
+});
+
 test('fresh destination evidence permits normal completion; stale, unknown and mismatched GPS requires passenger consent',()=>{
  assert.equal(safety.check(base('card'),taxi(true),id,uid,now).requiresPassengerConfirmation,false);
  for(const d of [taxi(),{...taxi(true),lastSeen:now-120001},

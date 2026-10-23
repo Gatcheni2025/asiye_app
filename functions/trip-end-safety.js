@@ -3,6 +3,23 @@
 const {randomUUID}=require('node:crypto');
 const TTL=5*60*1000, RADIUS_KM=0.3;
 const ACTIONS=new Set(['checkTripEnd','requestEarlyEnd','respondEarlyEnd','withdrawEarlyEnd']);
+// RTDB Rules compare scalar values reliably. Persist each server-owned
+// confirmation/claim as one JSON scalar so clients cannot alter nested votes
+// while unrelated legitimate request updates remain possible.
+function decode(trip){
+ if(!trip||typeof trip!=='object'||Array.isArray(trip))return trip;
+ const result={...trip};
+ for(const key of ['tripEndSafety','tripCompletion'])if(typeof result[key]==='string'){
+  try{result[key]=JSON.parse(result[key]);}catch(_){fail('Trip confirmation data is unavailable. Contact support.');}
+ }
+ return result;
+}
+function encode(trip){
+ if(!trip||typeof trip!=='object'||Array.isArray(trip))return trip;
+ const result={...trip};
+ for(const key of ['tripEndSafety','tripCompletion'])if(result[key]&&typeof result[key]==='object')result[key]=JSON.stringify(result[key]);
+ return result;
+}
 function fail(message,status=409){const error=Error(message);error.status=status;throw error;}
 const active=p=>p&&!/cancelled|canceled|rejected|completed/.test(String(p.status||''));
 function members(trip){
@@ -115,7 +132,7 @@ function requireClaim(trip){if(!processing(trip))fail('Confirm the destination o
 function completed(trip,now){requireClaim(trip);return {...trip.tripCompletion,phase:'completed',completedAt:now};}
 
 async function handle({db,id,uid,body,ownsProfile,transact}){
- const ref=db.ref('requests/'+id),trip=(await ref.once('value')).val();started(trip);
+ const ref=db.ref('requests/'+id),trip=decode((await ref.once('value')).val());started(trip);
  const name=body.action,taxi=(await db.ref('taxis/'+trip.taxiId).once('value')).val();
  let actor={role:'driver',uid};
  if(name==='respondEarlyEnd'){
@@ -133,7 +150,7 @@ async function handle({db,id,uid,body,ownsProfile,transact}){
   return action(current,name,body,actor,destination(current,taxi,id,Date.now()),Date.now(),newId);
  });
  if(!tx.committed)fail('The trip changed. Try again.');
- const live=tx.snapshot.val(),end=live.tripEndSafety;
+ const live=decode(tx.snapshot.val()),end=live.tripEndSafety;
  const payload={type:'trip_end_confirmation',requestId:id,title:'End trip safety check',
   message:end.status==='pending'?'Your driver wants to end the trip before your destination. Open Asiye to confirm or keep the trip active.':
    end.status==='approved'?'All passengers agreed to end the trip here.':'The trip remains active.',timestamp:Date.now()};
@@ -143,4 +160,4 @@ async function handle({db,id,uid,body,ownsProfile,transact}){
  await db.ref().update(updates);
  return {ok:true,status:live.status,endRequestId:end.id,endStatus:end.status};
 }
-module.exports={ACTIONS,TTL,members,scope,started,destination,approved,processing,check,action,claim,requireClaim,completed,handle};
+module.exports={ACTIONS,TTL,decode,encode,members,scope,started,destination,approved,processing,check,action,claim,requireClaim,completed,handle};

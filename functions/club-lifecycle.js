@@ -345,7 +345,7 @@ function registerClubLifecycle(deps) {
     distanceKm,
   } = deps;
   const db = admin.database();
-  const read = async (path) => (await db.ref(path).once("value")).val();
+  const read = async (path) => tripEndSafety.decode((await db.ref(path).once("value")).val());
   const transact = async (path, transform) => {
     const ref = db.ref(path);
     await ref.once("value");
@@ -355,7 +355,7 @@ function registerClubLifecycle(deps) {
         error = null;
         if (current === null) return current;
         try {
-          return transform(current);
+          return tripEndSafety.encode(transform(tripEndSafety.decode(current)));
         } catch (e) {
           error = e;
           return;
@@ -367,7 +367,7 @@ function registerClubLifecycle(deps) {
     if (error) throw error;
     if (!result.committed || !result.snapshot.val())
       fail("The booking changed. Retry the action.");
-    return result.snapshot.val();
+    return tripEndSafety.decode(result.snapshot.val());
   };
   const release = async (pool) => {
     if (pool.taxiId)

@@ -1682,6 +1682,7 @@ ASIYE.ride = {
        ======================================================== */
 
     renderInTransit(request) {
+        this.hydrateTripEnd(request);
 
         const container =
             document.getElementById(
@@ -1755,7 +1756,14 @@ ASIYE.ride = {
         this.renderEarlyEnd(request);
     },
 
+    hydrateTripEnd(request) {
+        for(const field of ['tripEndSafety','tripCompletion'])if(typeof request[field]==='string'){
+            try{request[field]=JSON.parse(request[field]);}catch(_){request[field]=null;}
+        }
+    },
+
     renderEarlyEnd(request) {
+        this.hydrateTripEnd(request);
         clearTimeout(this._earlyEndTimer);
         const end=request.tripEndSafety,container=document.getElementById('sheetContent');
         if(!container||!end||request.status!=='in_transit'||request.type==='delivery')return;
@@ -1801,6 +1809,7 @@ ASIYE.ride = {
        ======================================================== */
 
     renderCompleted(request) {
+        this.hydrateTripEnd(request);
 
         const passenger =
             this.getPassengerData(

@@ -14,7 +14,7 @@ function passenger(){
 }
 for(const accepted of [true,false])test(`passenger must explicitly ${accepted?'approve':'decline'} the current request; restoration never auto-approves`,async()=>{
  const {dom,w,calls}=passenger();try{
-  w.ASIYE.ride.renderInTransit(request);
+  w.ASIYE.ride.renderInTransit({...request,tripEndSafety:JSON.stringify(end)});
   assert.equal(calls.length,0);assert.match(w.document.querySelector('[role="alertdialog"]').textContent,/before your destination/);
   w.document.querySelector(`[data-end-answer="${accepted?'yes':'no'}"]`).click();await flush();
   assert.equal(calls.length,1);assert.equal(calls[0][0],'goTripActionSecure');assert.equal(calls[0][1].accepted,accepted);

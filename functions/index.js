@@ -7787,7 +7787,7 @@ async function transactGoContinuation(ref, transform) {
   const tx = await ref.transaction(current => {
     failure = null;
     if (current === null) return null;
-    try { return transform(current); }
+    try { return tripEndSafety.encode(transform(tripEndSafety.decode(current))); }
     catch (error) { failure = error; return undefined; }
   }, undefined, false);
   if (failure) throw failure;
@@ -12620,7 +12620,7 @@ async function settleProtectedGoFinancials(
           .TIMESTAMP,
       status:
         "completed",
-      tripCompletion: tripEndSafety.completed(trip, Date.now()),
+      tripCompletion: JSON.stringify(tripEndSafety.completed(trip, Date.now())),
       completedAt:
         admin.database
           .ServerValue
@@ -12775,6 +12775,8 @@ exports.settleTripPayment =
             });
         }
 
+        trip=tripEndSafety.decode(trip);
+
         if (
           !await driverOwnsTrip(
             decoded.uid,
@@ -12816,7 +12818,7 @@ exports.settleTripPayment =
           const tx=await transactGoContinuation(admin.database().ref(`requests/${requestId}`),current=>
             tripEndSafety.claim(current,taxi,requestId,decoded.uid,request.body?.endRequestId,Date.now()));
           if(!tx.committed)return response.status(409).json({error:'Trip changed before completion.'});
-          trip=tx.snapshot.val();
+          trip=tripEndSafety.decode(tx.snapshot.val());
         }
 
         const passengers =

@@ -58,6 +58,9 @@ ASIYE_DRIVER.trip = {
         if (generation !== this._generation) return false;
         if (!request) return false;
         const apply = live => {
+            for(const field of ['tripEndSafety','tripCompletion'])if(typeof live[field]==='string'){
+                try{live[field]=JSON.parse(live[field]);}catch(_){live[field]=null;}
+            }
             live.key = requestId;
             live.requestId = requestId;
             this.request = live;

@@ -15,7 +15,12 @@ before(async()=>{
  handlers=require('../../functions/index');
 });
 after(async()=>{global.fetch=fetchBefore;admin.auth().verifyIdToken=verify;await app.delete();await env.cleanup();});
-const read=async p=>(await db.ref(p).once('value')).val();
+const read=async p=>{
+ const match=p.match(/^requests\/([^/]+)\/(tripCompletion|tripEndSafety)(?:\/(.*))?$/);
+ if(match){const trip=require('../../functions/trip-end-safety').decode((await db.ref('requests/'+match[1]).once('value')).val());
+  return match[3]?match[3].split('/').reduce((v,key)=>v?.[key],trip?.[match[2]]):trip?.[match[2]];}
+ return require('../../functions/trip-end-safety').decode((await db.ref(p).once('value')).val());
+};
 beforeEach(async()=>{
  await db.ref().set({commuters:{p:{authUid:'p-auth',currentRequest:id},p2:{authUid:'p2-auth',currentRequest:id}},
   taxis:{d:{authUid:uid,userUid:uid,currentRequest:id,latitude:-29.9,longitude:31,lastSeen:Date.now()}}});
@@ -63,7 +68,7 @@ test('decline, timeout and withdrawal leave the trip, payment and earnings activ
  for(const kind of ['decline','expire','withdraw']){
   await seed();const end=await request();
   if(kind==='decline')assert.equal((await answer('p-auth',end,false)).status,200);
-  if(kind==='expire')await db.ref(`requests/${id}/tripEndSafety/expiresAt`).set(Date.now()-1);
+  if(kind==='expire')await db.ref(`requests/${id}/tripEndSafety`).set(JSON.stringify({...await read(`requests/${id}/tripEndSafety`),expiresAt:Date.now()-1}));
   if(kind==='withdraw')assert.equal((await action(uid,'withdrawEarlyEnd',{endRequestId:end})).status,200);
   assert.equal((await call('settleTripPayment',uid,{endRequestId:end})).status,409);
   assert.equal(await read(`requests/${id}/status`),'in_transit');assert.equal(await read(`tripPayments/${id}/p/status`),'held');

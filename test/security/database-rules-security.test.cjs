@@ -359,7 +359,7 @@ test('trip status changes are role-specific while legitimate lifecycle actions s
   await env.withSecurityRulesDisabled(async context => {
     await update(ref(context.database(), 'requests/trip1'), {
       status:'in_transit',tripStartedAt:1,pinVerifiedAt:1,
-      tripCompletion:{version:1,phase:'processing'},paymentSettlementStatus:'settled'
+      tripCompletion:JSON.stringify({version:1,phase:'processing'}),paymentSettlementStatus:'settled'
     });
   });
   await assertSucceeds(update(ref(dbFor('driver-auth'), 'requests/trip1'), {status:'completed'}));
