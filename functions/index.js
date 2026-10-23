@@ -13049,97 +13049,21 @@ exports.releaseTripPayment = onRequest(
   }
 );
 
-exports.paystackPaymentReturn =
-  onRequest(
-    {
-      region:
-        "us-central1",
-      invoker:
-        "public"
-    },
-    async (
-      request,
-      response
-    ) => {
-      const reference =
-        String(
-          request.query?.reference ||
-          request.query?.trxref ||
-          ""
-        )
-          .replace(
-            /[^A-Za-z0-9.=\-]/g,
-            ""
-          )
-          .slice(
-            0,
-            100
-          );
-
-      response
-        .status(200)
-        .set(
-          "Content-Type",
-          "text/html; charset=utf-8"
-        )
-        .set(
-          "Cache-Control",
-          "no-store"
-        )
-        .send(
-          `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Asiye Payment</title>
-<style>
-body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fb;margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;color:#111}
-main{max-width:520px;background:#fff;border-radius:24px;padding:30px;box-shadow:0 18px 60px rgba(0,0,0,.1);text-align:center}
-strong{display:block;font-size:26px;margin-bottom:12px}
-p{color:#596170;line-height:1.55}
-.ref{background:#f2f4f7;border-radius:14px;padding:12px;margin:18px 0;word-break:break-all;font-family:ui-monospace,monospace}
-</style>
-</head>
-<body>
-<main>
-<strong>Payment submitted</strong>
-<p>Your payment has been submitted. Asiye is returning you to the app and will verify the payment before confirming your booking.</p>
-<div class="ref">${reference ? "Reference: " + reference : "Payment reference received"}</div>
-<p><a id="backToAsiye" href="asiye://payment-complete?reference=${encodeURIComponent(reference)}" style="display:inline-block;padding:14px 18px;border-radius:14px;background:#111;color:#fff;text-decoration:none;font-weight:700">Return to Asiye</a></p>
-<script>
-(function(){
-  var reference = ${JSON.stringify(reference)};
-  var encoded = encodeURIComponent(reference || "");
-  var scheme = "asiye://payment-complete?reference=" + encoded;
-  var androidIntent =
-    "intent://payment-complete?reference=" + encoded +
-    "#Intent;scheme=asiye;package=com.asiyeapp.asiye;end";
-  var isAndroid = /Android/i.test(navigator.userAgent || "");
-  var primary = isAndroid ? androidIntent : scheme;
-  var link = document.getElementById("backToAsiye");
-  if (link) link.setAttribute("href", primary);
-
-  function returnToApp(target) {
-    try {
-      window.location.href = target;
-    } catch (_) {}
-  }
-
-  // Chrome handles intent:// more reliably for returning from an external
-  // Paystack checkout. The custom-scheme retry also covers older Android
-  // browsers and iOS.
-  returnToApp(primary);
-  setTimeout(function(){ returnToApp(scheme); }, 500);
-  setTimeout(function(){ returnToApp(scheme); }, 1400);
-})();
-</script>
-</main>
-</body>
-</html>`
-        );
+exports.paystackPaymentReturn = onRequest(
+  {region: "us-central1", invoker: "public"},
+  async (request, response) => {
+    if (!["GET", "HEAD"].includes(request.method)) {
+      return response.status(405).set("Allow", "GET, HEAD").send("GET required.");
     }
-  );
+    const reference = request.query?.reference || request.query?.trxref || "";
+    return response.status(200)
+      .set("Content-Type", "text/html; charset=utf-8")
+      .set("Cache-Control", "no-store")
+      .set("Referrer-Policy", "no-referrer")
+      .set("X-Content-Type-Options", "nosniff")
+      .send(require("./paystack-return").renderPaymentReturn(runtimeFirebaseProjectId(), reference));
+  }
+);
 
 exports.initializePaystackWalletTopup =
   onRequest(

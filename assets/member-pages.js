@@ -1255,17 +1255,9 @@ window.AsiyePages = {
             // Fall through to the normal browser path.
         }
 
-        const opened =
-            window.open(
-                target,
-                '_blank',
-                'noopener,noreferrer'
-            );
-
-        if (!opened) {
-            window.location.href =
-                target;
-        }
+        // Keep web checkout in the same tab and browser session. A noopener
+        // popup may return null even when it opened, causing two checkouts.
+        window.location.href = target;
     },
 
     async refreshPassengerWallet(fallbackBalance = null) {

@@ -16,7 +16,7 @@ function load(driver, fail = false) {
     context.window=context;
     vm.createContext(context);
     vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/member-pages.js'),'utf8'),context);
-    return {pages:context.AsiyePages,queries,alerts};
+    return {pages:context.AsiyePages,queries,alerts,context};
 }
 for (const driver of [false,true]) test(`${driver?'driver':'passenger'} menu pages render content`,async()=>{
     const {pages}=load(driver);
@@ -45,4 +45,16 @@ test('vehicle updates offer only supported physical categories',async()=>{
  assert.deepEqual([...select.matchAll(/<option value="([^"]+)"/g)].map(m=>m[1]),['sedan','hatchback']);
  assert.doesNotMatch(html,/SUV|Minibus|7-seater/);
  assert.match(html,/Sedan and Hatchback vehicles only/);
+});
+
+test('web checkout uses one current tab; native checkout keeps its external navigation bridge',()=>{
+ const web=load(false);web.context.location={};
+ web.context.open=()=>assert.fail('Do not create a duplicate noopener checkout popup');
+ web.pages.openExternalPayment('https://checkout.paystack.com/test-only');
+ assert.equal(web.context.location.href,'https://checkout.paystack.com/test-only');
+ const native=load(false),messages=[];native.context.location={};
+ native.context.AndroidNav={postMessage:value=>messages.push(JSON.parse(value))};
+ native.pages.openExternalPayment('https://checkout.paystack.com/test-only');
+ assert.deepEqual(messages,[{action:'external_nav',url:'https://checkout.paystack.com/test-only'}]);
+ assert.equal(native.context.location.href,undefined);
 });

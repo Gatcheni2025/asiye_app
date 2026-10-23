@@ -2955,6 +2955,16 @@ document.addEventListener(
             ASIYE.ui.renderHome();
         }
 
+        // Checkout can finish before its webhook arrives, or while this tab
+        // is in the background. Verify the saved reference after auth/profile
+        // and trip restoration; never initialize a second charge on return.
+        const resumeCardPayment = () => {
+            if (document.visibilityState !== 'hidden') ASIYE.payments?.resumeCardReturn?.();
+        };
+        window.addEventListener('focus', resumeCardPayment);
+        document.addEventListener('visibilitychange', resumeCardPayment);
+        resumeCardPayment();
+
 
         /*
          * Menu controls

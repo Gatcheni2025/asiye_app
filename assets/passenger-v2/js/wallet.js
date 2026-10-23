@@ -545,6 +545,35 @@ ASIYE.payments = {
         }
     },
 
+    _returnCheck: null,
+
+    async resumeCardReturn() {
+        if (this._returnCheck) return this._returnCheck;
+        if (!firebase.auth().currentUser || !ASIYE.state?.userId || !this.pendingCard()?.requestId) return false;
+        const run = async () => {
+            const params = new URLSearchParams(window.location?.search || '');
+            const reference = params.get('payment_return') === '1' ? params.get('reference') || '' : '';
+            try {
+                const handled = await this.handleCardReturn(reference);
+                if (handled && params.get('payment_return') === '1' && window.history?.replaceState) {
+                    const url = new URL(window.location.href);
+                    for (const name of ['payment_return', 'reference', 'trxref']) url.searchParams.delete(name);
+                    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+                }
+                return handled;
+            } catch (error) {
+                const pending = this.pendingCard();
+                if (pending) this.cardFailure = {requestId: pending.requestId, message: error.message, code: error.code};
+                this.paintCardPaymentState();
+                ASIYE.ui?.toast?.(error.message || 'Payment is still being confirmed. Tap Check payment to retry.');
+                return false;
+            }
+        };
+        this._returnCheck = run();
+        try { return await this._returnCheck; }
+        finally { this._returnCheck = null; }
+    },
+
     async handleCardReturn(reference) {
         const pending =
             this.pendingCard();
