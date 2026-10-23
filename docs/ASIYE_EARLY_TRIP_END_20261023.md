@@ -1,6 +1,8 @@
 # Passenger-confirmed early trip ending
 
-Status: implementation under review; staging deployment and device acceptance pending. Existing Paystack return repair remains verified at its recorded checkpoint.
+Status: staging deployment/readback verified at runtime source `538584af47a514df7444ed1da435488c0a1ef79f`; device acceptance is blocked by a reported passenger confirmation HTTP 403. Existing Paystack return repair remains verified at its recorded checkpoint.
+
+The operator's 23 October deployment screenshot records selected source `MATCH=3/3`, 43/43 expected functions ACTIVE, deployed rules MATCH, hosted files MATCH=46/46 and `EARLY_TRIP_END_DEPLOYMENT: VERIFIED`. An independent public Hosting audit subsequently confirmed all 46 files. These results confirm deployment, not a successful passenger confirmation or completed trip. Do not repeat the three-function deployment to diagnose the 403.
 
 For a started Go or Club/Work trip, the driver may request to end away from the destination. A fresh server location check retains normal completion within 300 metres of the destination. Missing/stale location also requires the confirmation flow. Parcel recipient/delivery completion remains separate.
 
@@ -26,3 +28,22 @@ The helper pins `asiye-paystack-staging` / `1000800408896`, the review branch an
 ## Acceptance
 
 Use two distinct staging accounts/devices, starting after valid pickup PIN verification. Check away-from-destination and unknown-location warnings; approval followed by exactly one completion/credit; decline and timeout preserving the live trip; driver withdrawal; pending/approved restoration after restart; stale-ID and wrong-account rejection; normal destination Cash/Card completion; and all-member consent on Club/Work. Confirm both apps release only this trip's pointers after completion. Keep the already-paid TEST reference when testing the existing Card trip. Native installed candidates require a new build after staging web/backend acceptance.
+
+## Passenger confirmation 403 diagnosis
+
+The server's confirmation identity checks reject a login that does not own exactly one onboard passenger profile, including a mismatched Club member UID. They also reject the reserved driver's own login confirming as the passenger. Separate devices or browser tabs do not make the same Firebase login two independent people. Neither check should be bypassed to make a test pass.
+
+The public endpoint independently returned its application JSON `Sign-in required.` with HTTP 401 for an unauthenticated empty POST. This confirms anonymous reachability; it does not establish the source of the passenger's authenticated 403. Capture only the failed request's **Response error message** if needed; never copy Authorization headers or tokens.
+
+In the existing authenticated staging Cloud Shell, the following read-only diagnostic accepts the passenger UID shown by the passenger console. It resolves only matching passenger profiles and their single current trip, compares the same identity fields as the deployed handler, and prints booleans/reason categories. It does not print identities, records or references and cannot change a trip, payment, rule or deployment.
+
+```bash
+cd ~/asiye-staging-review
+git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet
+node scripts/diagnose_staging_trip_end_403.cjs PASSENGER_UID_FROM_CONSOLE
+```
+
+- `DRIVER_SELF_CONFIRMATION_403`: use distinct passenger and driver accounts for acceptance. Do not reassign an existing paid trip or weaken the approval gate.
+- `PASSENGER_OWNERSHIP_403`: inspect the signed-in passenger/profile binding before any targeted correction; do not grant broad permissions.
+- `IDENTITY_CHECK_PASSES`: the identity checks do not explain this failure; use the actual HTTP response to distinguish application and platform denial.
+- `STAGING_DATABASE_READ_HTTP_403`: the Cloud Shell diagnostic itself lacked read access. This is not a diagnosis of the passenger's original response.
