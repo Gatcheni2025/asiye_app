@@ -5,7 +5,7 @@ const admin=require('../../functions/node_modules/firebase-admin');
 const {initializeTestEnvironment,assertFails}=require('@firebase/rules-unit-testing');
 const {ref,update,remove}=require('firebase/database');
 const projectId='demo-asiye-trip-end';let app,db,handlers,env,verify,fetchBefore;
-const id='ride',uid='driver-auth',destination={latitude:-29.8,longitude:31};
+const id='trip-early-end-0001',uid='driver-auth',destination={latitude:-29.8,longitude:31};
 before(async()=>{
  const host=process.env.FIREBASE_DATABASE_EMULATOR_HOST;assert.match(host||'',/^(localhost|127\.0\.0\.1):\d+$/);
  env=await initializeTestEnvironment({projectId,database:{rules:fs.readFileSync('../../database.rules.json','utf8')}});

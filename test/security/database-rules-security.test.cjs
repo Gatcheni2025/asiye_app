@@ -352,9 +352,17 @@ test('trip status changes are role-specific while legitimate lifecycle actions s
     });
   });
 
-  await assertSucceeds(update(ref(dbFor('driver-auth'), 'requests/trip1'), {
+  await assertFails(update(ref(dbFor('driver-auth'), 'requests/trip1'), {
     status: 'completed'
   }));
+
+  await env.withSecurityRulesDisabled(async context => {
+    await update(ref(context.database(), 'requests/trip1'), {
+      status:'in_transit',tripStartedAt:1,pinVerifiedAt:1,
+      tripCompletion:{version:1,phase:'processing'},paymentSettlementStatus:'settled'
+    });
+  });
+  await assertSucceeds(update(ref(dbFor('driver-auth'), 'requests/trip1'), {status:'completed'}));
 
   await env.withSecurityRulesDisabled(async context => {
     await update(ref(context.database(), 'requests/trip1'), {
