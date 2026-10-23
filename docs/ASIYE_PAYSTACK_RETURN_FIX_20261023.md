@@ -1,6 +1,10 @@
 # Paystack TEST return correction — 23 October 2026
 
-**Status: repaired callback independently verified; passenger Hosting update still pending.** After the operator ran the targeted function deployment, the CLI exited nonzero and the first helper suppressed its error. A fresh public probe then returned HTTP 200 with the exact reviewed callback page. The independent Hosting audit found **43/46 files matching**: `passenger-v2/js/app.js`, `passenger-v2/js/wallet.js` and `member-pages.js` still served the older version. The precise cause of that earlier CLI exit remains unknown; live readback proves the callback is reachable, not why the CLI failed. Google Cloud Console remains unavailable from the assistant's browser.
+**Status: staging return repair deployed and independently verified, 23 October 2026.** The operator ran `--resume-after-function` from helper `15a80b6`. The screenshot confirms `FUNCTION_DEPLOYMENT: SKIPPED`, `CALLBACK_IAM: UNCHANGED`, exact callback HTTP 200, **43/43 functions ACTIVE**, no missing/nonactive functions, matching RTDB rules, **46/46 hosted files matching**, `STAGING_INFRASTRUCTURE_READBACK: PASS` and `RETURN_REPAIR: VERIFIED`. The assistant separately reran both public checks: the callback matches the reviewed page exactly and Hosting matches **46/46**, with `PUBLIC_HOSTING_READBACK: PASS`.
+
+The public recheck reads no customer records and does not independently attest authenticated inventory, rules or all deployed function sources. This checkpoint verifies deployment/reachability of the return repair; the passenger's actual return, provider success, authenticated webhook and transaction split still require acceptance on the existing payment. No further deployment is needed for this repair.
+
+The earlier function-only CLI deployment exited nonzero and its first helper suppressed/deleted the error. The callback was subsequently independently verified before the web-only resume. The precise cause of that earlier CLI exit remains unknown. Future errors preserve private diagnostics; do not infer a historical cause from the successful later readback.
 
 ## Observed failure
 
@@ -22,9 +26,9 @@ The staging console initially showed an R86 Card booking at `payment_required` a
 - After authenticated profile and trip restoration, reload/focus/visibility recovery verifies the saved trip payment reference server-side. Concurrent resume events share one check. A mismatched reference, signed-out session or unsuccessful provider result cannot confirm pickup or clear the recovery marker.
 - The callback itself never marks a payment paid, reads customer records or initializes a checkout. Existing provider verification, signature validation, amount/currency/subaccount checks and pickup PIN gates remain authoritative.
 
-## Resume the passenger web update
+## Completed web-only resume
 
-The callback now matches. In the existing Cloud Shell checkout, finish the missing web update without another function build:
+The operator completed the following command. It is retained for recovery reference; do not rerun it for this verified checkpoint:
 
 ```bash
 cd ~/asiye-staging-review
@@ -34,7 +38,7 @@ node scripts/repair_staging_paystack_return.cjs --resume-after-function
 
 Resume mode requires the exact reviewed public callback page before proceeding. It validates the pinned staging project, human operator, review branch, tracked source and ACTIVE callback identity, then publishes the staging web preview if needed and runs the full inventory/rules/46-file readback. It never deploys Functions, changes IAM or reads the Paystack secret. If the callback no longer matches, it stops before any local cloud command or mutation.
 
-Expected result: `FUNCTION_DEPLOYMENT: SKIPPED`, `CALLBACK_IAM: UNCHANGED`, `STAGING_HOSTED_FILES: MATCH=46/46`, `STAGING_INFRASTRUCTURE_READBACK: PASS`, then `RETURN_REPAIR: VERIFIED`.
+Observed result: `FUNCTION_DEPLOYMENT: SKIPPED`, `CALLBACK_IAM: UNCHANGED`, `STAGING_HOSTED_FILES: MATCH=46/46`, `STAGING_INFRASTRUCTURE_READBACK: PASS`, then `RETURN_REPAIR: VERIFIED`. The helper's 21 selected tests passed before publishing; the separate 24-test local run also included the three offline-log tests.
 
 ## Apply a callback repair only when needed
 
@@ -65,3 +69,5 @@ Return to the original staging passenger tab and select **Check payment**. After
 Local validation: 52 focused/regression tests and four deployed-source utility tests passed. The exported-handler emulator suite and GitHub checks are recorded with the resulting commit/run; none are real provider transactions or device acceptance.
 
 Resume/logging correction: 24 focused tests passed, including the real command orchestrator with simulated cloud boundaries, which publishes only Hosting and rejects every unexpected cloud command; private log persistence after disposable source removal; strict cleanup-warning handling; and callback/payment-resume regressions. These tests do not deploy staging.
+
+At helper `15a80b6`, [source gate 39949344956](https://github.com/Gatcheni2025/asiye_app/actions/runs/39949344956), including exported-handler emulator and browser jobs; [Firebase security 39949349108](https://github.com/Gatcheni2025/asiye_app/actions/runs/39949349108); and [Paystack regression 39949344966](https://github.com/Gatcheni2025/asiye_app/actions/runs/39949344966) all passed. This deployment checkpoint update changes documentation only.
