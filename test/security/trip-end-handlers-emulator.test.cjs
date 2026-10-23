@@ -107,7 +107,8 @@ test('RTDB clients cannot forge, replace or delete consent/completion claims, or
  await seed();await request();
  for(const actor of [uid,'p-auth']){
   const dbClient=env.authenticatedContext(actor).database();
-  for(const patch of [{tripEndSafety:{status:'approved'}},{tripEndSafety:null},{tripCompletion:{version:1,phase:'processing'}},
+  for(const patch of [{tripEndSafety:{status:'approved'}},{tripEndSafety:JSON.stringify({status:'approved'})},{tripEndSafety:null},
+   {tripCompletion:JSON.stringify({version:1,phase:'processing'})},{tripCompletion:{version:1,phase:'processing'}},
    {earlyDropoffConfirmedAt:Date.now()},{status:'completed'}])await assertFails(update(ref(dbClient,'requests/'+id),patch));
   await assertFails(remove(ref(dbClient,'requests/'+id)));
  }

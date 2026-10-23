@@ -157,7 +157,10 @@ async function handle({db,id,uid,body,ownsProfile,transact}){
  const updates={};
  for(const passengerId of members(live))updates[`notifications/commuters/${passengerId}/trip-end-${end.id}`]=payload;
  updates[`notifications/taxis/${live.taxiId}/trip-end-${end.id}`]=payload;
- await db.ref().update(updates);
- return {ok:true,status:live.status,endRequestId:end.id,endStatus:end.status};
+ let notificationsQueued=true;
+ try{await db.ref().update(updates);}catch(_){notificationsQueued=false;}
+ // The vote already committed. An ancillary notification outage must not
+ // tell a passenger their confirmation failed while a driver can finish.
+ return {ok:true,status:live.status,endRequestId:end.id,endStatus:end.status,notificationsQueued};
 }
 module.exports={ACTIONS,TTL,decode,encode,members,scope,started,destination,approved,processing,check,action,claim,requireClaim,completed,handle};

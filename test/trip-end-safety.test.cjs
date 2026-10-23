@@ -19,6 +19,17 @@ test('persisted confirmations and completion claims round-trip as immutable scal
  assert.deepEqual(safety.decode([1,2]),[1,2]);
  assert.throws(()=>safety.decode({tripEndSafety:'broken json'}));
 });
+test('a notification outage cannot turn a committed passenger approval into a reported failure',async()=>{
+ let live=request();
+ const db={ref:p=>p?{once:async()=>({val:()=>p.startsWith('requests/')?safety.encode(live):taxi()})}:
+  {update:async()=>{throw Error('Synthetic notification outage');}}};
+ const result=await safety.handle({db,id,uid:'p-auth',body:{action:'respondEarlyEnd',endRequestId:'end-one',accepted:true},
+  ownsProfile:async(_root,p,uid)=>p==='p'&&uid==='p-auth',transact:async(_ref,fn)=>{
+   live=fn(live);return {committed:true,snapshot:{val:()=>safety.encode(live)}};
+  }});
+ assert.equal(result.ok,true);assert.equal(result.endStatus,'approved');assert.equal(result.notificationsQueued,false);
+ assert.equal(live.status,'in_transit');
+});
 
 test('fresh destination evidence permits normal completion; stale, unknown and mismatched GPS requires passenger consent',()=>{
  assert.equal(safety.check(base('card'),taxi(true),id,uid,now).requiresPassengerConfirmation,false);
