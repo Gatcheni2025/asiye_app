@@ -4,6 +4,7 @@ const { onRequest, onCall } = require("firebase-functions/v2/https");
 const { onValueUpdated } = require("firebase-functions/v2/database");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const tripEndSafety = require('./trip-end-safety');
 
 // =================================================================
 // --- INITIALIZE FIREBASE ADMIN ---
@@ -8242,6 +8243,9 @@ exports.goTripActionSecure = onRequest(
       if (!user) return response.status(401).json({error: 'Sign-in required.'});
       const id = validRequestId(request.body?.requestId);
       if (!id) return response.status(400).json({error: 'Invalid trip.'});
+      if (tripEndSafety.ACTIONS.has(request.body?.action))
+        return response.json(await tripEndSafety.handle({db:admin.database(),id,uid:user.uid,
+          body:request.body,ownsProfile:profileOwnedByAuth,transact:transactGoContinuation}));
       const ref = admin.database().ref(`requests/${id}`);
       const trip = (await ref.once('value')).val();
       if (!trip || trip.type === 'club') return response.status(409).json({error: 'Use the Club booking action for this trip.'});
@@ -12208,6 +12212,8 @@ async function settleProtectedGoFinancials(
     return null;
   }
 
+  tripEndSafety.requireClaim(trip);
+
   if (
     trip.fareStatus !== "agreed" ||
     !trip.taxiId ||
@@ -12614,6 +12620,7 @@ async function settleProtectedGoFinancials(
           .TIMESTAMP,
       status:
         "completed",
+      tripCompletion: tripEndSafety.completed(trip, Date.now()),
       completedAt:
         admin.database
           .ServerValue
@@ -12748,7 +12755,7 @@ exports.settleTripPayment =
             ""
           ).trim();
 
-        const trip =
+        let trip =
           (
             await admin.database()
               .ref(
@@ -12785,6 +12792,9 @@ exports.settleTripPayment =
         if (!['in_transit', 'completed'].includes(trip.status))
           return response.status(409).json({error: 'Only an ongoing or completed trip can be settled.'});
 
+        if (trip.status==='completed' && trip.driverSettlement?.source==='server_protected_go')
+          return response.json({ok:true,settled:true,serverCompleted:true,settlement:trip.driverSettlement});
+
         if (trip.clubSecurityVersion === 2 && !['in_transit', 'completed'].includes(trip.status)) {
           return response.status(409).json({error:'Secure Club payments can only be settled after verified departure.'});
         }
@@ -12797,6 +12807,16 @@ exports.settleTripPayment =
         if (trip.cashCollectionVersion === 2 && normaliseRidePaymentMethod(trip.paymentMethod) === 'cash') {
           try { goContinuation.requireCashDropoff(trip); }
           catch (error) { return response.status(409).json({error: error.message}); }
+        }
+
+        // Freeze a verified destination or both roles' early-end consent before
+        // any payment/earnings write. A retry reuses this server-owned claim.
+        if (trip.type!=='delivery' && trip.parcelSecurityVersion!==2 && trip.status!=='completed') {
+          const taxi=(await admin.database().ref(`taxis/${trip.taxiId}`).once('value')).val();
+          const tx=await transactGoContinuation(admin.database().ref(`requests/${requestId}`),current=>
+            tripEndSafety.claim(current,taxi,requestId,decoded.uid,request.body?.endRequestId,Date.now()));
+          if(!tx.committed)return response.status(409).json({error:'Trip changed before completion.'});
+          trip=tx.snapshot.val();
         }
 
         const passengers =
@@ -12991,7 +13011,7 @@ exports.settleTripPayment =
         );
 
         return response
-          .status(500)
+          .status(error.status || 500)
           .json({
             error:
               error?.message ||

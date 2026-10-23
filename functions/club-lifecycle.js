@@ -1,4 +1,5 @@
 const {assertPassengerBookingProfile} = require('./passenger-booking-profile');
+const tripEndSafety = require('./trip-end-safety');
 "use strict";
 const crypto = require("node:crypto");
 const WAIT_MS = 30 * 60 * 1000;
@@ -309,6 +310,7 @@ function driverAction(pool, uid, body, evidence, now) {
     case "complete":
       if (pool.status !== "in_transit")
         fail("Only a started trip can be completed.");
+      pool=tripEndSafety.claim(pool,evidence.taxi,evidence.requestId,uid,body.endRequestId,now);
       for (const [id, p] of active(pool)) {
         if (
           p.paymentMethod !== "cash" &&
@@ -316,6 +318,7 @@ function driverAction(pool, uid, body, evidence, now) {
         )
           fail("Settle all passenger payments before completing.");
       }
+      pool.tripCompletion=tripEndSafety.completed(pool,now);
       pool.status = "completed";
       pool.completedAt = now;
       active(pool).forEach(([, p]) => {
@@ -943,7 +946,7 @@ function registerClubLifecycle(deps) {
           current,
           user.uid,
           body,
-          { ledgers, nearPickup, pinValid },
+          { ledgers, nearPickup, pinValid, taxi, requestId },
           Date.now(),
         ),
       );

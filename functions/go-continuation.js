@@ -1,4 +1,5 @@
 'use strict';
+const tripEndSafety = require('./trip-end-safety');
 
 const terminal = status => {
   const value = String(status || '').trim().toLowerCase();
@@ -68,9 +69,11 @@ function action(trip, name, body, evidence, now) {
     if (trip.paymentMethod !== 'cash' || trip.status !== 'in_transit' || !trip.pinVerifiedAt || !trip.tripStartedAt)
       fail('Verify the pickup PIN and drive to the destination before collecting cash.');
     if (trip.cashCollectedAt) return trip;
-    if (body.cashCollected !== true || !evidence.nearDestination)
+    const early=tripEndSafety.approved(trip,body.endRequestId,now)&&trip.tripEndSafety.cashCollectedConfirmed===true;
+    if (body.cashCollected !== true || (!evidence.nearDestination&&!early))
       fail('Confirm cash collection only after arriving at the destination.');
-    return {...trip, cashCollectedAt: now, cashCollectionStatus: 'collected', dropoffArrivedAt: now};
+    return {...trip, cashCollectedAt: now, cashCollectionStatus: 'collected',
+      ...(evidence.nearDestination?{dropoffArrivedAt:now}:{earlyDropoffConfirmedAt:now})};
   }
   if (name === 'verifyPin') {
     if (trip.status === 'in_transit' && trip.pinVerifiedAt) return trip;
@@ -87,7 +90,9 @@ function action(trip, name, body, evidence, now) {
 }
 
 function requireCashDropoff(trip) {
-  if (!trip.pinVerifiedAt || !trip.tripStartedAt || !trip.cashCollectedAt || !trip.dropoffArrivedAt ||
+  const early=trip.earlyDropoffConfirmedAt&&(tripEndSafety.approved(trip,trip.tripEndSafety?.id,Date.now())||
+    (tripEndSafety.processing(trip)&&trip.tripCompletion.mode==='agreed_early_end'));
+  if (!trip.pinVerifiedAt || !trip.tripStartedAt || !trip.cashCollectedAt || (!trip.dropoffArrivedAt&&!early) ||
       !['in_transit', 'completed'].includes(trip.status))
     fail('Cash is collected after drop-off. Confirm collection at destination before completing the ride.');
 }

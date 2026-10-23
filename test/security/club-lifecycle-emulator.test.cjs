@@ -324,7 +324,11 @@ test("arrival PIN start completion lifecycle and repeated completion never doubl
       200,
     );
   }
-  for (const action of ["start", "complete", "complete"])
+  assert.equal((await call(service.action,"driver",{requestId,action:"start"})).status,200);
+  assert.equal((await call(service.action,"driver",{requestId,action:"complete"})).status,409,
+    'An away-from-destination driver must obtain passenger consent');
+  await db.ref('taxis/driver').update({latitude:-29.9,longitude:31.1,lastSeen:Date.now()});
+  for (const action of ["complete", "complete"])
     assert.equal(
       (await call(service.action, "driver", { requestId, action })).status,
       200,

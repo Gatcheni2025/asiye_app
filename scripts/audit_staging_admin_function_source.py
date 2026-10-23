@@ -162,7 +162,7 @@ def verify_inventory(inventory, names, expected, read_archive, get_json=None, re
     return report
 
 
-def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STAGING_ADMIN_FUNCTION_SOURCE', include_selected_in_scope=False):
+def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STAGING_ADMIN_FUNCTION_SOURCE', include_selected_in_scope=False, full_review_scope=False):
     try:
         if (command(['gcloud', 'config', 'get-value', 'project']) != PROJECT or
                 command(['gcloud', 'projects', 'describe', PROJECT, '--format=value(projectNumber)']) != NUMBER):
@@ -173,10 +173,13 @@ def main(manifest_path='scripts/staging_driver_admin_functions.json', label='STA
         pkg['main'] = 'staging-index.generated.cjs'
         expected['package.json'] = json.dumps(pkg).encode()
         extra_scope = ',...require(' + json.dumps('./' + manifest_path) + ')' if include_selected_in_scope else ''
-        expected[pkg['main']] = command(['node', '-e',
+        generator = (
             "const names=[...new Set([...require('./scripts/paystack_function_manifest.json'),"
             "...require('./scripts/auth_booking_staging_functions.json'),...require('./scripts/staging_driver_admin_functions.json')" + extra_scope + "])];"
-            "process.stdout.write(require('./scripts/prepare_staging_function_scope.cjs').renderEntry(names));"]).encode() + b'\n'
+            "process.stdout.write(require('./scripts/prepare_staging_function_scope.cjs').renderEntry(names));")
+        if full_review_scope:
+            generator = "process.stdout.write(require('./scripts/prepare_staging_function_scope.cjs').renderEntry(require('./scripts/audit_347_staging_readonly.cjs').manifest()));"
+        expected[pkg['main']] = command(['node', '-e', generator]).encode() + b'\n'
         inventory = json.loads(command(['gcloud', 'functions', 'list', '--v2', '--regions=us-central1',
             '--project=' + PROJECT,
             '--format=json(name,state,environment,buildConfig.runtime,buildConfig.entryPoint,buildConfig.sourceProvenance.resolvedStorageSource)']))

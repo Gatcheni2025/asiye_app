@@ -1752,6 +1752,47 @@ ASIYE.ride = {
                 if (error.name !== 'AbortError') ASIYE.ui.toast(error.message || 'Unable to share live trip. Please try again.');
             }
         });
+        this.renderEarlyEnd(request);
+    },
+
+    renderEarlyEnd(request) {
+        clearTimeout(this._earlyEndTimer);
+        const end=request.tripEndSafety,container=document.getElementById('sheetContent');
+        if(!container||!end||request.status!=='in_transit'||request.type==='delivery')return;
+        container.querySelector('[data-early-end]')?.remove();
+        const passengerId=request.type==='club'
+            ? Object.keys(request.passengers||{}).find(id=>id===ASIYE.state.userId||request.passengers[id].authUid===firebase.auth().currentUser?.uid)
+            : request.commuterId;
+        const response=end.responses?.[passengerId];
+        const expired=end.expiresAt<=Date.now()&&!request.tripCompletion;
+        const pending=!expired&&end.status==='pending'&&!response;
+        const panel=document.createElement('section');panel.dataset.earlyEnd='true';panel.className='trip-end-safety';
+        panel.setAttribute('role',pending?'alertdialog':'status');
+        if(pending){panel.setAttribute('aria-labelledby','earlyEndTitle');panel.setAttribute('aria-describedby','earlyEndDescription');}
+        const message=expired?'This request expired. Your trip is still active.':
+            end.status==='declined'?'The trip is still active. A passenger chose to continue to the destination.':
+            end.status==='withdrawn'?'Your driver withdrew the request. The trip is still active.':
+            response?.accepted?'You agreed to end here. Waiting for the other confirmations and the driver to finish.':
+            (end.locationAvailable?'Your driver wants to end the trip before your destination.':'We cannot confirm arrival at your destination. Your driver wants to end the trip here.')+' Are you sure you want to end the trip here?';
+        panel.innerHTML='<h3 id="earlyEndTitle">'+(pending?'End trip before your destination?':'End trip safety check')+'</h3><p id="earlyEndDescription">'+
+            ASIYE.ui.escape(message)+'</p>'+(pending?'<p>Only agree if you want to finish here. The agreed fare stays the same.'+
+            (request.type==='club'?' Every onboard passenger must agree.':'')+'</p><div class="trip-end-safety-actions">'+
+            '<button type="button" class="secondary-button" data-end-answer="no">Keep trip active</button><button type="button" class="primary-button" data-end-answer="yes">End trip here</button></div>':'');
+        container.prepend(panel);
+        for(const button of panel.querySelectorAll('[data-end-answer]'))button.addEventListener('click',async()=>{
+            if(this._endResponseActive)return;
+            const id=this.requestId;this._endResponseActive=true;
+            const buttons=panel.querySelectorAll('button');buttons.forEach(item=>item.disabled=true);
+            try{
+                await ASIYE.goNegotiation.post('goTripActionSecure',{requestId:id,action:'respondEarlyEnd',
+                    endRequestId:end.id,accepted:button.dataset.endAnswer==='yes'});
+            }catch(error){ASIYE.ui.toast(error.message||'Unable to save your response. The trip stays active.');buttons.forEach(item=>item.disabled=false);}
+            finally{this._endResponseActive=false;}
+        });
+        if(!expired&&end.status==='pending'){
+            const id=this.requestId;
+            this._earlyEndTimer=setTimeout(()=>{if(this.requestId===id)this.renderEarlyEnd(request);},Math.max(1,end.expiresAt-Date.now()+50));
+        }
     },
 
 
@@ -1800,10 +1841,11 @@ ASIYE.ride = {
                 </div>
 
                 <h2 class="home-title">
-                    You've arrived
+                    ${request.tripCompletion?.mode==='agreed_early_end'?'Trip ended here':"You've arrived"}
                 </h2>
 
                 <div class="home-greeting">
+                    ${request.tripCompletion?.mode==='agreed_early_end'?'Ended before the destination with your agreement: ':''}
                     ${ASIYE.ui.escape(
                         request.destination
                     )}

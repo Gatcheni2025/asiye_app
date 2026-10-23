@@ -3313,6 +3313,10 @@ ASIYE_DRIVER.ui = {
             ?.addEventListener(
                 'click',
                 () => {
+                    if(request.type!=='delivery'){
+                        void ASIYE_DRIVER.trip.confirmCompletion().catch(error=>this.toast(error.message||'Unable to check trip completion.','danger'));
+                        return;
+                    }
                     this.confirm(
                         request.type === 'delivery'
                             ? 'Complete delivery'
