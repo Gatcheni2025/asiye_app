@@ -1,4 +1,4 @@
-# Asiye — final release acceptance review, 22 October 2026
+# Asiye — final release acceptance review, updated 23 October 2026
 
 **Current decision: staging testing may continue; public mobile release and LIVE Card activation still need the evidence below.** This checklist records evidence and remaining work. It does not authorize production changes.
 
@@ -10,6 +10,7 @@ Reviewed runtime/source head: `b0b2899b508d2412a6e25b6a288114536bd27dfb` on `fix
 | --- | --- | --- |
 | Latest source checks | PASS | [Source gate 39838523618](https://github.com/Gatcheni2025/asiye_app/actions/runs/39838523618), [Firebase security 39838531790](https://github.com/Gatcheni2025/asiye_app/actions/runs/39838531790), and [Paystack regressions 39838523856](https://github.com/Gatcheni2025/asiye_app/actions/runs/39838523856) all succeeded at `b0b2899`. Provider responses and browser identities in these tests are simulated. |
 | Staging deployment | PASS | Operator screenshot confirms 43/43 expected functions ACTIVE, no missing/nonactive functions, deployed RTDB rules matching the review, 46/46 hosted files matching, and `STAGING_INFRASTRUCTURE_READBACK: PASS`. Project: `asiye-paystack-staging`, number `1000800408896`, region `us-central1`. |
+| Public Hosting recheck, 23 October | PASS, 46/46 | Independently reran `node scripts/audit_347_staging_readonly.cjs --hosting-only` against source `e1c2b1d61bffa52dfbd9946a91582e526caafdf5`: `STAGING_HOSTED_FILES: MATCH=46/46` and `PUBLIC_HOSTING_READBACK: PASS`. This public GET-only check does not recheck authenticated function inventory, RTDB rules or deployed function source. |
 | Selected changed function source | PASS for the 23-function Card/test-tools scope | Hosting completed only after the selected source gate passed; the helper reported updated tools and source verified. The Gen1 Club trigger uses immutable build provenance or an explicit deployed-version source download. This does not assert that all 43 functions, their dependencies, or production have identical deployed source. The general inventory audit's `DEPLOYED_FUNCTION_SOURCE_SHA: NOT_ATTESTED` line is a separate limitation. |
 | Testing-admin access | User-confirmed working | The corrected role-grant script at `b0b2899` grants and reads back `stagingTripTester:true`, preserving existing roles. The operator reran it successfully and then reported that access works. End-to-end cancellation and provider linkage must be recorded separately. |
 | Cash | User-confirmed working | Keep this result. Repeat a short device regression on the final candidate: PIN at pickup, cash collection after completion, and trip restoration. |
@@ -17,6 +18,14 @@ Reviewed runtime/source head: `b0b2899b508d2412a6e25b6a288114536bd27dfb` on `fix
 | Paystack TEST prerequisites | Provider check passed | [Technical readiness run 39824510128](https://github.com/Gatcheni2025/asiye_app/actions/runs/39824510128), checked 22 October at 19:39 SAST, confirmed the configured TEST subaccount exists, is active and verified, with 20% Asiye / 80% driver. Its report explicitly leaves the actual Card journey and bank settlement unverified. |
 
 The user's latest confirmation follows the testing-admin access repair. Do not treat it as evidence that Card checkout, split allocation, refunds, Club/Parcel or native device tests have all passed.
+
+## Continuation from the earlier Cloud Build checkpoint
+
+The 21 October checkpoint (two successful regional builds, `prepareTripPayment` ACTIVE, complete 37-function deployment unconfirmed) is historical. The later full staging audit above resolves that inventory question. The current expected set is **43 unique functions**: the original 37 plus `submitDriverEnrollmentSecure`, `uploadDriverEnrollmentDocument`, `adminEnrollmentConsole`, `reviewDriverEnrollmentSecure`, `submitDriverVehicleForReview` and `adminStagingTestConsole`. The latest 43-function inventory is recorded operator evidence; the fresh 23 October check above verifies public Hosting only.
+
+The red [technical-readiness run 39824510128](https://github.com/Gatcheni2025/asiye_app/actions/runs/39824510128) is not a staging compilation or provisioning failure. Its downloaded report, dated 22 October at 19:39 SAST, has exactly two blockers, both for **production**: missing/inactive reviewed endpoints and different RTDB rules. That report's earlier staging inventory has no missing reviewed endpoints and matching rules, and its Paystack TEST prerequisite check passes. The artifact ZIP SHA-256 was independently checked against GitHub metadata: `cc805dae1acb80641426cfe190deb390abaffedb6869b1e099e7c6676039100a`.
+
+Do not replay the full Functions deployment or historical Hosting fallback to clear that red job. Continue with the real staging TEST booking described below. If a later authenticated audit finds a new missing/nonactive function, diagnose that specific result before considering a targeted repair. The original private deployment log's exact historical failure cause remains unconfirmed; successful later inventory is not proof of that cause.
 
 ## Current application contract
 

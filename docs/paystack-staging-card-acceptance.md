@@ -4,11 +4,13 @@
 This checklist is for `asiye-paystack-staging` only. No writes to production Firebase `asiye-80386`.
 Never use `sk_live_` keys, launch live Card, or settle to a real driver's bank account during these TEST checks.
 
+**Deployment checkpoint, updated 23 October 2026:** the [current release review](ASIYE_347_STAGING_TO_RELEASE_ACCEPTANCE_20261022.md) records 43/43 staging functions ACTIVE and matching rules in the later operator audit. The independent public Hosting recheck passes 46/46 files. These resolve the earlier unconfirmed 37-function deployment checkpoint; payment acceptance below remains outstanding.
+
 ## A. Deploy and inventory
-- [ ] The owner-authorized Cloud Shell deployment exits successfully using `scripts/deploy_paystack_staging_cloud_shell.sh`.
-- [ ] All 37 reviewed functions exist and are active **in staging**. Local export discovery alone is not a deployed-inventory test.
-- [ ] Staging Realtime Database rules match the reviewed source; no unexpected public write paths.
-- [ ] Staging passenger and driver web previews load, have no production Firebase URLs, and have no-index headers.
+- [x] Later operator audit records 43/43 expected functions ACTIVE, none missing/nonactive, and `STAGING_INFRASTRUCTURE_READBACK: PASS`. Do not rerun the full deployment solely to complete this checklist.
+- [x] The same recorded full audit confirms deployed staging Realtime Database rules match the reviewed source.
+- [x] Independent public Hosting recheck on 23 October passes 46/46 reviewed files, including both roles' Firebase configuration, with no production identifiers and with no-index headers.
+- [ ] Before the real TEST journey, rerun `node scripts/audit_347_staging_readonly.cjs` in the authenticated staging Cloud Shell checkout. If inventory, rules and Hosting still match, proceed without deployment. Local export discovery alone does not attest deployed inventory or function source.
 - [ ] TEST-only `PAYSTACK_SECRET_KEY` is in staging Secret Manager; no secret is logged, exported, or embedded in Web assets.
 
 ## B. Subaccount and checkout

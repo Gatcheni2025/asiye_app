@@ -1,5 +1,7 @@
 > Authentication policy update: see [Passenger signup, first-booking photo and driver OTP](ASIYE_AUTH_FIRST_BOOKING_20261022.md). That policy supersedes passenger phone OTP and face-at-signup instructions below.
 
+> Deployment status update, 23 October: the [current acceptance review](ASIYE_347_STAGING_TO_RELEASE_ACCEPTANCE_20261022.md) records the later full audit with 43/43 staging functions ACTIVE and matching rules. A fresh public Hosting audit passes 46/46 files. The 37-function inventory, 16/17 Hosting result and HTTP 403 fallback instructions below are historical; do not repeat deployment on that basis. The signed candidates described below predate the latest runtime changes and still require replacement and device acceptance.
+
 # Asiye 347 — native OTP correction and candidate rebuild
 
 ## Corrected behavior
