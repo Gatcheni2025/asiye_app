@@ -15,6 +15,7 @@ The owner has requested release preparation and LIVE Card activation. Continue t
 | Fresh cloud inventory | The read-only [technical-readiness run 40061425242](https://github.com/Gatcheni2025/asiye_app/actions/runs/40061425242), rerun 24 October at **10:37 SAST**, finds 58 active production functions, six missing reviewed endpoints and different production rules. Staging rules now match; the earlier staging mismatch is resolved. |
 | Missing production endpoints | `configureDriverCardPayout`, `createParcelRequestSecure`, `acceptParcelRequestSecure`, `cancelParcelBookingSecure`, `getParcelPickupPinSecure`, `parcelTripActionSecure`. Existing function names alone do not attest their deployed code. |
 | Broader release inspection | The new [production Card preflight 40079742243](https://github.com/Gatcheni2025/asiye_app/actions/runs/40079742243), completed at **10:53 SAST**, checks the full 42-function release scope: **34/42 ACTIVE**. It additionally finds `adminEnrollmentConsole` and `reviewDriverEnrollmentSecure` missing/inactive, making **eight** gaps overall. Production Hosting matches **0/43** selected files (content differences or HTTP 404s), and the public payment return does not match the reviewed renderer. The launch gate is **OFF**, with approval/validation references missing. Bound LIVE credentials are not verified by that first inspection; the follow-up adds safe per-function mode/read-error categories. |
+| Confirmed production key mode | Follow-up [preflight 40080045831](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080045831), **10:58 SAST** at `760e8b2`, successfully reads the deployed numeric secret versions: all seven existing payment/refund consumers use **TEST** keys; the eighth consumer, `configureDriverCardPayout`, is absent. This is a confirmed TEST binding, not a Secret Manager permission error. The same eight endpoint gaps, 0/43 public-file parity result, callback mismatch and launch gate OFF remain. |
 | Rules | Production digest `195fc06e9b49f37aabf990ebc0de0c24020b5f9dfc15df05c61b56c655a4bf8a`; reviewed/staging digest `315cac1dc85c2bd65805a45f4136ebcaad90fbeb78136e963a125df717ff041a`. |
 | Provider evidence | TEST subaccount prerequisite passes, including active/verified 80/20 configuration. Real checkout, signed webhook, cancellation/refund and final device acceptance remain separately unverified. The Asiye Group TEST subaccount must never become a real driver's LIVE payout destination. |
 | Mobile | Existing Android 11.0.77 (347) / iOS 46522.0.5 (95526) candidates predate these runtime changes. Prepare fresh signed packages from the final accepted source using unused store build numbers. No new binary or store publication is certified here. |
@@ -40,6 +41,27 @@ node scripts/production_card_preflight.cjs --check
 If that dedicated checkout already exists, update it with `git pull --ff-only` instead of cloning over it. For driver-specific inspection, append `--driver=THE_EXACT_DRIVER_PROFILE_ID` to `--check`, keeping the real ID in the private operator session. No key is accepted as a command-line argument. `--public-only` needs no cloud credentials.
 
 Passing these infrastructure checks still prints `DEPLOYED_FUNCTION_SOURCE_REVISION: NOT_ATTESTED`, leaves actual provider/device acceptance uncertified, and never enables payments. Source attestation must compare immutable deployed build archives/versions with the accepted runtime before activation; inventory presence is insufficient. Any unavailable secret/rules/source read is a missing result, not permission to weaken the gate.
+
+## Private LIVE-key preparation
+
+The owner must enter the LIVE secret directly in their existing authorized Cloud Shell. If a correct LIVE version is already staged, retain it for the controlled deployment. Otherwise, the following creates a production Secret Manager version, validates the LIVE prefix, keeps input out of the command arguments/history, and suppresses shell tracing. It uses the same pinned Firebase CLI version as the reviewed staging tooling. Keep all existing versions for reconciliation and rollback. The production key value is never needed in this chat.
+
+```bash
+(
+  set +x
+  set -euo pipefail
+  test "$(gcloud projects describe asiye-80386 --format='value(projectNumber)')" = '531902350858'
+  read -r -s -p 'Paystack LIVE secret: ' ASIYE_LIVE_KEY_INPUT
+  printf '\n'
+  [[ "$ASIYE_LIVE_KEY_INPUT" =~ ^sk_live_[A-Za-z0-9_]+$ ]] || { printf 'A Paystack LIVE secret is required.\n' >&2; exit 1; }
+  printf '%s' "$ASIYE_LIVE_KEY_INPUT" | npx --yes firebase-tools@15.34.0 functions:secrets:set PAYSTACK_SECRET_KEY --data-file=- --non-interactive --project asiye-80386
+  unset ASIYE_LIVE_KEY_INPUT
+)
+```
+
+The CLI's `--non-interactive` path explicitly skips its automatic endpoint-update and stale-version-destruction prompt. [Its exact command implementation](https://github.com/firebase/firebase-tools/blob/v15.34.0/src/commands/functions-secrets-set.ts) was checked for this behavior. The created version still needs the controlled release deployment and numeric binding readback; the existing server launch gate remains off. Retain only the safe version-created result, never the entered key.
+
+At `760e8b2`, all **30 JavaScript preparation/regression tests**, **two mobile-package tests**, the [full source gate 40080045834](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080045834) (including **208/208** exported-handler/rules/UI tests), [Firebase security 40080048703](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080048703), and [Paystack regression 40080045824](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080045824) passed. The production inspection remains red because the observed release/configuration gaps are real, not because these code tests failed.
 
 ## Production rollout and activation sequence
 
