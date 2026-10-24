@@ -108,7 +108,8 @@ async function cloudChecks({run = command, http = fetch, readFile = file => fs.r
     missingOrInactiveFunctions: [], rulesMatch: false, secretBindingsLiveAndConsistent: false,
     secretBindingFailures: [], secretBindingModes: [], liveProviderAuthentication: false, driverSubaccountVerified: false,
     driverChecked: !!driver, launchEnabled: false, launchApprovalReferencePresent: false,
-    launchValidationReferencePresent: false, deployedSourceRevisionVerified: false};
+    launchValidationReferencePresent: false, deployedSourceRevisionVerified: false,
+    stagedSecretMode: 'NOT_READ', stagedSecretVersion: null, stagedLiveKeyAuthenticated: false};
   const inventory = [];
   let next = '';
   do {
@@ -165,6 +166,28 @@ async function cloudChecks({run = command, http = fetch, readFile = file => fs.r
     if (versions.get(version)?.domain !== 'live') report.secretBindingFailures.push(name);
   }
   const keys = [...versions.values()].filter(value => value.secret).map(value => value.secret);
+  // A newly stored LIVE version is distinct from the versions still bound to
+  // running functions. Verify it privately without treating it as deployment.
+  let stagedSecret = '';
+  try {
+    const payload = await get('https://secretmanager.googleapis.com/v1/projects/' + PROJECT +
+      '/secrets/PAYSTACK_SECRET_KEY/versions/latest:access');
+    stagedSecret = Buffer.from(payload.payload?.data || '', 'base64').toString('utf8').trim();
+    report.stagedSecretMode = keyDomain(stagedSecret).toUpperCase();
+    const resource = String(payload.name || '');
+    const match = new RegExp('^projects/(?:' + PROJECT + '|' + NUMBER +
+      ')/secrets/PAYSTACK_SECRET_KEY/versions/([1-9][0-9]*)$').exec(resource);
+    report.stagedSecretVersion = match ? match[1] : null;
+    if (report.stagedSecretMode === 'LIVE') {
+      try {
+        const response = JSON.parse(await responseText(http, 'https://api.paystack.co/bank?currency=ZAR&perPage=1',
+          {Authorization: 'Bearer ' + stagedSecret}));
+        report.stagedLiveKeyAuthenticated = response.status === true;
+      } catch (_) { /* Keep observed key mode separate from provider authentication. */ }
+    }
+  } catch (error) {
+    report.stagedSecretMode = /^READ_HTTP_\d{3}$/.test(error.message) ? error.message : 'READ_OR_FORMAT_UNAVAILABLE';
+  }
   const observedKeysLiveAndConsistent = keys.length > 0 &&
     [...versions.values()].every(value => value.domain === 'live') && keys.every(key => key === keys[0]);
   report.secretBindingsLiveAndConsistent = !report.secretBindingFailures.length && keys.length > 0 &&
@@ -202,6 +225,8 @@ function printReport(report, print = console.log) {
     if (c.missingOrInactiveFunctions.length) print('MISSING_OR_INACTIVE: ' + c.missingOrInactiveFunctions.join(', '));
     print('PRODUCTION_RTDB_RULES: ' + (c.rulesMatch ? 'MATCH' : 'MISMATCH_OR_READ_BLOCKED'));
     print('BOUND_PAYSTACK_SECRETS: ' + (c.secretBindingsLiveAndConsistent ? 'LIVE_AND_CONSISTENT' : 'NOT_VERIFIED_LIVE'));
+    print('STAGED_PAYSTACK_SECRET: ' + c.stagedSecretMode + ' | VERSION=' + (c.stagedSecretVersion || 'NOT_ATTESTED'));
+    print('STAGED_LIVE_KEY_API_AUTH: ' + (c.stagedLiveKeyAuthenticated ? 'VERIFIED' : 'NOT_VERIFIED'));
     if (c.secretBindingFailures.length) print('SECRET_BINDING_CHECK: ' + c.secretBindingFailures.join(', '));
     for (const item of c.secretBindingModes) print('BOUND_SECRET_MODE: ' + item.name + '=' + item.mode);
     print('PAYSTACK_LIVE_API_AUTH: ' + (c.liveProviderAuthentication ? 'VERIFIED' : 'NOT_VERIFIED'));

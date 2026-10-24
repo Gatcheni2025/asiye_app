@@ -17,11 +17,11 @@ const provider = {domain: 'live', currency: 'ZAR', subaccount_code: saved.subacc
   account_number: 'PRIVATE_BANK_9123', percentage_charge: 20, is_verified: true, active: true};
 const binding = version => ({key: 'PAYSTACK_SECRET_KEY', secret: 'PAYSTACK_SECRET_KEY', projectId: PROJECT, version});
 const response = value => ({ok: true, text: async () => typeof value === 'string' ? value : JSON.stringify(value)});
-function harness({oldBinding = false, launchEnabled = false, wrongDriver = false, providerFailure = false, missingPayout = false, secretDenied = false} = {}) {
+function harness({oldBinding = false, allBindingsTest = false, stagedTest = false, launchEnabled = false, wrongDriver = false, providerFailure = false, missingPayout = false, secretDenied = false} = {}) {
   const calls = [], output = [];
   const inventory = productionFunctions().map(name => ({name: 'projects/' + PROJECT + '/locations/us-central1/functions/' + name,
     state: 'ACTIVE', environment: 'GEN_2', serviceConfig: {secretEnvironmentVariables:
-      SECRET_FUNCTIONS.includes(name) ? [binding(oldBinding && name === 'paystackWebhook' ? '1' : '2')] : []}}));
+      SECRET_FUNCTIONS.includes(name) ? [binding(allBindingsTest || oldBinding && name === 'paystackWebhook' ? '1' : '2')] : []}}));
   const command = (program, args) => {
     assert.ok(['gcloud', 'git'].includes(program));
     if (program === 'git') return args[0] === 'rev-parse' ? 'a'.repeat(40) : '';
@@ -54,10 +54,12 @@ function harness({oldBinding = false, launchEnabled = false, wrongDriver = false
       return response({functions: missingPayout ? inventory.filter(item => !item.name.endsWith('/configureDriverCardPayout')) : inventory});
     }
     if (parsed.origin === 'https://secretmanager.googleapis.com') {
-      assert.match(parsed.pathname, new RegExp('^/v1/projects/' + PROJECT + '/secrets/PAYSTACK_SECRET_KEY/versions/[12]:access$'));
+      assert.match(parsed.pathname, new RegExp('^/v1/projects/' + PROJECT + '/secrets/PAYSTACK_SECRET_KEY/versions/(?:[12]|latest):access$'));
       if (secretDenied) return {ok: false, status: 403, text: async () => 'PRIVATE_SECRET_ACCESS_ERROR'};
-      const secret = parsed.pathname.endsWith('/1:access') ? testKey : liveKey;
-      return response({payload: {data: Buffer.from(secret).toString('base64')}});
+      const secret = parsed.pathname.endsWith('/1:access') || stagedTest && parsed.pathname.endsWith('/latest:access') ? testKey : liveKey;
+      return response({name: 'projects/' + NUMBER + '/secrets/PAYSTACK_SECRET_KEY/versions/' +
+        (parsed.pathname.endsWith('/latest:access') ? '3' : parsed.pathname.endsWith('/1:access') ? '1' : '2'),
+        payload: {data: Buffer.from(secret).toString('base64')}});
     }
     assert.equal(parsed.origin, DATABASE);
     const values = {
@@ -111,8 +113,27 @@ test('an older TEST-bound webhook fails even when other functions use a live key
   assert.equal(result.cloud.secretBindingsLiveAndConsistent, false);
   assert.deepEqual(result.cloud.secretBindingFailures, ['paystackWebhook']);
   assert.ok(h.output.includes('BOUND_SECRET_MODE: paystackWebhook=TEST'));
-  assert.equal(h.calls.some(url => url.origin === 'https://api.paystack.co'), false);
-  assert.ok(h.calls.filter(url => url.hostname === 'secretmanager.googleapis.com').every(url => !url.pathname.includes('latest')));
+  assert.equal(h.calls.some(url => url.pathname.startsWith('/subaccount/')), false);
+  assert.ok(h.calls.some(url => url.pathname.endsWith('/versions/1:access')));
+  assert.ok(h.calls.some(url => url.pathname.endsWith('/versions/2:access')));
+});
+test('a newly staged authenticated LIVE key never substitutes for older TEST function bindings', async () => {
+  const h = harness({allBindingsTest: true});
+  const result = await main(['--check'], h.deps);
+  assert.equal(result.cloud.stagedSecretMode, 'LIVE');
+  assert.equal(result.cloud.stagedSecretVersion, '3');
+  assert.equal(result.cloud.stagedLiveKeyAuthenticated, true);
+  assert.equal(result.cloud.secretBindingsLiveAndConsistent, false);
+  assert.equal(result.infrastructureChecksPass, false);
+  assert.ok(result.cloud.secretBindingModes.every(item => item.mode === 'TEST'));
+  for (const secret of [liveKey, testKey]) assert.equal(h.output.join('\n').includes(secret), false);
+});
+test('storing another TEST key is reported accurately and cannot verify a staged live credential', async () => {
+  const h = harness({allBindingsTest: true, stagedTest: true});
+  const result = await main(['--check'], h.deps);
+  assert.equal(result.cloud.stagedSecretMode, 'TEST');
+  assert.equal(result.cloud.stagedLiveKeyAuthenticated, false);
+  assert.equal(result.infrastructureChecksPass, false);
 });
 test('a missing payout endpoint cannot hide an existing live credential or pass readiness', async () => {
   const h = harness({missingPayout: true});
