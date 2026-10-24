@@ -1,6 +1,10 @@
 # Completed-trip passenger rating repair
 
-Status: source correction prepared; targeted staging deployment and real rating acceptance pending.
+Status: targeted staging deployment/readback VERIFIED at `a017820c1ffae046fb22ac03fa6cfb40df2bdb05`; real rating-save and reopen acceptance pending.
+
+The operator's 24 October Cloud Shell screenshot records 43/43 helper tests passing, deployment of only `goTripActionSecure`, `STAGING_TRIP_RATING_SOURCE: MATCH=1/1`, 43/43 expected functions ACTIVE, RTDB rules MATCH, hosted files MATCH=46/46, infrastructure readback PASS and `TRIP_RATING_DEPLOYMENT: VERIFIED`. The recognized cleanup-policy warning did not prevent the subsequent source/readback proof. An independent anonymous Hosting audit also confirms all 46 reviewed files match. These checks verify publishing; they do not establish a successful real rating submission.
+
+Source gate [40061598782](https://github.com/Gatcheni2025/asiye_app/actions/runs/40061598782), Firebase security [40061602550](https://github.com/Gatcheni2025/asiye_app/actions/runs/40061602550), Go decisions [40061598712](https://github.com/Gatcheni2025/asiye_app/actions/runs/40061598712) and Paystack regression [40061598670](https://github.com/Gatcheni2025/asiye_app/actions/runs/40061598670) passed at `a017820`. The full handler/rules/UI suite passed all 208 tests. Provider responses and test identities in automated tests are simulated.
 
 The operator confirmed early completion works with a different passenger login. The 24 October driver screenshot shows `completed` and the Cash completion screen, followed by **Could not save the rating.** The rating button called a missing `submitPassengerRating` method. Its async handler also accessed `event.currentTarget` after awaiting, and active-trip cleanup clears the controller's request ID.
 
@@ -8,9 +12,9 @@ The correction implements the missing method and uses the captured completed-tri
 
 The button waits for a confirmed server response, shows saved state, and retains stars for retry after an error. Club requires an explicit passenger selection when more than one member remains unrated. Saved state renders when reopening the trip. Driver Trip history now offers **Rate passenger** on completed passenger rides, so the existing completed Cash trip can be rated after refresh. Opening/closing a historical rating does not stop navigation or release a newer booking.
 
-## Targeted staging apply
+## Verified staging apply
 
-After the source/security checks pass, run in the existing human-authenticated staging Cloud Shell:
+The operator completed this targeted apply in the existing human-authenticated staging Cloud Shell. No repeat deployment is needed for the acceptance check below.
 
 ```bash
 cd ~/asiye-staging-review
