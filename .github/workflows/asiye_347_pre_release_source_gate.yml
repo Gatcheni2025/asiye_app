@@ -1,4 +1,4 @@
-name: Asiye 347 Pre-Release Source Gate
+name: Asiye 348 Pre-Release Source Gate
 
 on:
   workflow_dispatch:
@@ -83,7 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = 'fix/paystack-subaccounts-cash-card-no-wallet'
-          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.77+347'
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.78+348'
           node - <<'JS'
           const fs=require('node:fs');
           const assert=require('node:assert/strict');
@@ -95,7 +95,7 @@ jobs:
           const pub=fs.readFileSync('assets/passenger-v2/login.html','utf8');
           for(const id of ['googleLoginButton','appleLoginButton'])
             assert.ok(pub.includes('id="'+id+'"'),'Passenger login missing '+id);
-          console.log('PASS: 347 lineage, 37 secure function names, and passenger login method chooser.');
+          console.log('PASS: 348 lineage, 37 secure function names, and passenger login method chooser.');
           JS
       - name: Syntax-check secure backend and passenger/driver login
         run: |
@@ -154,7 +154,7 @@ jobs:
         run: |
           mkdir -p release-readiness
           cat > release-readiness/readme.txt <<'EOF'
-          Asiye 347 source gate only.
+          Asiye 348 source gate only.
           The CI outcome does not approve public stores, backend production rollout,
           live Paystack checkout or the installation of this build on customer devices.
           Human acceptance still required: staged DB rules/source revision, test provider
@@ -163,7 +163,7 @@ jobs:
           final signed Android/iOS candidate regression tests.
           EOF
           {
-            echo '### Asiye 347 — CI is not production release approval'
+            echo '### Asiye 348 — CI is not production release approval'
             echo ''
             echo '- Source regression tests run without booking or charging users.'
             echo '- **Staging rules/source SHA:** independent cloud readback still required.'
@@ -176,7 +176,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: asiye-347-source-not-release-clearance
+          name: asiye-348-source-not-release-clearance
           path: release-readiness/readme.txt
           retention-days: 14
 
