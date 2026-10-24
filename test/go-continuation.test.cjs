@@ -1,7 +1,19 @@
 'use strict';
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {activate, action, paymentReady, arrived} = require('../functions/go-continuation');
+const {activate, action, paymentReady, arrived, clearRequestPointer} = require('../functions/go-continuation');
+
+test('cancelled booking cleanup retries the empty cache and never removes a newer booking',()=>{
+  assert.equal(clearRequestPointer(null,'old'),null);
+  assert.equal(clearRequestPointer('old','old'),null);
+  assert.equal(clearRequestPointer('new','old'),undefined);
+});
+
+test('repeated cancellation is safe while an arrived booking remains protected',()=>{
+  const trip={commuterId:'passenger',status:'cancelled_by_commuter',cancelledAt:10};
+  assert.deepEqual(action(trip,'cancel',{}, {role:'passenger'},20),trip);
+  assert.throws(()=>action({...trip,status:'arrived',arrivedAt:1},'cancel',{}, {role:'passenger'},20));
+});
 const base = method => ({type: 'ehailing', rideType: 'go', negotiationEnabled: true,
   commuterId: 'passenger', taxiId: 'driver', status: 'payment_required', fareStatus: 'agreed',
   agreedFare: 113, finalAmount: 113, paymentMethod: method, safetyShareCompleted: false});

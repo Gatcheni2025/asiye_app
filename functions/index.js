@@ -1,14 +1,41 @@
+const {assertPassengerBookingProfile} = require('./passenger-booking-profile');
 const functions = require("firebase-functions/v1");
-const { onRequest } = require("firebase-functions/v2/https");
+const { onRequest, onCall } = require("firebase-functions/v2/https");
 const { onValueUpdated } = require("firebase-functions/v2/database");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const tripEndSafety = require('./trip-end-safety');
+const tripRatings = require('./trip-ratings');
 
 // =================================================================
 // --- INITIALIZE FIREBASE ADMIN ---
 // =================================================================
 if (admin.apps.length === 0) {
   admin.initializeApp();
+}
+
+// All payment callbacks, tracking and storage paths must resolve to the
+// running Firebase project. A staging deployment must never fall back to
+// production for its external links or uploaded driver documents.
+function runtimeFirebaseProjectId() {
+  const configured = (() => {
+    try { return JSON.parse(process.env.FIREBASE_CONFIG || "{}"); }
+    catch (_) { return {}; }
+  })();
+  const project = String(admin.app().options.projectId ||
+    process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT ||
+    configured.projectId || "").trim();
+  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project)) {
+    throw new Error("Firebase project identity is not configured.");
+  }
+  return project;
+}
+function runtimeHostingOrigin() {
+  return `https://${runtimeFirebaseProjectId()}.web.app`;
+}
+function runtimeWebOrigins() {
+  const project = runtimeFirebaseProjectId();
+  return [`https://${project}.web.app`, `https://${project}.firebaseapp.com`];
 }
 
 // =================================================================
@@ -22,13 +49,11 @@ function nativeAuthCors(request, response) {
   const origin =
     request.get("origin") || "";
 
-  const allowedOrigins =
-    new Set([
-      "https://asiye.cloud",
-      "https://www.asiye.cloud",
-      "https://app.asiye.cloud",
-      "https://asiye-80386.web.app",
-      "https://asiye-80386.firebaseapp.com",
+  const allowedOrigins = new Set([
+      ...runtimeWebOrigins(),
+      ...(runtimeFirebaseProjectId() === "asiye-80386"
+        ? ["https://asiye.cloud", "https://www.asiye.cloud", "https://app.asiye.cloud"]
+        : []),
       "https://appassets.androidplatform.net"
     ]);
 
@@ -195,13 +220,11 @@ function walletSmsCors(request, response) {
   const origin =
     request.get("origin") || "";
 
-  const allowedOrigins =
-    new Set([
-      "https://asiye.cloud",
-      "https://www.asiye.cloud",
-      "https://app.asiye.cloud",
-      "https://asiye-80386.web.app",
-      "https://asiye-80386.firebaseapp.com"
+  const allowedOrigins = new Set([
+      ...runtimeWebOrigins(),
+      ...(runtimeFirebaseProjectId() === "asiye-80386"
+        ? ["https://asiye.cloud", "https://www.asiye.cloud", "https://app.asiye.cloud"]
+        : [])
     ]);
 
   if (
@@ -490,18 +513,16 @@ async function sendTwilioSms({
 exports.createEftSmsTopup = onRequest(
   {
     region:
-      "us-central1",
-    secrets: [
-      twilioAccountSid,
-      twilioAuthToken,
-      twilioFromNumber
-    ]
+      "us-central1"
   },
   async (request, response) => {
     walletSmsCors(
       request,
       response
     );
+    if (request.method !== 'OPTIONS') return response.status(410).json({
+      error:'Wallet top-ups are discontinued. Contact Asiye support to resolve existing credit.'
+    });
 
     if (
       request.method ===
@@ -1851,6 +1872,7 @@ function driverProfileCanReceiveRequests(
 
   if (
     !vehicleType ||
+    !driverVehicleCategoryAllowed(driver) ||
     !registration ||
     !phone ||
     !profileImage
@@ -1957,6 +1979,17 @@ function driverProfileCanReceiveRequests(
   }
 
   return true;
+}
+
+// New applications and vehicle changes require a physical Sedan/Hatchback type.
+// Retain service labels on existing approved profiles, but never let a known
+// unsupported physical type be hidden behind a legacy label in another field.
+function driverVehicleCategoryAllowed(driver = {}) {
+  const categories = [driver.vehicle?.type, driver.vehicleType, driver.carCategory]
+    .map(value => String(value || '').trim().toLowerCase());
+  if (categories.some(type => ['suv', 'minibus'].includes(type))) return false;
+  const category = categories.find(Boolean) || '';
+  return ['sedan', 'hatchback', 'ehailing', 'e-hailing', 'go', 'car'].includes(category);
 }
 
 async function nearbyWorkDrivers(
@@ -2751,15 +2784,18 @@ function normaliseApprovedVehicle(input = {}, fallback = {}) {
     )
   );
 
+  const type = safeAdminString(
+    source.type ?? source.vehicleType ?? fallback.type ?? fallback.vehicleType,
+    60
+  ).toLowerCase();
+  if (!['sedan', 'hatchback'].includes(type)) {
+    throw new functions.https.HttpsError(
+      "invalid-argument", "Asiye accepts Sedan and Hatchback vehicles only."
+    );
+  }
+
   return {
-    type:
-      safeAdminString(
-        source.type ??
-        source.vehicleType ??
-        fallback.type ??
-        fallback.vehicleType,
-        60
-      ) || "ehailing",
+    type,
     make:
       safeAdminString(
         source.make ??
@@ -2820,8 +2856,13 @@ exports.adminWhoAmI = functions.https.onCall(
   }
 );
 
-exports.reviewDriverEnrollment = functions.https.onCall(
-  async (data, context) => {
+const enrollmentConsole = require('./admin-enrollment-console').makeEnrollmentConsole({
+  admin, requireReviewer: requireAsiyeEnrollmentReviewer, HttpsError: functions.https.HttpsError
+});
+exports.adminEnrollmentConsole = onCall({region: 'us-central1', invoker: 'public'},
+  request => enrollmentConsole(request.data, request));
+
+async function handleDriverEnrollmentReview(data, context) {
     const actor = await requireAsiyeEnrollmentReviewer(context);
 
     const uid = safeAdminString(data?.uid, 160);
@@ -3046,6 +3087,7 @@ exports.reviewDriverEnrollment = functions.https.onCall(
         approvedVehicle.registration,
       vehicleType:
         approvedVehicle.type,
+      carCategory: approvedVehicle.type,
       vehicleMake:
         approvedVehicle.make,
       vehicleModel:
@@ -3204,8 +3246,15 @@ exports.reviewDriverEnrollment = functions.https.onCall(
       status: "approved",
       driverId: uid
     };
+
+}
+exports.reviewDriverEnrollment = functions.https.onCall(handleDriverEnrollmentReview);
+exports.reviewDriverEnrollmentSecure = onCall({region: 'us-central1', invoker: 'public'}, request => {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(String(request.data?.uid || ''))) {
+    throw new functions.https.HttpsError('invalid-argument', 'A valid driver account ID is required.');
   }
-);
+  return handleDriverEnrollmentReview(request.data, request);
+});
 
 exports.adminManagePlatform = functions.https.onCall(
   async (data, context) => {
@@ -3355,6 +3404,15 @@ exports.adminManagePlatform = functions.https.onCall(
               source[field],
               max
             );
+        }
+      }
+
+      if ("vehicleType" in patch) {
+        patch.vehicleType = patch.vehicleType.toLowerCase();
+        if (!["sedan", "hatchback"].includes(patch.vehicleType)) {
+          throw new functions.https.HttpsError(
+            "invalid-argument", "Asiye accepts Sedan and Hatchback vehicles only."
+          );
         }
       }
 
@@ -4369,7 +4427,7 @@ exports.adminManagePlatform = functions.https.onCall(
       const source = data?.vehicle || driver.vehiclePending;
       const clean = (value, max) => safeAdminString(value, max);
       const vehicle = {
-        type: clean(source.type, 40),
+        type: clean(source.type, 40).toLowerCase(),
         make: clean(source.make, 80),
         model: clean(source.model, 80),
         colour: clean(source.colour || source.color, 60),
@@ -4382,6 +4440,9 @@ exports.adminManagePlatform = functions.https.onCall(
           vehicle.year > new Date().getFullYear() + 1 ||
           !Number.isInteger(vehicle.seats) || vehicle.seats < 1 || vehicle.seats > 15) {
         throw new functions.https.HttpsError("invalid-argument", "Vehicle details are incomplete or invalid.");
+      }
+      if (decision === "approved" && !["sedan", "hatchback"].includes(vehicle.type)) {
+        throw new functions.https.HttpsError("invalid-argument", "Asiye accepts Sedan and Hatchback vehicles only.");
       }
       if (decision === "approved" && !String(driver.vehiclePhoto || "").trim()) {
         throw new functions.https.HttpsError("failed-precondition", "A saved car picture is required before approval.");
@@ -4402,6 +4463,7 @@ exports.adminManagePlatform = functions.https.onCall(
         Object.assign(patch, {
           vehicle,
           vehicleType: vehicle.type,
+          carCategory: vehicle.type,
           vehicleMake: vehicle.make,
           vehicleModel: vehicle.model,
           vehicleColor: vehicle.colour,
@@ -5118,6 +5180,7 @@ exports.adminManagePlatform = functions.https.onCall(
               approvedVehicle.registration,
             vehicleType:
               approvedVehicle.type,
+            carCategory: approvedVehicle.type,
             vehicleMake:
               approvedVehicle.make,
             vehicleModel:
@@ -5481,10 +5544,9 @@ const ASIYE_GO_NEGOTIATION = Object.freeze({
     minimumFare: 30
   }),
   suggestedRatio: 0.90,
-  minimumRatio: 0.85,
+  recommendedMinimumRatio: 0.65,
   maximumRatio: 0.95,
-  commissionRate: 0.20,
-  maxDriverCounters: 2
+  commissionRate: 0.20
 });
 
 function goMoney(value) {
@@ -5567,14 +5629,16 @@ function goNegotiationPricing(trip) {
   const marketReference =
     goMarketReference(trip);
 
+  // The 65% floor protects the range; the 90% suggestion never vetoes an offer.
   const minimumFareOffer =
     Math.max(
       1,
       Math.ceil(
         marketReference *
-        ASIYE_GO_NEGOTIATION.minimumRatio
+        ASIYE_GO_NEGOTIATION.recommendedMinimumRatio
       )
     );
+  const recommendedMinimumFare = minimumFareOffer;
 
   const maximumFareOffer =
     Math.max(
@@ -5604,6 +5668,7 @@ function goNegotiationPricing(trip) {
     marketReferenceFare:
       marketReference,
     suggestedFare,
+    recommendedMinimumFare,
     minimumFareOffer,
     maximumFareOffer,
     commissionRate,
@@ -5624,7 +5689,7 @@ function validGoNegotiatedAmount(amount, pricing) {
   const value = Number(amount);
 
   return (
-    Number.isFinite(value) &&
+    Number.isSafeInteger(value) &&
     value >= pricing.minimumFareOffer &&
     value <= pricing.maximumFareOffer
   );
@@ -5677,6 +5742,8 @@ function goCommercialPatch(amount, pricing) {
       pricing.marketReferenceFare,
     suggestedFare:
       pricing.suggestedFare,
+    recommendedMinimumFare:
+      pricing.recommendedMinimumFare,
     minimumFareOffer:
       pricing.minimumFareOffer,
     maximumFareOffer:
@@ -5853,8 +5920,17 @@ async function reserveGoNegotiatedDriver({
   driver,
   driverAuthUid,
   amount,
+  expectedPassengerOffer,
+  expectedCounterFare,
+  expectedNegotiationRound,
   expectedFareStatuses
 }) {
+  if (driver.data.currentRequest !== requestId &&
+      (driver.data.isOnline !== true || driver.data.isBroadcasting !== true || !driverProfileCanReceiveRequests(driver.data))) {
+    const error = new Error('Go online with an approved vehicle before accepting a new fare.');
+    error.code = 'negotiation/not-available';
+    throw error;
+  }
   const requestRef =
     admin.database()
       .ref(
@@ -5964,6 +6040,14 @@ async function reserveGoNegotiatedDriver({
           if (sameDriverReservation) {
             return current;
           }
+
+          if (goContinuation.terminal(current.status) ||
+              (expectedPassengerOffer != null && Number(current.passengerOffer) !== Number(expectedPassengerOffer)) ||
+              (expectedNegotiationRound != null && Number(current.negotiationRound || 1) !== Number(expectedNegotiationRound)) ||
+              current.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === Number(current.passengerOfferRound || 1) ||
+              current.fareCounterDeclinedDrivers?.[driver.id] === true ||
+              (expectedCounterFare != null && (Number(current.driverCounterFare) !== Number(expectedCounterFare) ||
+                current.negotiationDriverId !== driver.id))) return undefined;
 
           if (
             current.taxiId &&
@@ -6449,6 +6533,19 @@ exports.submitGoFareOffer =
             });
         }
 
+        const bookingProfile = (await admin.database().ref(`commuters/${context.trip.commuterId}`).once('value')).val();
+        assertPassengerBookingProfile(bookingProfile, decoded);
+
+        if (String(context.trip.paymentMethod || "cash").toLowerCase() === "wallet") {
+          return response.status(409).json({
+            error:"Wallet payments are discontinued. Choose Cash or Card before offering."
+          });
+        }
+
+        if (goContinuation.terminal(context.trip.status)) {
+          return response.status(409).json({error: "This booking has ended. Start a new booking."});
+        }
+
         if (
           context.trip.taxiId ||
           context.trip.fareStatus ===
@@ -6503,6 +6600,15 @@ exports.submitGoFareOffer =
             null,
           driverCounterFare:
             null,
+          negotiationDriverId: null,
+          negotiationDriverName: null,
+          counterExpiresAt: null,
+          counterPlatformCommission: null,
+          counterDriverNetFare: null,
+          fareOfferDeclinedDrivers: null,
+          fareCounterDeclinedDrivers: null,
+          lastGoFareDecision: null,
+          passengerOfferRound: Number(context.trip.passengerOfferRound || 0) + 1,
           fareStatus:
             "passenger_offer",
           negotiationEnabled:
@@ -6538,10 +6644,6 @@ exports.submitGoFareOffer =
               .TIMESTAMP
         };
 
-        await context.ref.update(
-          patch
-        );
-
         /*
          * Booking-critical passenger lock is written by the authenticated
          * server after ownership is verified. The passenger client must not
@@ -6564,6 +6666,8 @@ exports.submitGoFareOffer =
           const terminalStatuses =
             new Set([
               "completed",
+              "cancelled",
+              "canceled",
               "cancelled_by_driver",
               "cancelled_by_admin",
               "cancelled_by_commuter",
@@ -6604,6 +6708,8 @@ exports.submitGoFareOffer =
                     existingTrip.commuterId ||
                     ""
                   ) === passengerId ||
+                  String(existingTrip.commuterId || '') === decoded.uid ||
+                  existingTrip.passengers?.[decoded.uid] ||
                   existingTrip.passengers?.[
                     passengerId
                   ]
@@ -6612,6 +6718,8 @@ exports.submitGoFareOffer =
 
             const existingIsTerminal =
               !existingTrip ||
+              goContinuation.terminal(existingTrip?.status) ||
+              (existingTrip?.type === "club" && goContinuation.terminal(existingTrip.passengers?.[passengerId]?.status)) ||
               terminalStatuses.has(
                 String(
                   existingTrip?.status ||
@@ -6623,13 +6731,7 @@ exports.submitGoFareOffer =
             if (existingIsTerminal) {
               await passengerCurrentRef
                 .transaction(
-                  current =>
-                    String(
-                      current ||
-                      ""
-                    ) === existingRequestId
-                      ? null
-                      : undefined,
+                  current => goContinuation.clearRequestPointer(current, existingRequestId),
                   undefined,
                   false
                 );
@@ -6713,16 +6815,46 @@ exports.submitGoFareOffer =
           }
         }
 
-        return response
-          .status(200)
-          .json({
-            ok:
-              true,
-            requestId:
-              context.requestId,
-            pricing:
-              patch
+        const offered = await transactGoContinuation(context.ref, current => {
+          if (current.commuterId !== context.trip.commuterId || current.taxiId ||
+              current.fareStatus === 'agreed' || goContinuation.terminal(current.status)) return undefined;
+          if (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(current.negotiationRound || 1)) return undefined;
+          // An HTTP retry must not erase a driver's decision or pending counter.
+          if (Number(current.passengerOfferRound || 0) > 0 && Number(current.passengerOffer) === amount) return current;
+          return {...current, ...patch,
+            negotiationRound: Number(current.negotiationRound || 0) + 1,
+            passengerOfferRound: Number(current.passengerOfferRound || 0) + 1,
+            status: ['pending','searching','driver_busy'].includes(current.status) ? current.status : 'pending'};
+        });
+        if (!offered.committed || !offered.snapshot.val()) {
+          const latest = offered.snapshot.val();
+          const ended = !latest || goContinuation.terminal(latest.status);
+          if (ended) await admin.database().ref(`commuters/${passengerId}/currentRequest`)
+            .transaction(current => goContinuation.clearRequestPointer(current, context.requestId), undefined, false);
+          return response.status(409).json({error: 'This booking changed. Start a new booking or refresh your active ride.',
+            ...(ended ? {} : {code:'booking/active-exists', activeRequestId:context.requestId, activeStatus:latest.status})});
+        }
+
+        let dispatch;
+        try {
+          // Driver delivery is part of offer submission, not a second client task.
+          dispatch = await dispatchGoRideToDrivers(context.requestId, passengerId);
+        } catch (error) {
+          console.error("Go offer saved; driver delivery needs retry", error?.message || error);
+          await transactGoContinuation(context.ref, current => {
+            if (current.taxiId || goContinuation.terminal(current.status) || current.fareStatus !== "passenger_offer" ||
+                Number(current.negotiationRound) !== Number(offered.snapshot.val().negotiationRound)) return undefined;
+            return {...current, driverDispatchPending:true, driverFoundCount:0,
+              driverDispatchCount:0, driverSearchStatus:"searching_for_driver"};
           });
+          return response.status(503).json({
+            error:"Your offer is saved. Reconnecting to nearby drivers. You can retry the search.",
+            offerSaved:true, requestId:context.requestId, pricing:(await context.ref.once("value")).val()
+          });
+        }
+        return response.status(200).json({
+          ok:true, requestId:context.requestId, pricing:(await context.ref.once("value")).val(), dispatch
+        });
 
       } catch (error) {
         console.error(
@@ -6732,8 +6864,9 @@ exports.submitGoFareOffer =
         );
 
         return response
-          .status(500)
+          .status(error.status || 500)
           .json({
+            ...(error.code ? {code: error.code} : {}),
             error:
               error?.message ||
               "Unable to protect this fare offer."
@@ -6823,6 +6956,13 @@ exports.counterGoFare =
             });
         }
 
+        if (goContinuation.terminal(context.trip.status) || context.trip.fareStatus !== 'passenger_offer') {
+          return response.status(409).json({error:'This offer changed or is waiting for the passenger. Refresh before countering.'});
+        }
+        if (driver.data.isOnline !== true || driver.data.isBroadcasting !== true || driver.data.currentRequest || !driverProfileCanReceiveRequests(driver.data)) {
+          return response.status(409).json({error:'Go online and finish any active trip before sending a counter-offer.'});
+        }
+
         const notification =
           await admin.database()
             .ref(
@@ -6867,17 +7007,9 @@ exports.counterGoFare =
             0
           );
 
-        if (
-          counterCount >=
-          ASIYE_GO_NEGOTIATION
-            .maxDriverCounters
-        ) {
-          return response
-            .status(409)
-            .json({
-              error:
-                "The maximum number of driver counters has been reached."
-            });
+        if ((request.body?.passengerOffer != null && Number(request.body.passengerOffer) !== passengerOffer) ||
+            (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+          return response.status(409).json({error:'The passenger offer changed. Review the latest fare before countering.'});
         }
 
         if (
@@ -6906,7 +7038,7 @@ exports.counterGoFare =
             pricing
           );
 
-        await context.ref.update({
+        const counterPatch = {
           driverCounterFare:
             amount,
           negotiationDriverId:
@@ -6927,14 +7059,23 @@ exports.counterGoFare =
             commercial.platformCommission,
           counterDriverNetFare:
             commercial.driverNetFare,
-          counterExpiresAt:
-            Date.now() +
-            (60 * 1000),
+          // Remains open until a passenger or driver makes a decision.
+          counterExpiresAt: null,
           fareCounterUpdatedAt:
             admin.database
               .ServerValue
               .TIMESTAMP
+        };
+        const counter = await transactGoContinuation(context.ref, current => {
+          if (goContinuation.terminal(current.status) || current.taxiId || current.fareStatus !== 'passenger_offer' ||
+              Number(current.passengerOffer) !== Number(context.trip.passengerOffer) ||
+              Number(current.driverCounterCount || 0) !== counterCount ||
+              Number(current.negotiationRound || 1) !== Number(context.trip.negotiationRound || 1) ||
+              current.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === Number(current.passengerOfferRound || 1) ||
+              current.fareCounterDeclinedDrivers?.[driver.id] === true) return undefined;
+          return {...current, ...counterPatch};
         });
+        if (!counter.committed || !counter.snapshot.val()) return response.status(409).json({error:'The passenger offer changed. Review the latest fare before countering.'});
 
         if (context.trip.commuterId) {
           await admin.database()
@@ -6947,7 +7088,7 @@ exports.counterGoFare =
               title:
                 "Driver counter offer",
               message:
-                `${goDriverDetails(driver).driverName} countered R${amount}. Your protected range ends at R${pricing.maximumFareOffer}.`,
+                `${goDriverDetails(driver).driverName} countered R${amount}. Accept this fare to book the ride, or keep your offer.`,
               requestId:
                 context.requestId,
               counterFare:
@@ -7132,6 +7273,10 @@ exports.acceptGoFareOffer =
             });
         }
 
+        if (request.body?.amount != null && Number(request.body.amount) !== amount) {
+          return response.status(409).json({error:'The passenger offer changed. Review the latest amount before accepting.'});
+        }
+
         const trip =
           await reserveGoNegotiatedDriver({
             requestId:
@@ -7140,6 +7285,8 @@ exports.acceptGoFareOffer =
             driverAuthUid:
               decoded.uid,
             amount,
+            expectedPassengerOffer: context.trip.passengerOffer,
+            expectedNegotiationRound: context.trip.negotiationRound || 1,
             expectedFareStatuses: [
               "passenger_offer"
             ]
@@ -7274,22 +7421,9 @@ exports.acceptGoFareCounter =
             });
         }
 
-        if (
-          Number(
-            context.trip.counterExpiresAt ||
-            0
-          ) &&
-          Date.now() >
-            Number(
-              context.trip.counterExpiresAt
-            )
-        ) {
-          return response
-            .status(409)
-            .json({
-              error:
-                "This driver counter expired. Keep searching for another driver."
-            });
+        if ((request.body?.amount != null && Number(request.body.amount) !== Number(context.trip.driverCounterFare)) ||
+            (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+          return response.status(409).json({error:'The driver counter changed. Review the latest fare before accepting.'});
         }
 
         const driverSnapshot =
@@ -7339,7 +7473,7 @@ exports.acceptGoFareCounter =
             .status(422)
             .json({
               error:
-                "The driver counter is outside the protected range."
+                "The driver counter is not a valid fare."
             });
         }
 
@@ -7353,6 +7487,9 @@ exports.acceptGoFareCounter =
               driver.data?.userUid ||
               driver.id,
             amount,
+            expectedPassengerOffer: context.trip.passengerOffer,
+            expectedCounterFare: context.trip.driverCounterFare,
+            expectedNegotiationRound: context.trip.negotiationRound || 1,
             expectedFareStatuses: [
               "driver_counter"
             ]
@@ -7401,6 +7538,80 @@ exports.acceptGoFareCounter =
       }
     }
   );
+
+// Only an authenticated notified driver can decline their copy of an offer.
+// The passenger booking stays active for the other drivers.
+exports.declineGoFareOffer = onRequest(
+  {region: 'us-central1', invoker: 'public'},
+  async (request, response) => {
+    walletSmsCors(request, response);
+    if (request.method === 'OPTIONS') return response.status(204).send('');
+    if (request.method !== 'POST') return response.status(405).json({error:'POST required.'});
+    try {
+      const decoded = await verifiedRequestUser(request);
+      if (!decoded) return response.status(401).json({error:'Driver authentication is required.'});
+      const driver = await resolveTaxiForAuthUid(decoded.uid);
+      if (!driver) return response.status(403).json({error:'Driver profile could not be verified.'});
+      const context = await loadGoNegotiationRequest(request.body?.requestId);
+      if (goContinuation.terminal(context.trip.status) || context.trip.taxiId || context.trip.fareStatus === 'agreed') {
+        return response.status(409).json({error:'This ride has already changed or been accepted.'});
+      }
+      const offerRound = Number(context.trip.passengerOfferRound || 1);
+      if (context.trip.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === offerRound) {
+        return response.status(200).json({ok:true, requestId:context.requestId, decision:'declined'});
+      }
+      const notificationRef = admin.database().ref(`notifications/taxis/${driver.id}/${context.requestId}`);
+      if (!(await notificationRef.once('value')).exists()) {
+        return response.status(403).json({error:'This offer was not sent to your driver account.'});
+      }
+      if ((request.body?.amount != null && Number(request.body.amount) !== Number(context.trip.passengerOffer)) ||
+          (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+        return response.status(409).json({error:'The passenger offer changed. Review it before declining.'});
+      }
+      let changed = false;
+      const decision = await transactGoContinuation(context.ref, current => {
+        changed = false;
+        if (goContinuation.terminal(current.status) || current.taxiId ||
+            !['passenger_offer','driver_counter'].includes(current.fareStatus) ||
+            Number(current.passengerOfferRound || 1) !== offerRound ||
+            Number(current.passengerOffer) !== Number(context.trip.passengerOffer) ||
+            Number(current.negotiationRound || 1) !== Number(context.trip.negotiationRound || 1)) return undefined;
+        if (current.fareOfferDeclinedDrivers?.[driver.id]?.offerRound === offerRound) return current;
+        changed = true;
+        const record = {offerRound, amount:Number(current.passengerOffer), at:Date.now()};
+        const next = {...current,
+          fareOfferDeclinedDrivers:{...current.fareOfferDeclinedDrivers, [driver.id]:record},
+          lastGoFareDecision:{...record, action:'declined', driverId:driver.id, driverName:goDriverDetails(driver).driverName}
+        };
+        if (current.fareStatus === 'driver_counter' && current.negotiationDriverId === driver.id) {
+          Object.assign(next, {fareStatus:'passenger_offer', driverCounterFare:null,
+            counterDriverNetFare:null, counterPlatformCommission:null, counterExpiresAt:null,
+            negotiationDriverId:null, negotiationDriverName:null,
+            negotiationRound:Number(current.negotiationRound || 1) + 1});
+        }
+        if (next.fareStatus === 'passenger_offer') {
+          next.driverFoundCount = Math.max(0, Number(current.driverFoundCount || 1) - 1);
+          next.driverSearchStatus = next.driverFoundCount ? 'driver_found_waiting_acceptance' : 'searching';
+          next.status = 'searching';
+        }
+        return next;
+      });
+      if (!decision.committed) return response.status(409).json({error:'This offer changed. Refresh before deciding.'});
+      await notificationRef.remove().catch(() => {});
+      if (changed && context.trip.commuterId) {
+        await admin.database().ref(`notifications/commuters/${context.trip.commuterId}`).push({
+          type:'go_fare_declined', title:'Driver declined your offer',
+          message:`${goDriverDetails(driver).driverName} declined R${context.trip.passengerOffer}. Your request is still open for other drivers.`,
+          requestId:context.requestId, timestamp:admin.database.ServerValue.TIMESTAMP
+        }).catch(() => {});
+      }
+      return response.status(200).json({ok:true, requestId:context.requestId, decision:'declined'});
+    } catch (error) {
+      console.error('Decline Go fare offer failed', error?.message || error);
+      return response.status(500).json({error:error?.message || 'Unable to decline this offer.'});
+    }
+  }
+);
 
 exports.declineGoFareCounter =
   onRequest(
@@ -7493,7 +7704,17 @@ exports.declineGoFareCounter =
             });
         }
 
-        await context.ref.update({
+        if ((request.body?.amount != null && Number(request.body.amount) !== Number(context.trip.driverCounterFare)) ||
+            (request.body?.negotiationRound != null && Number(request.body.negotiationRound) !== Number(context.trip.negotiationRound || 1))) {
+          return response.status(409).json({error:'The driver counter changed. Review the latest fare before deciding.'});
+        }
+
+        const declined = await transactGoContinuation(context.ref, current => {
+          if (goContinuation.terminal(current.status) || current.taxiId || current.fareStatus !== 'driver_counter' ||
+              current.negotiationDriverId !== driverId ||
+              Number(current.driverCounterFare) !== Number(context.trip.driverCounterFare) ||
+              Number(current.negotiationRound || 1) !== Number(context.trip.negotiationRound || 1)) return undefined;
+          return {...current,
           fareStatus:
             "passenger_offer",
           driverCounterFare:
@@ -7510,15 +7731,15 @@ exports.declineGoFareCounter =
             null,
           status:
             "searching",
-          [
-            `fareCounterDeclinedDrivers/${driverId}`
-          ]:
-            true,
+          negotiationRound: Number(current.negotiationRound || 1) + 1,
+          fareCounterDeclinedDrivers: {...current.fareCounterDeclinedDrivers, [driverId]: true},
           fareCounterUpdatedAt:
             admin.database
               .ServerValue
               .TIMESTAMP
+          };
         });
+        if (!declined.committed) return response.status(409).json({error:'This counter changed or the ride was already accepted.'});
 
         await admin.database()
           .ref(
@@ -7567,7 +7788,7 @@ async function transactGoContinuation(ref, transform) {
   const tx = await ref.transaction(current => {
     failure = null;
     if (current === null) return null;
-    try { return transform(current); }
+    try { return tripEndSafety.encode(transform(tripEndSafety.decode(current))); }
     catch (error) { failure = error; return undefined; }
   }, undefined, false);
   if (failure) throw failure;
@@ -8023,9 +8244,17 @@ exports.goTripActionSecure = onRequest(
       if (!user) return response.status(401).json({error: 'Sign-in required.'});
       const id = validRequestId(request.body?.requestId);
       if (!id) return response.status(400).json({error: 'Invalid trip.'});
+      if (request.body?.action === 'ratePassenger')
+        return response.json(await tripRatings.handle({db:admin.database(),id,uid:user.uid,
+          body:request.body,ownsProfile:profileOwnedByAuth,transact:transactGoContinuation}));
+      if (tripEndSafety.ACTIONS.has(request.body?.action))
+        return response.json(await tripEndSafety.handle({db:admin.database(),id,uid:user.uid,
+          body:request.body,ownsProfile:profileOwnedByAuth,transact:transactGoContinuation}));
       const ref = admin.database().ref(`requests/${id}`);
       const trip = (await ref.once('value')).val();
       if (!trip || trip.type === 'club') return response.status(409).json({error: 'Use the Club booking action for this trip.'});
+      if (trip.parcelSecurityVersion === 2)
+        return response.status(409).json({error: 'Use the secure Parcel action for this booking.'});
       const name = String(request.body.action || '');
       const passenger = await profileOwnedByAuth('commuters', trip.commuterId, user.uid);
       const driver = trip.taxiId && await profileOwnedByAuth('taxis', trip.taxiId, user.uid);
@@ -8063,11 +8292,13 @@ exports.goTripActionSecure = onRequest(
       if (name === 'cancel') {
         const locks = [[`commuters/${trip.commuterId}/currentRequest`, id]];
         if (trip.taxiId) await admin.database().ref(`taxis/${trip.taxiId}`).transaction(taxi => {
+          if (taxi === null) return null;
           if (!taxi || taxi.currentRequest !== id) return undefined;
           return {...taxi, currentRequest: null, isFull: false, passengerCount: 0};
         });
         for (const [path, expected] of locks)
-          await admin.database().ref(path).transaction(value => value === expected ? null : undefined);
+          await admin.database().ref(path).transaction(value => goContinuation.clearRequestPointer(value, expected), undefined, false);
+        if (trip.queuedTaxiId) await admin.database().ref(`taxis/${trip.queuedTaxiId}/bookingQueue/${id}`).remove();
         if (trip.type === 'delivery') await admin.database().ref(`delivery_requests/${id}`).update({status: result.status, cancelledAt: result.cancelledAt});
       }
       return response.json({ok: true, status: result.status,
@@ -8077,604 +8308,457 @@ exports.goTripActionSecure = onRequest(
     }
   });
 
-exports.dispatchGoRideRequest =
-  onRequest(
-    {
-      region:
-        "us-central1",
-      invoker:
-        "public"
-    },
-    async (
-      request,
-      response
-    ) => {
-      walletSmsCors(
-        request,
-        response
-      );
-
-      if (
-        request.method ===
-        "OPTIONS"
-      ) {
-        return response
-          .status(204)
-          .send("");
+// Parcel V2 driver assignment is server-controlled; direct RTDB claim is forbidden.
+exports.acceptParcelRequestSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    let driverId="",id="",driverLocked=false,requestClaimed=false;
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Driver sign-in required."});
+      driverId=safeProfileId(req.body?.driverId);
+      id=String(req.body?.requestId||"");
+      if(!driverId||!parcelSecurity.validId(id))
+        return res.status(400).json({error:"Invalid driver or Parcel reference."});
+      if(!await profileOwnedByAuth("taxis",driverId,user.uid))
+        return res.status(403).json({error:"This driver account is not yours."});
+      const db=admin.database(),driverRef=db.ref(`taxis/${driverId}`);
+      const driver=(await driverRef.once("value")).val();
+      const vehicleApproved=driver?.vehicleApproved===true||
+        String(driver?.vehicleApprovalStatus||"").toLowerCase()==="approved";
+      if(!driver||driver.verificationStatus!=="verified"||!vehicleApproved||
+        !driverProfileCanReceiveRequests(driver))
+        return res.status(403).json({error:"Approved driver and vehicle compliance required."});
+      const reqRef=db.ref(`requests/${id}`);
+      const trip=(await reqRef.once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(409).json({error:"Secure Parcel V2 required."});
+      if(!["pending","searching","driver_busy","accepted","payment_required"].includes(trip.status))
+        return res.status(409).json({error:"Parcel is no longer available."});
+      if(trip.taxiId&&trip.taxiId!==driverId)
+        return res.status(409).json({error:"Another driver already accepted this Parcel."});
+      if(trip.queuedTaxiId&&trip.queuedTaxiId!==driverId)
+        return res.status(409).json({error:"Parcel is reserved for another driver."});
+      if(trip.paymentMethod==="card"){
+        const account=(await db.ref(`driverPaystackSubaccounts/${driverId}`).once("value")).val();
+        if(account?.status!=="verified"||
+          !/^ACCT_[A-Za-z0-9]+$/.test(String(account.subaccountCode||"")))
+          return res.status(409).json({error:"Complete Paystack subaccount verification before accepting Card bookings."});
       }
-
-      if (
-        request.method !==
-        "POST"
-      ) {
-        return response
-          .status(405)
-          .json({
-            error:
-              "POST required."
-          });
-      }
-
-      try {
-        const match =
-          (
-            request.get(
-              "authorization"
-            ) ||
-            ""
-          ).match(
-            /^Bearer (.+)$/
-          );
-
-        if (!match) {
-          return response
-            .status(401)
-            .json({
-              error:
-                "Passenger authentication is required."
-            });
-        }
-
-        const decoded =
-          await admin.auth()
-            .verifyIdToken(
-              match[1]
-            );
-
-        const requestId =
-          String(
-            request.body?.requestId ||
-            ""
-          ).trim();
-
-        if (
-          !/^[A-Za-z0-9_-]{1,160}$/.test(
-            requestId
-          )
-        ) {
-          return response
-            .status(400)
-            .json({
-              error:
-                "Ride reference is invalid."
-            });
-        }
-
-        const passenger =
-          await resolvePassengerForWallet(
-            decoded
-          );
-
-        if (!passenger) {
-          return response
-            .status(403)
-            .json({
-              error:
-                "Passenger profile could not be verified."
-            });
-        }
-
-        const requestRef =
-          admin.database()
-            .ref(
-              `requests/${requestId}`
-            );
-
-        const snapshot =
-          await requestRef.once(
-            "value"
-          );
-
-        if (!snapshot.exists()) {
-          return response
-            .status(404)
-            .json({
-              error:
-                "Ride request was not found."
-            });
-        }
-
-        const trip =
-          snapshot.val() || {};
-
-        const ownsTrip =
-          trip.commuterId ===
-            passenger.id ||
-          trip.commuterId ===
-            decoded.uid ||
-          Boolean(
-            trip.passengers?.[
-              passenger.id
-            ]
-          ) ||
-          Boolean(
-            trip.passengers?.[
-              decoded.uid
-            ]
-          );
-
-        if (!ownsTrip) {
-          return response
-            .status(403)
-            .json({
-              error:
-                "This ride does not belong to the signed-in passenger."
-            });
-        }
-
-        if (
-          trip.type === "club"
-        ) {
-          return response
-            .status(400)
-            .json({
-              error:
-                "Club rides use the Club dispatch flow."
-            });
-        }
-
-        if (
-          ![
-            "pending",
-            "searching",
-            "driver_busy"
-          ].includes(
-            String(
-              trip.status ||
-              ""
-            )
-          )
-        ) {
-          return response
-            .status(409)
-            .json({
-              error:
-                "This ride is not ready for driver dispatch."
-            });
-        }
-
-        const pickupLat =
-          Number(
-            trip.commuterLocation
-              ?.latitude
-          );
-
-        const pickupLng =
-          Number(
-            trip.commuterLocation
-              ?.longitude
-          );
-
-        if (
-          !Number.isFinite(
-            pickupLat
-          ) ||
-          !Number.isFinite(
-            pickupLng
-          )
-        ) {
-          return response
-            .status(400)
-            .json({
-              error:
-                "Pickup location is unavailable."
-            });
-        }
-
-        const taxisSnapshot =
-          await admin.database()
-            .ref(
-              "taxis"
-            )
-            .once(
-              "value"
-            );
-
-        const idleDrivers =
-          [];
-
-        const busyDrivers =
-          [];
-
-        taxisSnapshot.forEach(
-          child => {
-            const taxi =
-              child.val() ||
-              {};
-
-            if (
-              taxi.isOnline !==
-                true ||
-              !driverProfileCanReceiveRequests(
-                taxi
-              )
-            ) {
-              return;
-            }
-
-            if (
-              trip.fareCounterDeclinedDrivers?.[
-                child.key
-              ] ===
-                true
-            ) {
-              return;
-            }
-
-            const lat =
-              Number(
-                taxi.latitude
-              );
-
-            const lng =
-              Number(
-                taxi.longitude
-              );
-
-            if (
-              !Number.isFinite(lat) ||
-              !Number.isFinite(lng)
-            ) {
-              return;
-            }
-
-            const vehicleType =
-              String(
-                taxi.vehicleType ||
-                ""
-              )
-                .toLowerCase();
-
-            if (
-              vehicleType &&
-              ![
-                "ehailing",
-                "e-hailing",
-                "go",
-                "car"
-              ].includes(
-                vehicleType
-              )
-            ) {
-              return;
-            }
-
-            const distanceKm =
-              haversineKm(
-                pickupLat,
-                pickupLng,
-                lat,
-                lng
-              );
-
-            if (
-              !Number.isFinite(
-                distanceKm
-              ) ||
-              distanceKm >
-                10
-            ) {
-              return;
-            }
-
-            const item = {
-              driverId:
-                child.key,
-              taxi,
-              distanceKm
-            };
-
-            if (
-              taxi.currentRequest
-            ) {
-              busyDrivers.push(
-                item
-              );
-            } else if (
-              taxi.isFull !==
-                true &&
-              taxi.isBroadcasting ===
-                true
-            ) {
-              idleDrivers.push(
-                item
-              );
-            }
-          }
-        );
-
-        idleDrivers.sort(
-          (
-            left,
-            right
-          ) =>
-            left.distanceKm -
-            right.distanceKm
-        );
-
-        busyDrivers.sort(
-          (
-            left,
-            right
-          ) =>
-            left.distanceKm -
-            right.distanceKm
-        );
-
-        if (
-          idleDrivers.length
-        ) {
-          const candidates =
-            idleDrivers.slice(
-              0,
-              8
-            );
-
-          const updates = {};
-
-          for (
-            const candidate
-            of candidates
-          ) {
-            updates[
-              `notifications/taxis/${candidate.driverId}/${requestId}`
-            ] = {
-              type:
-                "ride_request",
-              requestId,
-              rideType:
-                "go",
-              commuterId:
-                trip.commuterId ||
-                passenger.id,
-              commuterName:
-                trip.commuterName ||
-                "Passenger",
-              pickupAddress:
-                trip.pickupAddress ||
-                "Pickup",
-              destination:
-                trip.destination ||
-                trip.destinationName ||
-                "Destination",
-              fare:
-                Number(
-                  trip.finalAmount ||
-                  trip.calculatedPrice ||
-                  0
-                ),
-              distanceKm:
-                candidate.distanceKm,
-              paymentMethod:
-                String(
-                  trip.paymentMethod ||
-                  "cash"
-                ),
-              timestamp:
-                admin.database
-                  .ServerValue
-                  .TIMESTAMP
-            };
-          }
-
-          updates[
-            `requests/${requestId}/status`
-          ] =
-            "searching";
-
-          updates[
-            `requests/${requestId}/driverDispatchCount`
-          ] =
-            candidates.length;
-
-          updates[
-            `requests/${requestId}/driverDispatchAt`
-          ] =
-            admin.database
-              .ServerValue
-              .TIMESTAMP;
-
-          updates[
-            `requests/${requestId}/driverBusy`
-          ] =
-            false;
-
-          updates[
-            `requests/${requestId}/driverSearchStatus`
-          ] =
-            "driver_found_waiting_acceptance";
-
-          updates[
-            `requests/${requestId}/driverFoundCount`
-          ] =
-            candidates.length;
-
-          updates[
-            `requests/${requestId}/nearestDriverDistanceKm`
-          ] =
-            Number(
-              candidates[0]?.distanceKm ||
-              0
-            );
-
-          updates[
-            `requests/${requestId}/driverSearchUpdatedAt`
-          ] =
-            admin.database
-              .ServerValue
-              .TIMESTAMP;
-
-          await admin.database()
-            .ref()
-            .update(
-              updates
-            );
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              mode:
-                "broadcast",
-              drivers:
-                candidates.length
-            });
-        }
-
-        if (
-          busyDrivers.length
-        ) {
-          const selected =
-            busyDrivers[0];
-
-          const now =
-            admin.database
-              .ServerValue
-              .TIMESTAMP;
-
-          await admin.database()
-            .ref()
-            .update({
-              [`requests/${requestId}/status`]:
-                "driver_busy",
-              [`requests/${requestId}/queuedTaxiId`]:
-                selected.driverId,
-              [`requests/${requestId}/driverBusy`]:
-                true,
-              [`requests/${requestId}/driverSearchStatus`]:
-                "driver_found_busy",
-              [`requests/${requestId}/driverFoundCount`]:
-                1,
-              [`requests/${requestId}/nearestDriverDistanceKm`]:
-                Number(
-                  selected.distanceKm ||
-                  0
-                ),
-              [`requests/${requestId}/driverSearchUpdatedAt`]:
-                now,
-              [`requests/${requestId}/queuedAt`]:
-                now,
-              [`taxis/${selected.driverId}/bookingQueue/${requestId}`]:
-                {
-                  requestId,
-                  commuterId:
-                    trip.commuterId ||
-                    passenger.id,
-                  commuterName:
-                    trip.commuterName ||
-                    "Passenger",
-                  pickupAddress:
-                    trip.pickupAddress ||
-                    "Pickup",
-                  destination:
-                    trip.destination ||
-                    trip.destinationName ||
-                    "Destination",
-                  fare:
-                    Number(
-                      trip.finalAmount ||
-                      trip.calculatedPrice ||
-                      0
-                    ),
-                  paymentMethod:
-                    String(
-                      trip.paymentMethod ||
-                      "cash"
-                    ),
-                  queuedAt:
-                    now
-                }
-            });
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              mode:
-                "queued",
-              driverId:
-                selected.driverId
-            });
-        }
-
-        await requestRef.update({
-          status:
-            "searching",
-          driverBusy:
-            false,
-          driverDispatchCount:
-            0,
-          driverSearchStatus:
-            "searching_for_driver",
-          driverFoundCount:
-            0,
-          nearestDriverDistanceKm:
-            null,
-          driverSearchUpdatedAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP,
-          driverDispatchAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP
-        });
-
-        return response
-          .status(200)
-          .json({
-            ok:
-              true,
-            mode:
-              "none",
-            drivers:
-              0
-          });
-
-      } catch (error) {
-        console.error(
-          "Go ride dispatch failed",
-          {
-            code:
-              error?.code ||
-              "unknown",
-            message:
-              error?.message ||
-              String(error)
-          }
-        );
-
-        return response
-          .status(500)
-          .json({
-            error:
-              "Unable to send this ride request to nearby drivers."
-          });
+      const driverLock=await driverRef.child("currentRequest").transaction(
+        v=>v==null||v===""||v===id?id:undefined,undefined,false);
+      if(!driverLock.committed)
+        return res.status(409).json({error:"Finish your other active booking before accepting."});
+      driverLocked=true;
+      const now=Date.now();
+      const tx=await reqRef.transaction(current=>{
+        if(current===null)return null;
+        if(!current||current.type!=="delivery"||current.parcelSecurityVersion!==2||
+           current.commuterId!==trip.commuterId ||
+           !["pending","searching","driver_busy","accepted","payment_required"].includes(current.status)||
+           (current.taxiId&&current.taxiId!==driverId)||
+           (current.queuedTaxiId&&current.queuedTaxiId!==driverId))return;
+        if(current.taxiId===driverId)return current;
+        const card=current.paymentMethod==="card";
+        return {...current,
+          taxiId:driverId,driverAuthUid:user.uid,
+          driverName:String(driver.name||driver.fullName||"Asiye Driver"),
+          driverPhone:String(driver.phone||driver.phoneNumber||""),
+          vehicleReg:String(driver.vehicleReg||driver.registrationNumber||""),
+          vehicleMake:String(driver.vehicleMake||driver.make||""),
+          vehicleModel:String(driver.vehicleModel||driver.model||""),
+          vehicleColor:String(driver.vehicleColor||driver.color||""),
+          driverProfileImageUrl:String(driver.profileImageUrl||""),
+          driverVehiclePhoto:String(driver.vehiclePhoto||driver.carPhoto||""),
+          acceptedAt:now,status:card?"payment_required":"accepted",
+          paymentStatus:card?"payment_required":"cash_due",
+          paymentsReady:!card,queuedTaxiId:null,driverBusy:false
+        };
+      },undefined,false);
+      if(!tx.committed||!tx.snapshot.val()||tx.snapshot.val().taxiId!==driverId)
+        return res.status(409).json({error:"Parcel was accepted by another driver or cancelled."});
+      requestClaimed=true;
+      const accepted=tx.snapshot.val();
+      await driverRef.transaction(current=>{
+        if(current===null)return null;
+        if(current.currentRequest!==id)return;
+        return {...current,isBroadcasting:false,isFull:true,passengerCount:1,updatedAt:now};
+      },undefined,false);
+      await db.ref(`delivery_requests/${id}`).update({
+        taxiId:driverId,driverAuthUid:user.uid,driverName:accepted.driverName,
+        status:accepted.status,paymentStatus:accepted.paymentStatus,acceptedAt:now
+      });
+      await db.ref(`notifications/commuters/${trip.commuterId}`).push({
+        type:"request_accepted",requestId:id,driverId,driverName:accepted.driverName,
+        status:accepted.status,timestamp:now
+      });
+      return res.status(200).json({ok:true,requestId:id,status:accepted.status,taxiId:driverId});
+    }catch(e){
+      return res.status(e.status||409).json({error:e.message||"Unable to accept Parcel."});
+    }finally{
+      if(driverLocked&&!requestClaimed){
+        const db=admin.database();
+        const ownerSnapshot=await db.ref(`requests/${id}/taxiId`).once("value").catch(()=>null);
+        const owner=ownerSnapshot?.val()||null;
+        if(owner!==driverId)await db.ref(`taxis/${driverId}/currentRequest`)
+          .transaction(v=>v===null||v===id?null:undefined,undefined,false).catch(()=>{});
       }
     }
-  );
+  }
+);
+
+// Secure Parcel V2: PIN is generated and stored ONLY on the backend.
+// No driver or request listener receives the passenger's secret PIN.
+const parcelSecurity = require("./parcel-security");
+exports.createParcelRequestSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    res.set("Cache-Control","no-store");
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    let id="", passengerId="", reserved=false;
+    try {
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Sign in to request a parcel."});
+      const passenger=await resolvePassengerForWallet(user);
+      if(!passenger?.id || !await profileOwnedByAuth("commuters",passenger.id,user.uid))
+        return res.status(403).json({error:"Passenger account is not verified."});
+      assertPassengerBookingProfile(passenger, user);
+      const data=passenger.data||{};
+      passengerId=passenger.id;
+      const ref=admin.database().ref("requests").push();
+      id=ref.key;
+      const record=parcelSecurity.createParcelRecord(req.body||{},{
+        id:passengerId,name:data.name||data.fullName,
+        phone:data.phone||data.phoneNumber,
+        profileImageUrl:data.profileImageUrl
+      },id,Date.now());
+      const lock=admin.database().ref(`commuters/${passengerId}/currentRequest`);
+      const tx=await lock.transaction(current=>current?undefined:id,undefined,false);
+      if(!tx.committed)return res.status(409).json({error:"You already have an active booking. Resume or cancel it."});
+      reserved=true;
+      const pin=String(require("node:crypto").randomInt(1000,10000));
+      const db=admin.database();
+      const updates={
+        [`parcelPrivate/${id}`]:{
+          passengerId,authUid:user.uid,pin,createdAt:Date.now(),expiresAt:Date.now()+8*60*60*1000
+        },
+        [`requests/${id}`]:record,
+        [`delivery_requests/${id}`]:record
+      };
+      if(record.paymentMethod==="cash")updates[tripPaymentPath(id,passengerId)]={
+        method:"cash",provider:"cash",requestId:id,passengerId,amount:record.finalAmount,
+        currency:"ZAR",status:"cash_due",createdAt:Date.now()
+      };
+      // Dispatch listeners must never observe a booking without its PIN/ledger.
+      await db.ref().update(updates);
+      return res.status(200).json({ok:true,requestId:id,request:record,pickupPin:pin});
+    }catch(error){
+      // Only remove our reservation, never overwrite a different booking.
+      if(reserved){
+        await admin.database().ref(`commuters/${passengerId}/currentRequest`)
+          .transaction(v=>v===null||v===id?null:undefined,undefined,false).catch(()=>{});
+      }
+      if(id){
+        const db=admin.database();
+        await Promise.all([
+          db.ref(`requests/${id}`).remove(),
+          db.ref(`delivery_requests/${id}`).remove(),
+          db.ref(`parcelPrivate/${id}`).remove(),
+          db.ref(`tripPayments/${id}`).remove()
+        ]).catch(()=>{});
+      }
+      return res.status(error.status||400).json({error:error.message||"Unable to create secure parcel."});
+    }
+  }
+);
+exports.cancelParcelBookingSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Sign in required."});
+      const id=String(req.body?.requestId||"");
+      if(!parcelSecurity.validId(id))return res.status(400).json({error:"Invalid parcel reference."});
+      const db=admin.database(),ref=db.ref(`requests/${id}`);
+      const trip=(await ref.once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(409).json({error:"Secure Parcel booking required."});
+      const passenger=await profileOwnedByAuth("commuters",trip.commuterId,user.uid);
+      const driver=trip.taxiId&&await profileOwnedByAuth("taxis",trip.taxiId,user.uid);
+      if(!passenger&&!driver)return res.status(403).json({error:"Not your booking."});
+      const cancelled=String(trip.status||"").startsWith("cancelled");
+      if(!cancelled&&(["arrived","in_transit","completed"].includes(trip.status)||trip.arrivedAt||trip.pinVerifiedAt))
+        return res.status(409).json({error:"Driver has arrived. Contact support to end this Parcel."});
+      const ledger=(await db.ref(tripPaymentPath(id,trip.commuterId)).once("value")).val();
+      if(!cancelled&&trip.paymentMethod==="card" && ledger &&
+        ["initializing","initialization_unknown","initialized","held","captured","success"].includes(ledger.status))
+        return res.status(409).json({error:"Card checkout exists. Contact support for a verified cancellation/refund."});
+      const nextStatus=driver?"cancelled_by_driver":"cancelled_by_commuter";
+      const tx=await ref.transaction(current=>{
+        if(current===null)return null;
+        if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId||current.parcelSecurityVersion!==2)return;
+        if(String(current.status||"").startsWith("cancelled"))return current;
+        if(
+          current.arrivedAt||current.pinVerifiedAt||
+          ["arrived","in_transit","completed"].includes(current.status))return;
+        return {...current,status:nextStatus,cancelledAt:Date.now()};
+      },undefined,false);
+      if(!tx.committed||!tx.snapshot.val())
+        return res.status(409).json({error:"Parcel status changed. Reopen the trip."});
+      const result=tx.snapshot.val();
+      await db.ref(`delivery_requests/${id}`).update({
+        status:result.status,cancelledAt:result.cancelledAt||Date.now()
+      });
+      await db.ref(`commuters/${trip.commuterId}/currentRequest`)
+        .transaction(v=>v===null||v===id?null:undefined,undefined,false);
+      if(trip.taxiId)await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+        if(taxi===null)return null;
+        if(!taxi||taxi.currentRequest!==id)return undefined;
+        return {...taxi,currentRequest:null,isFull:false,isBroadcasting:false,passengerCount:0};
+      },undefined,false);
+      return res.status(200).json({ok:true,status:result.status});
+    }catch(e){return res.status(e.status||409).json({error:e.message||"Unable to cancel Parcel."});}
+  }
+);
+exports.getParcelPickupPinSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);res.set("Cache-Control","no-store");
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Sign in to view your pickup PIN."});
+      const id=String(req.body?.requestId||"");
+      if(!parcelSecurity.validId(id))return res.status(400).json({error:"Invalid parcel."});
+      const db=admin.database();
+      const trip=(await db.ref(`requests/${id}`).once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(404).json({error:"Secure parcel not found."});
+      if(!await profileOwnedByAuth("commuters",trip.commuterId,user.uid))
+        return res.status(403).json({error:"Only the sender can view the pickup PIN."});
+      const secret=(await db.ref(`parcelPrivate/${id}`).once("value")).val();
+      if(!secret||secret.passengerId!==trip.commuterId||
+        secret.expiresAt<Date.now()||String(trip.status||"").startsWith("cancelled"))
+        return res.status(409).json({error:"Parcel PIN has expired or been cancelled."});
+      return res.status(200).json({ok:true,requestId:id,pickupPin:secret.pin});
+    }catch(e){return res.status(e.status||409).json({error:e.message});}
+  }
+);
+exports.parcelTripActionSecure = onRequest(
+  {region:"us-central1",invoker:"public"},
+  async(req,res)=>{
+    walletSmsCors(req,res);
+    res.set("Cache-Control","no-store");
+    if(req.method==="OPTIONS")return res.status(204).send("");
+    if(req.method!=="POST")return res.status(405).json({error:"POST required."});
+    try{
+      const user=await verifiedRequestUser(req);
+      if(!user)return res.status(401).json({error:"Driver sign-in required."});
+      const id=String(req.body?.requestId||"");
+      if(!parcelSecurity.validId(id))return res.status(400).json({error:"Invalid parcel reference."});
+      const name=String(req.body?.action||"");
+      if(!["onWay","arrive","verifyPin","complete"].includes(name))
+        return res.status(400).json({error:"Unsupported Parcel action."});
+      const db=admin.database(),ref=db.ref(`requests/${id}`);
+      const trip=(await ref.once("value")).val();
+      if(!trip||trip.type!=="delivery"||trip.parcelSecurityVersion!==2)
+        return res.status(409).json({error:"Secure Parcel V2 required."});
+      if(!trip.taxiId||!await profileOwnedByAuth("taxis",trip.taxiId,user.uid))
+        return res.status(403).json({error:"Only the assigned driver can verify pickup."});
+      const taxi=(await db.ref(`taxis/${trip.taxiId}`).once("value")).val();
+      const pickup=trip.commuterLocation||{};
+      const locationFresh=Boolean(taxi&&Number(taxi.lastSeen)>Date.now()-120000&&
+        Number(taxi.lastSeen)<=Date.now()+10000);
+      const nearPickup=Boolean(locationFresh&&taxi.currentRequest===id&&
+        parcelSecurity.distanceKm(Number(taxi.latitude),Number(taxi.longitude),
+          Number(pickup.latitude),Number(pickup.longitude))<=0.3);
+      const destination=trip.destinationCoords||{};
+      const nearDestination=Boolean(locationFresh&&taxi.currentRequest===id&&
+        parcelSecurity.distanceKm(Number(taxi.latitude),Number(taxi.longitude),
+          Number(destination.latitude),Number(destination.longitude))<=0.3);
+      const driverReserved=!!taxi&&taxi.currentRequest===id;
+      const ledger=(await db.ref(tripPaymentPath(id,trip.commuterId)).once("value")).val();
+      const secret=name==="verifyPin"?
+        (await db.ref(`parcelPrivate/${id}`).once("value")).val():null;
+      if(name==="verifyPin"&&(!secret||secret.expiresAt<Date.now()||
+          secret.passengerId!==trip.commuterId))
+        return res.status(409).json({error:"Pickup PIN is expired or missing."});
+      const tx=await parcelSecurity.transact(ref,current=>{
+        if(!current||current.taxiId!==trip.taxiId||current.commuterId!==trip.commuterId)return;
+        return parcelSecurity.action(current,name,req.body?.pin,secret?.pin,
+          {driverReserved,ledger,nearPickup,nearDestination},Date.now());
+      });
+      if(!tx.committed||!tx.snapshot.val())
+        return res.status(409).json({error:"Parcel assignment changed. Reopen the booking."});
+      const result=tx.snapshot.val();
+      // Status mirror is server-only on secure parcels.
+      await db.ref(`delivery_requests/${id}`).update({
+        status:result.status,arrivedAt:result.arrivedAt||null,
+        pinVerifiedAt:result.pinVerifiedAt||null,tripStartedAt:result.tripStartedAt||null,
+        completedAt:result.completedAt||null
+      });
+      if(name==="complete"){
+        const gross=Number(result.finalAmount||0);
+        await parcelSecurity.transact(db.ref(`taxis/${trip.taxiId}`),taxi=>{
+          if(!taxi)return taxi;
+          // A scalar marker can be held immutable by RTDB rules while normal
+          // driver fields (GPS/availability) remain editable by its owner.
+          const credits=JSON.parse(taxi.parcelTripCredits||"{}");
+          if(credits[id])return taxi;
+          return {...taxi,
+            parcelTripCredits:JSON.stringify({...credits,[id]:true}),
+            totalTrips:Number(taxi.totalTrips||0)+1,
+            grossEarnings:Math.round((Number(taxi.grossEarnings||0)+gross)*100)/100,
+            totalEarnings:Math.round((Number(taxi.totalEarnings||0)+gross*0.8)*100)/100,
+            commissionDebt:Math.round((Number(taxi.commissionDebt||0)+
+              (result.paymentMethod==="cash"?gross*0.2:0))*100)/100
+          };
+        });
+        // Retrying a completed action repairs cleanup after a lost response.
+        // A newer booking must never lose its reservation.
+        await db.ref(`commuters/${trip.commuterId}/currentRequest`)
+          .transaction(v=>v===null||v===id?null:undefined,undefined,false);
+        await db.ref(`taxis/${trip.taxiId}`).transaction(taxi=>{
+          if(taxi===null)return null;
+          if(!taxi||taxi.currentRequest!==id)return undefined;
+          return {...taxi,currentRequest:null,isFull:false,passengerCount:0};
+        },undefined,false);
+      }
+      const verified=name==="verifyPin"?result.status==="in_transit"&&!!result.pinVerifiedAt:undefined;
+      return res.status(200).json({ok:true,status:result.status,pinValid:verified,
+        attemptsRemaining:name==="verifyPin"?Math.max(0,5-Number(result.pinAttempts||0)):undefined});
+    }catch(e){return res.status(e.status||409).json({error:e.message||"Unable to verify Parcel pickup."});}
+  }
+);
+
+// Shared by authenticated offer submission and the legacy dispatch endpoint.
+// The suggested fare is guidance only; every valid 65–95% offer can be sent.
+function goVehicleCategoryAllowed(driver = {}) {
+  return driverVehicleCategoryAllowed(driver);
+}
+
+async function dispatchGoRideToDrivers(requestId, expectedOwner) {
+  const db = admin.database();
+  const ref = db.ref(`requests/${requestId}`);
+  const trip = (await ref.once("value")).val();
+  const fail = (status, message) => { throw Object.assign(new Error(message), {status}); };
+  if (!trip) fail(404, "Ride request was not found.");
+  if (trip.commuterId !== expectedOwner) fail(403, "This ride does not belong to you.");
+  if (trip.type === "club") fail(400, "Club rides use the Club dispatch flow.");
+  if (trip.taxiId || !["pending", "searching", "driver_busy"].includes(trip.status))
+    fail(409, "This ride is not ready for driver dispatch.");
+
+  const protectedGo = isGoNegotiationTrip(trip) && trip.negotiationEnabled === true;
+  if (protectedGo) {
+    // A retry must preserve a counter awaiting the passenger's decision.
+    if (trip.fareStatus === "driver_counter") return {mode:"waiting_passenger", drivers:0};
+    if (trip.fareStatus !== "passenger_offer" || Number(trip.passengerOfferRound || 0) < 1 ||
+        !validGoNegotiatedAmount(trip.passengerOffer, goNegotiationPricing(trip)))
+      fail(409, "Submit a valid fare offer before searching for drivers.");
+    if (!["cash", "card"].includes(String(trip.paymentMethod || "cash").toLowerCase()))
+      fail(409, "Choose Cash or Card before searching for drivers.");
+  }
+
+  const lat = Number(trip.commuterLocation?.latitude);
+  const lng = Number(trip.commuterLocation?.longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) fail(400, "Pickup location is unavailable.");
+  const idleDrivers = [], busyDrivers = [];
+  const taxis = await db.ref("taxis").once("value");
+  taxis.forEach(child => {
+    const taxi = child.val() || {};
+    if (taxi.isOnline !== true || !driverProfileCanReceiveRequests(taxi) ||
+        trip.fareCounterDeclinedDrivers?.[child.key] === true ||
+        trip.fareOfferDeclinedDrivers?.[child.key]?.offerRound === Number(trip.passengerOfferRound || 1)) return;
+    const driverLat = Number(taxi.latitude), driverLng = Number(taxi.longitude);
+    if (!Number.isFinite(driverLat) || !Number.isFinite(driverLng) ||
+        !goVehicleCategoryAllowed(taxi)) return;
+    const distanceKm = haversineKm(lat, lng, driverLat, driverLng);
+    if (!Number.isFinite(distanceKm) || distanceKm > 10) return;
+    const candidate = {driverId:child.key, distanceKm};
+    if (taxi.currentRequest) busyDrivers.push(candidate);
+    else if (taxi.isFull !== true && taxi.isBroadcasting === true) idleDrivers.push(candidate);
+  });
+  idleDrivers.sort((a,b) => a.distanceKm - b.distanceKm);
+  busyDrivers.sort((a,b) => a.distanceKm - b.distanceKm);
+  const candidates = idleDrivers.slice(0,8);
+  const queued = candidates.length ? null : busyDrivers[0];
+  const mode = candidates.length ? "broadcast" : queued ? "queued" : "none";
+  const now = admin.database.ServerValue.TIMESTAMP;
+  const metadata = {
+    status: queued ? "driver_busy" : "searching",
+    driverBusy: Boolean(queued), driverDispatchCount:candidates.length, driverDispatchPending:false,
+    driverSearchStatus: candidates.length ? "driver_found_waiting_acceptance" :
+      queued ? "driver_found_busy" : "searching_for_driver",
+    driverFoundCount: candidates.length || (queued ? 1 : 0),
+    nearestDriverDistanceKm: candidates[0]?.distanceKm ?? queued?.distanceKm ?? null,
+    driverDispatchAt:now, driverSearchUpdatedAt:now,
+    ...(queued ? {queuedTaxiId:queued.driverId, queuedAt:now} : {})
+  };
+  // Do not resurrect a cancelled booking or overwrite a concurrent driver decision.
+  const updated = await transactGoContinuation(ref, current => {
+    if (current.commuterId !== expectedOwner || current.taxiId ||
+        !["pending", "searching", "driver_busy"].includes(current.status)) return undefined;
+    if (protectedGo && (current.fareStatus !== "passenger_offer" ||
+        Number(current.passengerOffer) !== Number(trip.passengerOffer) ||
+        Number(current.negotiationRound) !== Number(trip.negotiationRound) ||
+        JSON.stringify(current.fareOfferDeclinedDrivers || {}) !== JSON.stringify(trip.fareOfferDeclinedDrivers || {}))) return undefined;
+    return {...current, ...metadata};
+  });
+  if (!updated.committed || !updated.snapshot.val()) fail(409, "The booking changed. Refresh your offer before searching again.");
+
+  const saved = updated.snapshot.val();
+  const notice = {
+    requestId, rideType:"go", commuterId:saved.commuterId,
+    commuterName:saved.commuterName || "Passenger",
+    pickupAddress:saved.pickupAddress || "Pickup",
+    destination:saved.destination || saved.destinationName || "Destination",
+    fare:Number(protectedGo ? saved.passengerOffer : saved.finalAmount || saved.calculatedPrice || 0),
+    ...(protectedGo ? {passengerOffer:Number(saved.passengerOffer),
+      suggestedFare:Number(saved.suggestedFare), maximumFareOffer:Number(saved.maximumFareOffer),
+      negotiationRound:Number(saved.negotiationRound), passengerOfferRound:Number(saved.passengerOfferRound)} : {}),
+    paymentMethod:String(saved.paymentMethod || "cash")
+  };
+  const updates = {};
+  for (const candidate of candidates) {
+    updates[`notifications/taxis/${candidate.driverId}/${requestId}`] = {
+      ...notice, type:"ride_request", distanceKm:candidate.distanceKm, timestamp:now
+    };
+  }
+  if (queued) updates[`taxis/${queued.driverId}/bookingQueue/${requestId}`] = {...notice, queuedAt:now};
+  if (Object.keys(updates).length) await db.ref().update(updates);
+  return {mode, drivers:candidates.length, ...(queued ? {driverId:queued.driverId} : {})};
+}
+
+exports.dispatchGoRideRequest = onRequest(
+  {region:"us-central1", invoker:"public"}, async (request, response) => {
+    walletSmsCors(request, response);
+    if (request.method === "OPTIONS") return response.status(204).send("");
+    if (request.method !== "POST") return response.status(405).json({error:"POST required."});
+    try {
+      const user = await verifiedRequestUser(request);
+      if (!user) return response.status(401).json({error:"Passenger authentication is required."});
+      const requestId = String(request.body?.requestId || "").trim();
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(requestId)) return response.status(400).json({error:"Ride reference is invalid."});
+      const passenger = await resolvePassengerForWallet(user);
+      const trip = (await admin.database().ref(`requests/${requestId}`).once("value")).val();
+      if (!trip) return response.status(404).json({error:"Ride request was not found."});
+      if (!passenger || !await goPassengerOwnsTrip(user, trip))
+        return response.status(403).json({error:"This ride does not belong to the signed-in passenger."});
+      return response.status(200).json({ok:true, ...await dispatchGoRideToDrivers(requestId, trip.commuterId)});
+    } catch (error) {
+      console.error("Go ride dispatch failed", error?.message || error);
+      return response.status(error.status || 500).json({error:error.message || "Unable to send this ride request to nearby drivers."});
+    }
+  });
 
 
 // =================================================================
@@ -9087,7 +9171,8 @@ exports.confirmTripWalletReady =
 // LiteSpeed 404 page seen on-device. Writing through Admin SDK also guarantees
 // the profile URL is allocated to the correct commuter/taxi record.
 const PROFILE_STORAGE_BUCKET =
-  "asiye-80386.firebasestorage.app";
+  admin.app().options.storageBucket ||
+  `${runtimeFirebaseProjectId()}.firebasestorage.app`;
 
 function safeProfileId(value) {
   const id =
@@ -9283,27 +9368,21 @@ exports.uploadProfileImageProxy =
             });
         }
 
-        // During phone signup, validate a complete name before committing
-        // both identity and face photo with the Admin SDK. Client-side
-        // Realtime Database writes can be blocked on legacy commuter IDs.
-        const fullName = String(request.body?.fullName || "").trim();
-        const signup = role === "passenger" && request.body?.completeSignup === true;
-        // Firebase custom-token sessions can omit phone_number. Verify the
-        // phone attached to the SAME Firebase Auth UID; never trust form text.
-        const verifiedPhone = signup
-          ? String((await admin.auth().getUser(decoded.uid)).phoneNumber || "").trim()
-          : "";
-        if (signup && (
-          !verifiedPhone ||
+        // Passengers sign in with Google/Apple; no passenger SMS is required.
+        // Validate the name and save the booking gate with the picture atomically.
+        const passengerUpload = role === "passenger";
+        const account = passengerUpload ? await admin.auth().getUser(decoded.uid) : null;
+        if (passengerUpload && !account.providerData?.some(p => ["google.com", "apple.com"].includes(p.providerId))) {
+          return response.status(403).json({error: "Sign in with Google or Apple before saving your passenger picture."});
+        }
+        const existingProfile = passengerUpload
+          ? (await admin.database().ref(`${rootName}/${userId}`).once("value")).val() || {} : {};
+        const fullName = String(request.body?.fullName || existingProfile.name || account?.displayName || "").trim();
+        if (passengerUpload && (
           fullName.length < 2 || fullName.length > 100 ||
           /[<>\u0000-\u001f]/.test(fullName)
         )) {
-          return response.status(422).json({
-            code: !verifiedPhone ? "phone-otp-required" : "name-required",
-            error: !verifiedPhone
-              ? "This Firebase account has no verified mobile number. Complete SMS OTP before saving the profile."
-              : "Enter your full name before saving."
-          });
+          return response.status(422).json({code: "name-required", error: "Enter your name before saving."});
         }
 
         const dataUrl =
@@ -9485,14 +9564,15 @@ exports.uploadProfileImageProxy =
                     url
                 }
               : {
-                  ...(signup ? {
-                    name: fullName,
-                    phone: verifiedPhone,
+                  name: fullName,
+                  bookingFaceAuthUid: decoded.uid,
+                  bookingFaceSavedAt: now,
+                  ...{
                     authUid: decoded.uid,
                     onboardingCompleted: true,
                     profileSetupPending: false,
                     profileCompletedAt: now
-                  } : {}),
+                  },
                   profileImageUrl:
                     url,
                   profile_picture_url:
@@ -9590,7 +9670,9 @@ exports.uploadDriverEnrollmentDocument = onRequest(
       const match=String(request.get("authorization")||"").match(/^Bearer (.+)$/);
       if(!match) return response.status(401).json({error:"Sign in first."});
       const actor=await admin.auth().verifyIdToken(match[1]);
-      if(!actor.phone_number) return response.status(403).json({error:"Phone OTP verification required."});
+      const driverAccount = await admin.auth().getUser(actor.uid);
+      if (!driverAccount.phoneNumber || !driverAccount.providerData?.some(p => ["google.com", "apple.com"].includes(p.providerId)))
+        return response.status(403).json({error:"Sign in with Google or Apple, then verify your driver phone by OTP."});
       const uid=safeProfileId(actor.uid);
       const submission=String(request.body?.submissionId||"");
       const kind=String(request.body?.kind||"");
@@ -9817,7 +9899,7 @@ exports.submitDriverVehicleForReview =
             cleanText(
               source.type,
               40
-            ),
+            ).toLowerCase(),
           make:
             cleanText(
               source.make,
@@ -9860,6 +9942,12 @@ exports.submitDriverVehicleForReview =
               error:
                 "Complete type, make, model, colour and registration."
             });
+        }
+
+        if (!["sedan", "hatchback"].includes(vehiclePending.type)) {
+          return response.status(400).json({
+            error: "Asiye accepts Sedan and Hatchback vehicles only."
+          });
         }
 
         const currentYear =
@@ -9973,133 +10061,52 @@ const {
 const PAYSTACK_API =
   "https://api.paystack.co";
 
+const PAYSTACK_CALLBACK_URL =
+  `https://us-central1-${runtimeFirebaseProjectId()}.cloudfunctions.net/paystackPaymentReturn`;
+
+function paystackReference() {
+  return `ASIYE-${Date.now().toString(36)}-${paystackCrypto.randomBytes(16).toString("hex")}`;
+}
+
+function paystackFallbackEmail(uid) {
+  const key=paystackCrypto.createHash("sha256").update(String(uid)).digest("hex").slice(0,24);
+  return `payments+${key}@asiye.cloud`;
+}
+
 const {
   splitCardFare, stableTransferReference, isVerifiedCardPayment,
   isPayoutReady, bankInput
 } = require("./driver-card-payout");
+const {PLATFORM_COMMISSION_PERCENT, code:paystackSubaccountCode,
+  isVerifiedSubaccount, verifySplit:verifyDriverPaystackSplit} = require("./paystack-subaccount-split");
 
-// Driver card transfers are private server-owned financial records.
-// The passenger card charge stays on Asiye's Paystack account until the
-// driver's identity, trip completion and bank have been confirmed.
+const {keyDomain, requireLaunchApproval, requireTransactionDomain,
+  refundableCancellation, createCardRefundService} = require("./paystack-payment-safety");
+const configuredPaystackDomain = () => keyDomain(paystackSecretKey.value());
+const cardRefundService = createCardRefundService({
+  database: () => admin.database(), request: paystackRequest,
+  configuredDomain: configuredPaystackDomain, markPayment: markTripPassengerPayment,
+  refreshClub: refreshClubPaymentsReady
+});
+async function requirePaystackCheckoutApproval() {
+  const domain = configuredPaystackDomain();
+  const launch = domain === "live"
+    ? (await admin.database().ref("paymentLaunch/paystack").once("value")).val() : null;
+  requireLaunchApproval(domain, launch);
+  return domain;
+}
+
+// Historical driver transfer records remain private for reconciliation.
+// New card fares use Paystack subaccounts at checkout; no later Asiye-funded
+// driver transfer is initiated by the new route.
 const driverPayoutPath = (requestId, passengerId) =>
   `driverCardPayouts/${requestId}/${passengerId}`;
 
-async function issueDriverCardPayout(requestId, passengerId, trip) {
-  const driverId = safeProfileId(trip?.taxiId || trip?.driverId);
-  if (trip?.status !== "completed" || !driverId) return { status: "not_ready" };
-  const payment = (await admin.database()
-    .ref(tripPaymentPath(requestId, passengerId)).once("value")).val();
-  if (!payment || payment.status !== "captured" || payment.method !== "card") {
-    return { status: "not_card_capture" };
-  }
-  // Charge was only "held" after direct Paystack verification; check again
-  // before any bank transfer. A cancelled/refunded charge cannot pay a driver.
-  const verified = await verifyPaystackReference(payment.reference);
-  if (!isVerifiedCardPayment(payment, verified)) {
-    throw Error("Card payment cannot be reconciled with Paystack.");
-  }
-  const split = splitCardFare(Number(payment.amountSubunit));
-  const recordRef = admin.database().ref(driverPayoutPath(requestId, passengerId));
-  const reference = stableTransferReference(requestId, passengerId);
-  const created = await recordRef.transaction(existing => existing || ({
-    status: "due",
-    provider: "paystack",
-    method: "card",
-    requestId, passengerId, driverId,
-    paymentReference: payment.reference,
-    paymentTransactionId: String(verified.id || ""),
-    transferReference: reference,
-    ...split,
-    createdAt: admin.database.ServerValue.TIMESTAMP
-  }), undefined, false);
-  const existing = created.snapshot.val();
-  if (!existing || existing.driverId !== driverId ||
-      existing.paymentReference !== payment.reference) {
-    throw Error("Card payout ledger conflict; manual reconciliation required.");
-  }
-  await admin.database().ref(`driverPayoutQueues/${driverId}/${reference}`).set({
-    requestId, passengerId, createdAt: admin.database.ServerValue.TIMESTAMP
-  });
-  // Never transfer twice if another invocation has already attempted it.
-  if (!["due", "awaiting_bank"].includes(existing.status)) return { status: existing.status };
-  const bank = (await admin.database()
-    .ref(`driverPayoutAccounts/${driverId}`).once("value")).val();
-  if (!isPayoutReady({ trip, payment, driverId, banking: bank })) {
-    await recordRef.child("status").set("awaiting_bank");
-    return { status: "awaiting_bank" };
-  }
-  // CAS lock across concurrent status triggers / manual invocations.
-  const locked = await recordRef.transaction(record => {
-    if (!record || !["due","awaiting_bank"].includes(record.status)) return;
-    return { ...record, status: "transfer_processing",
-      recipientCode: bank.recipientCode,
-      transferAttemptedAt: admin.database.ServerValue.TIMESTAMP };
-  }, undefined, false);
-  if (!locked.committed) return { status: "already_processing" };
-  const refMap = admin.database().ref(`driverPayoutRefs/${reference}`);
-  await refMap.set({ requestId, passengerId, driverId });
-  try {
-    const result = await paystackRequest("/transfer", {
-      method: "POST",
-      body: {
-        source: "balance", amount: split.driverSubunit, currency: "ZAR",
-        recipient: bank.recipientCode, reference,
-        reason: `Asiye completed trip ${requestId.slice(0, 60)}`
-      }
-    });
-    const transfer = result.data || {};
-    await recordRef.transaction(current => {
-      if (!current || current.transferReference !== reference || current.status === "paid")
-        return;
-      return { ...current,
-        status: transfer.status === "otp" ? "otp_required" : "transfer_pending",
-        transferCode: String(transfer.transfer_code || current.transferCode || ""),
-        paystackTransferId: String(transfer.id || ""),
-        paystackTransferState: String(transfer.status || "pending"),
-        updatedAt: admin.database.ServerValue.TIMESTAMP };
-    }, undefined, false);
-    // Never say "paid" until Paystack's signed transfer-success webhook.
-    return { status: "transfer_pending", reference };
-  } catch (error) {
-    // Network timeouts may happen AFTER Paystack received the transfer.
-    // Do not retry with a new reference or guess whether funds moved.
-    await recordRef.update({
-      status: "needs_reconciliation",
-      lastError: String(error.message || "Transfer requires review").slice(0, 250),
-      updatedAt: admin.database.ServerValue.TIMESTAMP
-    });
-    throw error;
-  }
-}
-
-const PAYSTACK_CALLBACK_URL =
-  "https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn";
-
-function paystackReference() {
-  return (
-    "ASIYE-" +
-    Date.now().toString(36).toUpperCase() +
-    "-" +
-    paystackCrypto
-      .randomBytes(8)
-      .toString("hex")
-      .toUpperCase()
-  );
-}
-
-function paystackFallbackEmail(uid) {
-  const digest =
-    paystackCrypto
-      .createHash("sha256")
-      .update(String(uid || "wallet"))
-      .digest("hex")
-      .slice(0, 18);
-
-  return (
-    "wallet+" +
-    digest +
-    "@asiye.cloud"
-  );
+// Historical transfers remain in the database for audit and customer support.
+// Paystack forbids merchant-level aggregation: new trips settle directly to
+// the driver's bank through the subaccount configured at charge initialization.
+async function issueDriverCardPayout(_requestId, _passengerId, _trip) {
+  return {status:"settled_by_paystack_subaccount_or_legacy_review"};
 }
 
 async function paystackRequest(
@@ -10126,6 +10133,7 @@ async function paystackRequest(
       PAYSTACK_API + path,
       {
         method,
+        signal: AbortSignal.timeout(20000),
         headers: {
           Authorization:
             "Bearer " + secret,
@@ -10150,7 +10158,7 @@ async function paystackRequest(
 
   if (
     !response.ok ||
-    payload.status === false
+    payload.status !== true
   ) {
     const error =
       new Error(
@@ -10228,7 +10236,7 @@ function firebaseDatabaseBaseUrl() {
 
   return String(
     configured.databaseURL ||
-    "https://asiye-80386-default-rtdb.firebaseio.com"
+    `https://${runtimeFirebaseProjectId()}-default-rtdb.firebaseio.com`
   ).replace(/\/$/, "");
 }
 
@@ -10269,12 +10277,11 @@ async function creditPaystackWallet(payment, transaction) {
   return { credited: !!tx.committed, balance: finalCredit.balance };
 }
 // =================================================================
-// --- RIDE PAYMENT HOLDS: CASH / CARD / ASIYE WALLET ---
+// --- CASH / CARD SERVICE PAYMENT STATE; LEGACY WALLET RECONCILIATION ---
 // =================================================================
-// Go reserves non-cash payment immediately after booking.
-// Club waits until the pool is full, then reserves each passenger's
-// Wallet funds and requires each Card passenger to complete Paystack.
-// Reserved funds remain held by Asiye until trip completion.
+// Card checkout follows driver assignment; Club additionally waits for its pool.
+// "held" is an internal paid-awaiting-service state, not a Paystack authorization
+// hold or escrow. Paystack controls direct subaccount bank settlement.
 
 function normaliseRidePaymentMethod(value) {
   const method =
@@ -11209,6 +11216,38 @@ async function initialiseCardTripPayment(
   } =
     context;
 
+  const paystackDomain = await requirePaystackCheckoutApproval();
+
+  // A Paystack subaccount is immutable for the transaction: NEVER collect
+  // the full fare before the driver and their approved bank are known.
+  const driverId=safeProfileId(trip?.taxiId||trip?.driverId);
+  if(!driverId){
+    const e=new Error("Card payment is available after a driver accepts. Cash remains available.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+  const driver=(await admin.database().ref(`taxis/${driverId}`).once("value")).val();
+  const vehicleApproved = driver?.vehicleApproved === true ||
+    String(driver?.vehicleApprovalStatus || "").toLowerCase() === "approved";
+  if (!driver || String(driver.verificationStatus || "").toLowerCase() !== "verified" ||
+      !vehicleApproved || !driverProfileCanReceiveRequests(driver)) {
+    const e=new Error("Driver identity and vehicle approval are required for card payments.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+  const registered=(await admin.database().ref(`driverPaystackSubaccounts/${driverId}`).once("value")).val();
+  if(!registered||registered.platformCommissionPercent!==PLATFORM_COMMISSION_PERCENT||
+     !/^ACCT_[A-Za-z0-9]+$/.test(String(registered.subaccountCode||""))){
+    const e=new Error("The assigned driver is not registered with Paystack for direct settlements.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+  // Check live Paystack subaccount verification (not merely a stored status).
+  const result=await paystackRequest("/subaccount/"+encodeURIComponent(registered.subaccountCode));
+  const live=result.data||{};
+  if(live.domain !== paystackDomain || !isVerifiedSubaccount(live,registered.subaccountCode)||
+     (live.account_number && String(live.account_number).slice(-4)!==registered.accountLast4)){
+    const e=new Error("Paystack has not yet verified this driver's subaccount.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
+
   const paymentRef =
     admin.database()
       .ref(
@@ -11226,6 +11265,12 @@ async function initialiseCardTripPayment(
         )
     ).val();
 
+  if(current&&(current.splitMode!=="paystack_subaccount_80_20"||
+    current.splitDriverId!==driverId||
+    current.subaccountCode!==registered.subaccountCode)){
+    const e=new Error("Card checkout belongs to an incompatible payout account. Contact support.");
+    e.code="payment/driver-subaccount-required";throw e;
+  }
   if (
     current &&
     [
@@ -11267,174 +11312,98 @@ async function initialiseCardTripPayment(
     };
   }
 
-  const profile =
-    passenger?.data ||
-    {};
-
-  const email =
-    String(
-      profile.email ||
-      decoded.email ||
-      paystackFallbackEmail(
-        decoded.uid
-      )
-    )
-      .trim()
-      .toLowerCase();
-
-  const reference =
-    paystackReference();
-
-  const initialized =
-    await paystackRequest(
-      "/transaction/initialize",
-      {
-        method:
-          "POST",
-        body: {
-          email,
-          amount:
-            String(
-              Math.round(
-                amount *
-                100
-              )
-            ),
-          currency:
-            "ZAR",
-          reference,
-          callback_url:
-            PAYSTACK_CALLBACK_URL,
-          channels: [
-            "card"
-          ],
-          metadata: {
-            purpose:
-              "asiye_trip_card",
-            uid:
-              decoded.uid,
-            passengerId,
-            requestId,
-            rideType:
-              trip.type ===
-                "club"
-                ? trip.clubMode ||
-                  "club"
-                : trip.rideType ||
-                  "go"
-          }
-        }
-      }
-    );
-
-  const data =
-    initialized.data ||
-    {};
-
-  if (
-    !data.authorization_url ||
-    !data.reference
-  ) {
-    throw new Error(
-      "Paystack did not return a card checkout link."
-    );
+  // Reserve the immutable reference BEFORE making an external request. A lost
+  // response must not let a retry create a second payable checkout.
+  if (current) {
+    const error = new Error("Card checkout is already being prepared or needs verification. Retry verification or contact support.");
+    error.code = "payment/checkout-in-progress";
+    throw error;
   }
-
-  await admin.database()
-    .ref()
-    .update({
-      [
-        tripPaymentPath(
-          requestId,
-          passengerId
-        )
-      ]:
-        {
-          method:
-            "card",
-          provider:
-            "paystack",
-          requestId,
-          passengerId,
-          uid:
-            decoded.uid,
-          amount,
-          amountSubunit:
-            Math.round(
-              amount *
-              100
-            ),
-          currency:
-            "ZAR",
-          reference,
-          authorizationUrl:
-            data.authorization_url,
-          accessCode:
-            data.access_code ||
-            "",
-          status:
-            "initialized",
-          createdAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP
-        },
-      [
-        `tripPaymentReferences/${reference}`
-      ]:
-        {
-          requestId,
-          passengerId,
-          createdAt:
-            admin.database
-              .ServerValue
-              .TIMESTAMP
-        }
-    });
-
-  await markTripPassengerPayment(
-    requestId,
-    passengerId,
-    trip,
-    {
-      paymentStatus:
-        "payment_required",
-      paymentReference:
-        reference
-    }
-  );
-
-  if (
-    trip.type !==
-      "club"
-  ) {
-    await admin.database()
-      .ref(
-        `requests/${requestId}`
-      )
-      .update({
-        status:
-          "payment_required",
-        paymentsReady:
-          false
-      });
-  }
-  if (trip.type === "delivery") {
-    await admin.database().ref(`delivery_requests/${requestId}`).update({
-      status: "payment_required", paymentStatus: "payment_required",
-      paymentsReady: false
-    });
-  }
-
-  return {
-    ready:
-      false,
-    status:
-      "payment_required",
-    reference,
-    authorizationUrl:
-      data.authorization_url
+  const profile = passenger?.data || {};
+  const email = String(profile.email || decoded.email || paystackFallbackEmail(decoded.uid)).trim().toLowerCase();
+  const reference = paystackReference();
+  const candidate = {
+    method:"card", provider:"paystack", splitMode:"paystack_subaccount_80_20",
+    splitDriverId:driverId, subaccountCode:registered.subaccountCode, paystackDomain,
+    platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
+    requestId, passengerId, uid:decoded.uid, amount,
+    amountSubunit:Math.round(amount * 100), currency:"ZAR", reference,
+    status:"initializing", createdAt:Date.now()
   };
+  const claim = await paymentRef.transaction(value => value ? undefined : candidate, undefined, false);
+  if (!claim.committed) {
+    const error = new Error("A card checkout already exists. Refresh the booking before retrying.");
+    error.code = "payment/checkout-in-progress";
+    throw error;
+  }
+  await admin.database().ref(`tripPaymentReferences/${reference}`).set({requestId,passengerId,createdAt:Date.now()});
+
+  let data;
+  try {
+    const fresh = (await admin.database().ref(`requests/${requestId}`).once("value")).val();
+    if (!fresh || String(fresh.status || "").startsWith("cancelled") ||
+        ["completed","rejected","expired"].includes(fresh.status) || fresh.taxiId !== driverId)
+      throw Error("Booking changed before checkout. Contact support before retrying payment.");
+    const initialized = await paystackRequest("/transaction/initialize", {
+      method:"POST",
+      body:{
+        email, amount:String(Math.round(amount * 100)), currency:"ZAR", reference,
+        subaccount:registered.subaccountCode, bearer:"account",
+        callback_url:PAYSTACK_CALLBACK_URL, channels:["card"],
+        metadata:{purpose:"asiye_trip_card",uid:decoded.uid,passengerId,requestId,
+          rideType:trip.type === "club" ? trip.clubMode || "club" : trip.rideType || "go"}
+      }
+    });
+    data = initialized.data || {};
+    if (data.reference !== reference ||
+        !String(data.authorization_url || "").startsWith("https://checkout.paystack.com/"))
+      throw Error("Paystack returned a mismatched checkout reference or link.");
+  } catch (error) {
+    // The provider may have accepted the request even when its response was
+    // lost. Keep the same reference and callback mapping for reconciliation.
+    await paymentRef.transaction(value => {
+      if (value===null) return null;
+      if (!value || value.reference !== reference || value.status !== "initializing") return;
+      return {...value,status:"initialization_unknown",initializationErrorAt:Date.now()};
+    }, undefined, false);
+    throw error;
+  }
+  const initializedTx = await paymentRef.transaction(value => {
+    if (value===null) return null;
+    if (!value || value.reference !== reference) return;
+    if (!["initializing","initialization_unknown"].includes(value.status)) return value;
+    return {...value,status:"initialized",authorizationUrl:data.authorization_url,
+      accessCode:data.access_code || ""};
+  }, undefined, false);
+  if (!initializedTx.committed) throw Error("Card checkout changed before confirmation.");
+  const payment = initializedTx.snapshot.val();
+  if (["held","captured"].includes(payment.status))
+    return {ready:true,status:payment.status,reference};
+  if (payment.status !== "initialized") throw Error("Card payment is under refund review.");
+
+  if (trip.parcelSecurityVersion === 2) {
+    // Acceptance already set payment_required. Never resurrect a cancelled
+    // Parcel or overwrite an already verified payment after a slow API call.
+    const tx = await admin.database().ref(`requests/${requestId}`).transaction(value => {
+      if (value===null) return null;
+      if (!value || value.taxiId !== driverId ||
+          !["payment_required","accepted"].includes(value.status)) return;
+      return {...value,paymentReference:reference};
+    }, undefined, false);
+    if (!tx.committed) throw Error("Parcel changed while preparing payment. Contact support.");
+  } else {
+    await markTripPassengerPayment(requestId, passengerId, trip,
+      {paymentStatus:"payment_required",paymentReference:reference});
+    if (trip.type !== "club") await admin.database().ref(`requests/${requestId}`).transaction(value => {
+      if (value===null) return null;
+      if (!value || value.taxiId !== driverId ||
+          ["held","captured"].includes(value.paymentStatus) ||
+          String(value.status || "").startsWith("cancelled") ||
+          ["completed","rejected","expired"].includes(value.status)) return;
+      return {...value,status:"payment_required",paymentsReady:false};
+    }, undefined, false);
+  }
+  return {ready:false,status:"payment_required",reference,authorizationUrl:data.authorization_url};
 }
 
 async function prepareTripPaymentServer(
@@ -11449,6 +11418,17 @@ async function prepareTripPaymentServer(
   } =
     context;
 
+  if (method === 'wallet') {
+    const error = new Error('Wallet payment is unavailable. Select Cash or Card.');
+    error.code = 'payment/wallet-disabled';
+    throw error;
+  }
+  if (String(trip.status || "").startsWith("cancelled") ||
+      ["completed","rejected","expired"].includes(trip.status)) {
+    const error = new Error("This booking has ended. Payment cannot be started.");
+    error.code = "payment/trip-ended";
+    throw error;
+  }
   /*
    * Negotiated Go has a hard server-side payment gate. A modified WebView
    * cannot initialise Paystack, reserve Wallet funds, or mark Cash due until
@@ -11536,10 +11516,8 @@ async function prepareTripPaymentServer(
   }
 
   if (
-    trip.type ===
-      "club" &&
-    trip.poolReady !==
-      true
+    trip.type === "club" &&
+    (trip.poolReady !== true || !trip.taxiId || !trip.driverAcceptedAt)
   ) {
     return {
       ready:
@@ -11638,132 +11616,91 @@ async function prepareTripPaymentServer(
   );
 }
 
-async function recordCardTripPaymentHeld(
-  payment,
-  transaction
-) {
-  if (
-    !transactionMatchesPayment(
-      transaction,
-      payment
-    )
-  ) {
-    throw new Error(
-      "Card transaction does not match the trip fare."
-    );
+async function recordCardTripPaymentHeld(payment, transaction) {
+  requireTransactionDomain(payment, transaction, configuredPaystackDomain());
+  if (!verifyDriverPaystackSplit(payment, transaction))
+    throw Error("Paystack card charge is missing a verified driver subaccount split.");
+  if (!transactionMatchesPayment(transaction, payment))
+    throw Error("Card transaction does not match the trip fare.");
+  const {requestId,passengerId} = payment;
+  const db=admin.database(), requestRef=db.ref(`requests/${requestId}`);
+  const trip=(await requestRef.once("value")).val();
+  if (!trip) throw Error("Trip was not found.");
+  const paymentRef=db.ref(tripPaymentPath(requestId,passengerId));
+  const cancelled=value=>String(value?.status || "").startsWith("cancelled") ||
+    ["rejected","expired"].includes(value?.status);
+  const matches=current=>current && current.reference===payment.reference &&
+    current.splitDriverId===payment.splitDriverId && current.subaccountCode===payment.subaccountCode;
+  async function quarantine(reason) {
+    const result=await paymentRef.transaction(current=>{
+      if (current===null) return null;
+      if (!matches(current)) return;
+      if (["refund_initializing","refund_unknown","refund_pending","refunded","refund_review"].includes(current.status)) return current;
+      return {...current,status:"refund_review",paymentRefundAttention:true,
+        paystackTransactionId:String(transaction.id || ""),
+        paidAt:transaction.paid_at || transaction.paidAt || Date.now(),refundReviewAt:Date.now()};
+    },undefined,false);
+    if (!result.committed) throw Error("Payment changed during refund review.");
+    await requestRef.update({paymentRefundAttention:true,refundReviewReason:reason});
+    return {requestId,passengerId,status:result.snapshot.val().status};
   }
+  // A late/duplicate charge cannot resurrect a cancelled booking or reverse
+  // a completed refund. Direct subaccount settlement needs merchant review.
+  if (cancelled(trip)) return quarantine("charge_after_parcel_cancellation");
+  if (!trip.taxiId || String(trip.taxiId) !== String(payment.splitDriverId))
+    return quarantine("driver_changed_after_checkout");
 
-  const requestId =
-    String(
-      payment.requestId ||
-      ""
-    );
+  const settledTx=await paymentRef.transaction(current=>{
+    if (current===null) return null;
+    if (!matches(current)) return;
+    if (["held","captured","refund_initializing","refund_unknown","refund_pending","refunded","refund_review"].includes(current.status))
+      return current;
+    return {...current,status:"held",heldAt:Date.now(),
+      paystackTransactionId:String(transaction.id || ""),channel:String(transaction.channel || "card"),
+      paidAt:transaction.paid_at || transaction.paidAt || Date.now()};
+  },undefined,false);
+  if (!settledTx.committed) throw Error("Paystack payment reference changed while confirming.");
+  const ledgerStatus=settledTx.snapshot.val().status;
+  if (ledgerStatus==="captured" || ledgerStatus==="refund_initializing" || ledgerStatus==="refund_unknown" || ledgerStatus==="refund_pending" ||
+      ledgerStatus==="refunded" || ledgerStatus==="refund_review")
+    return {requestId,passengerId,status:ledgerStatus};
 
-  const passengerId =
-    String(
-      payment.passengerId ||
-      ""
-    );
-
-  const trip =
-    (
-      await admin.database()
-        .ref(
-          `requests/${requestId}`
-        )
-        .once(
-          "value"
-        )
-    ).val();
-
-  if (!trip) {
-    throw new Error(
-      "Trip was not found."
-    );
-  }
-
-  await admin.database()
-    .ref(
-      tripPaymentPath(
-        requestId,
-        passengerId
-      )
-    )
-    .update({
-      status:
-        "held",
-      heldAt:
-        admin.database
-          .ServerValue
-          .TIMESTAMP,
-      paystackTransactionId:
-        String(
-          transaction.id ||
-          ""
-        ),
-      channel:
-        String(
-          transaction.channel ||
-          "card"
-        ),
-      paidAt:
-        transaction.paid_at ||
-        transaction.paidAt ||
-        admin.database
-          .ServerValue
-          .TIMESTAMP
-    });
-
-  await markTripPassengerPayment(
-    requestId,
-    passengerId,
-    trip,
-    {
-      paymentStatus:
-        "held",
-      paymentHeldAmount:
-        Number(
-          payment.amount ||
-          0
-        )
+  if (trip.parcelSecurityVersion === 2) {
+    // The assignment/cancellation check must happen inside the same transaction
+    // that unlocks pickup, after provider verification has finished.
+    const tx=await requestRef.transaction(current=>{
+      if (current===null) return null;
+      if (!current || current.parcelSecurityVersion!==2 || cancelled(current) ||
+          current.taxiId!==payment.splitDriverId || current.commuterId!==passengerId) return;
+      if (["captured","refund_initializing","refund_unknown","refund_pending","refunded","refund_review"].includes(current.paymentStatus)) return current;
+      return {...current,paymentStatus:"held",paymentsReady:true,paymentHeldAmount:Number(payment.amount),
+        ...(current.status === "payment_required" ? {status:"accepted"} : {})};
+    },undefined,false);
+    if (!tx.committed) {
+      const latest=(await requestRef.once("value")).val();
+      return quarantine(cancelled(latest) ? "charge_after_parcel_cancellation" : "driver_changed_after_checkout");
     }
-  );
-
-  if (
-    trip.type ===
-      "club"
-  ) {
-    await refreshClubPaymentsReady(
-      requestId
-    );
-  } else {
-    await admin.database()
-      .ref(
-        `requests/${requestId}`
-      )
-      .update({
-        paymentStatus:
-          "held",
-        paymentsReady:
-          true,
-        ...(trip.negotiationEnabled === true ? {} : {
-          status: trip.safetyShareCompleted ? "pending" : trip.status
-        })
-      });
-  }
-  if (trip.type === "delivery") {
-    await admin.database().ref(`delivery_requests/${requestId}`).update({
-      paymentStatus: "held", paymentsReady: true,
-      status: trip.safetyShareCompleted ? "pending" : trip.status
+    const current=tx.snapshot.val();
+    await db.ref(`delivery_requests/${requestId}`).update({
+      status:current.status,paymentStatus:current.paymentStatus,paymentsReady:current.paymentsReady
     });
+    return {requestId,passengerId,status:current.paymentStatus};
   }
-
-  return {
-    requestId,
-    passengerId,
-    status:
-      "held"
-  };
+  await markTripPassengerPayment(requestId,passengerId,trip,
+    {paymentStatus:"held",paymentHeldAmount:Number(payment.amount || 0)});
+  if (trip.type === "club") {
+    await refreshClubPaymentsReady(requestId);
+  } else {
+    await requestRef.update({paymentStatus:"held",paymentsReady:true,
+      ...(trip.type === "delivery"
+        ? (trip.status === "payment_required" ? {status:"accepted"} : {})
+        : trip.negotiationEnabled === true ? {} : {status:trip.safetyShareCompleted ? "pending" : trip.status})});
+  }
+  if (trip.type === "delivery") await db.ref(`delivery_requests/${requestId}`).update({
+    paymentStatus:"held",paymentsReady:true,
+    ...(trip.status === "payment_required" ? {status:"accepted"} : {})
+  });
+  return {requestId,passengerId,status:"held"};
 }
 
 exports.configureDriverCardPayout = onRequest(
@@ -11781,8 +11718,11 @@ exports.configureDriverCardPayout = onRequest(
         return response.status(403).json({ error: "Not your driver account." });
       const driver = (await admin.database().ref(`taxis/${driverId}`)
         .once("value")).val();
-      if (!driver || driver.verificationStatus !== "verified")
-        return response.status(403).json({ error: "Driver must be verified before setting up payouts." });
+      const vehicleApproved = driver?.vehicleApproved === true ||
+        String(driver?.vehicleApprovalStatus || "").toLowerCase() === "approved";
+      if (!driver || String(driver.verificationStatus || "").toLowerCase() !== "verified" ||
+          !vehicleApproved || !driverProfileCanReceiveRequests(driver))
+        return response.status(403).json({ error: "Driver and vehicle must be fully approved before setting up a Paystack subaccount." });
       if (request.method === "GET" && request.query?.action === "banks") {
         const banks = await paystackRequest("/bank?currency=ZAR&enabled_for_verification=true&perPage=100");
         return response.status(200).json({ ok: true, banks: (banks.data || [])
@@ -11790,11 +11730,23 @@ exports.configureDriverCardPayout = onRequest(
           .map(item => ({ name: String(item.name), code: String(item.code) })) });
       }
       if (request.method === "GET") {
-        const saved = (await admin.database()
-          .ref(`driverPayoutAccounts/${driverId}`).once("value")).val();
-        return response.status(200).json({ ok: true, status: saved?.status || "not_configured",
-          accountLast4: saved?.accountLast4 || "", bankName: saved?.bankName || "",
-          accountName: saved?.accountName || "" });
+        const subRef=admin.database().ref(`driverPaystackSubaccounts/${driverId}`);
+        let saved=(await subRef.once("value")).val();
+        if (saved?.subaccountCode && saved?.status === "pending_paystack_verification") {
+          const result=await paystackRequest("/subaccount/"+
+            encodeURIComponent(saved.subaccountCode));
+          const live=result.data||{};
+          if (isVerifiedSubaccount(live,saved.subaccountCode) &&
+              (!live.account_number ||
+               String(live.account_number).slice(-4) === saved.accountLast4)) {
+            await subRef.update({status:"verified",verifiedAt:admin.database.ServerValue.TIMESTAMP});
+            await admin.database().ref(`taxis/${driverId}`).update({payoutStatus:"verified"});
+            saved={...saved,status:"verified"};
+          }
+        }
+        return response.status(200).json({ok:true,status:saved?.status||"not_configured",
+          accountLast4:saved?.accountLast4||"",bankName:saved?.bankName||"",
+          accountName:saved?.accountName||"",subaccountCode:saved?.subaccountCode||""});
       }
       if (request.method !== "POST")
         return response.status(405).json({ error: "Method not supported." });
@@ -11818,49 +11770,54 @@ exports.configureDriverCardPayout = onRequest(
           error: "Bank account could not be verified for this driver. Check the account holder and ID number."
         });
       }
-      const recipientResult = await paystackRequest("/transferrecipient", {
-        method: "POST",
-        body: {
-          type: "basa", name: clean.accountName,
-          account_number: clean.accountNumber, bank_code: clean.bankCode,
-          currency: "ZAR", description: "Asiye driver fare earnings"
-        }
+      // Subaccounts are provisioned only once: retries after Paystack timeouts
+      // require manual reconciliation to prevent duplicate payout destinations.
+      const subRef=admin.database().ref(`driverPaystackSubaccounts/${driverId}`);
+      const lock=await subRef.transaction(x=>x?undefined:{
+        status:"provisioning",ownerUid:actor.uid,
+        accountLast4:clean.accountNumber.slice(-4),
+        startedAt:admin.database.ServerValue.TIMESTAMP
+      },undefined,false);
+      if(!lock.committed)return response.status(409).json({
+        error:"Driver subaccount already exists or needs review. Contact Asiye support."
       });
-      const recipientCode = String(recipientResult.data?.recipient_code || "");
-      if (!/^RCP_[A-Za-z0-9]+$/.test(recipientCode)) {
-        throw Error("Paystack did not provide a bank payout recipient.");
+      let sub;
+      try {
+        const created=await paystackRequest("/subaccount",{
+          method:"POST",body:{
+            business_name:clean.accountName,
+            settlement_bank:clean.bankCode,
+            account_number:clean.accountNumber,
+            percentage_charge:PLATFORM_COMMISSION_PERCENT,
+            description:"Asiye direct driver settlement"
+          }
+        });
+        sub=created.data||{};
+      } catch(error) {
+        await subRef.update({status:"manual_review"});
+        throw error;
       }
-      await admin.database().ref(`driverPayoutAccounts/${driverId}`).set({
-        status: "verified", recipientCode,
-        accountName: clean.accountName,
-        accountLast4: clean.accountNumber.slice(-4),
-        bankCode: clean.bankCode,
-        bankName: String(recipientResult.data?.details?.bank_name || clean.bankCode),
-        verifiedBy: "paystack",
-        verifiedAt: admin.database.ServerValue.TIMESTAMP,
-        ownerUid: actor.uid
+      const subCode=paystackSubaccountCode(sub);
+      if(!/^ACCT_[A-Za-z0-9]+$/.test(subCode)||
+         Number(sub.percentage_charge)!==PLATFORM_COMMISSION_PERCENT){
+        await subRef.update({status:"manual_review"});
+        throw Error("Paystack subaccount requires manual review.");
+      }
+      const ready=isVerifiedSubaccount(sub,subCode);
+      await subRef.set({
+        status:ready?"verified":"pending_paystack_verification",
+        subaccountCode:subCode,platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
+        bankCode:clean.bankCode,bankName:String(sub.settlement_bank||clean.bankCode),
+        accountName:clean.accountName,accountLast4:clean.accountNumber.slice(-4),
+        ownerUid:actor.uid,createdAt:admin.database.ServerValue.TIMESTAMP
       });
       await admin.database().ref(`taxis/${driverId}`).update({
-        payoutStatus: "verified", payoutAccountLast4: clean.accountNumber.slice(-4)
+        payoutStatus:ready?"verified":"pending_paystack_verification",
+        payoutAccountLast4:clean.accountNumber.slice(-4)
       });
-      // Start previously earned but undelivered card payouts once the driver
-      // provides a verified bank. Every transfer reference remains immutable.
-      const queue = (await admin.database().ref(`driverPayoutQueues/${driverId}`)
-        .limitToFirst(100).once("value")).val() || {};
-      for (const item of Object.values(queue)) {
-        try {
-          const completedTrip = (await admin.database()
-            .ref(`requests/${item.requestId}`).once("value")).val();
-          if (completedTrip?.status === "completed") {
-            await issueDriverCardPayout(item.requestId, item.passengerId, completedTrip);
-          }
-        } catch (error) {
-          console.warn("Bank enabled; existing payout requires review",
-            item.requestId, error?.message || String(error));
-        }
-      }
-      return response.status(200).json({ ok: true, status: "verified",
-        accountLast4: clean.accountNumber.slice(-4) });
+      return response.status(200).json({ok:true,
+        status:ready?"verified":"pending_paystack_verification",
+        subaccountCode:subCode,accountLast4:clean.accountNumber.slice(-4)});
     } catch (error) {
       console.error("Driver payout bank configuration error", error?.message);
       return response.status(422).json({
@@ -11870,8 +11827,8 @@ exports.configureDriverCardPayout = onRequest(
   }
 );
 
-// Server-only payout trigger: the passenger has already paid, but the
-// assigned driver receives their 80% only after trip completion.
+// Compatibility trigger only. Direct driver settlement is arranged by Paystack
+// at checkout; trip completion never initiates a replacement bank transfer.
 exports.disburseCompletedCardTrips = functions.runWith({
   secrets: [paystackSecretKey]
 }).database.ref("/requests/{requestId}/status").onUpdate(async(change, context) => {
@@ -12001,7 +11958,11 @@ exports.prepareTripPayment =
           });
 
       } catch (error) {
-        const status =
+        const status = error?.code === 'payment/launch-not-approved' || error?.code === 'payment/configuration' ? 503 :
+          error?.code === 'payment/checkout-in-progress' ||
+          error?.code === 'payment/trip-ended' ||
+          error?.code === 'payment/wallet-disabled' ||
+          error?.code === 'payment/driver-subaccount-required' ||
           error?.code ===
             "payment/insufficient-wallet" ||
           error?.code ===
@@ -12034,7 +11995,8 @@ exports.prepareTripPayment =
           .json({
             error:
               error?.message ||
-              "Unable to prepare ride payment."
+              "Unable to prepare ride payment.",
+            code: error?.code || "payment/unavailable"
           });
       }
     }
@@ -12154,7 +12116,9 @@ exports.verifyTripCardPayment =
               payment.status ||
               ""
             )
-          )
+          ) && context.trip.taxiId === payment.splitDriverId &&
+          !String(context.trip.status || "").startsWith("cancelled") &&
+          !["rejected","expired"].includes(context.trip.status)
         ) {
           return response
             .status(200)
@@ -12169,6 +12133,14 @@ exports.verifyTripCardPayment =
               ready:
                 true
             });
+        }
+
+        if (payment.status === "refunded")
+          return response.status(200).json({ok: true, requestId, ready: false, status: "refunded"});
+        if (["refund_initializing", "refund_unknown", "refund_pending", "refund_review"].includes(payment.status)) {
+          const refund = await cardRefundService.synchronize(reference);
+          return response.status(200).json({ok: true, requestId, ready: false,
+            status: refund?.status || payment.status});
         }
 
         const transaction =
@@ -12197,7 +12169,7 @@ exports.verifyTripCardPayment =
             });
         }
 
-        await recordCardTripPaymentHeld(
+        const confirmation = await recordCardTripPaymentHeld(
           payment,
           transaction
         );
@@ -12208,12 +12180,12 @@ exports.verifyTripCardPayment =
             ok:
               true,
             status:
-              "held",
+              confirmation.status,
             requestId,
             passengerId:
               context.passengerId,
             ready:
-              true
+              ["held","captured"].includes(confirmation.status)
           });
 
       } catch (error) {
@@ -12243,6 +12215,8 @@ async function settleProtectedGoFinancials(
   ) {
     return null;
   }
+
+  tripEndSafety.requireClaim(trip);
 
   if (
     trip.fareStatus !== "agreed" ||
@@ -12650,6 +12624,7 @@ async function settleProtectedGoFinancials(
           .TIMESTAMP,
       status:
         "completed",
+      tripCompletion: JSON.stringify(tripEndSafety.completed(trip, Date.now())),
       completedAt:
         admin.database
           .ServerValue
@@ -12784,7 +12759,7 @@ exports.settleTripPayment =
             ""
           ).trim();
 
-        const trip =
+        let trip =
           (
             await admin.database()
               .ref(
@@ -12804,6 +12779,8 @@ exports.settleTripPayment =
             });
         }
 
+        trip=tripEndSafety.decode(trip);
+
         if (
           !await driverOwnsTrip(
             decoded.uid,
@@ -12818,13 +12795,34 @@ exports.settleTripPayment =
             });
         }
 
+        if (!['in_transit', 'completed'].includes(trip.status))
+          return response.status(409).json({error: 'Only an ongoing or completed trip can be settled.'});
+
+        if (trip.status==='completed' && trip.driverSettlement?.source==='server_protected_go')
+          return response.json({ok:true,settled:true,serverCompleted:true,settlement:trip.driverSettlement});
+
         if (trip.clubSecurityVersion === 2 && !['in_transit', 'completed'].includes(trip.status)) {
           return response.status(409).json({error:'Secure Club payments can only be settled after verified departure.'});
+        }
+        if (trip.parcelSecurityVersion === 2 &&
+          (!['in_transit','completed'].includes(trip.status) ||
+           !trip.pinVerifiedAt || !trip.tripStartedAt)) {
+          return response.status(409).json({error:'Secure Parcel pickup PIN must be verified before settlement.'});
         }
 
         if (trip.cashCollectionVersion === 2 && normaliseRidePaymentMethod(trip.paymentMethod) === 'cash') {
           try { goContinuation.requireCashDropoff(trip); }
           catch (error) { return response.status(409).json({error: error.message}); }
+        }
+
+        // Freeze a verified destination or both roles' early-end consent before
+        // any payment/earnings write. A retry reuses this server-owned claim.
+        if (trip.type!=='delivery' && trip.parcelSecurityVersion!==2 && trip.status!=='completed') {
+          const taxi=(await admin.database().ref(`taxis/${trip.taxiId}`).once('value')).val();
+          const tx=await transactGoContinuation(admin.database().ref(`requests/${requestId}`),current=>
+            tripEndSafety.claim(current,taxi,requestId,decoded.uid,request.body?.endRequestId,Date.now()));
+          if(!tx.committed)return response.status(409).json({error:'Trip changed before completion.'});
+          trip=tripEndSafety.decode(tx.snapshot.val());
         }
 
         const passengers =
@@ -12941,15 +12939,13 @@ exports.settleTripPayment =
               );
 
             } else {
-              await paymentRef
-                .update({
-                  status:
-                    "captured",
-                  capturedAt:
-                    admin.database
-                      .ServerValue
-                      .TIMESTAMP
-                });
+              const captured = await paymentRef.transaction(current => {
+                if (current === null) return null;
+                if (current.reference !== payment.reference || !["held", "captured"].includes(current.status)) return;
+                return {...current, status: "captured", capturedAt: current.capturedAt || Date.now()};
+              }, undefined, false);
+              if (!captured.committed || captured.snapshot.val()?.status !== "captured")
+                return response.status(409).json({error: "Payment changed during settlement."});
             }
 
             await markTripPassengerPayment(
@@ -13021,7 +13017,7 @@ exports.settleTripPayment =
         );
 
         return response
-          .status(500)
+          .status(error.status || 500)
           .json({
             error:
               error?.message ||
@@ -13031,499 +13027,69 @@ exports.settleTripPayment =
     }
   );
 
-async function releaseTripPaymentForPassenger(
-  requestId,
-  passengerId
-) {
-  const paymentRef =
-    admin.database()
-      .ref(
-        tripPaymentPath(
-          requestId,
-          passengerId
-        )
-      );
-
-  const payment =
-    (
-      await paymentRef
-        .once(
-          "value"
-        )
-    ).val();
-
-  if (!payment) {
-    return {
-      status:
-        "nothing_to_release"
-    };
+async function releaseTripPaymentForPassenger(requestId, passengerId) {
+  const ref = admin.database().ref(tripPaymentPath(requestId, passengerId));
+  const payment = (await ref.once("value")).val();
+  if (!payment) return {status: "nothing_to_release"};
+  const trip = (await admin.database().ref(`requests/${requestId}`).once("value")).val();
+  if (!refundableCancellation(trip, passengerId)) {
+    const error = new Error("Cancel an unstarted booking before requesting its payment release. Contact support for a started trip.");
+    error.status = 409;
+    throw error;
   }
-
-  if (
-    [
-      "released",
-      "refund_pending",
-      "refunded"
-    ].includes(
-      String(
-        payment.status ||
-        ""
-      )
-    )
-  ) {
-    return {
-      status:
-        payment.status
-    };
+  if (payment.method === "card") return cardRefundService.release(payment);
+  if (payment.method === "wallet") {
+    const released = await releaseWalletTripPayment(requestId, passengerId);
+    return {status: "released", balance: Number(released.balance || 0)};
   }
-
-  if (
-    payment.method ===
-      "wallet"
-  ) {
-    const released =
-      await releaseWalletTripPayment(
-        requestId,
-        passengerId
-      );
-
-    return {
-      status:
-        "released",
-      balance:
-        Number(
-          released.balance ||
-          0
-        )
-    };
-  }
-
-  if (
-    payment.method ===
-      "card" &&
-    payment.status ===
-      "held"
-  ) {
-    const refund =
-      await paystackRequest(
-        "/refund",
-        {
-          method:
-            "POST",
-          body: {
-            transaction:
-              payment.paystackTransactionId ||
-              payment.reference,
-            amount:
-              Math.round(
-                Number(
-                  payment.amount ||
-                  0
-                ) *
-                100
-              ),
-            currency:
-              "ZAR",
-            customer_note:
-              "Asiye ride cancelled before completion",
-            merchant_note:
-              `Asiye trip ${requestId} cancelled`
-          }
-        }
-      );
-
-    await paymentRef
-      .update({
-        status:
-          "refund_pending",
-        refundId:
-          String(
-            refund.data?.id ||
-            ""
-          ),
-        refundStatus:
-          String(
-            refund.data?.status ||
-            "pending"
-          ),
-        refundRequestedAt:
-          admin.database
-            .ServerValue
-            .TIMESTAMP
-      });
-
-    return {
-      status:
-        "refund_pending"
-    };
-  }
-
-  if (
-    payment.status ===
-      "captured"
-  ) {
-    return {
-      status:
-        "captured"
-    };
-  }
-
-  await paymentRef
-    .update({
-      status:
-        "released",
-      releasedAt:
-        admin.database
-          .ServerValue
-          .TIMESTAMP
-    });
-
-  return {
-    status:
-      "released"
-  };
+  const result = await ref.transaction(current => {
+    if (current === null) return null;
+    if (current.status === "captured") return current;
+    return {...current, status: "released", releasedAt: Date.now()};
+  }, undefined, false);
+  return {status: result.snapshot.val()?.status || "nothing_to_release"};
 }
 
-
-exports.releaseTripPayment =
-  onRequest(
-    {
-      region:
-        "us-central1",
-      invoker:
-        "public",
-      secrets: [
-        paystackSecretKey
-      ]
-    },
-    async (
-      request,
-      response
-    ) => {
-      walletSmsCors(
-        request,
-        response
-      );
-
-      if (
-        request.method ===
-        "OPTIONS"
-      ) {
-        return response
-          .status(204)
-          .send("");
-      }
-
-      if (
-        request.method !==
-        "POST"
-      ) {
-        return response
-          .status(405)
-          .json({
-            error:
-              "POST required."
-          });
-      }
-
-      try {
-        const decoded =
-          await verifiedRequestUser(
-            request
-          );
-
-        if (!decoded) {
-          return response
-            .status(401)
-            .json({
-              error:
-                "Sign in again before cancelling this payment."
-            });
-        }
-
-        const requestId =
-          String(
-            request.body?.requestId ||
-            ""
-          ).trim();
-
-        const context =
-          await tripPassengerContext(
-            decoded,
-            requestId
-          );
-
-        const paymentRef =
-          admin.database()
-            .ref(
-              tripPaymentPath(
-                requestId,
-                context.passengerId
-              )
-            );
-
-        const payment =
-          (
-            await paymentRef
-              .once(
-                "value"
-              )
-          ).val();
-
-        if (!payment) {
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              status:
-                "nothing_to_release"
-            });
-        }
-
-        if (
-          payment.method ===
-            "wallet"
-        ) {
-          const released =
-            await releaseWalletTripPayment(
-              requestId,
-              context.passengerId
-            );
-
-          await markTripPassengerPayment(
-            requestId,
-            context.passengerId,
-            context.trip,
-            {
-              paymentStatus:
-                "released"
-            }
-          );
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              status:
-                "released",
-              balance:
-                Number(
-                  released.balance ||
-                  0
-                )
-            });
-        }
-
-        if (
-          payment.method ===
-            "card" &&
-          payment.status ===
-            "held"
-        ) {
-          const refund =
-            await paystackRequest(
-              "/refund",
-              {
-                method:
-                  "POST",
-                body: {
-                  transaction:
-                    payment.paystackTransactionId ||
-                    payment.reference,
-                  amount:
-                    Math.round(
-                      Number(
-                        payment.amount ||
-                        0
-                      ) *
-                      100
-                    ),
-                  currency:
-                    "ZAR",
-                  customer_note:
-                    "Asiye ride cancelled before completion",
-                  merchant_note:
-                    `Asiye trip ${requestId} cancelled`
-                }
-              }
-            );
-
-          await paymentRef
-            .update({
-              status:
-                "refund_pending",
-              refundId:
-                String(
-                  refund.data?.id ||
-                  ""
-                ),
-              refundStatus:
-                String(
-                  refund.data?.status ||
-                  "pending"
-                ),
-              refundRequestedAt:
-                admin.database
-                  .ServerValue
-                  .TIMESTAMP
-            });
-
-          await markTripPassengerPayment(
-            requestId,
-            context.passengerId,
-            context.trip,
-            {
-              paymentStatus:
-                "refund_pending"
-            }
-          );
-
-          return response
-            .status(200)
-            .json({
-              ok:
-                true,
-              status:
-                "refund_pending"
-            });
-        }
-
-        await paymentRef
-          .update({
-            status:
-              payment.status ===
-                "captured"
-                ? "captured"
-                : "released",
-            releasedAt:
-              admin.database
-                .ServerValue
-                .TIMESTAMP
-          });
-
-        return response
-          .status(200)
-          .json({
-            ok:
-              true,
-            status:
-              payment.status ===
-                "captured"
-                ? "captured"
-                : "released"
-          });
-
-      } catch (error) {
-        console.error(
-          "Trip payment release failed",
-          error
-        );
-
-        return response
-          .status(500)
-          .json({
-            error:
-              error?.message ||
-              "Unable to release ride payment."
-          });
-      }
-    }
-  );
-
-
-exports.paystackPaymentReturn =
-  onRequest(
-    {
-      region:
-        "us-central1",
-      invoker:
-        "public"
-    },
-    async (
-      request,
-      response
-    ) => {
-      const reference =
-        String(
-          request.query?.reference ||
-          request.query?.trxref ||
-          ""
-        )
-          .replace(
-            /[^A-Za-z0-9.=\-]/g,
-            ""
-          )
-          .slice(
-            0,
-            100
-          );
-
-      response
-        .status(200)
-        .set(
-          "Content-Type",
-          "text/html; charset=utf-8"
-        )
-        .set(
-          "Cache-Control",
-          "no-store"
-        )
-        .send(
-          `<!doctype html>
-<html>
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Asiye Payment</title>
-<style>
-body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fb;margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;color:#111}
-main{max-width:520px;background:#fff;border-radius:24px;padding:30px;box-shadow:0 18px 60px rgba(0,0,0,.1);text-align:center}
-strong{display:block;font-size:26px;margin-bottom:12px}
-p{color:#596170;line-height:1.55}
-.ref{background:#f2f4f7;border-radius:14px;padding:12px;margin:18px 0;word-break:break-all;font-family:ui-monospace,monospace}
-</style>
-</head>
-<body>
-<main>
-<strong>Payment submitted</strong>
-<p>Your payment has been submitted. Asiye is returning you to the app and will verify the payment before updating your wallet.</p>
-<div class="ref">${reference ? "Reference: " + reference : "Payment reference received"}</div>
-<p><a id="backToAsiye" href="asiye://payment-complete?reference=${encodeURIComponent(reference)}" style="display:inline-block;padding:14px 18px;border-radius:14px;background:#111;color:#fff;text-decoration:none;font-weight:700">Return to Asiye</a></p>
-<script>
-(function(){
-  var reference = ${JSON.stringify(reference)};
-  var encoded = encodeURIComponent(reference || "");
-  var scheme = "asiye://payment-complete?reference=" + encoded;
-  var androidIntent =
-    "intent://payment-complete?reference=" + encoded +
-    "#Intent;scheme=asiye;package=com.asiyeapp.asiye;end";
-  var isAndroid = /Android/i.test(navigator.userAgent || "");
-  var primary = isAndroid ? androidIntent : scheme;
-  var link = document.getElementById("backToAsiye");
-  if (link) link.setAttribute("href", primary);
-
-  function returnToApp(target) {
+exports.releaseTripPayment = onRequest(
+  {region: "us-central1", invoker: "public", secrets: [paystackSecretKey]},
+  async (request, response) => {
+    walletSmsCors(request, response);
+    response.set("Cache-Control", "no-store");
+    if (request.method === "OPTIONS") return response.status(204).send("");
+    if (request.method !== "POST") return response.status(405).json({error: "POST required."});
     try {
-      window.location.href = target;
-    } catch (_) {}
-  }
-
-  // Chrome handles intent:// more reliably for returning from an external
-  // Paystack checkout. The custom-scheme retry also covers older Android
-  // browsers and iOS.
-  returnToApp(primary);
-  setTimeout(function(){ returnToApp(scheme); }, 500);
-  setTimeout(function(){ returnToApp(scheme); }, 1400);
-})();
-</script>
-</main>
-</body>
-</html>`
-        );
+      const decoded = await verifiedRequestUser(request);
+      if (!decoded) return response.status(401).json({error: "Sign in again before cancelling this payment."});
+      const requestId = String(request.body?.requestId || "").trim();
+      const context = await tripPassengerContext(decoded, requestId);
+      if (context.trip.parcelSecurityVersion === 2)
+        return response.status(409).json({error: "Use secure Parcel cancellation and support refund review for this payment."});
+      const result = await releaseTripPaymentForPassenger(requestId, context.passengerId);
+      return response.status(200).json({ok: true, ...result});
+    } catch (error) {
+      console.error("Trip payment release failed", error?.message);
+      const status = error?.code === "payment/not-passenger" ? 403 :
+        error?.code === "payment/trip-not-found" ? 404 : error?.status || 502;
+      return response.status(status).json({error: error?.message || "Unable to release ride payment."});
     }
-  );
+  }
+);
+
+exports.paystackPaymentReturn = onRequest(
+  {region: "us-central1", invoker: "public"},
+  async (request, response) => {
+    if (!["GET", "HEAD"].includes(request.method)) {
+      return response.status(405).set("Allow", "GET, HEAD").send("GET required.");
+    }
+    const reference = request.query?.reference || request.query?.trxref || "";
+    return response.status(200)
+      .set("Content-Type", "text/html; charset=utf-8")
+      .set("Cache-Control", "no-store")
+      .set("Referrer-Policy", "no-referrer")
+      .set("X-Content-Type-Options", "nosniff")
+      .send(require("./paystack-return").renderPaymentReturn(runtimeFirebaseProjectId(), reference));
+  }
+);
 
 exports.initializePaystackWalletTopup =
   onRequest(
@@ -13544,6 +13110,9 @@ exports.initializePaystackWalletTopup =
         request,
         response
       );
+      if (request.method !== 'OPTIONS') return response.status(410).json({
+        error:'Wallet top-ups are discontinued. Contact Asiye support to resolve existing credit.'
+      });
 
       if (
         request.method ===
@@ -13992,6 +13561,8 @@ exports.paystackWebhook =
             ""
           );
 
+        if (!secret.trim()) return response.status(503).send("Webhook is not configured.");
+
         const raw =
           Buffer.isBuffer(
             request.rawBody
@@ -14045,6 +13616,12 @@ exports.paystackWebhook =
         const event =
           request.body ||
           {};
+
+        if (["refund.pending", "refund.processing", "refund.needs-attention", "refund.failed", "refund.processed"].includes(event.event)) {
+          const reference = sanitizeReference(event.data?.transaction_reference);
+          await cardRefundService.synchronize(reference);
+          return response.status(200).send("ok");
+        }
 
         if (["transfer.success", "transfer.failed", "transfer.reversed"].includes(event.event)) {
           const transfer = event.data || {};
@@ -14228,14 +13805,7 @@ exports.releaseCancelledGoTripPayment =
 
         if (
           before === after ||
-          ![
-            "cancelled_by_commuter",
-            "cancelled_by_driver",
-            "cancelled_by_admin",
-            "rejected"
-          ].includes(
-            after
-          )
+          !(after === 'rejected' || /^cancelled(?:_|$)|^canceled(?:_|$)/.test(after))
         ) {
           return null;
         }
@@ -14262,6 +13832,21 @@ exports.releaseCancelledGoTripPayment =
           return null;
         }
 
+        // Admin cancellations and older clients must release the same pointer.
+        // A delayed cancellation must never clear a newer active booking.
+        if (trip.commuterId) await admin.database()
+          .ref(`commuters/${trip.commuterId}/currentRequest`)
+          .transaction(current => goContinuation.clearRequestPointer(current, requestId), undefined, false);
+
+        if (trip.parcelSecurityVersion === 2) {
+          const payment=(await admin.database().ref(tripPaymentPath(requestId,trip.commuterId)).once("value")).val();
+          if (payment?.method === "card" &&
+              ["initializing","initialization_unknown","initialized","held","captured"].includes(payment.status))
+            await change.after.ref.parent.update({paymentRefundAttention:true,
+              refundReviewReason:"secure_parcel_cancelled_card_payment"});
+          return null;
+        }
+
         const passengerId =
           String(
             trip.commuterId ||
@@ -14285,16 +13870,7 @@ exports.releaseCancelledGoTripPayment =
               `taxis/${trip.taxiId}/currentRequest`
             )
             .transaction(
-              current =>
-                String(
-                  current ||
-                  ""
-                ) ===
-                  String(
-                    requestId
-                  )
-                  ? null
-                  : undefined
+              current => goContinuation.clearRequestPointer(current, requestId)
             )
             .catch(
               () => {}
@@ -14722,7 +14298,7 @@ exports.createTripShareToken = onRequest(
                 previous.expiresAt
               ),
             liveTrackingUrl:
-              `https://asiye-80386.web.app/track.html?share=${encodeURIComponent(reusableToken)}`
+              `${runtimeHostingOrigin()}/track.html?share=${encodeURIComponent(reusableToken)}`
           });
       }
 
@@ -14783,7 +14359,7 @@ exports.createTripShareToken = onRequest(
           shareToken,
           expiresAt,
           liveTrackingUrl:
-            `https://asiye-80386.web.app/track.html?share=${encodeURIComponent(shareToken)}`
+            `${runtimeHostingOrigin()}/track.html?share=${encodeURIComponent(shareToken)}`
         });
 
     } catch (error) {
@@ -15037,3 +14613,11 @@ exports.synchronizeClubBooking = functions.database.ref('/requests/{requestId}')
 exports.expireClubWaiting = require('firebase-functions/v2/scheduler').onSchedule(
   { schedule: 'every 1 minutes', region: 'us-central1' }, () => secureClub.expireDue()
 );
+
+// Staging owner tools are separate from enrollment and financial admin roles.
+const stagingTestConsole = require('./staging-test-console').makeStagingTestConsole({
+  admin, projectId: runtimeFirebaseProjectId, paymentDomain: configuredPaystackDomain,
+  paystackRequest, driverEligible: driverProfileCanReceiveRequests, HttpsError: functions.https.HttpsError
+});
+exports.adminStagingTestConsole = onCall({region: 'us-central1', invoker: 'public', secrets: [paystackSecretKey]},
+  request => stagingTestConsole(request.data, {auth: request.auth}));

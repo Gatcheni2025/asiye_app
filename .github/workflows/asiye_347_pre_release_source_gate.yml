@@ -1,0 +1,225 @@
+name: Asiye 348 Pre-Release Source Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths:
+      - '.github/workflows/asiye_347_pre_release_source_gate.yml'
+      - 'docs/ASIYE_347_STAGING_TO_RELEASE_ACCEPTANCE_20261022.md'
+      - 'assets/admin/**'
+      - 'assets/admin-login.html'
+      - 'assets/member-pages.js'
+      - 'assets/member-pages.css'
+      - 'scripts/deploy_staging_driver_search_ui.cjs'
+      - 'scripts/deploy_staging_go_dispatch.cjs'
+      - 'scripts/go_dispatch_staging_functions.json'
+      - 'scripts/staging_card_test_functions.json'
+      - 'scripts/deploy_staging_card_test_tools.cjs'
+      - 'scripts/grant_staging_trip_tester.cjs'
+      - 'scripts/audit_staging_card_test_source.py'
+      - 'test/card-setup-recovery.test.cjs'
+      - 'scripts/staging_vehicle_eligibility_functions.json'
+      - 'scripts/deploy_staging_vehicle_eligibility.cjs'
+      - 'scripts/audit_staging_vehicle_eligibility_source.py'
+      - 'scripts/audit_staging_go_dispatch_source.py'
+      - 'scripts/audit_staging_admin_function_source.py'
+      - 'test/go-driver-category.test.cjs'
+      - 'test/test_staging_go_dispatch_source.py'
+      - 'test/test_staging_card_test_source.py'
+      - 'test/test_staging_source_readback.py'
+      - 'scripts/deploy_staging_driver_admin.cjs'
+      - 'scripts/grant_staging_driver_reviewer.cjs'
+      - 'test/admin-login.test.cjs'
+      - 'assets/passenger-v2/**'
+      - 'assets/driver-v2/**'
+      - 'test/passenger-booking-face.test.cjs'
+      - 'scripts/deploy_staging_auth_booking_flow.cjs'
+      - 'scripts/repair_staging_paystack_return.cjs'
+      - 'test/paystack-return.test.cjs'
+      - 'test/staging-payment-return-repair.test.cjs'
+      - 'test/trip-end-safety.test.cjs'
+      - 'test/trip-ratings.test.cjs'
+      - 'scripts/deploy_staging_trip_ratings.cjs'
+      - 'scripts/staging_trip_rating_functions.json'
+      - 'scripts/audit_staging_trip_rating_source.py'
+      - 'scripts/deploy_staging_early_trip_end.cjs'
+      - 'scripts/early_trip_end_functions.json'
+      - 'scripts/audit_staging_early_trip_end_source.py'
+      - 'scripts/audit_staging_auth_function_source.py'
+      - 'test/test_staging_auth_source.py'
+      - 'scripts/auth_booking_staging_functions.json'
+      - 'test/security/**'
+      - 'assets/passenger-v2/login.html'
+      - 'assets/passenger-v2/js/login.js'
+      - 'assets/passenger-v2/css/login.css'
+      - 'assets/driver-v2/js/login.js'
+      - 'assets/native-auth-session.js'
+      - 'lib/**'
+      - 'test/native-social-phone-link.test.cjs'
+      - 'test/native_phone_auth_test.dart'
+      - 'test/staging-passenger-social-phone-link.test.cjs'
+      - 'test/staging-auth-recaptcha.test.cjs'
+      - 'scripts/audit_347_staging_readonly.cjs'
+      - 'test/audit-347-staging-readonly.test.cjs'
+      - 'functions/**'
+      - 'database.rules.json'
+
+permissions:
+  contents: read
+
+jobs:
+  static-source:
+    name: Read-only source checks (NOT production acceptance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate release lineage and endpoint manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = 'fix/paystack-subaccounts-cash-card-no-wallet'
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.78+348'
+          node - <<'JS'
+          const fs=require('node:fs');
+          const assert=require('node:assert/strict');
+          const manifest=JSON.parse(fs.readFileSync('scripts/paystack_function_manifest.json','utf8'));
+          assert.equal(manifest.length,37,'Staging manifest must have exactly 37 functions');
+          assert.equal(new Set(manifest).size,37,'Function names must be unique');
+          for(const n of ['prepareTripPayment','verifyTripCardPayment','configureDriverCardPayout','paystackWebhook','createParcelRequestSecure','goTripActionSecure','joinClubPoolSecure','createTripShareToken','getTripShare'])
+            assert.ok(manifest.includes(n),'Missing secure function: '+n);
+          const pub=fs.readFileSync('assets/passenger-v2/login.html','utf8');
+          for(const id of ['googleLoginButton','appleLoginButton'])
+            assert.ok(pub.includes('id="'+id+'"'),'Passenger login missing '+id);
+          console.log('PASS: 348 lineage, 37 secure function names, and passenger login method chooser.');
+          JS
+      - name: Syntax-check secure backend and passenger/driver login
+        run: |
+          node --check assets/passenger-v2/js/login.js
+          node --check assets/driver-v2/js/login.js
+          node --check assets/native-auth-session.js
+          node --check functions/index.js
+          node --check functions/paystack-payment-safety.js
+          node --check functions/trip-end-safety.js
+          node --check functions/trip-ratings.js
+          node --check scripts/deploy_staging_early_trip_end.cjs
+          node --check scripts/deploy_staging_trip_ratings.cjs
+          python3 -m py_compile scripts/audit_staging_early_trip_end_source.py
+          python3 -m py_compile scripts/audit_staging_trip_rating_source.py
+          node -e "JSON.parse(require('fs').readFileSync('database.rules.json','utf8'))"
+      - name: Validate read-only isolated staging audit (no Google API calls)
+        run: |
+          node --check scripts/audit_347_staging_readonly.cjs
+          node --test test/audit-347-staging-readonly.test.cjs
+      - name: Validate staging resume source readback without Google API calls
+        run: |
+          python3 -m unittest discover -s test -p 'test_staging_auth_source.py'
+          python3 -m unittest discover -s test -p 'test_staging_go_dispatch_source.py'
+          python3 -m unittest discover -s test -p 'test_staging_card_test_source.py'
+          python3 -m unittest discover -s test -p 'test_staging_source_readback.py'
+      - name: Run auth, booking, Parcel and Paystack failure regressions
+        run: |
+          node --test \
+            test/staging-passenger-social-phone-link.test.cjs \
+            test/native-social-phone-link.test.cjs \
+            test/passenger-booking-face.test.cjs \
+            test/admin-login.test.cjs \
+            test/admin-portal.test.cjs \
+            test/request-search-awareness.test.cjs \
+            test/member-pages.test.cjs \
+            test/registration-submission.test.cjs \
+            test/login-otp.test.cjs \
+            test/driver-enrollment-v2.test.cjs \
+            test/native-auth-session.test.cjs \
+            test/staging-auth-recaptcha.test.cjs \
+            test/go-fare-negotiation.test.cjs \
+            test/go-driver-category.test.cjs \
+            test/card-setup-recovery.test.cjs \
+            test/paystack-return.test.cjs \
+            test/staging-payment-return-repair.test.cjs \
+            test/go-continuation.test.cjs \
+            test/trip-end-safety.test.cjs \
+            test/trip-ratings.test.cjs \
+            test/club-lifecycle.test.cjs \
+            test/parcel-security.test.cjs \
+            test/paystack-payment-safety.test.cjs \
+            test/paystack-subaccount-migration.test.cjs
+      - name: Record human acceptance gates — NOT PASSED
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p release-readiness
+          cat > release-readiness/readme.txt <<'EOF'
+          Asiye 348 source gate only.
+          The CI outcome does not approve public stores, backend production rollout,
+          live Paystack checkout or the installation of this build on customer devices.
+          Human acceptance still required: staged DB rules/source revision, test provider
+          subaccount and webhook/refund checkout, Go/Club/Parcel device E2E, Cash pickup
+          timing, historical Wallet reconciliations, merchant written approval and
+          final signed Android/iOS candidate regression tests.
+          EOF
+          {
+            echo '### Asiye 348 — CI is not production release approval'
+            echo ''
+            echo '- Source regression tests run without booking or charging users.'
+            echo '- **Staging rules/source SHA:** independent cloud readback still required.'
+            echo '- **Paystack TEST:** real charge, webhook, cancellation and subaccount split still required.'
+            echo '- **Device UAT:** Android and iOS passengers/drivers, native auth, OTP, PIN, location and notifications still required.'
+            echo '- **Release artifacts:** previous signed 347 artifacts predate the 22 October passenger changes.'
+            echo '- **LIVE payments/store release:** remain DISABLED / NOT AUTHORIZED.'
+            echo '- Checklist: `docs/ASIYE_347_STAGING_TO_RELEASE_ACCEPTANCE_20261022.md`.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: asiye-348-source-not-release-clearance
+          path: release-readiness/readme.txt
+          retention-days: 14
+
+  auth-booking-security:
+    name: Auth, first-booking photo rules and mobile camera flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: |
+          npm --prefix test/security install --no-audit --no-fund
+          npm --prefix functions install --no-audit --no-fund
+      - name: Test database and real booking handlers
+        working-directory: test/security
+        run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json "node --test --test-reporter=tap --test-timeout=45000 --test-concurrency=1 *.test.cjs"
+      - name: Install Chromium
+        if: ${{ !cancelled() }}
+        working-directory: test/security
+        run: |
+          npx playwright install chromium --only-shell
+          # GitHub's Ubuntu image normally has the runtime libraries already.
+          # Avoid slow optional font downloads unless a browser launch needs them.
+          if ! node -e "require('playwright').chromium.launch({headless:true}).then(b=>b.close()).catch(e=>{console.error(e.message);process.exit(1);})"; then
+            npx playwright install-deps chromium
+          fi
+      - name: Test mobile camera capture and failed-upload retry
+        if: ${{ !cancelled() }}
+        working-directory: test/security
+        run: |
+          node booking-face-ui.cjs
+          node admin-login-ui.cjs
+          node driver-search-ui.cjs
+          node staging-trip-tests-ui.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: auth-first-booking-camera-review
+          path: ui-review/
+          if-no-files-found: ignore

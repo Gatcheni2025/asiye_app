@@ -24,16 +24,18 @@ function makeEnrollmentSubmission({ admin, bucketName, cors }) {
 
     try {
       const match = String(req.get('authorization') || '').match(/^Bearer (.+)$/);
-      if (!match) bad('Please sign in using SMS OTP.', 401);
+      if (!match) bad('Sign in with Google or Apple, then verify your driver phone.', 401);
       const identity = await admin.auth().verifyIdToken(match[1]);
       const uid = identity.uid;
       if (!/^[a-zA-Z0-9_-]{1,128}$/.test(uid)) bad('Invalid driver identity.', 403);
       const authUser = await admin.auth().getUser(uid);
+      if (!authUser.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId)))
+        bad('Sign in with Google or Apple before verifying your driver phone.', 403);
       // Never trust phone text from the form or a WebView bridge payload.
       const phone = String(authUser.phoneNumber || '').trim();
       if (!phone || (identity.phone_number &&
           phone !== identity.phone_number))
-        bad('Your Firebase account has no verified mobile number. Sign in using SMS OTP.', 403);
+        bad('Your Firebase account has no verified mobile number. Sign in with Google or Apple, then verify your driver phone.', 403);
 
       const input = req.body?.enrollment;
       const submissionId = clean(req.body?.submissionId, 72);
@@ -47,6 +49,9 @@ function makeEnrollmentSubmission({ admin, bucketName, cors }) {
       const vehicle = input.vehiclePending || {};
       for (const [key,max] of Object.entries({type:35,make:80,model:80,colour:40,registration:20}))
         if (!valid(vehicle[key], 2, max)) bad('Missing vehicle ' + key + '.');
+      const vehicleType = clean(vehicle.type,35).toLowerCase();
+      if (!['sedan', 'hatchback'].includes(vehicleType))
+        bad('Asiye accepts Sedan and Hatchback vehicles only.');
       const year = Number(vehicle.year), seats = Number(vehicle.seats);
       if (!Number.isInteger(year) || year < 1990 || year > 2100 ||
           !Number.isInteger(seats) || seats < 1 || seats > 15)
@@ -109,7 +114,7 @@ function makeEnrollmentSubmission({ admin, bucketName, cors }) {
       }
 
       const vehiclePending = {
-        type:clean(vehicle.type,35), make:clean(vehicle.make,80),
+        type:vehicleType, make:clean(vehicle.make,80),
         model:clean(vehicle.model,80), colour:clean(vehicle.colour,40),
         registration:clean(vehicle.registration,20), year, seats
       };

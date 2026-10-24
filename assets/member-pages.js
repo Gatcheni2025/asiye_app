@@ -741,16 +741,17 @@
                     return true;
                 }
 
-                app?.ui?.toast?.(
-                    'Add one trusted person before continuing.'
-                );
+                const promptKey = `asiye-contact-later:${role}:${id}`;
+                try {
+                    if (sessionStorage.getItem(promptKey) === 'true') return true;
+                } catch (_) { /* Optional preference storage must not block the dashboard. */ }
 
-                window.AsiyePages
+                await window.AsiyePages
                     ?.open?.(
-                        'safety'
+                        'safety', {setup: true}
                     );
 
-                return false;
+                return true;
             };
     }
 
@@ -1254,17 +1255,9 @@ window.AsiyePages = {
             // Fall through to the normal browser path.
         }
 
-        const opened =
-            window.open(
-                target,
-                '_blank',
-                'noopener,noreferrer'
-            );
-
-        if (!opened) {
-            window.location.href =
-                target;
-        }
+        // Keep web checkout in the same tab and browser session. A noopener
+        // popup may return null even when it opened, causing two checkouts.
+        window.location.href = target;
     },
 
     async refreshPassengerWallet(fallbackBalance = null) {
@@ -1494,7 +1487,11 @@ window.AsiyePages = {
         return payload;
     },
 
-    async open(page) {
+    async open(page, options = {}) {
+        if (page === 'wallet') {
+            window.alert('Asiye Wallet is discontinued. Contact support about existing funds.');
+            return;
+        }
         this.dialog?.close(); this.dialog?.remove();
         const driver = !!window.ASIYE_DRIVER;
         const app = driver ? ASIYE_DRIVER : ASIYE;
@@ -1598,13 +1595,13 @@ window.AsiyePages = {
                 const link = document.createElement('a');
                 link.href = './payout.html';
                 link.className = 'member-primary member-secondary-support';
-                link.textContent = 'Set up bank account · 80% card payouts';
+                link.textContent = 'Set up Paystack subaccount · direct 80% settlement';
                 body.append(link);
                 const payoutInfo = document.createElement('p');
                 payoutInfo.className = 'member-note';
                 payoutInfo.textContent = user.payoutStatus === 'verified'
-                    ? 'Your card payout bank is verified (ending ' + (user.payoutAccountLast4 || '****') + ').'
-                    : 'Validate your South African banking details to receive completed card-trip earnings.';
+                    ? 'Your Paystack subaccount bank is verified (ending ' + (user.payoutAccountLast4 || '****') + ').'
+                    : 'Paystack must verify your bank account for direct driver settlement.';
                 body.append(payoutInfo);
                 this.bindDriverFaceScan(
                     body
@@ -2161,13 +2158,12 @@ window.AsiyePages = {
                 >
                     <label>
                         Vehicle type
-                        <input
-                            name="type"
-                            maxlength="40"
-                            value="${esc(current.type)}"
-                            placeholder="e.g. Sedan, SUV, 7-seater"
-                            required
-                        >
+                        <select name="type" required>
+                            <option value="">Select Sedan or Hatchback</option>
+                            <option value="sedan" ${String(current.type).trim().toLowerCase() === 'sedan' ? 'selected' : ''}>Sedan</option>
+                            <option value="hatchback" ${String(current.type).trim().toLowerCase() === 'hatchback' ? 'selected' : ''}>Hatchback</option>
+                        </select>
+                        <span class="member-note">Asiye accepts Sedan and Hatchback vehicles only.</span>
                     </label>
 
                     <label>
@@ -2461,6 +2457,11 @@ window.AsiyePages = {
                             )
                     };
 
+                    if (!['sedan', 'hatchback'].includes(vehiclePending.type)) {
+                        vehicleStatus.textContent = 'Select Sedan or Hatchback. These are the only vehicles Asiye supports.';
+                        return;
+                    }
+
                     if (
                         [
                             vehiclePending.type,
@@ -2658,10 +2659,10 @@ window.AsiyePages = {
                         <i class="fas fa-shield-heart"></i>
                     </div>
                     <div>
-                        <small>DRIVER SAFETY</small>
+                        <small>${driver ? 'DRIVER' : 'PASSENGER'} SAFETY · OPTIONAL</small>
                         <h2>Trusted family & live location</h2>
                         <p>
-                            Keep people you trust connected to your driving account
+                            Keep people you trust connected to your account
                             and share your active trip location when you need to.
                         </p>
                     </div>
@@ -2669,8 +2670,12 @@ window.AsiyePages = {
 
                 <p class="member-note member-section-intro">
                     Your primary safety contact stays connected to your Asiye
-                    account. You can add more trusted people at any time.
+                    account. You can add someone now or return here later from Safety.
                 </p>
+
+                <button type="button" class="member-primary member-secondary" data-family-later>
+                    ${options.setup ? 'Add later — go to dashboard' : 'Back to dashboard'}
+                </button>
 
                 <div data-family-list>
                     ${
@@ -2696,7 +2701,7 @@ window.AsiyePages = {
                 </div>
 
                 <form data-family-form class="member-family-form">
-                    <h3>Add another trusted person</h3>
+                    <h3>${members.length ? 'Add another trusted person' : 'Add a trusted person'}</h3>
 
                     <button
                         type="button"
@@ -2742,7 +2747,7 @@ window.AsiyePages = {
                     </p>
 
                     <button class="member-primary" type="submit">
-                        Save trusted person
+                        ${options.setup ? 'Save and continue' : 'Save trusted person'}
                     </button>
                 </form>
 
@@ -2757,6 +2762,13 @@ window.AsiyePages = {
 
             const familyForm =
                 body.querySelector('[data-family-form]');
+
+            body.querySelector('[data-family-later]').onclick = () => {
+                try {
+                    sessionStorage.setItem(`asiye-contact-later:${context.role}:${id}`, 'true');
+                } catch (_) { /* Native/limited browsers can still continue without saving this hint. */ }
+                dialog.close();dialog.remove();
+            };
 
             body.querySelector(
                 '[data-family-pick-contact]'
@@ -2803,10 +2815,15 @@ window.AsiyePages = {
                         phone: form.elements.phone.value
                     });
 
-                    this.open('safety');
+                    if (options.setup) {
+                        dialog.close();dialog.remove();
+                        app.ui?.toast?.('Trusted person saved. You can manage contacts in Safety.', 'success');
+                    } else {
+                        await this.open('safety');
+                    }
                 } catch (error) {
                     button.disabled = false;
-                    button.textContent = 'Save trusted person';
+                    button.textContent = options.setup ? 'Save and continue' : 'Save trusted person';
 
                     app.ui?.toast?.(
                         error?.message ||
@@ -3082,7 +3099,7 @@ window.AsiyePages = {
                     }
                 );
 
-            const email = config?.supportEmail;
+            const email = config?.supportEmail || 'admin@asiye.cloud';
 
             if (
                 email &&
@@ -3091,9 +3108,15 @@ window.AsiyePages = {
                         email
                     )
             ) {
-                body.innerHTML +=
-                    `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`;
+                body.insertAdjacentHTML(
+                    'beforeend',
+                    `<a class="member-primary member-secondary-support" href="mailto:${encodeURIComponent(email)}">Email support instead</a>`
+                );
             }
+            body.insertAdjacentHTML(
+                'beforeend',
+                '<a class="member-primary member-secondary-support" href="tel:+27315661165">Call Asiye Support · 031 566 1165</a>'
+            );
             window.AsiyeSupportChat?.mount(body, {
                 role: driver ? 'driver' : 'passenger',
                 dialog
@@ -3340,9 +3363,26 @@ window.AsiyePages = {
                             )
                             : '';
 
-                    html += `<details class="member-trip"><summary><span><small>${esc(String(ride.status || 'Booked').replace(/_/g,' '))}</small><strong>${esc(ride.destination || ride.destinationName || ride.dropoffAddress || 'Trip')}</strong></span><b>${this.money(amount)}</b></summary><div>${this.row('Date', stamp && Number.isFinite(stamp) ? new Date(stamp).toLocaleString() : 'Not recorded')}${this.row('Reference',ride.key)}${this.row('Service',ride.type || 'Ride')}${this.row('Payment',passenger.paymentMethod || ride.paymentMethod)}${earningsDetails}</div></details>`;
+                    const ratingAction = driver && ride.status === 'completed' && ride.type !== 'delivery' && ride.parcelSecurityVersion !== 2
+                        ? `<button type="button" class="member-primary" data-rate-completed-trip="${esc(ride.key)}">Rate passenger</button>` : '';
+                    html += `<details class="member-trip"><summary><span><small>${esc(String(ride.status || 'Booked').replace(/_/g,' '))}</small><strong>${esc(ride.destination || ride.destinationName || ride.dropoffAddress || 'Trip')}</strong></span><b>${this.money(amount)}</b></summary><div>${this.row('Date', stamp && Number.isFinite(stamp) ? new Date(stamp).toLocaleString() : 'Not recorded')}${this.row('Reference',ride.key)}${this.row('Service',ride.type || 'Ride')}${this.row('Payment',passenger.paymentMethod || ride.paymentMethod)}${earningsDetails}${ratingAction}</div></details>`;
                 });
                 body.innerHTML = html;
+                body.addEventListener('click', async event => {
+                    const button = event.target.closest('[data-rate-completed-trip]');
+                    if (!button || button.disabled) return;
+                    button.disabled = true;
+                    try {
+                        const key = button.dataset.rateCompletedTrip;
+                        const fresh = (await firebase.database().ref(`requests/${key}`).once('value')).val();
+                        if (!fresh || fresh.status !== 'completed') throw new Error('This trip is no longer available for rating.');
+                        dialog.close(); dialog.remove();
+                        app.ui.showTripCompleted({ ...fresh, key, requestId: key }, { history: true });
+                    } catch (error) {
+                        button.disabled = false;
+                        app.ui?.toast?.(error.message || 'Could not open this rating. Please try again.', 'danger');
+                    }
+                });
             } catch (error) {
                 body.innerHTML = note('Records could not load. Check your connection and account access.') + '<button class="member-primary">Retry</button>';
                 body.querySelector('button').onclick = () => this.open(page);

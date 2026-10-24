@@ -1,0 +1,106 @@
+'use strict';
+// Owner-requested staging patch: seven existing endpoints, DB rules and Web assets.
+// Never selects production, changes IAM, writes Auth users or starts a payment.
+const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const {spawnSync}=require('node:child_process');
+const ROOT=path.resolve(__dirname,'..');
+const PROJECT='asiye-paystack-staging',NUMBER='1000800408896';
+const BRANCH='fix/paystack-subaccounts-cash-card-no-wallet';
+const FUNCTIONS=Object.freeze(require('./auth_booking_staging_functions.json'));
+function run(name,args,{cwd=ROOT,env=process.env,quiet=false}={}){
+ const result=spawnSync(name,args,{cwd,env,encoding:'utf8',stdio:quiet?'pipe':'inherit',timeout:20*60*1000,maxBuffer:8*1024*1024});
+ if(result.status!==0||result.error)throw Error('Command failed: '+name+' '+args.slice(0,2).join(' ')+'. Stop here; do not continue other deploy commands.');
+ return String(result.stdout||'').trim();
+}
+function isGeneratedPackageChange(paths,current,reviewed){
+ return paths.length===1 && paths[0]==='functions/package.json' &&
+  current.main==='staging-index.generated.cjs' && reviewed.main==='index.js' &&
+  require('node:util').isDeepStrictEqual({...current,main:reviewed.main},reviewed);
+}
+function resumeRequested(args){
+ if(args.length===0)return false;
+ if(args.length===1&&args[0]==='--resume-after-functions')return true;
+ throw Error('Usage: node scripts/deploy_staging_auth_booking_flow.cjs [--resume-after-functions]');
+}
+function cleanupOnlyFailure(result,names=FUNCTIONS){
+ if(result.error||result.signal||result.status!==1)return false;
+ const clean=String(result.stdout||'')+'\n'+String(result.stderr||'');
+ const text=clean.replace(/\x1b\[[0-9;]*m/g,'');
+ const errors=text.split('\n').filter(line=>/^Error:/.test(line.trim()));
+ return errors.length===1 &&
+  /^Error: Functions successfully deployed but could not set up cleanup policy in location us-central1\./.test(errors[0].trim()) &&
+  names.every(name=>text.includes('functions['+name+'(us-central1)] Successful create operation.') ||
+    text.includes('functions['+name+'(us-central1)] Successful update operation.'));
+}
+function deployFunctions(cli,args,options,names=FUNCTIONS){
+ const result=spawnSync(cli,args,{...options,encoding:'utf8',stdio:'pipe',timeout:20*60*1000,maxBuffer:16*1024*1024});
+ if(result.stdout)process.stdout.write(result.stdout);
+ if(result.stderr)process.stderr.write(result.stderr);
+ if(result.status===0&&!result.error)return;
+ if(!cleanupOnlyFailure(result,names))throw Error('Functions deployment failed; rules and Hosting were not attempted.');
+ console.log('Functions reported success; cleanup-policy setup was skipped. Verifying '+names.length+' deployed source archives before continuing.');
+}
+async function main(){
+ const resume=resumeRequested(process.argv.slice(2));
+ if(process.cwd()!==ROOT)throw Error('Run from the Asiye repository root.');
+ if(run('gcloud',['config','get-value','project'],{quiet:true})!==PROJECT ||
+    run('gcloud',['projects','describe',PROJECT,'--format=value(projectNumber)'],{quiet:true})!==NUMBER)
+  throw Error('Choose the isolated staging project first: gcloud config set project '+PROJECT);
+ if(run('git',['branch','--show-current'],{quiet:true})!==BRANCH)throw Error('Wrong review branch.');
+ const changed=run('git',['diff','--name-only','HEAD'],{quiet:true}).split('\n').filter(Boolean);
+ if(changed.length){
+  // Older staging setup generated this one entrypoint change. It is never used
+  // for deployment here: the backend comes from the exact archived HEAD below.
+  const current=JSON.parse(fs.readFileSync(path.join(ROOT,'functions/package.json'),'utf8'));
+  const reviewed=JSON.parse(run('git',['show','HEAD:functions/package.json'],{quiet:true}));
+  if(!isGeneratedPackageChange(changed,current,reviewed))throw Error('Commit or discard tracked edits before deployment.');
+  console.log('Preserving the earlier generated staging entrypoint; deploying archived reviewed source.');
+ }
+ const account=run('gcloud',['config','get-value','account'],{quiet:true});
+ if(!account||account.endsWith('gserviceaccount.com'))throw Error('Use the human staging administrator already signed into Cloud Shell.');
+ const secret=run('gcloud',['secrets','versions','access','latest','--secret=PAYSTACK_SECRET_KEY','--project='+PROJECT],{quiet:true});
+ if(!/^sk_test_[A-Za-z0-9]+$/.test(secret))throw Error('Staging Paystack key is not TEST. No deployment attempted.');
+ const sha=run('git',['rev-parse','HEAD'],{quiet:true});
+ console.log('STAGING AUTH/BOOKING PATCH '+sha+' | '+PROJECT+' ('+NUMBER+')');
+ run('node',['--test','test/staging-passenger-social-phone-link.test.cjs','test/native-social-phone-link.test.cjs',
+   'test/passenger-booking-face.test.cjs','test/registration-submission.test.cjs']);
+ const sdk=await fetch('https://'+PROJECT+'.web.app/passenger-v2/js/firebase.js',
+  {redirect:'error',cache:'no-store',signal:AbortSignal.timeout(20000)});
+ if(!sdk.ok)throw Error('Cannot read existing staging Web configuration.');
+ const config=require('./rebuild_staging_auth_preview.cjs').parseConfig(await sdk.text());
+ if(config.messagingSenderId!==NUMBER)throw Error('Staging SDK project number mismatch.');
+ const result=require('./build_staging_web_preview.cjs').createStagingPreview({assetsRoot:path.join(ROOT,'assets'),
+  outputDir:path.join(ROOT,'staging-preview'),firebaseConfig:config,expectedProject:PROJECT});
+ const cliDir=path.join(ROOT,'.asiye-staging-cli');
+ const cli=path.join(cliDir,'node_modules','.bin','firebase');
+ if(!fs.existsSync(cli))run('npm',['--prefix',cliDir,'install','--no-audit','--no-fund','--no-save','firebase-tools@15.34.0']);
+ run(cli,['projects:list','--json'],{quiet:true});
+ if(!resume){
+ // Archive reviewed source to an isolated temporary directory; leave tracked files untouched.
+ const temp=fs.mkdtempSync(path.join(os.tmpdir(),'asiye-staging-auth-'));
+ try{
+  const archive=path.join(temp,'source.tar');
+  run('git',['archive','--format=tar','--output='+archive,sha,'functions','scripts','firebase.json','database.rules.json']);
+  run('tar',['-xf',archive,'-C',temp]);fs.unlinkSync(archive);
+  const manifest=[...new Set([...require('./paystack_function_manifest.json'),...FUNCTIONS])];
+  if(FUNCTIONS.some(name=>!manifest.includes(name)))throw Error('Patch function outside the reviewed staging manifest.');
+  const pkgPath=path.join(temp,'functions/package.json'),pkg=JSON.parse(fs.readFileSync(pkgPath,'utf8'));
+  if(pkg.main!=='index.js')throw Error('Unexpected Functions entrypoint.');
+  fs.writeFileSync(path.join(temp,'functions/staging-index.generated.cjs'),require('./prepare_staging_function_scope.cjs').renderEntry(manifest));
+  pkg.main='staging-index.generated.cjs';fs.writeFileSync(pkgPath,JSON.stringify(pkg,null,2)+'\n');
+  run('npm',['--prefix',path.join(temp,'functions'),'install','--no-audit','--no-fund']);
+  const env={...process.env,FIREBASE_CONFIG:JSON.stringify(config),STAGING_PROJECT:PROJECT};
+  deployFunctions(cli,['deploy','--project',PROJECT,'--config',path.join(temp,'firebase.json'),'--only',FUNCTIONS.map(n=>'functions:'+n).join(','),'--non-interactive'],{cwd:temp,env});
+ }finally{fs.rmSync(temp,{recursive:true,force:true});}
+ }
+ // A successful deploy or screenshot alone is not enough for future resumes:
+ // prove ACTIVE state and exact reviewed JS/package/wrapper bytes from the
+ // immutable build generation. This operation only reads Google resources.
+ run('python3',['scripts/audit_staging_auth_function_source.py']);
+ run(cli,['deploy','--project',PROJECT,'--config',path.join(ROOT,'firebase.json'),'--only','database','--non-interactive']);
+ run(cli,['deploy','--project',PROJECT,'--config',result.generatedConfig,'--only','hosting','--non-interactive']);
+ run('node',['scripts/audit_347_staging_readonly.cjs']);
+ console.log('Staging patch deployed. Test passenger first booking and driver OTP in a fresh browser session. Native binaries still require a new build.');
+}
+if(require.main===module)main().catch(error=>{console.error('BLOCKED: '+error.message);process.exitCode=1;});
+module.exports={FUNCTIONS,isGeneratedPackageChange,resumeRequested,cleanupOnlyFailure,deployFunctions};

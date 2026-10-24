@@ -1,0 +1,9 @@
+[
+  "uploadProfileImageProxy",
+  "submitGoFareOffer",
+  "createParcelRequestSecure",
+  "createClubBookingSecure",
+  "joinClubPoolSecure",
+  "submitDriverEnrollmentSecure",
+  "uploadDriverEnrollmentDocument"
+]

@@ -27,6 +27,25 @@ ASIYE_DRIVER.map = {
     routeGeometry:
         null,
 
+    setStatus(message, retry = false) {
+        const root = document.getElementById('driverApp');
+        if (!root) return;
+        let status = document.getElementById('driverMapStatus');
+        if (!status) {
+            status = document.createElement('div');
+            status.id = 'driverMapStatus';status.className = 'driver-map-notice';
+            status.setAttribute('role', 'status');
+            const text = document.createElement('span');
+            const button = document.createElement('button');
+            button.type = 'button';button.textContent = 'Retry map';
+            button.onclick = () => window.location.reload();
+            status.append(text, button);root.append(status);
+        }
+        status.hidden = !message;
+        status.querySelector('span').textContent = message;
+        status.querySelector('button').hidden = !retry;
+    },
+
 
     /* ========================================================
        INITIALIZE
@@ -52,6 +71,8 @@ ASIYE_DRIVER.map = {
             console.error(
                 '❌ Mapbox GL is not loaded.'
             );
+
+            this.setStatus('The map could not load. Check your connection and retry.', true);
 
             return;
         }
@@ -86,6 +107,8 @@ ASIYE_DRIVER.map = {
                 'Map configuration is missing.',
                 'danger'
             );
+
+            this.setStatus('Map configuration is unavailable. Please contact support.', false);
 
             return;
         }
@@ -122,6 +145,8 @@ ASIYE_DRIVER.map = {
 
 
         try {
+
+            this.setStatus('Loading your map…');
 
             this.instance =
 
@@ -164,6 +189,9 @@ ASIYE_DRIVER.map = {
                     this.initialized =
                         true;
 
+                    clearTimeout(this.loadTimer);
+                    this.setStatus('');
+
 
                     console.log(
                         '✅ Driver Mapbox ready'
@@ -205,6 +233,8 @@ ASIYE_DRIVER.map = {
                 'error',
                 error => {
 
+                    if (!this.initialized) this.setStatus('The map could not load. Check your connection and retry.', true);
+
                     console.error(
                         'Mapbox error:',
                         error?.error ||
@@ -213,8 +243,14 @@ ASIYE_DRIVER.map = {
                 }
             );
 
+            this.loadTimer = setTimeout(() => {
+                if (!this.initialized) this.setStatus('The map is taking longer to load. Check your connection and retry.', true);
+            }, 15000);
+
 
         } catch (error) {
+
+            this.setStatus('The map could not start. Enable graphics acceleration in your browser and retry.', true);
 
             console.error(
                 '❌ Driver map initialization failed:',

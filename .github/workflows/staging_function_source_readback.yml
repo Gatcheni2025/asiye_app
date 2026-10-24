@@ -1,0 +1,36 @@
+name: Read deployed staging function code (no deployment)
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths:
+      - '.github/workflows/staging_function_source_readback.yml'
+      - 'scripts/audit_staging_function_source.py'
+      - 'test/test_staging_source_readback.py'
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify archive comparison behavior
+        run: python3 -m unittest discover -s test -p 'test_staging_source_readback.py'
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: asiye-paystack-staging
+          credentials_json: ${{ secrets.FIREBASE_STAGING_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Compare immutable deployed build archives with reviewed function code
+        run: python3 scripts/audit_staging_function_source.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: asiye-staging-function-source-readback
+          path: source-readback/staging-function-source.json
+          if-no-files-found: error
+          retention-days: 14

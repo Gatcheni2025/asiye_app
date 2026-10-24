@@ -57,27 +57,24 @@ test('bank setup rejects malformed verification fields',()=>{
  assert.throws(()=>bankInput({...good,documentNumber:''}));
 });
 
-test('payout status is driven by signed transfer webhook only',()=>{
+test('new Card fares use direct subaccounts without an Asiye-funded bank transfer',()=>{
  const f=read('functions/index.js');
- assert.match(f,/disburseCompletedCardTrips/);
- assert.match(f,/status !== "completed"/);
- assert.match(f,/paystackRequest\("\/transfer"/);
- assert.match(f,/event\.event === "transfer\.success"/);
- assert.match(f,/transaction\(current =>/);
- assert.match(f,/needs_reconciliation/);
+ assert.match(f,/subaccount:registered\.subaccountCode/);
+ assert.match(f,/bearer:"account"/);
+ assert.match(f,/verifyDriverPaystackSplit\(payment,\s*transaction\)/);
+ assert.doesNotMatch(f,/paystackRequest\(["']\/transfer(?:recipient)?["']/);
+ assert.match(f,/settled_by_paystack_subaccount_or_legacy_review/);
  assert.match(f,/verifiedRequestUser\(request\)/);
  assert.match(read('assets/driver-v2/payout.html'),/Paystack/);
 });
 
-test('passenger phone registration requires saved name and face photo',()=>{
+test('passenger face capture is required at booking, after social signup',()=>{
  const login=read('assets/passenger-v2/js/login.js');
- const app=read('assets/passenger-v2/js/app.js');
- assert.match(login,/AsiyePassengerOnboarding\?\.photo/);
- assert.match(login,/uploadProfileImageProxy/);
- assert.match(login,/onboardingCompleted: true/);
- assert.match(login,/this\.showStep\('newPassengerStep'\)/);
- assert.match(app,/authUser\.phoneNumber && !/);
- assert.match(read('assets/passenger-v2/login.html'),/scanPassengerFace/);
+ const profile=read('assets/passenger-v2/js/profile.js');
+ assert.doesNotMatch(login,/uploadProfileImageProxy|phone-otp-required/);
+ assert.match(profile,/uploadProfileImageProxy/);
+ assert.match(profile,/bookingFaceAuthUid === auth.uid/);
+ assert.match(profile,/return await this.scanAndSave\(\)/);
 });
 
 test('private Paystack bank tokens and card transfer records reject client writes',()=>{
@@ -88,15 +85,17 @@ test('private Paystack bank tokens and card transfer records reject client write
  }
 });
 
-test('parcel card trips must clear Paystack before drivers are notified',()=>{
+test('Parcel dispatch follows secure creation and pickup waits for verified Card payment',()=>{
  const p=read('assets/passenger-v2/js/parcels.js');
  const d=read('assets/driver-v2/js/trip-controller.js');
  const backend=read('functions/index.js');
- assert.match(p,/paymentMethod === 'card'/);
- assert.match(p,/ASIYE\.payments\.prepare\(requestId\)/);
- assert.match(p,/payment_required/);
+ assert.match(p,/createParcelRequestSecure/);
+ assert.match(p,/!\['cash', 'card'\]\.includes\(paymentMethod\)/);
+ assert.ok(p.indexOf('notifyGoDrivers(requestId,payload.request)') > p.indexOf('const requestId = payload.requestId'));
+ assert.doesNotMatch(p,/ASIYE\.payments\.prepare\(requestId\)/);
  assert.match(backend,/trip\.type === "delivery"/);
- assert.match(d,/settleSelectedPayments/);
+ assert.match(d,/Confirm Paystack payment before collecting this parcel/);
+ assert.match(d,/parcelTripActionSecure/);
  assert.match(backend,/driverPayoutPath/);
 });
 

@@ -582,7 +582,8 @@ button {
 }
 
 
-#passengerPhoneInput {
+#passengerPhoneInput,
+#socialPhoneInput {
 
     flex:
         1;
@@ -604,6 +605,18 @@ button {
 
     font-weight:
         800;
+}
+
+/* Keep the one-time phone confirmation aligned with the main login form. */
+.alternate-method-panel {
+    margin-top: 18px;
+    padding-top: 4px;
+}
+.alternate-method-panel .login-subtitle {
+    text-align: center;
+}
+.alternate-method-panel .secondary-button {
+    margin-top: 10px;
 }
 
 

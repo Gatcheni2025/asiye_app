@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow,noarchive"><meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; frame-src https://*.firebaseapp.com https://accounts.google.com https://appleid.apple.com; style-src 'self'; connect-src 'self' https://*.googleapis.com https://*.cloudfunctions.net https://*.firebaseapp.com; object-src 'none'; base-uri 'self'; form-action 'self'">
+<title>Asiye · Staging trip tests</title>
+<link rel="stylesheet" href="/admin/testing.css">
+</head>
+<body>
+<main>
+  <header><a href="/admin/">ASIYE<span>●</span> <small>OPERATIONS</small></a><span class="environment">STAGING · PAYSTACK TEST</span></header>
+  <section class="intro"><p class="eyebrow">APPLICATION ACCEPTANCE</p><h1>Keep testing moving.</h1><p>Check active trips, connect a verified TEST payment split and end a test booking when you need a fresh start.</p></section>
+  <section id="testLogin" class="panel">
+    <h2>Test administrator sign-in</h2><p>This tool needs separate staging trip-test access assigned by the staging owner.</p>
+    <div class="actions"><button id="testGoogle" type="button">Continue with Google</button><button id="testApple" type="button" class="secondary">Continue with Apple</button></div>
+    <p id="testIdentity"></p><button id="testCheckAccess" type="button" class="secondary" hidden>Check access again</button>
+  </section>
+  <p id="testNotice" class="notice" role="status" aria-live="polite"></p>
+  <section id="testWorkspace" hidden>
+    <div class="toolbar"><div><h2>Active test trips</h2><p>Latest 100 booking records · select a trip to review it.</p></div><div class="actions"><button id="testRefresh" type="button" class="secondary">Refresh</button><button id="testLogout" type="button" class="secondary">Log out</button></div></div>
+    <div id="testTrips" class="trips"></div>
+    <section id="testDetails" class="panel" hidden>
+      <p class="eyebrow">SELECTED TEST TRIP</p><h2 id="testTripTitle"></h2><p id="testTripSummary"></p>
+      <form id="testLinkForm" class="task">
+        <h3>Driver Card setup</h3><p id="testDriverStatus"></p>
+        <label>Verified Paystack TEST subaccount code<input id="testSubaccount" autocomplete="off" placeholder="ACCT_…" required pattern="ACCT_[A-Za-z0-9]+"></label>
+        <p>Paystack must confirm TEST mode, active verification and 20% Asiye commission. Linking an existing code creates no charge.</p>
+        <button id="testLinkButton" type="submit">Link TEST subaccount to this driver</button>
+      </form>
+      <form id="testCancelForm" class="task">
+        <h3>Cancel this active test trip</h3><p>The trip record and audit history stay available. Matching passenger and driver booking locks are released. Card refunds are checked separately.</p>
+        <label>Reason<textarea id="testCancelReason" minlength="10" maxlength="500" required placeholder="Why does this test trip need to end?"></textarea></label>
+        <label>Type the exact trip ID to confirm<input id="testCancelConfirm" autocomplete="off" required></label>
+        <button id="testCancelButton" type="submit" class="danger">Cancel selected test trip</button>
+      </form>
+    </section>
+  </section>
+</main>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-functions.js"></script>
+<script src="/admin/auth.js?v=3"></script><script src="/admin/testing.js" defer></script>
+</body></html>

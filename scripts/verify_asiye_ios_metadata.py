@@ -5,6 +5,7 @@ import plistlib
 import pathlib
 import sys
 import zipfile
+import re
 
 parser = argparse.ArgumentParser()
 target = parser.add_mutually_exclusive_group(required=True)
@@ -35,4 +36,11 @@ expected = {
 for key, value in expected.items():
     if info.get(key) != value:
         sys.exit(f'FAIL: {key}: expected {value!r}, got {info.get(key)!r}')
+sdk = re.fullmatch(r'iphoneos(\d+)(?:\.\d+)*', str(info.get('DTSDKName','')))
+minimum = tuple(int(value) for value in str(info.get('MinimumOSVersion','0')).split('.'))
+if not sdk or int(sdk[1]) < 26:
+    sys.exit('FAIL: signed app must use the iOS 26 SDK or later.')
+if minimum < (15,5):
+    sys.exit('FAIL: signed app minimum must cover the existing iOS 15.5 native dependency requirement.')
 print(f'PASS signed/built iOS app version {args.version} ({args.build}), bundle and export compliance.')
+print(f"PASS actual SDK {info['DTSDKName']} and minimum iOS {info['MinimumOSVersion']}.")

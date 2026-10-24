@@ -58,6 +58,9 @@ ASIYE_DRIVER.trip = {
         if (generation !== this._generation) return false;
         if (!request) return false;
         const apply = live => {
+            for(const field of ['tripEndSafety','tripCompletion'])if(typeof live[field]==='string'){
+                try{live[field]=JSON.parse(live[field]);}catch(_){live[field]=null;}
+            }
             live.key = requestId;
             live.requestId = requestId;
             this.request = live;
@@ -65,6 +68,7 @@ ASIYE_DRIVER.trip = {
             window.AsiyeTripChat?.watchTrip?.(live, requestId);
             this.handleState(live);
             this.renderCancellation(live);
+            this.renderEarlyEnd(live);
         };
         localStorage.setItem('currentRequestId', requestId);
         apply(request);
@@ -103,6 +107,24 @@ ASIYE_DRIVER.trip = {
         return ASIYE_DRIVER.requests.postNegotiation('goTripActionSecure', {requestId: this.requestId, action, ...details});
     },
 
+    async submitPassengerRating(passengerId, score, requestId = this.requestId) {
+        if (!requestId) throw new Error('Open the completed trip from Trip history before rating.');
+        if (!Number.isInteger(score) || score < 1 || score > 5) throw new Error('Choose a rating from 1 to 5 stars.');
+        // Completion clears this.requestId and may promote a newer booking.
+        // Rate the captured completed trip without changing either trip's locks.
+        const result = await ASIYE_DRIVER.requests.postNegotiation('goTripActionSecure', {
+            requestId, action: 'ratePassenger', passengerId, score
+        });
+        if (!result?.ok || result.ratings?.version !== 1) throw new Error('The rating was not confirmed. Please try again.');
+        return result;
+    },
+
+    async parcelAction(action, details = {}) {
+        return ASIYE_DRIVER.requests.postNegotiation('parcelTripActionSecure', {
+            requestId:this.requestId, action, ...details
+        });
+    },
+
     /* ========================================================
        STATE MACHINE
        ======================================================== */
@@ -129,10 +151,11 @@ ASIYE_DRIVER.trip = {
             case 'payment_required':
 
                 if (
-                    request.negotiationEnabled ===
-                        true &&
-                    request.fareStatus ===
-                        'agreed'
+                    (request.negotiationEnabled === true &&
+                     request.fareStatus === 'agreed') ||
+                    (request.type === 'delivery' &&
+                     request.paymentMethod === 'card' &&
+                     Boolean(request.taxiId))
                 ) {
 
                     this.renderNegotiatedPaymentWaiting(
@@ -148,6 +171,7 @@ ASIYE_DRIVER.trip = {
                 this.renderAccepted(
                     request
                 );
+                void this.resumeConfirmedCardPickup(request);
 
                 break;
 
@@ -175,6 +199,7 @@ ASIYE_DRIVER.trip = {
                 this.renderDriverOnWay(
                     request
                 );
+                void this.resumeConfirmedCardPickup(request);
 
                 break;
 
@@ -296,7 +321,7 @@ ASIYE_DRIVER.trip = {
             <div class="driver-payment-wait-card">
 
                 <div class="driver-dialog-kicker">
-                    Asiye Go · Fare agreed
+                    ${request.type === 'delivery' ? 'Asiye Parcel · Driver reserved' : 'Asiye Go · Fare agreed'}
                 </div>
 
                 <h2 class="driver-title">
@@ -308,9 +333,7 @@ ASIYE_DRIVER.trip = {
                     ${
                         paymentMethod === 'card'
                             ? 'Waiting for confirmed Paystack payment. Pickup unlocks automatically after confirmation.'
-                            : paymentMethod === 'wallet'
-                                ? 'Waiting for the agreed fare to be reserved from Wallet or voucher credit.'
-                                : 'Cash is due after drop-off. Head to pickup and verify the passenger PIN before driving to the destination.'
+                            : 'Cash is due after drop-off. Head to pickup and verify the passenger PIN before driving to the destination.'
                     }
                 </div>
 
@@ -343,6 +366,7 @@ ASIYE_DRIVER.trip = {
                       : 'Pickup unlocks when payment is confirmed. Verify the PIN at pickup before departure.'}
                 </div>
                 ${paymentMethod === 'cash' ? '<button class="driver-btn driver-btn-primary" data-cash-pickup>Start cash pickup</button>' : ''}
+                ${paymentMethod === 'card' ? '<a class="driver-btn driver-btn-primary" href="./payout.html">Card earnings · verify payment setup</a><p class="driver-payment-wait-note">If payment setup is incomplete, finish it here. The passenger can then tap Try card payment again.</p>' : ''}
 
             </div>
         `;
@@ -408,6 +432,26 @@ ASIYE_DRIVER.trip = {
        GO — START PICKUP
        ======================================================== */
 
+    async resumeConfirmedCardPickup(request) {
+        const id = this.requestId;
+        if (!id || request.type === 'club' || request.type === 'delivery' ||
+            request.paymentMethod !== 'card' || request.goContinuationVersion !== 2 ||
+            request.fareStatus !== 'agreed' || request.paymentsReady !== true ||
+            !['held', 'captured'].includes(request.paymentStatus) ||
+            !['accepted', 'driver_on_way'].includes(request.status) ||
+            this._cardPickupNavigatedFor === id || this._cardPickupActive) return;
+        this._cardPickupActive = true;
+        try {
+            if (request.status === 'accepted') await this.goAction('onWay');
+            const live = (await this.requestRef.once('value')).val();
+            if (this.requestId !== id || live?.status !== 'driver_on_way' || live.paymentsReady !== true) return;
+            await this.startPickupNavigation(live);
+            this._cardPickupNavigatedFor = id;
+        } catch (error) {
+            ASIYE_DRIVER.ui?.toast?.(error.message || 'Payment confirmed. Tap Start pickup to retry navigation.', 'warning');
+        } finally { this._cardPickupActive = false; }
+    },
+
     async startPickup() {
 
         if (
@@ -447,6 +491,18 @@ ASIYE_DRIVER.trip = {
         }
 
 
+        if (this.request.type === 'delivery' &&
+            String(this.request.paymentMethod || 'cash').toLowerCase() === 'card' &&
+            (this.request.paymentsReady !== true ||
+             !['held', 'captured'].includes(String(this.request.paymentStatus || '')))) {
+            throw new Error('Confirm Paystack payment before collecting this parcel.');
+        }
+
+        if (this.request.parcelSecurityVersion === 2) {
+            await this.parcelAction('onWay');
+            await this.startPickupNavigation(this.request);
+            return;
+        }
         if (this.request.goContinuationVersion === 2) {
             await this.goAction('onWay');
             await this.startPickupNavigation(this.request);
@@ -622,7 +678,8 @@ ASIYE_DRIVER.trip = {
 
     async startDestinationNavigation(request) {
         const current = this.requestRef ? (await this.requestRef.once('value')).val() : request;
-        if (current?.goContinuationVersion === 2 && (current.status !== 'in_transit' || !current.pinVerifiedAt))
+        if ((current?.goContinuationVersion === 2 || current?.parcelSecurityVersion === 2) &&
+            (current.status !== 'in_transit' || !current.pinVerifiedAt))
             throw new Error('Verify the passenger PIN at pickup before starting destination navigation.');
         ASIYE_DRIVER.ui.closePassengerPin?.();
         ASIYE_DRIVER.ui.showInTransit(current || request);
@@ -681,6 +738,10 @@ ASIYE_DRIVER.trip = {
         }
 
 
+        if (this.request.parcelSecurityVersion === 2) {
+            await this.parcelAction('arrive');
+            return;
+        }
         if (this.request.goContinuationVersion === 2) {
             await this.goAction('arrive');
             return;
@@ -746,7 +807,7 @@ ASIYE_DRIVER.trip = {
                         request.commuterName,
 
                     expectedPin:
-                        request.pickupPin,
+                        request.parcelSecurityVersion === 2 ? undefined : request.pickupPin,
 
                     isClub:
                         false
@@ -762,6 +823,11 @@ ASIYE_DRIVER.trip = {
     async verifyGoPin(
         enteredPin
     ) {
+        if (this.request?.parcelSecurityVersion === 2) {
+            const result = await this.parcelAction('verifyPin', {pin:enteredPin});
+            if (result.pinValid) await this.startDestinationNavigation(this.request);
+            return result.pinValid === true;
+        }
         if (this.request?.goContinuationVersion === 2) {
             const result = await this.goAction('verifyPin', {pin: enteredPin});
             if (result.pinValid) await this.startDestinationNavigation(this.request);
@@ -829,6 +895,8 @@ ASIYE_DRIVER.trip = {
 
 
     async startGoTrip() {
+        if (this.request?.parcelSecurityVersion === 2)
+            throw new Error('Parcel movement requires server PIN verification.');
 
         await this.requestRef.update({
 
@@ -1694,7 +1762,7 @@ ASIYE_DRIVER.trip = {
     },
 
 
-    async settleSelectedPayments() {
+    async settleSelectedPayments(options = {}) {
         const request =
             this.request;
 
@@ -1740,7 +1808,8 @@ ASIYE_DRIVER.trip = {
                         body:
                             JSON.stringify({
                                 requestId:
-                                    this.requestId
+                                    this.requestId,
+                                endRequestId: options.endRequestId
                             })
                     }
                 );
@@ -1776,8 +1845,79 @@ ASIYE_DRIVER.trip = {
        COMPLETE TRIP
        ======================================================== */
 
-    async completeTrip() {
-        if (this.request?.clubSecurityVersion === 2) { await this.settleSelectedPayments(); await window.ClubLive.driverAction('complete'); await this.releaseDriver(); return; }
+    async confirmCompletion() {
+        const request=this.request;
+        if(!request||!this.requestId||this._finishing)return;
+        const id=this.requestId;
+        const check=await this.goAction('checkTripEnd');
+        if(this.requestId!==id)return;
+        if(check.approved){await this.completeTrip({endRequestId:check.endRequestId});return;}
+        const cash=request.type==='club'
+            ? Object.values(request.passengers||{}).filter(p=>!/cancelled|rejected/.test(p.status||'')&&p.paymentMethod==='cash')
+                .reduce((sum,p)=>sum+Number(p.price||0),0)
+            : request.paymentMethod==='cash'?Number(request.agreedFare||request.finalAmount||0):0;
+        const early=check.requiresPassengerConfirmation;
+        if(early&&check.status==='pending'){
+            ASIYE_DRIVER.ui.toast('Waiting for the passenger to confirm. The trip is still active.');return;
+        }
+        const message=early
+            ? (check.locationAvailable?'You are not at your destination. Are you sure you want to end the trip here?':'We cannot confirm arrival at the destination. Are you sure you want to end the trip here?')+
+              (request.type==='club'?' Every onboard passenger must also confirm.':' The passenger must also confirm.')+
+              ' The agreed fare stays the same.'+(cash>0?` Confirm only after collecting R${cash.toFixed(2)} cash.`:'')
+            : cash>0?`Confirm drop-off and that you collected R${cash.toFixed(2)} cash.`:'Confirm that the trip has ended at the destination.';
+        ASIYE_DRIVER.ui.confirm(early?'End trip before destination?':'Complete trip',message,async()=>{
+            if(this.requestId!==id)return;
+            try{
+                if(early)await this.goAction('requestEarlyEnd',{warningConfirmed:true,cashCollected:cash>0});
+                else await this.completeTrip();
+            }catch(error){ASIYE_DRIVER.ui.toast(error.message||'Unable to end the trip.','danger');}
+        });
+    },
+
+    renderEarlyEnd(request) {
+        clearTimeout(this._earlyEndTimer);
+        const container=document.getElementById('activeTripContent');
+        container?.querySelector('[data-early-end]')?.remove();
+        if(!container||request.status!=='in_transit'||request.type==='delivery')return;
+        const end=request.tripEndSafety,button=document.getElementById('driverCompleteTrip');
+        if(!end)return;
+        const expired=end.expiresAt<=Date.now()&&!request.tripCompletion;
+        const status=expired?'expired':end.status;
+        const panel=document.createElement('section');panel.dataset.earlyEnd='true';panel.className='trip-end-safety';
+        panel.setAttribute('role','status');
+        const message=status==='pending'?'Waiting for passenger confirmation. Your trip is still active.':
+            status==='approved'?'All passengers agreed to end the trip here. Finishing the trip…':
+            status==='declined'?'A passenger chose to keep the trip active. Continue to the destination.':
+            status==='expired'?'The confirmation request expired. The trip is still active.':'The end-trip request was withdrawn. The trip is still active.';
+        panel.innerHTML='<strong>End trip safety check</strong><p>'+ASIYE_DRIVER.ui.escape(message)+'</p>'+
+            (status==='pending'?'<button type="button" data-withdraw-early-end class="driver-btn driver-btn-secondary">Keep trip active</button>':'');
+        if(button)button.before(panel);else container.prepend(panel);
+        if(button){button.disabled=status==='pending';if(status==='approved')button.textContent='Finish agreed early end';}
+        panel.querySelector('[data-withdraw-early-end]')?.addEventListener('click',async event=>{
+            event.currentTarget.disabled=true;
+            try{await this.goAction('withdrawEarlyEnd',{endRequestId:end.id});}
+            catch(error){ASIYE_DRIVER.ui.toast(error.message,'danger');if(event.currentTarget)event.currentTarget.disabled=false;}
+        });
+        const key=this.requestId+':'+end.id;
+        if(status==='approved'&&this._earlyEndAttempt!==key){
+            this._earlyEndAttempt=key;
+            void this.completeTrip({endRequestId:end.id}).catch(error=>
+                ASIYE_DRIVER.ui.toast(error.message||'Unable to finish. Tap Finish agreed early end to retry.','danger'));
+        }
+        if(['pending','approved'].includes(status)&&end.expiresAt>Date.now()){
+            const id=this.requestId;
+            this._earlyEndTimer=setTimeout(()=>{if(this.requestId===id)this.renderEarlyEnd(this.request);},end.expiresAt-Date.now()+50);
+        }
+    },
+
+    async completeTrip(options = {}) {
+        if(this._finishing)return;
+        this._finishing=true;
+        try{return await this.finishConfirmedTrip(options);}finally{this._finishing=false;}
+    },
+
+    async finishConfirmedTrip(options = {}) {
+        if (this.request?.clubSecurityVersion === 2) { await this.settleSelectedPayments(options); await window.ClubLive.driverAction('complete',options); await this.releaseDriver(); return; }
 
 
         if (
@@ -1795,8 +1935,14 @@ ASIYE_DRIVER.trip = {
 
         try {
             if (request.goContinuationVersion === 2 && String(request.paymentMethod).toLowerCase() === 'cash')
-                await this.goAction('collectCash', {cashCollected: true});
-            const settlementResult = await this.settleSelectedPayments();
+                await this.goAction('collectCash', {cashCollected: true,endRequestId:options.endRequestId});
+            const settlementResult = await this.settleSelectedPayments(options);
+            if (request.parcelSecurityVersion === 2) {
+                await this.parcelAction('complete');
+                ASIYE_DRIVER.ui.closePassengerPin?.();
+                await this.releaseDriver();
+                return;
+            }
             if (settlementResult?.serverCompleted === true) {
                 ASIYE_DRIVER.ui.closePassengerPin?.();
                 await this.releaseDriver();
@@ -2170,7 +2316,7 @@ ASIYE_DRIVER.trip = {
                         'Trip completed',
 
                     message:
-                        'You have arrived at your destination.',
+                        request.tripCompletion?.mode==='agreed_early_end'?'Your trip ended here with your agreement.':'You have arrived at your destination.',
 
                     amount:
 
@@ -2217,6 +2363,16 @@ ASIYE_DRIVER.trip = {
         reason = ''
     ) {
         if (this.request?.clubSecurityVersion === 2) { await window.ClubLive.driverAction('cancelDriver'); await this.releaseDriver(); return true; }
+        if (this.request?.parcelSecurityVersion === 2) {
+            const result = await ASIYE_DRIVER.requests.postNegotiation(
+                'cancelParcelBookingSecure',{requestId:this.requestId}
+            );
+            if (result.ok) {
+                await this.releaseDriver();
+                this.cleanup();
+            }
+            return Boolean(result.ok);
+        }
         if (this.request && this.request.type !== 'club') {
             await this.goAction('cancel');
             await this.releaseDriver();

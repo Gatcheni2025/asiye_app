@@ -67,7 +67,8 @@
 
     async function requireApproval() {
         const user = firebase.auth().currentUser;
-        if (!clean(user)) {
+        if (!clean(user) || !user.phoneNumber ||
+            !user.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
             window.location.replace('./login.html');
             return false;
         }

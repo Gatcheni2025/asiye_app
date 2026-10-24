@@ -1,9 +1,12 @@
 /* ============================================================
    ASIYE DRIVER V2
-   PHONE LOGIN / OTP
+   GOOGLE / APPLE, THEN DRIVER PHONE OTP
    ============================================================ */
 
 window.ASIYE_DRIVER_LOGIN = {
+
+    pendingUser: null,
+    awaitingPhoneLink: false,
 
     confirmationResult:
         null,
@@ -69,7 +72,7 @@ window.ASIYE_DRIVER_LOGIN = {
             );
         } catch (_) {}
 
-        this.prepareRecaptcha();
+        // reCAPTCHA is created only when a signed-in driver requests SMS.
 
         await this.checkExistingSession();
     },
@@ -152,6 +155,9 @@ window.ASIYE_DRIVER_LOGIN = {
        ======================================================== */
 
     bindEvents() {
+        document.getElementById('switchDriverSignInButton')?.addEventListener('click', () =>
+            this.useAnotherSignInMethod().catch(() => this.toast('Could not switch accounts. Please try again.')));
+
 
         document
             .getElementById(
@@ -323,82 +329,49 @@ window.ASIYE_DRIVER_LOGIN = {
        RECAPTCHA
        ======================================================== */
 
+    // Reuse one Firebase verifier for the entire page lifecycle. Firebase's
+    // asynchronous render must finish before signInWithPhoneNumber consumes it.
     prepareRecaptcha() {
+        if (this.recaptchaRenderPromise) return this.recaptchaRenderPromise;
+        if (this.recaptchaVerifier) return Promise.resolve(this.recaptchaVerifier);
+        if (!document.getElementById('recaptcha-container')) return Promise.resolve(null);
 
+        let verifier;
         try {
-
-            if (
-                this.recaptchaVerifier
-            ) {
-
-                try {
-                    this.recaptchaVerifier.clear();
-                } catch (_) {}
-
-                this.recaptchaVerifier = null;
-            }
-
-
-            const container =
-                document.getElementById('recaptcha-container');
-
-            if (container) {
-                container.innerHTML = '';
-            }
-
-
-            this.recaptchaVerifier =
-
-                new firebase.auth
-                    .RecaptchaVerifier(
-
-                        'recaptcha-container',
-
-                        {
-
-                            size:
-                                'invisible',
-
-                            callback:
-                                () => {
-
-                                    console.log(
-                                        '✅ Driver reCAPTCHA passed'
-                                    );
-                                },
-
-                            'expired-callback':
-                                () => {
-
-                                    console.warn(
-                                        'Driver reCAPTCHA expired, resetting verifier.'
-                                    );
-
-                                    this.prepareRecaptcha();
-                                }
-                        }
-                    );
-
-
-            this.recaptchaVerifier
-                .render()
-                .catch(
-                    error => {
-
-                        console.warn(
-                            'reCAPTCHA render warning:',
-                            error
-                        );
+            verifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+                size: 'invisible',
+                callback: () => console.log('✅ Driver reCAPTCHA passed'),
+                'expired-callback': () => this.resetRecaptchaWidget()
+            });
+            this.recaptchaVerifier = verifier;
+            this.recaptchaRenderPromise = verifier.render()
+                .then(widgetId => {
+                    if (this.recaptchaVerifier === verifier) this.recaptchaWidgetId = widgetId;
+                    return verifier;
+                })
+                .catch(error => {
+                    console.warn('Driver reCAPTCHA render warning:', error);
+                    if (this.recaptchaVerifier === verifier) {
+                        this.recaptchaVerifier = null;
+                        this.recaptchaRenderPromise = null;
+                        this.recaptchaWidgetId = null;
+                        try { verifier.clear(); } catch (_) {}
                     }
-                );
-
-
+                    return null;
+                });
+            return this.recaptchaRenderPromise;
         } catch (error) {
+            console.error('Driver reCAPTCHA setup failed:', error);
+            this.recaptchaVerifier = null;
+            this.recaptchaRenderPromise = null;
+            this.recaptchaWidgetId = null;
+            return Promise.resolve(null);
+        }
+    },
 
-            console.error(
-                'Could not create reCAPTCHA:',
-                error
-            );
+    resetRecaptchaWidget() {
+        if (Number.isInteger(this.recaptchaWidgetId)) {
+            try { window.grecaptcha?.reset(this.recaptchaWidgetId); } catch (_) {}
         }
     },
 
@@ -456,6 +429,14 @@ window.ASIYE_DRIVER_LOGIN = {
        ======================================================== */
 
     async sendOtp() {
+        const current = firebase.auth().currentUser;
+        if (!this.awaitingPhoneLink || !this.pendingUser || current?.uid !== this.pendingUser.uid ||
+            !current.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
+            this.showStep('loginStep');
+            this.toast('Sign in with Google or Apple before verifying your driver phone.');
+            return;
+        }
+
 
         const input =
             document.getElementById(
@@ -532,25 +513,10 @@ window.ASIYE_DRIVER_LOGIN = {
 
         try {
 
-            if (
-                !this.recaptchaVerifier
-            ) {
+            const verifier = await this.prepareRecaptcha();
+            if (!verifier) throw new Error('Security verification is unavailable. Reload the page.');
 
-                this.prepareRecaptcha();
-            }
-
-
-            this.confirmationResult =
-
-                await firebase
-                    .auth()
-                    .signInWithPhoneNumber(
-
-                        phone,
-
-                        this.recaptchaVerifier
-                    );
-
+            this.confirmationResult = await current.linkWithPhoneNumber(phone, verifier);
 
             const display =
                 document.getElementById(
@@ -601,7 +567,9 @@ window.ASIYE_DRIVER_LOGIN = {
             );
 
 
-            this.prepareRecaptcha();
+            if (['auth/captcha-check-failed', 'auth/invalid-app-credential'].includes(error?.code)) {
+                this.resetRecaptchaWidget();
+            }
 
 
         } finally {
@@ -724,6 +692,10 @@ window.ASIYE_DRIVER_LOGIN = {
                     );
 
             authUser = result.user;
+            if (authUser?.uid !== this.pendingUser?.uid || !authUser?.phoneNumber) {
+                throw new Error('Phone verification did not preserve your Google or Apple account. Please try again.');
+            }
+            this.awaitingPhoneLink = false;
 
         } catch (error) {
 
@@ -1059,7 +1031,34 @@ window.ASIYE_DRIVER_LOGIN = {
        4. Email matching for Google / Apple
        ======================================================== */
 
+    driverIdentityReady(user) {
+        if (!user?.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
+            this.showStep('loginStep');
+            this.toast('Sign in with Google or Apple first.');
+            return false;
+        }
+        this.pendingUser = user;
+        if (!user.phoneNumber) {
+            this.awaitingPhoneLink = true;
+            this.showStep('phoneStep');
+            return false;
+        }
+        this.awaitingPhoneLink = false;
+        return true;
+    },
+
+    async useAnotherSignInMethod() {
+        await firebase.auth().signOut();
+        this.pendingUser = null;
+        this.awaitingPhoneLink = false;
+        this.confirmationResult = null;
+        clearInterval(this.resendInterval);
+        this.showStep('loginStep');
+    },
+
     async verifyDriverProfile(user) {
+        if (!this.driverIdentityReady(user)) return;
+
 
         try {
 
@@ -1490,6 +1489,7 @@ window.ASIYE_DRIVER_LOGIN = {
         driverData,
         authUser
     ) {
+        if (!this.driverIdentityReady(authUser)) return;
         const account = await AsiyeEnrollment.getStatus(authUser);
         if (account.state !== 'approved') {
             window.location.replace('./enrollment.html');
@@ -1641,7 +1641,8 @@ window.ASIYE_DRIVER_LOGIN = {
         }
 
 
-        this.prepareRecaptcha();
+        // Keep the rendered verifier when resending an OTP.
+
 
 
         const input =
@@ -1775,6 +1776,8 @@ window.ASIYE_DRIVER_LOGIN = {
     showStep(
         stepId
     ) {
+        // A profile read failure must not send an already-verified driver back to OTP.
+        if (stepId === 'phoneStep' && !this.awaitingPhoneLink) stepId = 'loginStep';
 
         document
             .querySelectorAll(
@@ -1866,6 +1869,17 @@ window.ASIYE_DRIVER_LOGIN = {
 
                 break;
 
+
+            case 'auth/credential-already-in-use':
+            case 'auth/phone-number-already-exists':
+                message = 'This number is linked to another Asiye account. Use its Google or Apple account, or contact Asiye Support to link it securely.';
+                break;
+            case 'auth/provider-already-linked':
+                message = 'Your phone is already linked. Sign in again with the same Google or Apple account.';
+                break;
+            case 'auth/operation-not-allowed':
+                message = 'SMS verification is not enabled for this Firebase project or region. Please choose another sign-in method.';
+                break;
 
             case 'auth/captcha-check-failed':
 

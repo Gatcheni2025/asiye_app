@@ -10,16 +10,15 @@ ASIYE.pricing = {
     /*
      * Market-reference model used as the anchor for both Asiye Go and Work.
      *
-     * GO negotiation is deliberately bounded:
+     * GO recommendations guide the passenger and driver:
      *   suggested fare: 90% of market reference
-     *   minimum offer: 85%
+     *   minimum passenger offer: 65% of the route reference
      *   maximum driver counter: 95%
      *   Asiye commission: 20%
      *   driver receives: 80%
      *
-     * This means the minimum permitted Go fare still pays the driver
-     * 68% of the market-reference value (85% × 80%) while Asiye keeps
-     * its full 20% commission.
+     * Offers from 65% up to the ceiling reach drivers below the recommendation.
+     * The agreed fare always keeps the same 20/80 commission split.
      */
     rates: {
         market: {
@@ -32,7 +31,7 @@ ASIYE.pricing = {
 
         go: {
             suggestedRatio: 0.90,
-            minimumRatio: 0.85,
+            recommendedMinimumRatio: 0.65,
             maximumRatio: 0.95,
             commissionRate: 0.20
         },
@@ -97,9 +96,10 @@ ASIYE.pricing = {
                 1,
                 Math.ceil(
                     marketReferenceFare *
-                    goRules.minimumRatio
+                    goRules.recommendedMinimumRatio
                 )
             );
+        const recommendedMinimum = minimumOffer;
 
         const maximumOffer =
             Math.max(
@@ -188,6 +188,9 @@ ASIYE.pricing = {
             goMinimumOffer:
                 minimumOffer,
 
+            goRecommendedMinimum:
+                recommendedMinimum,
+
             goMaximumOffer:
                 maximumOffer,
 
@@ -216,7 +219,7 @@ ASIYE.pricing = {
                 Math.round(
                     (
                         1 -
-                        goRules.minimumRatio
+                        goRules.recommendedMinimumRatio
                     ) *
                     100
                 ),

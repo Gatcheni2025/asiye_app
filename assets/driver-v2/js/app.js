@@ -746,6 +746,13 @@ ASIYE_DRIVER.ui = {
             driver.carCategory;
 
 
+        const categories = [vehicle.type, driver.vehicleType, driver.carCategory]
+            .map(value => String(value || '').trim().toLowerCase());
+        if (categories.some(category => ['suv', 'minibus'].includes(category)) ||
+            !['sedan', 'hatchback', 'ehailing', 'e-hailing', 'go', 'car'].includes(categories.find(Boolean) || '')) {
+            return false;
+        }
+
         const make =
             vehicle.make ||
             driver.vehicleMake ||
@@ -974,7 +981,7 @@ ASIYE_DRIVER.ui = {
             !this.hasApprovedVehicle()
         ) {
             this.toast(
-                'Complete your approved driver profile first: selfie, car photo, phone, make, model, colour, year, registration and seats are required before you can go online.',
+                'Asiye supports approved Sedan and Hatchback vehicles only. Complete your selfie, car photo, phone and vehicle details before going online.',
                 'warning'
             );
 
@@ -988,6 +995,8 @@ ASIYE_DRIVER.ui = {
 
 
         try {
+
+            if (newOnline) await window.AsiyeDriverPresence.prepare(driverId);
 
             await firebase
                 .database()
@@ -1058,6 +1067,9 @@ ASIYE_DRIVER.ui = {
                     ?.start?.();
 
             } else {
+
+                ASIYE_DRIVER.requests?.stop?.();
+                this.closeIncomingRequest();
 
                 this.toast(
                     'You are now offline.'
@@ -1193,6 +1205,12 @@ ASIYE_DRIVER.ui = {
         const isClub =
             request.type === 'club';
 
+        const acceptButton = document.getElementById('acceptRequestButton');
+        if (acceptButton) {
+            acceptButton.disabled = false;
+            acceptButton.textContent = 'Accept';
+        }
+
 
         const isDelivery =
             request.type ===
@@ -1252,7 +1270,7 @@ ASIYE_DRIVER.ui = {
             )
 
             : Number(
-                request.agreedFare ||
+                (request.negotiationEnabled === true && request.fareStatus !== 'agreed' ? request.passengerOffer : request.agreedFare) ||
                 request.finalAmount ||
                 request.calculatedPrice ||
                 0
@@ -1620,11 +1638,17 @@ ASIYE_DRIVER.ui = {
             true;
 
 
-        this.startRequestTimer(
-            isEarlyWork
-                ? 45
-                : 20
-        );
+        if (ASIYE_DRIVER.goNegotiation?.isProtectedGo(request)) {
+            this.stopRequestTimer();
+            const timer = document.getElementById('incomingRequestTimer');
+            if (timer) {
+                timer.textContent = 'Open';
+                timer.setAttribute('aria-label', 'Offer stays open until a decision is made');
+            }
+        } else {
+            document.getElementById('incomingRequestTimer')?.removeAttribute('aria-label');
+            this.startRequestTimer(isEarlyWork ? 45 : 20);
+        }
     },
 
 
@@ -3289,6 +3313,10 @@ ASIYE_DRIVER.ui = {
             ?.addEventListener(
                 'click',
                 () => {
+                    if(request.type!=='delivery'){
+                        void ASIYE_DRIVER.trip.confirmCompletion().catch(error=>this.toast(error.message||'Unable to check trip completion.','danger'));
+                        return;
+                    }
                     this.confirm(
                         request.type === 'delivery'
                             ? 'Complete delivery'
@@ -3312,11 +3340,22 @@ ASIYE_DRIVER.ui = {
        COMPLETED
        ======================================================== */
 
+    closeTripCompleted() {
+        document.getElementById('driverCompletedOverlay')?.classList.remove('open');
+        // Completion already released its matching locks. Rating a historical
+        // trip must not clear a newer active booking or stop its navigation.
+        const currentTrip = ASIYE_DRIVER.trip;
+        if (currentTrip?.request && currentTrip.request.status !== 'completed')
+            currentTrip.handleState(currentTrip.request);
+        else this.showDashboard();
+    },
+
     showTripCompleted(
-        request
+        request,
+        { history = false } = {}
     ) {
 
-        ASIYE_DRIVER.navigator?.stop();
+        if (!history) ASIYE_DRIVER.navigator?.stop();
 
         const overlay =
             document.getElementById(
@@ -3337,6 +3376,9 @@ ASIYE_DRIVER.ui = {
 
 
         if (!overlay) return;
+
+        const completedRequestId = request.requestId || request.key || ASIYE_DRIVER.trip?.requestId;
+        overlay.dataset.completedRequestId = completedRequestId || '';
 
 
         let amount =
@@ -3437,11 +3479,14 @@ ASIYE_DRIVER.ui = {
 
             const passengers = request.type === 'club'
                 ? Object.entries(request.passengers || {})
-                    .filter(([, passenger]) => !String(passenger.status || '').includes('cancelled'))
+                    .filter(([, passenger]) => passenger.status === 'completed')
                     .map(([id, passenger]) => ({ id, name: passenger.name || passenger.commuterName || 'Passenger' }))
                 : [{ id: request.commuterId, name: request.commuterName || 'Passenger' }];
+            let savedRatings = request.tripRatings;
+            try { if (typeof savedRatings === 'string') savedRatings = JSON.parse(savedRatings); }
+            catch (_) { savedRatings = null; }
             const unrated = passengers.filter(passenger =>
-                passenger.id && !request.ratings?.driverToPassenger?.[passenger.id]
+                passenger.id && !savedRatings?.driverToPassenger?.[passenger.id]
             );
 
             details.innerHTML = `
@@ -3452,37 +3497,50 @@ ASIYE_DRIVER.ui = {
                         <strong>Rate your passenger</strong>
                         ${unrated.length > 1 ? `<select id="ratingPassengerId" style="width:100%;margin:10px 0;padding:11px;border-radius:10px;"><option value="">Choose passenger</option>${unrated.map(item => `<option value="${ASIYE_DRIVER.ui.escape(item.id)}">${ASIYE_DRIVER.ui.escape(item.name)}</option>`).join('')}</select>` : ''}
                         <div data-passenger-rating-stars style="display:flex;justify-content:center;gap:7px;margin:10px 0;">
-                            ${[1,2,3,4,5].map(value => `<button type="button" data-passenger-rating="${value}" style="border:0;background:none;color:#c8c8c8;font-size:28px;">★</button>`).join('')}
+                            ${[1,2,3,4,5].map(value => `<button type="button" data-passenger-rating="${value}" aria-label="Rate passenger ${value} of 5 stars" style="border:0;background:none;color:#c8c8c8;font-size:28px;">★</button>`).join('')}
                         </div>
                         <button type="button" id="submitPassengerRating" class="driver-btn driver-btn-primary driver-btn-full" disabled>Submit rating</button>
                     </section>` : '<p style="margin-top:12px;font-weight:800;">Passenger rating submitted.</p>'}
             `;
 
-            let selectedRating = 0;
+            let selectedRating = 0, saving = false;
+            const submitButton = details.querySelector('#submitPassengerRating');
+            const passengerSelect = details.querySelector('#ratingPassengerId');
+            const refreshSubmit = () => {
+                if (submitButton) submitButton.disabled = saving || !selectedRating || (passengerSelect && !passengerSelect.value);
+            };
+            passengerSelect?.addEventListener('change', refreshSubmit);
             details.querySelectorAll('[data-passenger-rating]').forEach(star => {
                 star.onclick = () => {
+                    if (saving) return;
                     selectedRating = Number(star.dataset.passengerRating);
                     details.querySelectorAll('[data-passenger-rating]').forEach(item => {
                         item.style.color = Number(item.dataset.passengerRating) <= selectedRating
                             ? '#f5b301' : '#c8c8c8';
                     });
-                    const submit = details.querySelector('#submitPassengerRating');
-                    if (submit) submit.disabled = false;
+                    refreshSubmit();
                 };
             });
             details.querySelector('#submitPassengerRating')?.addEventListener('click', async event => {
-                const passengerId = details.querySelector('#ratingPassengerId')?.value || unrated[0]?.id;
+                if (saving) return;
+                const button = event.currentTarget;
+                const passengerId = passengerSelect ? passengerSelect.value : unrated[0]?.id;
                 if (!passengerId) return this.toast('Choose a passenger first.', 'warning');
-                event.currentTarget.disabled = true;
-                event.currentTarget.textContent = 'Saving…';
+                saving = true;
+                button.disabled = true;
+                button.textContent = 'Saving…';
                 try {
-                    await ASIYE_DRIVER.trip.submitPassengerRating(passengerId, selectedRating);
-                    event.currentTarget.textContent = 'Rating submitted';
+                    const result = await ASIYE_DRIVER.trip.submitPassengerRating(passengerId, selectedRating, completedRequestId);
+                    request.tripRatings = JSON.stringify(result.ratings);
+                    if (overlay.classList.contains('open') && overlay.dataset.completedRequestId === completedRequestId)
+                        this.showTripCompleted(request, { history });
                     this.toast('Passenger rating saved.', 'success');
-                } catch {
-                    event.currentTarget.disabled = false;
-                    event.currentTarget.textContent = 'Submit rating';
-                    this.toast('Could not save the rating.', 'danger');
+                } catch (error) {
+                    button.disabled = false;
+                    button.textContent = 'Submit rating';
+                    this.toast(error.message || 'Could not save the rating. Please try again.', 'danger');
+                } finally {
+                    saving = false;
                 }
             });
         }
@@ -4484,6 +4542,8 @@ async function (
             driver
         );
 
+        window.AsiyeDriverPresence.start(driverId);
+
 
         localStorage.setItem(
             'driverId',
@@ -4501,21 +4561,6 @@ async function (
             '✅ Driver profile loaded:',
             driverId
         );
-
-
-        /*
-         * One-time safety setup.
-         * A verified driver must save one trusted family member
-         * before going online or receiving bookings.
-         */
-        if (
-            window.AsiyeSafetyContact &&
-            !await AsiyeSafetyContact.ensure({
-                role: 'driver'
-            })
-        ) {
-            return;
-        }
 
 
         /*
@@ -4677,6 +4722,14 @@ async function (
         console.log(
             '✅ Asiye Driver V2 ready'
         );
+
+        // Optional contacts must never stop the map, GPS, restored trips or
+        // incoming offers. Show setup only after the dashboard is ready.
+        if (restoredTrip === false && !ASIYE_DRIVER.state.availability.isOnline && window.AsiyeSafetyContact) {
+            void AsiyeSafetyContact.ensure({role: 'driver'}).catch(error => {
+                console.warn('Optional trusted-contact setup:', error.message);
+            });
+        }
 
 
         const signalReady = () => {
@@ -5003,22 +5056,7 @@ document.addEventListener(
                 'click',
                 async () => {
 
-                    document
-                        .getElementById(
-                            'driverCompletedOverlay'
-                        )
-                        ?.classList
-                        .remove(
-                            'open'
-                        );
-
-
-                    await ASIYE_DRIVER.trip
-                        .releaseDriver();
-
-
-                    ASIYE_DRIVER.ui
-                        .showDashboard();
+                    ASIYE_DRIVER.ui.closeTripCompleted();
                 }
             );
 

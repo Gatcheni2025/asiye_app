@@ -1,0 +1,88 @@
+name: Paystack subaccount migration safety check
+on:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify actual Android 341 and uploaded iOS release ancestry
+        run: bash scripts/verify_payment_release_341_lineage.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Syntax checks for finance and passenger pages
+        run: |
+          node --check functions/index.js
+          node --check functions/club-lifecycle.js
+          node --check functions/parcel-security.js
+          node --check functions/paystack-subaccount-split.js
+          node --check functions/paystack-payment-safety.js
+          node --check scripts/paystack_technical_readiness.cjs
+          node --check scripts/verify_paystack_staging.cjs
+          node --check scripts/build_staging_web_preview.cjs
+          node --check scripts/summarize_staging_deploy_error.cjs
+          node --check scripts/diagnose_paystack_staging.cjs
+          node --check scripts/diagnose_paystack_deploy_log.cjs
+          node --check scripts/diagnose_paystack_operations.cjs
+          node --check scripts/diagnose_staging_rtdb_trigger.cjs
+          node --test test/staging-rtdb-trigger-diagnosis.test.cjs
+          node --test test/staging-log-offline-diagnosis.test.cjs
+          node --test test/staging-operations-diagnosis.test.cjs
+          node --check scripts/recover_missing_paystack_staging.cjs
+          node --test test/staging-bounded-recovery.test.cjs
+          node --check scripts/deploy_paystack_staging_hosting_only.cjs
+          node --test test/staging-hosting-only-deploy.test.cjs
+          node --check scripts/rebuild_staging_auth_preview.cjs
+          node --check assets/passenger-v2/js/login.js
+          node --check assets/driver-v2/js/login.js
+          node --test test/staging-auth-recaptcha.test.cjs
+          node --test test/staging-passenger-social-phone-link.test.cjs
+          node --check scripts/diagnose_paystack_hosting.cjs
+          node --test test/staging-hosting-diagnosis.test.cjs
+          node --check scripts/diagnose_staging_hosting_upload.cjs
+          node --test test/staging-hosting-upload-diagnosis.test.cjs
+          node --test test/staging-deploy-diagnostics.test.cjs
+          node --test test/staging-function-scope.test.cjs
+          node --test test/staging-function-entry.test.cjs
+          node --check assets/passenger-v2/js/app.js
+          node --check assets/passenger-v2/js/state.js
+          node --check assets/passenger-v2/js/club.js
+          node --check assets/passenger-v2/js/parcels.js
+          node --check assets/passenger-v2/js/wallet.js
+          node --check assets/passenger-v2/js/ride-controller.js
+          node --check assets/driver-v2/js/requests.js
+          node --check assets/driver-v2/js/trip-controller.js
+          node --check assets/member-pages.js
+      - name: Isolated staging project and payment-endpoint regressions
+        run: node --test test/staging-web-boundary.test.cjs
+      - name: Dry-run the full staging web bundle with synthetic public Firebase identifiers
+        env:
+          FIREBASE_STAGING_PROJECT: asiye-ci-preview
+          FIREBASE_STAGING_WEB_CONFIG: '{"apiKey":"AIzaXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX","authDomain":"asiye-ci-preview.firebaseapp.com","databaseURL":"https://asiye-ci-preview-default-rtdb.firebaseio.com","projectId":"asiye-ci-preview","storageBucket":"asiye-ci-preview.firebasestorage.app","messagingSenderId":"123456789012","appId":"1:123456789012:web:abcdefab12"}'
+        run: |
+          node scripts/build_staging_web_preview.cjs
+          test -f staging-preview/passenger-v2/js/firebase.js
+          test -f staging-preview/driver-v2/js/firebase.js
+          test -f firebase.staging.generated.json
+          echo 'A synthetic preview was built only in the ephemeral CI runner, not deployed.'
+      - name: New Paystack 80/20 and no-wallet regression checks
+        run: node --test test/paystack-subaccount-migration.test.cjs test/paystack-payment-safety.test.cjs
+      - name: Full simulated Go Work Parcel Paystack charge flow
+        run: node --test test/paystack-card-journey-simulation.test.cjs
+      - name: Server-secured Parcel PIN and Paystack journey tests
+        run: node --test test/parcel-security.test.cjs
+      - name: Driver-first Parcel and Work payment regressions
+        run: node --test test/driver-first-card-booking.test.cjs
+      - name: Existing booking PIN and commission regressions
+        run: node --test test/go-continuation.test.cjs test/club-lifecycle.test.cjs test/card-booking-sequence.test.cjs test/go-fare-settlement-lifecycle.test.cjs
+      - name: Compliance release gate
+        run: |
+          echo "This workflow does not deploy any Firebase functions or build public apps."
+          echo "Paystack merchant activation, driver subaccount verification, live-device integration, cash/card UI, legacy outstanding balances and settlements need sign-off before deployment."

@@ -1,3 +1,5 @@
+const {assertPassengerBookingProfile} = require('./passenger-booking-profile');
+const tripEndSafety = require('./trip-end-safety');
 "use strict";
 const crypto = require("node:crypto");
 const WAIT_MS = 30 * 60 * 1000;
@@ -308,6 +310,7 @@ function driverAction(pool, uid, body, evidence, now) {
     case "complete":
       if (pool.status !== "in_transit")
         fail("Only a started trip can be completed.");
+      pool=tripEndSafety.claim(pool,evidence.taxi,evidence.requestId,uid,body.endRequestId,now);
       for (const [id, p] of active(pool)) {
         if (
           p.paymentMethod !== "cash" &&
@@ -315,6 +318,7 @@ function driverAction(pool, uid, body, evidence, now) {
         )
           fail("Settle all passenger payments before completing.");
       }
+      pool.tripCompletion=tripEndSafety.completed(pool,now);
       pool.status = "completed";
       pool.completedAt = now;
       active(pool).forEach(([, p]) => {
@@ -341,7 +345,7 @@ function registerClubLifecycle(deps) {
     distanceKm,
   } = deps;
   const db = admin.database();
-  const read = async (path) => (await db.ref(path).once("value")).val();
+  const read = async (path) => tripEndSafety.decode((await db.ref(path).once("value")).val());
   const transact = async (path, transform) => {
     const ref = db.ref(path);
     await ref.once("value");
@@ -351,7 +355,7 @@ function registerClubLifecycle(deps) {
         error = null;
         if (current === null) return current;
         try {
-          return transform(current);
+          return tripEndSafety.encode(transform(tripEndSafety.decode(current)));
         } catch (e) {
           error = e;
           return;
@@ -363,7 +367,7 @@ function registerClubLifecycle(deps) {
     if (error) throw error;
     if (!result.committed || !result.snapshot.val())
       fail("The booking changed. Retry the action.");
-    return result.snapshot.val();
+    return tripEndSafety.decode(result.snapshot.val());
   };
   const release = async (pool) => {
     if (pool.taxiId)
@@ -596,7 +600,7 @@ function registerClubLifecycle(deps) {
       )
         fail("Choose valid pickup and destination locations.", 400);
     }
-    if (!["cash", "wallet", "card"].includes(body.paymentMethod || "cash"))
+    if (!["cash", "card"].includes(body.paymentMethod || "cash"))
       fail("Invalid payment method.", 400);
     return {
       commuterId: profile.id,
@@ -671,6 +675,7 @@ function registerClubLifecycle(deps) {
   const create = endpoint(async (user, body) => {
     const requestId = idOf(body);
     const profile = await resolvePassenger(user);
+    assertPassengerBookingProfile(profile, user);
     profile.id = profile.id || user.uid;
     const p = memberDetails(user, profile, body);
     for (const key of ["routeDistanceKm", "routeDurationMinutes"])
@@ -760,6 +765,7 @@ function registerClubLifecycle(deps) {
   const join = endpoint(async (user, body) => {
     const requestId = idOf(body);
     const profile = await resolvePassenger(user);
+    assertPassengerBookingProfile(profile, user);
     profile.id = profile.id || user.uid;
     const p = memberDetails(user, profile, body);
     await reservePassenger(profile.id, requestId);
@@ -940,7 +946,7 @@ function registerClubLifecycle(deps) {
           current,
           user.uid,
           body,
-          { ledgers, nearPickup, pinValid },
+          { ledgers, nearPickup, pinValid, taxi, requestId },
           Date.now(),
         ),
       );
@@ -952,7 +958,10 @@ function registerClubLifecycle(deps) {
           "Incorrect PIN. Ask the passenger for their current pickup PIN.",
           422,
         );
-      if (body.action === "acceptFare") await preparePayments(requestId, pool);
+      if (["acceptFare", "acceptWaiting"].includes(body.action) &&
+           pool.poolReady && pool.driverAcceptedAt) {
+         await preparePayments(requestId, pool);
+       }
       if (body.action === "complete") {
         const gross = money(
           active(pool).reduce((sum, [, p]) => sum + Number(p.price), 0),

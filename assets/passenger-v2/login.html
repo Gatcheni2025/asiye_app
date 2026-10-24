@@ -65,14 +65,7 @@
 .role-switch-link{display:flex;align-items:center;justify-content:center;gap:9px;margin:14px 0 2px;padding:13px 16px;border:1px solid #e1e4e8;border-radius:14px;background:#fff;color:#111;text-decoration:none;font-size:13px;font-weight:800;box-shadow:0 5px 16px rgba(0,0,0,.04)}
 .role-switch-link:active{transform:scale(.985);background:#f5f6f7}
 </style>
-<style>
-.passenger-photo-setup{margin:14px 0;padding:14px;border-radius:16px;background:#f3f8f5;text-align:center}
-.passenger-photo-setup h3{margin:4px 0}
-#newPassengerFacePreview{width:132px;height:132px;object-fit:cover;border-radius:50%;margin:12px auto;border:4px solid #207343}
-#newPassengerFaceCamera video{width:100%;max-height:330px;border-radius:12px}
-#newPassengerFaceStatus{font-size:13px;color:#285b3c}
-#scanPassengerFace{background:#215a3c}
-</style></head>
+</head>
 
 
 <body>
@@ -179,225 +172,13 @@
             </button>
 
 
-            <div class="divider">
-
-                <span></span>
-
-                <strong>or</strong>
-
-                <span></span>
-
-            </div>
-
-
-            <!-- PHONE -->
-
-            <label class="login-label">
-
-                Mobile number
-
-            </label>
-
-
-            <div class="phone-wrapper">
-
-                <div class="country-code">
-
-                    🇿🇦
-
-                    <strong>
-                        +27
-                    </strong>
-
-                </div>
-
-
-                <input
-                    id="passengerPhoneInput"
-                    type="tel"
-                    inputmode="numeric"
-                    maxlength="10"
-                    placeholder="82 123 4567"
-                >
-
-            </div>
-
-
-            <div
-                id="phoneError"
-                class="login-error"
-            ></div>
-
-
-            <button
-                id="sendOtpButton"
-                class="primary-button"
-            >
-
-                Continue with phone
-
-            </button>
-
-            <a class="role-switch-link" href="../driver-v2/login.html">
-                <i class="fas fa-car-side"></i>
-                Login as driver
-            </a>
-
+            <p class="login-subtitle">Sign in with Google or Apple. No phone verification is needed. You’ll take a live face picture before your first booking.</p>
+            <a class="role-switch-link" href="../driver-v2/login.html">Login as driver</a>
         </div>
-
-
-        <!-- OTP -->
-
-        <div
-            id="otpStep"
-            class="login-step"
-        >
-
-            <button
-                id="changePhoneButton"
-                class="change-number"
-            >
-
-                <i class="fas fa-pen"></i>
-
-                Change number
-
-            </button>
-
-
-            <div class="otp-copy">
-
-                Verification code sent to
-
-                <strong id="otpPhoneDisplay">
-                    +27
-                </strong>
-
-            </div>
-
-
-            <label class="login-label">
-
-                6-digit code
-
-            </label>
-
-
-            <input
-                id="passengerOtpInput"
-                class="otp-input"
-                type="tel"
-                inputmode="numeric"
-                maxlength="6"
-                autocomplete="one-time-code"
-                placeholder="000000"
-            >
-
-
-            <div
-                id="otpError"
-                class="login-error"
-            ></div>
-
-
-            <button
-                id="verifyOtpButton"
-                class="primary-button"
-            >
-
-                Verify & continue
-
-            </button>
-
-
-            <button
-                id="resendOtpButton"
-                class="secondary-button"
-                disabled
-            >
-
-                Resend code
-
-                <span id="resendTimer">
-                    30
-                </span>
-
-            </button>
-
+        <div id="profileCheckStep" class="login-step center-step">
+            <h2>Getting your account ready…</h2>
+            <p>Please wait a moment.</p>
         </div>
-
-
-        <!-- CHECKING PROFILE -->
-
-        <div
-            id="profileCheckStep"
-            class="login-step center-step"
-        >
-
-            <div class="spinner"></div>
-
-            <h2>
-                Loading your Asiye account
-            </h2>
-
-            <p>
-                Just a moment...
-            </p>
-
-        </div>
-
-
-        <!-- NEW PASSENGER -->
-
-        <div
-            id="newPassengerStep"
-            class="login-step center-step"
-        >
-
-            <div class="welcome-icon">
-
-                <i class="fas fa-user-plus"></i>
-
-            </div>
-
-
-            <h2>
-
-                Welcome to Asiye
-
-            </h2>
-
-
-            <p>
-
-                Verify your profile before booking. Your full name and a live face picture are required.
-
-            </p>
-
-
-            <input
-                id="newPassengerName"
-                class="name-input"
-                type="text"
-                placeholder="Your full name"
-            >
-
-
-            <section class="passenger-photo-setup" aria-label="Required face scan">
-                <h3>Step 2 · Face scan</h3>
-                <p>Use your front camera to take a clear profile picture. It will be saved to your Asiye account.</p>
-                <img id="newPassengerFacePreview" alt="Your new passenger profile picture" hidden>
-                <div id="newPassengerFaceCamera" hidden></div>
-                <button type="button" id="newPassengerFaceShutter" hidden>Capture face picture</button>
-                <button type="button" id="scanPassengerFace" class="primary-button">Scan face with camera</button>
-                <p id="newPassengerFaceStatus" role="status" aria-live="polite">Face scan required before continuing.</p>
-            </section>
-            <button id="createPassengerProfile" class="primary-button" type="button">
-                Save profile &amp; continue
-            </button>
-
-        </div>
-
 
         <div id="recaptcha-container"></div>
 
@@ -425,7 +206,6 @@
 
 <script src="./js/firebase.js"></script>
 
-<script src="./js/onboarding.js"></script>
 <script src="./js/login.js"></script>
 <script src="../native-auth-session.js"></script>
 

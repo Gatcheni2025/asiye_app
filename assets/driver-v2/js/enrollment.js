@@ -260,6 +260,9 @@
     };
     const check = async () => {
         if (!user || busy) return;
+        if (!user.phoneNumber || !user.providerData?.some(p => ['google.com', 'apple.com'].includes(p.providerId))) {
+            window.location.replace('./login.html'); return;
+        }
         status.textContent = 'Checking registration and admin approval…';
         form.hidden = true;
         pendingPanel.hidden = true;
@@ -288,7 +291,7 @@
             }
             if (state.state === 'new') {
                 if (!user.phoneNumber) {
-                    status.textContent = 'Your mobile number must be verified with an OTP before driver registration. Log out and sign in using your phone number.';
+                    status.textContent = 'Your mobile number must be verified with an OTP before driver registration. Sign in with Google or Apple, then verify your driver phone by OTP.';
                     return;
                 }
                 verifiedPhone.value = user.phoneNumber;
@@ -297,7 +300,7 @@
                 status.textContent = 'Complete the seven steps once. Your application will then wait for administrator approval.';
                 return;
             }
-            status.textContent = 'Sign in using your verified mobile number.';
+            status.textContent = 'Sign in with Google or Apple, then verify your driver mobile number.';
         } catch (error) {
             console.warn('Driver enrollment status read failed:', error.code || error.message);
             status.textContent = 'Unable to check your existing enrollment. Please retry while connected to the internet. Your registration has not been reset.';
@@ -311,12 +314,7 @@
         button.disabled = true;
         try {
             stopCamera();
-            await firebase.auth().signOut();
-            ['driverId','userId','commuterId','authUid','userType',
-                'driverPhone','driverName','currentRequestId'].forEach(key => {
-                try { localStorage.removeItem(key); } catch (_) {}
-            });
-            window.location.replace('./login.html');
+            await window.AsiyeSession.logout();
         } catch (error) {
             button.disabled = false;
             status.textContent = 'Unable to log out. Please check your connection and retry.';
@@ -449,7 +447,7 @@
 
         } catch (error) {
             if (error.code === 'storage/unauthorized') {
-                status.textContent = 'Document upload authorization failed. Please sign out and sign in with OTP again.';
+                status.textContent = 'Document upload authorization failed. Please sign in with Google or Apple, then verify your driver phone.';
             } else if (/permission.?denied/i.test(String(error.code || error.message))) {
                 status.textContent = 'Firebase could not confirm the submission. Refresh the approval status before trying again; your details are still here.';
             } else {

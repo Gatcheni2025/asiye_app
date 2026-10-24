@@ -1,0 +1,30 @@
+name: Paystack Test-Mode Card Preflight
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Initialize checkout or verify previously paid TEST reference'
+        required: true
+        type: choice
+        options: [check, initialize, verify]
+      reference:
+        description: 'Only for verify: Paystack TEST reference from initialize job'
+        required: false
+        type: string
+permissions:
+  contents: read
+jobs:
+  paystack-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Paystack TEST mode (never production)
+        env:
+          PAYSTACK_TEST_SECRET_KEY: ${{ secrets.PAYSTACK_TEST_SECRET_KEY }}
+          PAYSTACK_TEST_DRIVER_SUBACCOUNT: ${{ vars.PAYSTACK_TEST_DRIVER_SUBACCOUNT }}
+          PAYSTACK_TEST_PAID_REFERENCE: ${{ inputs.reference }}
+          MODE: ${{ inputs.mode }}
+        run: node scripts/paystack_test_mode_preflight.cjs "$MODE"

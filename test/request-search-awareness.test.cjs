@@ -25,7 +25,7 @@ const driverAppSource = fs.readFileSync(
 
 test('Go dispatch writes real driver search state for passenger UI', () => {
   const start = functionsSource.indexOf(
-    'exports.dispatchGoRideRequest'
+    'async function dispatchGoRideToDrivers'
   );
   assert.ok(start >= 0);
 
@@ -67,7 +67,7 @@ test('Go passenger UI changes from searching to Driver found', () => {
   );
   assert.ok(
     rideSource.includes(
-      'Waiting for a driver to accept your trip'
+      'Waiting for a driver to accept your fare or make a counter-offer'
     )
   );
   assert.ok(
@@ -196,7 +196,7 @@ test('Go dispatch only targets drivers who can actually open the request', () =>
     'function driverProfileCanReceiveRequests'
   );
   const dispatchStart = functionsSource.indexOf(
-    'exports.dispatchGoRideRequest'
+    'async function dispatchGoRideToDrivers'
   );
   assert.ok(helperStart >= 0);
   assert.ok(dispatchStart > helperStart);
