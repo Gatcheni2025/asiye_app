@@ -16,6 +16,7 @@ after(async()=>{global.fetch=fetchBefore;admin.auth().verifyIdToken=verify;await
 beforeEach(async()=>{
  await db.ref().set({commuters:{p:{authUid:'p-auth'},p2:{authUid:'p2-auth'}},taxis:{d:{authUid:'d-auth',totalTrips:1,totalEarnings:68}},
   requests:{[id]:{type:'ehailing',status:'completed',commuterId:'p',taxiId:'d',driverAuthUid:'d-auth',tripStartedAt:1,
+   requirePin:true,pickupPin:'1234',arrivedAt:1,pinVerifiedAt:1,paymentsReady:true,
    goContinuationVersion:2,paymentSettlementStatus:'settled',tripCompletion:JSON.stringify({version:1,phase:'completed'}),finalAmount:85}},
   tripPayments:{[id]:{p:{method:'cash',amount:85,status:'cash_collected'}}}});
 });
@@ -56,6 +57,11 @@ test('Club members are rated separately; absent and cancelled members cannot rec
  assert.deepEqual(Object.keys((await record()).driverToPassenger).sort(),['p','p2']);
 });
 test('clients cannot forge, replace or delete the server-owned rating scalar; unrelated permitted updates still work',async()=>{
+ const driver=env.authenticatedContext('d-auth').database();
+ // Prove the fixture permits ordinary writes before testing the new guard;
+ // otherwise a missing prerequisite could make every forgery appear blocked.
+ await assertSucceeds(update(ref(driver,'requests/'+id),{ratingReceiptViewedAt:Date.now()}));
+ await assertFails(update(ref(driver,'requests/'+id),{tripRatings:JSON.stringify({version:1,driverToPassenger:{p:{score:1}}})}));
  await call();
  for(const uid of ['d-auth','p-auth']){
   const client=env.authenticatedContext(uid).database();
