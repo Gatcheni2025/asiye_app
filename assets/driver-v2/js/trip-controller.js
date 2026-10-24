@@ -107,6 +107,18 @@ ASIYE_DRIVER.trip = {
         return ASIYE_DRIVER.requests.postNegotiation('goTripActionSecure', {requestId: this.requestId, action, ...details});
     },
 
+    async submitPassengerRating(passengerId, score, requestId = this.requestId) {
+        if (!requestId) throw new Error('Open the completed trip from Trip history before rating.');
+        if (!Number.isInteger(score) || score < 1 || score > 5) throw new Error('Choose a rating from 1 to 5 stars.');
+        // Completion clears this.requestId and may promote a newer booking.
+        // Rate the captured completed trip without changing either trip's locks.
+        const result = await ASIYE_DRIVER.requests.postNegotiation('goTripActionSecure', {
+            requestId, action: 'ratePassenger', passengerId, score
+        });
+        if (!result?.ok || result.ratings?.version !== 1) throw new Error('The rating was not confirmed. Please try again.');
+        return result;
+    },
+
     async parcelAction(action, details = {}) {
         return ASIYE_DRIVER.requests.postNegotiation('parcelTripActionSecure', {
             requestId:this.requestId, action, ...details

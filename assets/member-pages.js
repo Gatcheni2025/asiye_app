@@ -3363,9 +3363,26 @@ window.AsiyePages = {
                             )
                             : '';
 
-                    html += `<details class="member-trip"><summary><span><small>${esc(String(ride.status || 'Booked').replace(/_/g,' '))}</small><strong>${esc(ride.destination || ride.destinationName || ride.dropoffAddress || 'Trip')}</strong></span><b>${this.money(amount)}</b></summary><div>${this.row('Date', stamp && Number.isFinite(stamp) ? new Date(stamp).toLocaleString() : 'Not recorded')}${this.row('Reference',ride.key)}${this.row('Service',ride.type || 'Ride')}${this.row('Payment',passenger.paymentMethod || ride.paymentMethod)}${earningsDetails}</div></details>`;
+                    const ratingAction = driver && ride.status === 'completed' && ride.type !== 'delivery' && ride.parcelSecurityVersion !== 2
+                        ? `<button type="button" class="member-primary" data-rate-completed-trip="${esc(ride.key)}">Rate passenger</button>` : '';
+                    html += `<details class="member-trip"><summary><span><small>${esc(String(ride.status || 'Booked').replace(/_/g,' '))}</small><strong>${esc(ride.destination || ride.destinationName || ride.dropoffAddress || 'Trip')}</strong></span><b>${this.money(amount)}</b></summary><div>${this.row('Date', stamp && Number.isFinite(stamp) ? new Date(stamp).toLocaleString() : 'Not recorded')}${this.row('Reference',ride.key)}${this.row('Service',ride.type || 'Ride')}${this.row('Payment',passenger.paymentMethod || ride.paymentMethod)}${earningsDetails}${ratingAction}</div></details>`;
                 });
                 body.innerHTML = html;
+                body.addEventListener('click', async event => {
+                    const button = event.target.closest('[data-rate-completed-trip]');
+                    if (!button || button.disabled) return;
+                    button.disabled = true;
+                    try {
+                        const key = button.dataset.rateCompletedTrip;
+                        const fresh = (await firebase.database().ref(`requests/${key}`).once('value')).val();
+                        if (!fresh || fresh.status !== 'completed') throw new Error('This trip is no longer available for rating.');
+                        dialog.close(); dialog.remove();
+                        app.ui.showTripCompleted({ ...fresh, key, requestId: key }, { history: true });
+                    } catch (error) {
+                        button.disabled = false;
+                        app.ui?.toast?.(error.message || 'Could not open this rating. Please try again.', 'danger');
+                    }
+                });
             } catch (error) {
                 body.innerHTML = note('Records could not load. Check your connection and account access.') + '<button class="member-primary">Retry</button>';
                 body.querySelector('button').onclick = () => this.open(page);

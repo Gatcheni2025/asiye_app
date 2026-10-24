@@ -5,6 +5,7 @@ const { onValueUpdated } = require("firebase-functions/v2/database");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const tripEndSafety = require('./trip-end-safety');
+const tripRatings = require('./trip-ratings');
 
 // =================================================================
 // --- INITIALIZE FIREBASE ADMIN ---
@@ -8243,6 +8244,9 @@ exports.goTripActionSecure = onRequest(
       if (!user) return response.status(401).json({error: 'Sign-in required.'});
       const id = validRequestId(request.body?.requestId);
       if (!id) return response.status(400).json({error: 'Invalid trip.'});
+      if (request.body?.action === 'ratePassenger')
+        return response.json(await tripRatings.handle({db:admin.database(),id,uid:user.uid,
+          body:request.body,ownsProfile:profileOwnedByAuth,transact:transactGoContinuation}));
       if (tripEndSafety.ACTIONS.has(request.body?.action))
         return response.json(await tripEndSafety.handle({db:admin.database(),id,uid:user.uid,
           body:request.body,ownsProfile:profileOwnedByAuth,transact:transactGoContinuation}));

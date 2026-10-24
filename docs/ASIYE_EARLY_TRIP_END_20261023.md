@@ -1,6 +1,6 @@
 # Passenger-confirmed early trip ending
 
-Status: staging deployment/readback verified at runtime source `538584af47a514df7444ed1da435488c0a1ef79f`; the reported passenger HTTP 403 is now identified as the driver's own account attempting passenger confirmation. Independent two-account completion acceptance remains pending. Existing Paystack return repair remains verified at its recorded checkpoint.
+Status: staging deployment/readback verified at runtime source `538584af47a514df7444ed1da435488c0a1ef79f`; the operator subsequently confirmed early completion works with a new passenger login. The 24 October driver screenshot shows `completed` and the Cash completion screen. Saving the subsequent passenger rating fails and is tracked in the [rating repair](ASIYE_TRIP_RATING_FIX_20261024.md). Independent Card, Club and native acceptance remains pending. Existing Paystack return repair remains verified at its recorded checkpoint.
 
 The operator's 23 October deployment screenshot records selected source `MATCH=3/3`, 43/43 expected functions ACTIVE, deployed rules MATCH, hosted files MATCH=46/46 and `EARLY_TRIP_END_DEPLOYMENT: VERIFIED`. An independent public Hosting audit subsequently confirmed all 46 files. These results confirm deployment, not a successful passenger confirmation or completed trip. Do not repeat the three-function deployment to diagnose the 403.
 
