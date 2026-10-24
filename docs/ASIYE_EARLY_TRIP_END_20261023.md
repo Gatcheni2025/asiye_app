@@ -37,11 +37,15 @@ The public endpoint independently returned its application JSON `Sign-in require
 
 In the existing authenticated staging Cloud Shell, the following read-only diagnostic accepts the passenger UID shown by the passenger console. It resolves only matching passenger profiles and their single current trip, compares the same identity fields as the deployed handler, and prints booleans/reason categories. It does not print identities, records or references and cannot change a trip, payment, rule or deployment.
 
+The first operator run on 24 October stopped at `STAGING_DATABASE_READ_HTTP_400`, before producing an identity result. The original helper unnecessarily queried `commuters/userUid`, which is not indexed in the reviewed/deployed rules. The correction follows the direct current-trip pointer first, uses only the indexed `authUid` lookup when necessary, and supports an optional exact current-trip ID for legacy bindings. It changes the read-only helper, not database rules or deployed application code. The original passenger HTTP 403 remains unresolved until an identity report or its actual response is obtained.
+
 ```bash
 cd ~/asiye-staging-review
 git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet
 node scripts/diagnose_staging_trip_end_403.cjs PASSENGER_UID_FROM_CONSOLE
 ```
+
+If the passenger has only a legacy `userUid` binding and no discoverable current-trip pointer, append the exact current trip ID as a second argument. The helper then reads that trip and its participant profiles directly; it does not scan collections or reassign a booking.
 
 - `DRIVER_SELF_CONFIRMATION_403`: use distinct passenger and driver accounts for acceptance. Do not reassign an existing paid trip or weaken the approval gate.
 - `PASSENGER_OWNERSHIP_403`: inspect the signed-in passenger/profile binding before any targeted correction; do not grant broad permissions.

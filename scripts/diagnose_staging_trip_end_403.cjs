@@ -25,22 +25,30 @@ function identityReport(trip,taxi,uid,profiles){
    sameDriver?'DRIVER_SELF_CONFIRMATION_403':'IDENTITY_CHECK_PASSES'
  };
 }
-async function diagnose(uid,read){
- const profiles={};let candidates={};
- const direct=await read('commuters/'+uid);
- if(direct)profiles[uid]=direct;
- // Include linked legacy IDs, without downloading the commuters collection.
- for(const field of ['authUid','userUid']){
-  const matches=await read('commuters',{orderBy:JSON.stringify(field),equalTo:JSON.stringify(uid),limitToFirst:'3'});
-  if(matches&&Object.keys(matches).length>=3)throw Error('PASSENGER_PROFILE_LOOKUP_AMBIGUOUS');
-  for(const [id,profile]of Object.entries(matches||{})){
-   if(!validKey(id))throw Error('PASSENGER_PROFILE_KEY_UNSUPPORTED');
-   profiles[id]=profile;
+async function diagnose(uid,read,requestId){
+ const profiles={},candidates={};
+ if(requestId)candidates[requestId]=true;
+ else{
+  const direct=await read('commuters/'+uid);
+  if(direct)profiles[uid]=direct;
+  if(direct?.currentRequest!=null){
+   if(!validKey(direct.currentRequest))throw Error('CURRENT_TRIP_KEY_UNSUPPORTED');
+   candidates[direct.currentRequest]=true;
+  }else{
+   // REST queries require indexes. commuters/authUid is indexed, userUid is
+   // not. Prefer the exact current-trip pointer and never query userUid.
+   // An explicit trip ID also supports legacy userUid-only profile bindings.
+   const matches=await read('commuters',{orderBy:JSON.stringify('authUid'),equalTo:JSON.stringify(uid),limitToFirst:'3'});
+   if(matches&&Object.keys(matches).length>=3)throw Error('PASSENGER_PROFILE_LOOKUP_AMBIGUOUS');
+   for(const [id,profile]of Object.entries(matches||{})){
+    if(!validKey(id))throw Error('PASSENGER_PROFILE_KEY_UNSUPPORTED');
+    profiles[id]=profile;
+    if(profile?.currentRequest!=null){
+     if(!validKey(profile.currentRequest))throw Error('CURRENT_TRIP_KEY_UNSUPPORTED');
+     candidates[profile.currentRequest]=true;
+    }
+   }
   }
- }
- for(const profile of Object.values(profiles)){
-  const id=profile?.currentRequest;
-  if(id!=null){if(!validKey(id))throw Error('CURRENT_TRIP_KEY_UNSUPPORTED');candidates[id]=true;}
  }
  const ids=Object.keys(candidates);
  if(ids.length!==1)throw Error(ids.length?'MULTIPLE_CURRENT_TRIPS_REQUIRE_REVIEW':'NO_CURRENT_TRIP_FOR_PASSENGER');
@@ -61,7 +69,7 @@ async function diagnose(uid,read){
  };
 }
 async function main(args=process.argv.slice(2),deps={}){
- if(args.length!==1||!validKey(args[0]))throw Error('USE_ONE_PASSENGER_AUTH_UID_FROM_THE_PASSENGER_CONSOLE');
+ if(args.length<1||args.length>2||args.some(value=>!validKey(value)))throw Error('USE_PASSENGER_AUTH_UID_AND_OPTIONAL_CURRENT_TRIP_ID');
  const run=deps.command||command,http=deps.fetch||fetch,print=deps.print||console.log;
  if(run(['config','get-value','project'])!==PROJECT||
   run(['projects','describe',PROJECT,'--format=value(projectNumber)'])!==NUMBER)
@@ -74,19 +82,27 @@ async function main(args=process.argv.slice(2),deps={}){
   let response;
   try{response=await http(url.href,{method:'GET',headers:{Authorization:'Bearer '+token},
    redirect:'error',signal:AbortSignal.timeout(20000)});}catch(_){throw Error('STAGING_DATABASE_READ_UNAVAILABLE');}
-  if(!response.ok)throw Error('STAGING_DATABASE_READ_HTTP_'+response.status);
+  if(!response.ok){
+   // The raw body may contain private identifiers. Classify the one known
+   // REST-query error internally; never print the response body or URL.
+   if(response.status===400&&query.orderBy){
+    let detail='';try{detail=(await response.text()).slice(0,4096);}catch(_){}
+    if(/index not defined/i.test(detail))throw Error('STAGING_QUERY_INDEX_MISSING');
+   }
+   throw Error('STAGING_DATABASE_READ_HTTP_'+response.status);
+  }
   const text=await response.text();
   if(text.length>1024*1024)throw Error('STAGING_DATABASE_READ_SIZE_LIMIT');
   try{return JSON.parse(text);}catch(_){throw Error('STAGING_DATABASE_RESPONSE_UNAVAILABLE');}
  };
- const report=await diagnose(args[0],read);
+ const report=await diagnose(args[0],read,args[1]);
  print('PROJECT='+PROJECT+' | READ_ONLY');
  for(const [key,value]of Object.entries(report))print(key+'='+value);
  print('No records, identities, credentials or payment references printed. No writes or deployments.');
  return report;
 }
 if(require.main===module)main().catch(error=>{
- const allowed=/^(?:USE_ONE_PASSENGER_AUTH_UID_FROM_THE_PASSENGER_CONSOLE|CLOUD_SHELL_READ_UNAVAILABLE|STAGING_PROJECT_IDENTITY_MISMATCH|PASSENGER_PROFILE_LOOKUP_AMBIGUOUS|PASSENGER_PROFILE_KEY_UNSUPPORTED|CURRENT_TRIP_KEY_UNSUPPORTED|MULTIPLE_CURRENT_TRIPS_REQUIRE_REVIEW|NO_CURRENT_TRIP_FOR_PASSENGER|CURRENT_TRIP_NOT_FOUND|CURRENT_TRIP_HAS_NO_SUPPORTED_DRIVER|ONBOARD_PASSENGER_KEY_UNSUPPORTED|STAGING_DATABASE_READ_UNAVAILABLE|STAGING_DATABASE_READ_HTTP_\d{3}|STAGING_DATABASE_READ_SIZE_LIMIT|STAGING_DATABASE_RESPONSE_UNAVAILABLE)$/;
+ const allowed=/^(?:USE_PASSENGER_AUTH_UID_AND_OPTIONAL_CURRENT_TRIP_ID|CLOUD_SHELL_READ_UNAVAILABLE|STAGING_PROJECT_IDENTITY_MISMATCH|PASSENGER_PROFILE_LOOKUP_AMBIGUOUS|PASSENGER_PROFILE_KEY_UNSUPPORTED|CURRENT_TRIP_KEY_UNSUPPORTED|MULTIPLE_CURRENT_TRIPS_REQUIRE_REVIEW|NO_CURRENT_TRIP_FOR_PASSENGER|CURRENT_TRIP_NOT_FOUND|CURRENT_TRIP_HAS_NO_SUPPORTED_DRIVER|ONBOARD_PASSENGER_KEY_UNSUPPORTED|STAGING_DATABASE_READ_UNAVAILABLE|STAGING_DATABASE_READ_HTTP_\d{3}|STAGING_QUERY_INDEX_MISSING|STAGING_DATABASE_READ_SIZE_LIMIT|STAGING_DATABASE_RESPONSE_UNAVAILABLE)$/;
  console.error('EARLY_END_DIAGNOSIS: '+(allowed.test(error.message)?error.message:'READ_UNAVAILABLE'));
  process.exitCode=2;
 });
