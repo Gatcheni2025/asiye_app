@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm');
 const {FUNCTIONS,FUNDING_OFF,SECRET_CONSUMERS,renderEntry}=require('../scripts/production_release_scope.cjs');
-const {checkAuthorization,reviewedDigest,privateBucket,assertOff,stagedLive,neededFunctions,promote,main}=require('../scripts/deploy_production_release.cjs');
+const {checkAuthorization,reviewedDigest,privateBucket,assertOff,stagedLive,neededFunctions,promote,apiResponse,main}=require('../scripts/deploy_production_release.cjs');
 const hosting=require('../scripts/production_release_hosting.cjs');
 const {PROJECT,NUMBER}=require('../scripts/production_card_preflight.cjs');
 test('the promotion wrapper exposes the reviewed 44 endpoints and preserves unrelated deployed functions',()=>{
@@ -66,6 +66,20 @@ test('a failed source proof prevents rules and public web rollout',async()=>{
  await assert.rejects(promote({needed:[],guard:async()=>{},deploy:async()=>assert.fail('Unexpected redeploy'),audit:async()=>{throw Error('source mismatch');},
   verify:async()=>events.push('keys'),rules:async()=>events.push('rules'),web:async()=>events.push('web')}),/source mismatch/);
  assert.deepEqual(events,[]);
+});
+test('metadata GET interruptions retry within a bound; cloud writes are never retried',async()=>{
+ let reads=0;
+ const result=await apiResponse(async()=>{reads++;if(reads<3)throw new TypeError('private network detail');return{ok:true,text:async()=>'{"ready":true}'};},
+  'https://example.invalid',{method:'GET'},async()=>{});
+ assert.deepEqual(result,{ready:true});assert.equal(reads,3);
+ let writes=0;
+ await assert.rejects(apiResponse(async()=>{writes++;throw Error('private error');},'https://example.invalid',{method:'POST'},async()=>{}),/PRODUCTION_API_POST_UNAVAILABLE/);
+ assert.equal(writes,1);
+});
+test('successful binary Hosting uploads accept an empty or plain-text acknowledgement',async()=>{
+ const result=await apiResponse(async()=>({ok:true,text:async()=> 'OK'}),
+  'https://upload-firebasehosting.googleapis.com',{method:'POST',rawResponse:true},async()=>{});
+ assert.deepEqual(result,{});
 });
 test('only app resources are packaged; homepage, unrelated CSS, secrets and staging test UI are excluded',()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'asiye-hosting-scope-'));

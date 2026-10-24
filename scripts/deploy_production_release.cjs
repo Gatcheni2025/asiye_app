@@ -12,7 +12,7 @@ const ROOT=path.resolve(__dirname,'..'),REGION='us-central1';
 const CF='https://cloudfunctions.googleapis.com',SM='https://secretmanager.googleapis.com/v1/projects/'+PROJECT;
 function command(program,args,{cwd=ROOT,timeout=90000,quiet=true}={}){
  const r=spawnSync(program,args,{cwd,encoding:'utf8',timeout,maxBuffer:12*1024*1024,stdio:quiet?'pipe':'inherit'});
- if(r.status!==0||r.error)throw Error('LOCAL_COMMAND_FAILED_'+path.basename(program));
+ if(r.status!==0||r.error)throw Error('LOCAL_COMMAND_FAILED_'+path.basename(program).toUpperCase().replace(/[^A-Z0-9_]/g,'_'));
  return String(r.stdout||'').trim();
 }
 function reviewedDigest(root=ROOT){
@@ -72,6 +72,24 @@ async function promote({needed,deploy,guard,audit,verify,rules,web}){
  for(let i=0;i<rest.length;i+=8){await guard();await deploy(rest.slice(i,i+8));}
  await guard();await audit();await verify();await guard();await rules();await guard();return web();
 }
+async function apiResponse(http,url,options,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))){
+ const attempts=options.method==='GET'?3:1;
+ for(let attempt=0;attempt<attempts;attempt++){
+  try{
+   const response=await http(url,{...options,signal:AbortSignal.timeout(60000)});
+   if(!response.ok){
+    if(options.method==='GET'&&[429,502,503,504].includes(response.status)&&attempt+1<attempts){await pause(1000*(attempt+1));continue;}
+    throw Error('PRODUCTION_API_HTTP_'+response.status);
+   }
+   if(options.rawResponse){await response.text();return{};}
+   const text=await response.text();return text?JSON.parse(text):{};
+  }catch(error){
+   if(/^PRODUCTION_API_HTTP_/.test(error.message))throw error;
+   if(attempt+1<attempts){await pause(1000*(attempt+1));continue;}
+   throw Error('PRODUCTION_API_'+options.method+'_UNAVAILABLE');
+  }
+ }
+}
 async function main(args=process.argv.slice(2),deps={}){
  const mode=args[0]||'--check';if(args.length>1||!['--check','--apply'].includes(mode))throw Error('PRODUCTION_RELEASE_ARGUMENT_INVALID');
  const run=deps.command||command,http=deps.fetch||fetch,print=deps.print||console.log;
@@ -84,10 +102,9 @@ async function main(args=process.argv.slice(2),deps={}){
  const api=async(method,url,body,raw=false)=>{
   const u=new URL(url);if(!['cloudfunctions.googleapis.com','secretmanager.googleapis.com','storage.googleapis.com','firebasehosting.googleapis.com',
    'upload-firebasehosting.googleapis.com',new URL(DATABASE).hostname].includes(u.hostname)||u.protocol!=='https:'||u.username||u.password||u.port)throw Error('PRODUCTION_API_TARGET_INVALID');
-  const headers={Authorization:'Bearer '+run('gcloud',['auth','print-access-token'])};
+  const headers={Authorization:'Bearer '+run('gcloud',['auth','print-access-token']),Connection:'close'};
   if(body!==undefined)headers['Content-Type']=raw?'application/octet-stream':'application/json';
-  const r=await http(url,{method,redirect:'error',headers,body:body===undefined?undefined:raw?body:JSON.stringify(body),signal:AbortSignal.timeout(60000)});
-  if(!r.ok)throw Error('PRODUCTION_API_HTTP_'+r.status);const text=await r.text();return text?JSON.parse(text):{};
+  return apiResponse(http,url,{method,redirect:'error',headers,body:body===undefined?undefined:raw?body:JSON.stringify(body),rawResponse:raw});
  };
  const launch=await assertOff(api),version=await stagedLive(api,http);
  const guard=async()=>{await assertOff(api);await stagedLive(api,http,version);};
@@ -163,4 +180,4 @@ async function main(args=process.argv.slice(2),deps={}){
  }
 }
 if(require.main===module)main().catch(e=>{console.error('PRODUCTION_RELEASE: BLOCKED '+(/^[A-Z0-9_]+$/.test(e.message)?e.message:'DEPLOYMENT_STOPPED_SEE_PRIVATE_DIAGNOSTICS'));process.exitCode=1;});
-module.exports={reviewedDigest,checkAuthorization,privateBucket,inventory,assertOff,stagedLive,boundVersions,neededFunctions,promote,main};
+module.exports={reviewedDigest,checkAuthorization,privateBucket,inventory,assertOff,stagedLive,boundVersions,neededFunctions,promote,apiResponse,main};

@@ -35,6 +35,10 @@ async function main(){
   const text=await r.text();if(text.length>30*1024*1024)throw Error('PRIVATE_LOG_SIZE_LIMIT');return json?JSON.parse(text):text;
  };
  const objects=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:PREFIX,maxResults:'100'}));
+ console.log('PRIVATE_DIAGNOSTIC_OBJECT_COUNT='+(objects.items||[]).length);
+ const parent=PREFIX.replace(/private-diagnostics\/$/,'');
+ const saved=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:parent,maxResults:'1000'}));
+ console.log('PRIVATE_BACKUP_CHECK='+JSON.stringify({objects:(saved.items||[]).length,stateSaved:(saved.items||[]).some(o=>o.name===parent+'state.json'),sourceArchives:(saved.items||[]).filter(o=>o.name.endsWith('.archive')).length}));
  for(const object of objects.items||[]){
   if(!object.name.startsWith(PREFIX)||!object.name.endsWith('.log'))continue;
   const raw=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o/'+encodeURIComponent(object.name)+'?alt=media',false);
@@ -43,6 +47,8 @@ async function main(){
  const functions=await get('https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+'/locations/us-central1/functions?pageSize=1000');
  console.log('CURRENT_SELECTED_FUNCTION_STATES='+JSON.stringify((functions.functions||[]).filter(f=>FUNCTIONS.includes(f.name.split('/').pop())).map(f=>({
   name:f.name.split('/').pop(),state:f.state||'UNKNOWN',errorCategories:(f.stateMessages||[]).flatMap(m=>classify(String(m.message||'')).categories)}))));
+ const payoutKeys=await get('https://asiye-80386-default-rtdb.firebaseio.com/driverPaystackSubaccounts.json?shallow=true');
+ console.log('PRODUCTION_DRIVER_PAYOUT_PROFILE_COUNT='+Object.keys(payoutKeys||{}).length);
  console.log('GET-only. No private log lines, identities, keys or API response bodies printed.');
 }
 if(require.main===module)main().catch(e=>{console.error('PRODUCTION_DIAGNOSIS: '+(/^[A-Z0-9_]+$/.test(e.message)?e.message:'READ_UNAVAILABLE'));process.exitCode=2;});
