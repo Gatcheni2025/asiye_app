@@ -1,6 +1,6 @@
 # Asiye — final release acceptance review, updated 23 October 2026
 
-**Current decision: staging testing may continue; public mobile release and LIVE Card activation still need the evidence below.** This checklist records evidence and remaining work. It does not authorize production changes.
+**24 October release request:** the owner has now requested release preparation and LIVE Card activation. Continue through the [current production inspection and rollout guide](ASIYE_LIVE_CARD_RELEASE_20261024.md). The refreshed read-only cloud report confirms staging parity and the remaining six missing production endpoints/rules difference. General permission need not be requested again; actual deployment, provider/device evidence and the existing server approval record still need to be completed. LIVE activation has not been performed.
 
 Reviewed payment-return runtime source: `15c1aa2eba5a865803aeca9994a798ed0f182704`; web-only resume helper: `15a80b6a7b505065c641ecfa683798a05ea63906`, on `fix/paystack-subaccounts-cash-card-no-wallet`. Pull request [#19](https://github.com/Gatcheni2025/asiye_app/pull/19) is open and targets `fix/11.0.67-club-booking-arrival-pin-timer`. Production `main` still reports `11.0.49+319`; it is not the reviewed release source. The checklist update itself changes documentation only.
 

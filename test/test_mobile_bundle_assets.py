@@ -3,10 +3,30 @@ from pathlib import Path
 import unittest
 import zipfile
 
-from scripts.verify_mobile_bundle_assets import verify_bundle
+from scripts.verify_mobile_bundle_assets import REQUIRED, verify_bundle
 
 
 class MobileAssetParityTests(unittest.TestCase):
+    def test_default_release_guard_rejects_stale_driver_rating_and_history_assets(self):
+        assets = Path(__file__).resolve().parents[1] / 'assets'
+        with tempfile.TemporaryDirectory() as temp:
+            for extension, prefix in (
+                ('apk', 'assets/flutter_assets/assets/'),
+                ('aab', 'base/assets/flutter_assets/assets/'),
+                ('ipa', 'Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/'),
+            ):
+                artifact = Path(temp) / ('candidate.' + extension)
+                for stale_file in (None, 'driver-v2/js/app.js', 'member-pages.js'):
+                    with zipfile.ZipFile(artifact, 'w') as package:
+                        for relative in REQUIRED:
+                            data = b'old rating screen' if relative == stale_file else (assets / relative).read_bytes()
+                            package.writestr(prefix + relative, data)
+                    if stale_file:
+                        with self.assertRaisesRegex(ValueError, 'Stale bundled asset: ' + stale_file):
+                            verify_bundle(artifact, assets, 'asiye-80386')
+                    else:
+                        self.assertEqual(len(verify_bundle(artifact, assets, 'asiye-80386')), len(REQUIRED))
+
     def test_signed_package_formats_accept_current_assets_and_reject_stale_auth(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
