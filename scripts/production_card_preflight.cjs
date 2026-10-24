@@ -106,7 +106,7 @@ async function cloudChecks({run = command, http = fetch, readFile = file => fs.r
   const get = async url => JSON.parse(await responseText(http, url, headers));
   const report = {source, activeExpected: 0, expectedFunctions: productionFunctions().length,
     missingOrInactiveFunctions: [], rulesMatch: false, secretBindingsLiveAndConsistent: false,
-    secretBindingFailures: [], liveProviderAuthentication: false, driverSubaccountVerified: false,
+    secretBindingFailures: [], secretBindingModes: [], liveProviderAuthentication: false, driverSubaccountVerified: false,
     driverChecked: !!driver, launchEnabled: false, launchApprovalReferencePresent: false,
     launchValidationReferencePresent: false, deployedSourceRevisionVerified: false};
   const inventory = [];
@@ -145,21 +145,33 @@ async function cloudChecks({run = command, http = fetch, readFile = file => fs.r
         version = bindingOf(item);
       } catch (_) { /* Report the missing binding without printing API bodies. */ }
     }
-    if (!version) { report.secretBindingFailures.push(name); continue; }
+    if (!version) {
+      report.secretBindingFailures.push(name);
+      report.secretBindingModes.push({name, mode: 'BINDING_MISSING_OR_NOT_PINNED'});
+      continue;
+    }
     if (!versions.has(version)) {
       try {
         const payload = await get('https://secretmanager.googleapis.com/v1/projects/' + PROJECT +
           '/secrets/PAYSTACK_SECRET_KEY/versions/' + version + ':access');
         const secret = Buffer.from(payload.payload?.data || '', 'base64').toString('utf8').trim();
         versions.set(version, {secret, domain: keyDomain(secret)});
-      } catch (_) { versions.set(version, null); }
+      } catch (error) {
+        const reason = /^READ_HTTP_\d{3}$/.test(error.message) ? error.message : 'SECRET_READ_OR_FORMAT_UNAVAILABLE';
+        versions.set(version, {reason});
+      }
     }
+    report.secretBindingModes.push({name, mode: versions.get(version).domain?.toUpperCase() || versions.get(version).reason});
     if (versions.get(version)?.domain !== 'live') report.secretBindingFailures.push(name);
   }
-  const keys = [...versions.values()].filter(Boolean).map(value => value.secret);
+  const keys = [...versions.values()].filter(value => value.secret).map(value => value.secret);
+  const observedKeysLiveAndConsistent = keys.length > 0 &&
+    [...versions.values()].every(value => value.domain === 'live') && keys.every(key => key === keys[0]);
   report.secretBindingsLiveAndConsistent = !report.secretBindingFailures.length && keys.length > 0 &&
-    keys.every(key => key === keys[0]);
-  if (report.secretBindingsLiveAndConsistent) {
+    observedKeysLiveAndConsistent;
+  // Inspect an already deployed LIVE credential even when an endpoint is absent.
+  // Missing bindings still block infrastructure readiness and never authorize checkout.
+  if (observedKeysLiveAndConsistent) {
     const providerGet = async route => {
       const result = JSON.parse(await responseText(http, 'https://api.paystack.co' + route,
         {Authorization: 'Bearer ' + keys[0]}));
@@ -191,6 +203,7 @@ function printReport(report, print = console.log) {
     print('PRODUCTION_RTDB_RULES: ' + (c.rulesMatch ? 'MATCH' : 'MISMATCH_OR_READ_BLOCKED'));
     print('BOUND_PAYSTACK_SECRETS: ' + (c.secretBindingsLiveAndConsistent ? 'LIVE_AND_CONSISTENT' : 'NOT_VERIFIED_LIVE'));
     if (c.secretBindingFailures.length) print('SECRET_BINDING_CHECK: ' + c.secretBindingFailures.join(', '));
+    for (const item of c.secretBindingModes) print('BOUND_SECRET_MODE: ' + item.name + '=' + item.mode);
     print('PAYSTACK_LIVE_API_AUTH: ' + (c.liveProviderAuthentication ? 'VERIFIED' : 'NOT_VERIFIED'));
     print('DRIVER_LIVE_SUBACCOUNT: ' + (c.driverSubaccountVerified ? 'VERIFIED_80_20_ZAR' : c.driverChecked ? 'NOT_VERIFIED' : 'NOT_CHECKED'));
     print('CURRENT_LIVE_LAUNCH_GATE: ' + (c.launchEnabled ? 'ENABLED' : 'OFF'));

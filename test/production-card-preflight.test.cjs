@@ -17,7 +17,7 @@ const provider = {domain: 'live', currency: 'ZAR', subaccount_code: saved.subacc
   account_number: 'PRIVATE_BANK_9123', percentage_charge: 20, is_verified: true, active: true};
 const binding = version => ({key: 'PAYSTACK_SECRET_KEY', secret: 'PAYSTACK_SECRET_KEY', projectId: PROJECT, version});
 const response = value => ({ok: true, text: async () => typeof value === 'string' ? value : JSON.stringify(value)});
-function harness({oldBinding = false, launchEnabled = false, wrongDriver = false, providerFailure = false} = {}) {
+function harness({oldBinding = false, launchEnabled = false, wrongDriver = false, providerFailure = false, missingPayout = false, secretDenied = false} = {}) {
   const calls = [], output = [];
   const inventory = productionFunctions().map(name => ({name: 'projects/' + PROJECT + '/locations/us-central1/functions/' + name,
     state: 'ACTIVE', environment: 'GEN_2', serviceConfig: {secretEnvironmentVariables:
@@ -51,10 +51,11 @@ function harness({oldBinding = false, launchEnabled = false, wrongDriver = false
     assert.equal(options.headers.Authorization, 'Bearer ' + token);
     if (parsed.origin === 'https://cloudfunctions.googleapis.com') {
       assert.equal(parsed.pathname, '/v2/projects/' + PROJECT + '/locations/us-central1/functions');
-      return response({functions: inventory});
+      return response({functions: missingPayout ? inventory.filter(item => !item.name.endsWith('/configureDriverCardPayout')) : inventory});
     }
     if (parsed.origin === 'https://secretmanager.googleapis.com') {
       assert.match(parsed.pathname, new RegExp('^/v1/projects/' + PROJECT + '/secrets/PAYSTACK_SECRET_KEY/versions/[12]:access$'));
+      if (secretDenied) return {ok: false, status: 403, text: async () => 'PRIVATE_SECRET_ACCESS_ERROR'};
       const secret = parsed.pathname.endsWith('/1:access') ? testKey : liveKey;
       return response({payload: {data: Buffer.from(secret).toString('base64')}});
     }
@@ -109,8 +110,24 @@ test('an older TEST-bound webhook fails even when other functions use a live key
   assert.equal(result.infrastructureChecksPass, false);
   assert.equal(result.cloud.secretBindingsLiveAndConsistent, false);
   assert.deepEqual(result.cloud.secretBindingFailures, ['paystackWebhook']);
+  assert.ok(h.output.includes('BOUND_SECRET_MODE: paystackWebhook=TEST'));
   assert.equal(h.calls.some(url => url.origin === 'https://api.paystack.co'), false);
   assert.ok(h.calls.filter(url => url.hostname === 'secretmanager.googleapis.com').every(url => !url.pathname.includes('latest')));
+});
+test('a missing payout endpoint cannot hide an existing live credential or pass readiness', async () => {
+  const h = harness({missingPayout: true});
+  const result = await main(['--check', '--driver=' + driverId], h.deps);
+  assert.equal(result.cloud.liveProviderAuthentication, true);
+  assert.equal(result.cloud.secretBindingsLiveAndConsistent, false);
+  assert.equal(result.infrastructureChecksPass, false);
+  assert.ok(h.output.includes('BOUND_SECRET_MODE: configureDriverCardPayout=BINDING_MISSING_OR_NOT_PINNED'));
+});
+test('blocked Secret Manager reads are reported as HTTP categories without claiming TEST mode', async () => {
+  const h = harness({secretDenied: true});
+  const result = await main(['--check'], h.deps);
+  assert.equal(result.cloud.liveProviderAuthentication, false);
+  assert.ok(result.cloud.secretBindingModes.every(item => item.mode === 'READ_HTTP_403'));
+  assert.equal(h.output.join('\n').includes('PRIVATE_SECRET_ACCESS_ERROR'), false);
 });
 test('live driver validation rejects TEST accounts, wrong owner, bank, currency, commission or verification', async () => {
   assert.equal(driverCheck(driver, saved, provider, driverId), true);
