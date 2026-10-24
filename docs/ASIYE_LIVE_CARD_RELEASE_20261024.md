@@ -1,5 +1,29 @@
 # Asiye release and LIVE Card activation — 24 October 2026
 
+## Continuation after the owner's LIVE-key setup
+
+The owner reported **Done** after the private setup. [Read-only verification 40082836913](https://github.com/Gatcheni2025/asiye_app/actions/runs/40082836913), at **11:40 SAST**, confirms **staged LIVE version 2** and **Paystack API authentication VERIFIED**. The running payment functions still bind TEST versions, the eight production endpoint gaps remain, and checkout is OFF. This confirms key storage/authentication without claiming a production deployment or charge.
+
+The prepared production promotion keeps checkout off. Its runtime digest is `dd0a54a8d853b6b5e8ec9903d1f9ba4b0f794da790b454a492507ff50276154e`, covering the accepted function files/package, rules, scoped app assets and generated entrypoint. It uses the same application runtime accepted on staging at `a017820` and inspected at `69d5ae5`.
+
+The promotion covers the 42 application endpoints plus the two reviewed handlers that return HTTP 410 for discontinued Wallet funding. Existing ledgers, balances, historical reconciliation endpoints and unrelated deployed functions remain. It deploys explicit names in batches, starting with Wallet funding retirement, then requires **44/44 immutable function source matches**, matching numeric LIVE secret bindings, matching rules and **43/43 selected public app files**, including the exact payment-return HTML. This changes the release promotion scope to 44; staging's 43 and the ordinary production preflight's 42 are unchanged scopes.
+
+Before changing functions, the helper backs up existing selected source archives, function metadata, rules, launch state and the current Hosting version/file map into an existing project-owned private GCF source bucket. Uniform bucket access and absence of public IAM bindings are required. Raw logs stay private; only redacted readback is uploaded to Actions. It preserves the website homepage, policies, unrelated CSS and unknown public files by merging app assets into the current Hosting version. A concurrent Hosting release aborts publication rather than replacing it silently.
+
+The new workflow runs deployment-control tests, archive checks and the full handler/rules suite before production credentials are loaded. Its dedicated release branch is `release/production-card-backend-20261024`; the checked-in run record initially has `applyBackend: false`. The owner's existing release instruction authorizes the separate recorded backend apply. The helper cannot enable checkout, initialize a charge, refund, mutate customer records or publish mobile stores. Real driver LIVE payout setup, accepted provider/device evidence and the existing server-only approval record remain separate activation steps.
+
+For an existing human Cloud Shell to execute the same prepared operation if the Actions identity lacks permissions:
+
+```bash
+cd ~/asiye-production-release-review
+git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet
+gcloud config set project asiye-80386
+npm --prefix .asiye-release-cli install --no-audit --no-fund --no-save firebase-tools@15.34.0
+node scripts/deploy_production_release.cjs --apply
+```
+
+Use a clean review checkout. Re-running inspects exact deployed source and key bindings and skips endpoints already matching this runtime. A source or backup failure stops before subsequent rules/Hosting work; consult the redacted result and keep raw diagnostics private.
+
 The owner has requested release preparation and LIVE Card activation. Continue that work without asking again for general permission. Production is **asiye-80386 / 531902350858**, in `us-central1`; isolated TEST staging remains **asiye-paystack-staging / 1000800408896**. The requested payment model remains Cash/Card, direct driver-owned Paystack subaccounts, 80% driver / 20% Asiye, with processing fees borne by Asiye. Historical Wallet/EFT records remain available for reconciliation.
 
 **Activation has not been performed.** The current evidence establishes a production deployment gap. The server's existing `paymentLaunch/paystack` approval gate is retained; a Live merchant account or a Live API key alone does not open checkout. A source inspection or successful build cannot supply missing provider/device acceptance.

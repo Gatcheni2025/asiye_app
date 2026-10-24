@@ -29,7 +29,12 @@ def source_for(item, name, get_json, reviewed=True):
         b = item.get('buildConfig', {})
         if reviewed and (item.get('environment') == 'GEN_1' or b.get('runtime') != 'nodejs22' or b.get('entryPoint') != name):
             raise ValueError('REVIEWED_RUNTIME_OR_ENTRYPOINT_MISMATCH')
-        return b.get('sourceProvenance', {}).get('resolvedStorageSource', {})
+        resolved=b.get('sourceProvenance', {}).get('resolvedStorageSource', {})
+        if not reviewed and not resolved.get('generation'):
+            original=b.get('source',{}).get('storageSource',{})
+            if original.get('generation'):return original
+            return {'currentGen2UpdateTime':item.get('updateTime','')}
+        return resolved
     if item.get('environment') == 'GEN_2': raise ValueError('REVIEWED_GENERATION_MISMATCH')
     old = get_json('https://cloudfunctions.googleapis.com/v1/' + pinned_name(name))
     if old.get('name') not in identities or old.get('status') != 'ACTIVE' or (reviewed and (old.get('runtime') != 'nodejs22' or old.get('entryPoint') != name)):
@@ -99,6 +104,14 @@ def main():
         current=get_json(url)
         if str(current.get('versionId','')) != version or current.get('status') != 'ACTIVE': raise ValueError('GEN1_DEPLOYMENT_CHANGED_DURING_AUDIT')
         return data
+    def read_current_gen2(name,updated):
+        if not updated:raise ValueError('CURRENT_GEN2_SOURCE_IDENTITY_UNAVAILABLE')
+        url='https://cloudfunctions.googleapis.com/v2/'+pinned_name(name)
+        meta=json.loads(read(request(url+':generateDownloadUrl',{})))
+        data=read(urllib.request.Request(signed_source_url(meta.get('downloadUrl'))))
+        current=get_json(url)
+        if current.get('updateTime')!=updated or current.get('state')!='ACTIVE':raise ValueError('GEN2_DEPLOYMENT_CHANGED_DURING_BACKUP')
+        return data
     if len(sys.argv)==3 and sys.argv[1]=='--backup-dir':
         folder=Path(sys.argv[2]);folder.mkdir(parents=True,mode=0o700,exist_ok=True);folder.chmod(0o700);records=[]
         for item in items:
@@ -106,7 +119,9 @@ def main():
             if name not in names: continue
             try:
                 src=source_for(item,name,get_json,reviewed=False)
-                data=read_version(name,src['functionVersion']) if 'functionVersion' in src else read_storage(*storage_identity(src))
+                data=(read_version(name,src['functionVersion']) if 'functionVersion' in src else
+                      read_current_gen2(name,src['currentGen2UpdateTime']) if 'currentGen2UpdateTime' in src else
+                      read_storage(*storage_identity(src)))
                 sha=hashlib.sha256(data).hexdigest();file=folder/(sha+'.archive')
                 if not file.exists():file.write_bytes(data);file.chmod(0o600)
                 records.append({'name':name,'sha256':sha,'source':src})

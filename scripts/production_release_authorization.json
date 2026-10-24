@@ -1,0 +1,10 @@
+{
+  "project": "asiye-80386",
+  "projectNumber": "531902350858",
+  "runtimeSha256": "dd0a54a8d853b6b5e8ec9903d1f9ba4b0f794da790b454a492507ff50276154e",
+  "checkoutMustRemainOff": true,
+  "stagingRuntime": "a017820c1ffae046fb22ac03fa6cfb40df2bdb05",
+  "reviewedSource": "69d5ae51d3e9599d3100ee79ee68a87e40e01a9c",
+  "ownerInstruction": "Prepare release and make Card live; private LIVE key setup confirmed on 24 October 2026",
+  "scope": "Backend and web promotion with checkout off; no live charge/refund or store publication"
+}
