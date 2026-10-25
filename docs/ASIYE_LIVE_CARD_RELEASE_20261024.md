@@ -9,8 +9,8 @@ The backend rollout is complete. Do not repeat the 44-function deployment to add
 | Production web at that checkpoint | 43/43 checked files matched; homepage and policy pages preserved |
 | Paystack credential | All nine selected consumers bind authenticated LIVE secret version 2 |
 | Wallet | Funding endpoints retired; balances and financial history preserved |
-| Driver banking | New dashboard/menu entry and clearer verification screen prepared on 25 October; deployment evidence follows in PR #19 |
-| New signed apps | Android 11.0.79 (349), iOS 46522.0.7 candidates; build evidence follows in PR #19 |
+| Driver banking | Published on 25 October; dashboard/menu and banking verification screen match production |
+| New signed apps | Signed Android 11.0.79 (349) and iOS 46522.0.7 (95726) built successfully; links below |
 | LIVE checkout | OFF until real driver banking and provider setup are verified |
 
 ## What the driver does
@@ -26,7 +26,7 @@ Card payments retain **80% to the driver's own Paystack subaccount / 20% to Asiy
 
 ## What remains before public launch
 
-- Verify at least one actual approved driver's LIVE bank/subaccount through this flow. The last private inspection on 24 October found zero configured profiles; that was a setup requirement, not a missing function.
+- Verify at least one actual approved driver's LIVE bank/subaccount through this flow. The fresh inspection on 25 October at 13:56 SAST found zero configured profiles; that was a setup requirement, not a missing function.
 - Confirm the Paystack Dashboard's **Live Mode** webhook is saved as:
   https://us-central1-asiye-80386.cloudfunctions.net/paystackWebhook
 - The callback supplied by checkout is:
@@ -37,6 +37,22 @@ Card payments retain **80% to the driver's own Paystack subaccount / 20% to Asiy
 These are concrete remaining checks; successful CI does not establish an actual payment, refund or bank settlement. No new general permission is needed for the already requested release work.
 
 ## Release evidence
+
+The [25 October Hosting-only publication](https://github.com/Gatcheni2025/asiye_app/actions/runs/40174005357) completed: **0 functions redeployed**, immutable source MATCH=44/44, rules MATCH, web MATCH=44/44, exact callback and checkout OFF. The scope is 42 app functions plus two retired Wallet-funding handlers. Runtime digest `d4c13961b5623168d7d6c5e2f673d8bfdc17af4dcd91b4db0bdd4dba85ab515f`; Hosting version `d5000fa60dffef6a`, 108 files with 10 existing unrelated files preserved.
+
+The [fresh independent preflight](https://github.com/Gatcheni2025/asiye_app/actions/runs/40174500054), rerun 25 October at **13:56 SAST**, confirms matching production rules/public files/callback, authenticated LIVE credentials, **0 driver payout profiles** and checkout OFF. Passing the infrastructure inspection does not claim a verified driver: the report explicitly says banking setup is required.
+
+All **218** exported-handler/rules/UI tests passed. [Banking phone checks](https://github.com/Gatcheni2025/asiye_app/actions/runs/40174500020) passed at 320/360/390 px for entry, pending and masked verified status, using simulated provider/identity data.
+
+The [signed mobile build](https://github.com/Gatcheni2025/asiye_app/actions/runs/40173938689) passed signatures and all 32 selected bundled production assets in the APK, AAB and IPA. Android API 36/16 KB packaging and all 20 native libraries passed. The actual IPA uses SDK `iphoneos26.5`, minimum iOS 15.5.
+
+| Signed download | Version |
+| --- | --- |
+| [Android APK + AAB](https://github.com/Gatcheni2025/asiye_app/actions/runs/40173938689/artifacts/12591173925) | 11.0.79 (349) |
+| [iOS IPA](https://github.com/Gatcheni2025/asiye_app/actions/runs/40173938689/artifacts/12591827692) | 46522.0.7 (95726) |
+
+TestFlight upload and public store publication were not performed. Artifact ZIP hashes and build source are retained in [the evidence record](release-evidence/production-banking-20261025.json).
+
 
 The 24 October [production readback ZIP](https://github.com/Gatcheni2025/asiye_app/actions/runs/40111382791/artifacts/12566479927) was independently verified with SHA-256 `616614b0c5fa532505e521974b4316e671ad9f8abed1acb8b524eee7b0fb8c7c`. Its source is `e509fb897eea3dfda333e7f265ce1197cade85d5`; runtime digest `dd0a54a8d853b6b5e8ec9903d1f9ba4b0f794da790b454a492507ff50276154e`. It preserved private rollback backups. The full exported-handler/rules/UI suite passed 208 tests before that rollout.
 
