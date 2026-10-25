@@ -1,0 +1,63 @@
+{
+  "project": "asiye-80386",
+  "operation": "Driver banking UI Hosting only",
+  "productionRun": 40174005357,
+  "source": "eb5b50b88291209b643740f987eb8b904ae5d812",
+  "runtimeSha256": "d4c13961b5623168d7d6c5e2f673d8bfdc17af4dcd91b4db0bdd4dba85ab515f",
+  "functionSourceMatches": 44,
+  "functionsExpected": 44,
+  "functionsRedeployed": 0,
+  "rulesMatch": true,
+  "publicFilesMatched": 44,
+  "publicFilesExpected": 44,
+  "callbackMatches": true,
+  "walletFundingDisabled": true,
+  "liveSecretVersion": "2",
+  "hostingVersion": "d5000fa60dffef6a",
+  "hostingFiles": 108,
+  "unrelatedFilesPreserved": 10,
+  "readbackArtifact": {
+    "id": 12591866436,
+    "sha256": "67c70dece985a44ae91a927614692a09e58efe8f6dc587d31b5ed2e960d92ec3",
+    "zipHashIndependentlyVerified": true
+  },
+  "independentPreflight": {
+    "run": 40174500054,
+    "checkedAt": "2026-10-25T11:56:28Z",
+    "driverPayoutProfiles": 0,
+    "checkoutEnabled": false,
+    "launchEvidenceReferencesPresent": false
+  },
+  "mobile": {
+    "run": 40173938689,
+    "source": "42602fa9737c354c2ffcaa3b871b3415735e3636",
+    "selectedBundledAssetsMatched": 32,
+    "android": {
+      "version": "11.0.79",
+      "versionCode": 349,
+      "artifact": 12591173925,
+      "zipSha256": "09ed6139e7fbc3a7ddbfe0f13de2fee331c28672ab669c67814888250ec51dcc",
+      "api": 36,
+      "nativeLibrariesAligned16Kb": 20
+    },
+    "ios": {
+      "version": "46522.0.7",
+      "build": 95726,
+      "artifact": 12591827692,
+      "zipSha256": "7e55c03b5e059398a73a76ed402beaa5f830d937bf3de6dd49e75bbe0d418782",
+      "sdk": "iphoneos26.5",
+      "minimumIos": "15.5"
+    },
+    "signedBuildsPassed": true,
+    "testFlightUploadPerformed": false,
+    "publicStorePublicationPerformed": false
+  },
+  "automatedHandlerRulesUiTestsPassed": 218,
+  "phoneLayoutRun": 40174500020,
+  "phoneWidthsChecked": [
+    320,
+    360,
+    390
+  ],
+  "providerAndRealDeviceAcceptanceCertified": false
+}

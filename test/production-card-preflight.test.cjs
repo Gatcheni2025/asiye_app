@@ -67,6 +67,10 @@ function harness({oldBinding = false, allBindingsTest = false, stagedTest = fals
       ['/taxis/' + driverId + '.json']: driver,
       ['/driverPaystackSubaccounts/' + driverId + '.json']: wrongDriver ? {...saved, ownerUid: 'wrong'} : saved
     };
+    if (parsed.pathname === '/driverPaystackSubaccounts.json') {
+      assert.equal(parsed.searchParams.get('shallow'), 'true');
+      return response(null);
+    }
     assert.ok(Object.hasOwn(values, parsed.pathname), 'Never read customer collections or unrelated profiles');
     return response(values[parsed.pathname]);
   };
@@ -104,6 +108,18 @@ test('all checks use pinned GETs and redact credentials, private records and app
   assert.match(h.output.join('\n'), /LIVE_ACTIVATION: NOT_PERFORMED/);
   for (const secret of [token, liveKey, driverId, uid, provider.account_number, saved.subaccountCode, saved.accountLast4, 'PRIVATE_APPROVAL_REF', 'PRIVATE_VALIDATION_REF'])
     assert.equal(h.output.join('\n').includes(secret), false);
+});
+test('default infrastructure readback can pass while explicitly reporting that driver banking remains required', async () => {
+  const h = harness();
+  const result = await main(['--check'], h.deps);
+  assert.equal(result.infrastructureChecksPass, true);
+  assert.equal(result.cloud.driverChecked, false);
+  assert.equal(result.cloud.driverSubaccountVerified, false);
+  assert.equal(result.cloud.driverPayoutProfileCount, 0);
+  assert.equal(result.liveActivationPerformed, false);
+  assert.ok(h.output.includes('DRIVER_BANKING_SETUP: REQUIRED_IN_APP'));
+  assert.ok(h.output.includes('DRIVER_LIVE_SUBACCOUNT: NOT_CHECKED'));
+  assert.equal(h.calls.some(url => url.pathname.startsWith('/taxis/')), false);
 });
 test('an older TEST-bound webhook fails even when other functions use a live key', async () => {
   const h = harness({oldBinding: true});

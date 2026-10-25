@@ -110,7 +110,8 @@ async function cloudChecks({run = command, http = fetch, readFile = file => fs.r
     secretBindingFailures: [], secretBindingModes: [], liveProviderAuthentication: false, driverSubaccountVerified: false,
     driverChecked: !!driver, launchEnabled: false, launchApprovalReferencePresent: false,
     launchValidationReferencePresent: false, deployedSourceRevisionVerified: false,
-    stagedSecretMode: 'NOT_READ', stagedSecretVersion: null, stagedLiveKeyAuthenticated: false};
+    stagedSecretMode: 'NOT_READ', stagedSecretVersion: null, stagedLiveKeyAuthenticated: false,
+    driverPayoutProfileCount: null};
   const inventory = [];
   let next = '';
   do {
@@ -137,6 +138,12 @@ async function cloudChecks({run = command, http = fetch, readFile = file => fs.r
   report.launchEnabled = launch?.liveEnabled === true;
   report.launchApprovalReferencePresent = !!String(launch?.approvalReference || '').trim();
   report.launchValidationReferencePresent = !!String(launch?.validationReference || '').trim();
+  // Count server-owned payout mappings only; never enumerate customer records
+  // or print the keys. Individual ownership/provider proof still needs --driver.
+  try {
+    const keys = await get(DATABASE + '/driverPaystackSubaccounts.json?shallow=true');
+    report.driverPayoutProfileCount = keys === null ? 0 : Object.keys(keys).length;
+  } catch (_) { /* A blocked read remains unknown, never zero. */ }
   const versions = new Map();
   for (const name of SECRET_FUNCTIONS) {
     let item = byName.get(name), version = bindingOf(item);
@@ -232,6 +239,8 @@ function printReport(report, print = console.log) {
     for (const item of c.secretBindingModes) print('BOUND_SECRET_MODE: ' + item.name + '=' + item.mode);
     print('PAYSTACK_LIVE_API_AUTH: ' + (c.liveProviderAuthentication ? 'VERIFIED' : 'NOT_VERIFIED'));
     print('DRIVER_LIVE_SUBACCOUNT: ' + (c.driverSubaccountVerified ? 'VERIFIED_80_20_ZAR' : c.driverChecked ? 'NOT_VERIFIED' : 'NOT_CHECKED'));
+    print('PRODUCTION_DRIVER_PAYOUT_PROFILES: ' + (c.driverPayoutProfileCount === null ? 'READ_UNAVAILABLE' : c.driverPayoutProfileCount));
+    if (c.driverPayoutProfileCount === 0) print('DRIVER_BANKING_SETUP: REQUIRED_IN_APP');
     print('CURRENT_LIVE_LAUNCH_GATE: ' + (c.launchEnabled ? 'ENABLED' : 'OFF'));
     print('LAUNCH_EVIDENCE_REFERENCES: ' + (c.launchApprovalReferencePresent && c.launchValidationReferencePresent ? 'PRESENT_NOT_VALIDATED' : 'MISSING'));
   }
@@ -251,7 +260,8 @@ async function main(args = process.argv.slice(2), deps = {}) {
   printReport(report, deps.print);
   const c = report.cloud;
   report.infrastructureChecksPass = !!c && !c.missingOrInactiveFunctions.length && c.rulesMatch &&
-    c.secretBindingsLiveAndConsistent && c.liveProviderAuthentication && c.driverSubaccountVerified &&
+    c.secretBindingsLiveAndConsistent && c.liveProviderAuthentication &&
+    (!c.driverChecked || c.driverSubaccountVerified) &&
     report.public.hostingMatches === report.public.hostingExpected && report.public.callbackMatches;
   // Even infrastructure parity cannot certify deployed code or manual acceptance.
   // The exit code describes the requested checks, never authorizes live charges.

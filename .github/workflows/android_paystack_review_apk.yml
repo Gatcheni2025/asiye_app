@@ -1,4 +1,4 @@
-name: Asiye 349 Android and iOS Release Candidates
+name: Asiye 350 Android and iOS Release Candidates
 
 on:
   workflow_dispatch:
@@ -22,8 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ASIYE_SOURCE_VERSION: '11.0.79+349'
-  ASIYE_IOS_MARKETING_VERSION: '46522.0.7'
+  ASIYE_SOURCE_VERSION: '11.0.80+350'
+  ASIYE_IOS_MARKETING_VERSION: '46522.0.8'
 
 jobs:
   validation:
@@ -44,7 +44,7 @@ jobs:
       - name: Verify release ancestry and selected review version
         run: |
           test "$GITHUB_REF_NAME" = 'fix/paystack-subaccounts-cash-card-no-wallet'
-          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.79+349'
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.80+350'
           bash scripts/verify_payment_release_341_lineage.sh
           node scripts/ios_release_preflight.cjs
       - name: Check JavaScript syntax
@@ -102,13 +102,13 @@ jobs:
         run: node render-ride-confirmation.cjs
       - uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.79-349-ui-review
+          name: asiye-11.0.80-350-ui-review
           path: ui-review/
           if-no-files-found: error
           retention-days: 7
 
   android:
-    name: Signed Android 11.0.79 (349) APK and AAB
+    name: Signed Android 11.0.80 (350) APK and AAB
     needs: validation
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -143,7 +143,7 @@ jobs:
       - name: Analyze Flutter compilation errors
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Verify native OTP linking and account collision recovery
-        run: flutter test test/native_phone_auth_test.dart
+        run: flutter test test/native_phone_auth_test.dart test/native_auth_routing_test.dart
       - name: Build signed Android App Bundle
         run: flutter build appbundle --release
       - name: Build review APK
@@ -173,8 +173,8 @@ jobs:
           APK_PACKAGE=$("$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | sed -n '1p')
           printf '%s\n' "$APK_PACKAGE"
           printf '%s\n' "$APK_PACKAGE" | grep -F "name='com.asiyeapp.asiye'"
-          printf '%s\n' "$APK_PACKAGE" | grep -F "versionCode='349'"
-          printf '%s\n' "$APK_PACKAGE" | grep -F "versionName='11.0.79'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionCode='350'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionName='11.0.80'"
           TARGET_API=$("$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | sed -n "s/^targetSdkVersion:'\([0-9]*\)'.*/\1/p")
           test "$TARGET_API" -ge 36
           ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name zipalign -type f | sort -V | tail -1)
@@ -185,8 +185,8 @@ jobs:
           grep -F 'jar verified' aab-signature.txt
           curl --fail --location --silent --show-error https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar --output "$RUNNER_TEMP/bundletool.jar"
           java -jar "$RUNNER_TEMP/bundletool.jar" validate --bundle=build/app/outputs/bundle/release/app-release.aab
-          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionCode')" = '349'
-          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionName')" = '11.0.79'
+          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionCode')" = '350'
+          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionName')" = '11.0.80'
           java -jar "$RUNNER_TEMP/bundletool.jar" dump config --bundle=build/app/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/asiye-aab-config.json"
           grep -F 'PAGE_ALIGNMENT_16K' "$RUNNER_TEMP/asiye-aab-config.json"
       - name: Prepare installation download and build details
@@ -197,14 +197,14 @@ jobs:
           python3 scripts/verify_android_native_pages.py --artifact build/app/outputs/flutter-apk/app-release.apk
           python3 scripts/verify_android_native_pages.py --artifact build/app/outputs/bundle/release/app-release.aab
           mkdir -p review-apk
-          cp build/app/outputs/flutter-apk/app-release.apk review-apk/Asiye-11.0.79-349.apk
-          cp build/app/outputs/bundle/release/app-release.aab review-apk/Asiye-11.0.79-349.aab
+          cp build/app/outputs/flutter-apk/app-release.apk review-apk/Asiye-11.0.80-350.apk
+          cp build/app/outputs/bundle/release/app-release.aab review-apk/Asiye-11.0.80-350.aab
           (
             cd review-apk
-            sha256sum Asiye-11.0.79-349.apk Asiye-11.0.79-349.aab > SHA256SUMS.txt
+            sha256sum Asiye-11.0.80-350.apk Asiye-11.0.80-350.aab > SHA256SUMS.txt
           )
           cat > review-apk/BUILD-INFO.txt <<EOF
-          Asiye Android 11.0.79 (349) — APK for testing and AAB for Play review
+          Asiye Android 11.0.80 (350) — APK for testing and AAB for Play review
           Source commit: $GITHUB_SHA
           Source branch: $GITHUB_REF_NAME
           Package: com.asiyeapp.asiye
@@ -223,14 +223,14 @@ jobs:
           Driver logout confirms offline availability before signing out; live incoming offers include recommended counters and net earnings.
           Live Card checkout requires server-recorded provider approval and technical validation; a live key alone cannot enable it.
           Refund reservations prevent duplicate provider requests; verified callbacks cannot reverse completed refunds.
-          Go offer delivery status: docs/RELEASE_349.md; payment acceptance: docs/PAYSTACK_TECHNICAL_ACCEPTANCE_20261017.md
+          Go offer delivery status: docs/RELEASE_350.md; payment acceptance: docs/PAYSTACK_TECHNICAL_ACCEPTANCE_20261017.md
           Support: admin@asiye.cloud | 031 566 1165
           EOF
           cat review-apk/BUILD-INFO.txt >> "$GITHUB_STEP_SUMMARY"
           cat review-apk/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.79-349-android
+          name: asiye-11.0.80-350-android
           path: review-apk/
           if-no-files-found: error
           retention-days: 30
@@ -293,7 +293,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.79-349-ios
+          name: asiye-11.0.80-350-ios
           path: |
             ios/release-output/*.ipa
             ios/release-output/release-info.json

@@ -38,7 +38,7 @@ test('installed social OTP reads social input and sends original UID for native 
   x.element('driverPhoneInput').value = '0821234567';
   await x.login.sendOtp();
   assert.equal(x.posted.length, 1);
-  assert.deepEqual(x.posted[0], {action:'startPhoneSignIn', phone:'+27821234567', linkUid:x.user.uid});
+  assert.deepEqual(x.posted[0], {action:'startPhoneSignIn', phone:'+27821234567', linkUid:x.user.uid,role:'driver'});
   assert.equal(x.element('sendOtpButton').disabled, true);
   assert.equal(x.values.get('asiyePendingPhoneAuthLinkUid'), x.user.uid);
   await x.login.resendOtp();
@@ -70,6 +70,29 @@ test('same-UID native phone session completes driver flow and clears link recove
   assert.equal(x.calls.tokens, 1);
   assert.equal(x.calls.completed, 1);
   assert.equal(x.values.has('asiyePendingPhoneAuthLinkUid'), false);
+  assert.deepEqual(x.posted[0],{action:'nativeAuthSessionAccepted',provider:'phone',role:'driver',uid:x.user.uid});
+});
+test('a driver verification cannot be accepted by a passenger page or a different role payload',async()=>{
+  const x=setup();
+  await assert.rejects(()=>x.window.onNativeAuthSession({provider:'phone',role:'commuter',
+    customToken:'signed-token',uid:x.user.uid,linkUid:x.user.uid}),/different Asiye sign-in screen/);
+  assert.equal(x.calls.tokens,0);assert.equal(x.calls.completed,0);assert.equal(x.posted.length,0);
+});
+test('Activity recreation keeps the native driver owner while WebView Firebase is restoring',async()=>{
+  const x=setup();x.auth.currentUser=null;x.login.pendingUser=null;x.login.awaitingPhoneLink=false;
+  x.window.onNativePhoneAuthRestored({role:'driver',linkUid:x.user.uid,
+    phone:'+27821234567',verificationId:'restored-id',inProgress:true});
+  assert.equal(x.values.get('asiyePendingPhoneAuthLinkUid'),x.user.uid);
+  await x.window.onNativeAuthSession({provider:'phone',role:'driver',linkUid:x.user.uid,
+    customToken:'same-native-owner',uid:x.user.uid});
+  assert.equal(x.calls.tokens,1);assert.equal(x.calls.completed,1);
+  assert.equal(x.posted[0].action,'nativeAuthSessionAccepted');
+});
+test('native recovery for a different role cannot overwrite driver recovery state',()=>{
+  const x=setup();x.values.set('asiyePendingPhoneAuthLinkUid',x.user.uid);
+  x.window.onNativePhoneAuthRestored({role:'commuter',linkUid:'wrong-owner',verificationId:'other-id'});
+  assert.equal(x.values.get('asiyePendingPhoneAuthLinkUid'),x.user.uid);
+  assert.equal(x.calls.tokens,0);
 });
 
 test('a changed social session sends no native OTP request', async()=>{

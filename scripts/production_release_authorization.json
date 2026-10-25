@@ -1,12 +1,12 @@
 {
   "project": "asiye-80386",
   "projectNumber": "531902350858",
-  "runtimeSha256": "d4c13961b5623168d7d6c5e2f673d8bfdc17af4dcd91b4db0bdd4dba85ab515f",
+  "runtimeSha256": "a5ef66e679551fe4a1166f35f07fb5d2bb2d0fe02ce93c88d81c8da4337c073a",
   "checkoutMustRemainOff": true,
   "stagingRuntime": "a017820c1ffae046fb22ac03fa6cfb40df2bdb05",
   "reviewedSource": "69d5ae51d3e9599d3100ee79ee68a87e40e01a9c",
-  "ownerInstruction": "25 October 2026: driver must verify banking in app; prepare production release and LIVE Card",
-  "scope": "Banking UI Hosting update only; unchanged verified backend/rules; checkout remains off",
-  "previousProductionRuntimeSha256": "dd0a54a8d853b6b5e8ec9903d1f9ba4b0f794da790b454a492507ff50276154e",
-  "uiBaseline": "ecb91346c529ccac523db62ffd73efd79c63bf0a"
+  "ownerInstruction": "25 October 2026: fix driver phone OTP returning to passenger and missing driver OTP",
+  "scope": "Shared native-auth bridge Hosting only; native routing delivered in signed 350 candidates; backend/rules unchanged; checkout remains off",
+  "previousProductionRuntimeSha256": "d4c13961b5623168d7d6c5e2f673d8bfdc17af4dcd91b4db0bdd4dba85ab515f",
+  "uiBaseline": "e60511914be4893ca87902520bef892d83a1ccb1"
 }
