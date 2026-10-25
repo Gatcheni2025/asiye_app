@@ -10,6 +10,14 @@ const {hash}=require('./audit_347_staging_readonly.cjs');
 const {runDeployment}=require('./repair_staging_paystack_return.cjs');
 const ROOT=path.resolve(__dirname,'..'),REGION='us-central1';
 const CF='https://cloudfunctions.googleapis.com',SM='https://secretmanager.googleapis.com/v1/projects/'+PROJECT;
+const BANKING_BASELINE='ecb91346c529ccac523db62ffd73efd79c63bf0a';
+const BANKING_ASSETS=new Set(['assets/driver-v2/index.html','assets/driver-v2/js/app.js',
+ 'assets/driver-v2/css/app.css','assets/driver-v2/payout.html','assets/driver-v2/js/payout.js',
+ 'assets/driver-v2/css/payout.css','assets/member-pages.js']);
+function assertBankingHostingScope(run,source){
+ const changed=run('git',['diff','--name-only',BANKING_BASELINE,source,'--','functions','database.rules.json','lib','assets']).split('\n').filter(Boolean);
+ if(changed.some(file=>!BANKING_ASSETS.has(file)))throw Error('BANKING_HOSTING_SCOPE_EXCEEDED');
+}
 function command(program,args,{cwd=ROOT,timeout=90000,quiet=true}={}){
  const r=spawnSync(program,args,{cwd,encoding:'utf8',timeout,maxBuffer:12*1024*1024,stdio:quiet?'pipe':'inherit'});
  if(r.status!==0||r.error)throw Error('LOCAL_COMMAND_FAILED_'+path.basename(program).toUpperCase().replace(/[^A-Z0-9_]/g,'_'));
@@ -91,7 +99,7 @@ async function apiResponse(http,url,options,pause=ms=>new Promise(resolve=>setTi
  }
 }
 async function main(args=process.argv.slice(2),deps={}){
- const mode=args[0]||'--check';if(args.length>1||!['--check','--apply'].includes(mode))throw Error('PRODUCTION_RELEASE_ARGUMENT_INVALID');
+ const mode=args[0]||'--check';if(args.length>1||!['--check','--apply','--hosting-only'].includes(mode))throw Error('PRODUCTION_RELEASE_ARGUMENT_INVALID');
  const run=deps.command||command,http=deps.fetch||fetch,print=deps.print||console.log;
  if(run('gcloud',['config','get-value','project'])!==PROJECT||run('gcloud',['projects','describe',PROJECT,'--format=value(projectNumber)'])!==NUMBER)throw Error('PRODUCTION_PROJECT_IDENTITY_MISMATCH');
  if(!['fix/paystack-subaccounts-cash-card-no-wallet','release/production-card-backend-20261024'].includes(run('git',['branch','--show-current'])))throw Error('PRODUCTION_REVIEW_BRANCH_MISMATCH');
@@ -99,6 +107,7 @@ async function main(args=process.argv.slice(2),deps={}){
  if(!/^[a-f0-9]{40}$/.test(source)||run('git',['diff','--name-only','HEAD','--','functions','assets','scripts','database.rules.json']))throw Error('REVIEWED_SOURCE_UNAVAILABLE_OR_MODIFIED');
  run('git',['merge-base','--is-ancestor','69d5ae51d3e9599d3100ee79ee68a87e40e01a9c','HEAD']);
  const digest=reviewedDigest();checkAuthorization(JSON.parse(fs.readFileSync(path.join(ROOT,'scripts/production_release_authorization.json'),'utf8')),digest);
+ if(mode==='--hosting-only')assertBankingHostingScope(run,source);
  const api=async(method,url,body,raw=false)=>{
   const u=new URL(url);if(!['cloudfunctions.googleapis.com','secretmanager.googleapis.com','storage.googleapis.com','firebasehosting.googleapis.com',
    'upload-firebasehosting.googleapis.com',new URL(DATABASE).hostname].includes(u.hostname)||u.protocol!=='https:'||u.username||u.password||u.port)throw Error('PRODUCTION_API_TARGET_INVALID');
@@ -122,7 +131,9 @@ async function main(args=process.argv.slice(2),deps={}){
  const plan=auditRun(),needed=neededFunctions(plan,before,version,await boundVersions(api,before));
  print('FUNCTIONS_NEEDING_PROMOTION='+needed.length+'/'+FUNCTIONS.length);
  if(mode==='--check'){print('PRODUCTION_PROMOTION_PLAN: READ_ONLY | CHECKOUT=OFF');return;}
+ if(mode==='--hosting-only'&&needed.length)throw Error('HOSTING_ONLY_REQUIRES_MATCHING_FUNCTIONS_AND_BINDINGS');
  const previous=await hosting.liveVersion(api),rules=await api('GET',DATABASE+'/.settings/rules.json');
+ if(mode==='--hosting-only'&&hash(rules)!==hash(JSON.parse(fs.readFileSync(path.join(ROOT,'database.rules.json'),'utf8'))))throw Error('HOSTING_ONLY_REQUIRES_MATCHING_RULES');
  const bucket=before.flatMap(i=>[i.buildConfig?.sourceProvenance?.resolvedStorageSource?.bucket,
   i.buildConfig?.source?.storageSource?.bucket]).find(n=>typeof n==='string'&&n.includes(NUMBER));
  if(!bucket||!/^gcf[-a-z0-9.]+$/.test(bucket))throw Error('PRIVATE_BACKUP_BUCKET_UNAVAILABLE');
@@ -159,7 +170,10 @@ async function main(args=process.argv.slice(2),deps={}){
    verify:async()=>{const versions=await boundVersions(api,await inventory(api));if(SECRET_CONSUMERS.some(n=>versions[n]!==version))throw Error('DEPLOYED_LIVE_BINDINGS_MISMATCH');},
    rules:async()=>{
     const local=JSON.parse(fs.readFileSync(path.join(ROOT,'database.rules.json'),'utf8'));
-    if(hash(await api('GET',DATABASE+'/.settings/rules.json'))!==hash(local))runDeployment(cli,['deploy','--project',PROJECT,'--config',path.join(ROOT,'firebase.json'),'--only','database','--non-interactive','--debug'],{env,logRoot:privateRoot});
+    if(hash(await api('GET',DATABASE+'/.settings/rules.json'))!==hash(local)){
+     if(mode==='--hosting-only')throw Error('HOSTING_ONLY_REQUIRES_MATCHING_RULES');
+     runDeployment(cli,['deploy','--project',PROJECT,'--config',path.join(ROOT,'firebase.json'),'--only','database','--non-interactive','--debug'],{env,logRoot:privateRoot});
+    }
     if(hash(await api('GET',DATABASE+'/.settings/rules.json'))!==hash(local))throw Error('PRODUCTION_RULES_READBACK_MISMATCH');print('PRODUCTION_RTDB_RULES: MATCH');
    },
    web:()=>hosting.promoteHosting({api,previous,assets:hosting.assetsForHosting(path.join(ROOT,'assets')),
@@ -169,10 +183,10 @@ async function main(args=process.argv.slice(2),deps={}){
   for(const name of FUNDING_OFF){const r=await http('https://'+REGION+'-'+PROJECT+'.cloudfunctions.net/'+name,{method:'GET',redirect:'error',signal:AbortSignal.timeout(20000)});if(r.status!==410)throw Error('WALLET_FUNDING_RETIREMENT_NOT_VERIFIED');}
   const output={project:PROJECT,source,runtimeSha256:digest,functionSourceMatches:44,functionsExpected:44,rulesMatch:true,
    publicFilesMatched:publicResult.hostingMatches,publicFilesExpected:publicResult.hostingExpected,callbackMatches:true,walletFundingDisabled:true,
-   liveSecretVersion:version,checkoutEnabled:false,liveActivationPerformed:false,providerAndDeviceAcceptanceNotCertified:true,
+   liveSecretVersion:version,checkoutEnabled:false,liveActivationPerformed:false,hostingOnly:mode==='--hosting-only',providerAndDeviceAcceptanceNotCertified:true,
    hosting:result,privateBackup:'gs://'+bucket+'/'+prefix};
   fs.writeFileSync(path.join(ROOT,'production-release-readback/release.json'),JSON.stringify(output,null,2)+'\n');
-  print('PRODUCTION_RELEASE_PAYLOAD: VERIFIED | FUNCTIONS=44/44 | RULES=MATCH | WEB=43/43 | CHECKOUT=OFF');
+  print('PRODUCTION_RELEASE_PAYLOAD: VERIFIED | FUNCTIONS=44/44 | RULES=MATCH | WEB='+publicResult.hostingMatches+'/'+publicResult.hostingExpected+' | CHECKOUT=OFF');
   return output;
  }finally{
   if(backupReady)for(const folder of fs.readdirSync(privateRoot,{withFileTypes:true}).filter(i=>i.isDirectory()&&i.name.startsWith('asiye-return-logs-')))
@@ -185,4 +199,4 @@ if(require.main===module)main().catch(e=>{
  const code=/^[A-Z0-9_]+$/.test(String(e.code||''))?e.code:'NONE';
  console.error('PRODUCTION_RELEASE: BLOCKED '+(/^[A-Z0-9_]+$/.test(e.message)?e.message:'DEPLOYMENT_STOPPED_SEE_PRIVATE_DIAGNOSTICS')+' | KIND='+kind+' | CODE='+code);process.exitCode=1;
 });
-module.exports={reviewedDigest,checkAuthorization,privateBucket,inventory,assertOff,stagedLive,boundVersions,neededFunctions,promote,apiResponse,main};
+module.exports={reviewedDigest,checkAuthorization,privateBucket,inventory,assertOff,stagedLive,boundVersions,neededFunctions,promote,apiResponse,assertBankingHostingScope,main};

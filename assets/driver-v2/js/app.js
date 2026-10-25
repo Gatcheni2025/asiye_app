@@ -680,6 +680,17 @@ ASIYE_DRIVER.ui = {
 
                 `
             }
+            <a href="./payout.html" class="driver-banking-card">
+                <i class="fas fa-building-columns" aria-hidden="true"></i>
+                <span><strong>Banking details</strong><small>${
+                    driver.payoutStatus === 'verified'
+                        ? 'Bank verified · manage your card earnings'
+                        : driver.payoutStatus === 'pending_paystack_verification'
+                            ? 'Bank verification pending · check status'
+                            : 'Verify your bank to receive card earnings'
+                }</small></span>
+                <i class="fas fa-chevron-right" aria-hidden="true"></i>
+            </a>
         `;
 
 
@@ -5112,6 +5123,11 @@ document.addEventListener(
 
                             ASIYE_DRIVER.ui
                                 .closeMenu();
+
+                            if (page === 'banking') {
+                                window.location.assign('./payout.html');
+                                return;
+                            }
 
 
                             if (

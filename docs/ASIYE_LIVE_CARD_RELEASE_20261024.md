@@ -1,115 +1,45 @@
-# Asiye release and LIVE Card activation — 24 October 2026
+# Asiye production status — updated 25 October 2026
 
-## Continuation after the owner's LIVE-key setup
+The backend rollout is complete. Do not repeat the 44-function deployment to add the banking screen.
 
-The owner reported **Done** after the private setup. [Read-only verification 40082836913](https://github.com/Gatcheni2025/asiye_app/actions/runs/40082836913), at **11:40 SAST**, confirms **staged LIVE version 2** and **Paystack API authentication VERIFIED**. The running payment functions still bind TEST versions, the eight production endpoint gaps remain, and checkout is OFF. This confirms key storage/authentication without claiming a production deployment or charge.
-
-The prepared production promotion keeps checkout off. Its runtime digest is `dd0a54a8d853b6b5e8ec9903d1f9ba4b0f794da790b454a492507ff50276154e`, covering the accepted function files/package, rules, scoped app assets and generated entrypoint. It uses the same application runtime accepted on staging at `a017820` and inspected at `69d5ae5`.
-
-The promotion covers the 42 application endpoints plus the two reviewed handlers that return HTTP 410 for discontinued Wallet funding. Existing ledgers, balances, historical reconciliation endpoints and unrelated deployed functions remain. It deploys explicit names in batches, starting with Wallet funding retirement, then requires **44/44 immutable function source matches**, matching numeric LIVE secret bindings, matching rules and **43/43 selected public app files**, including the exact payment-return HTML. This changes the release promotion scope to 44; staging's 43 and the ordinary production preflight's 42 are unchanged scopes.
-
-Before changing functions, the helper backs up existing selected source archives, function metadata, rules, launch state and the current Hosting version/file map into an existing project-owned private GCF source bucket. Uniform bucket access and absence of public IAM bindings are required. Raw logs stay private; only redacted readback is uploaded to Actions. It preserves the website homepage, policies, unrelated CSS and unknown public files by merging app assets into the current Hosting version. A concurrent Hosting release aborts publication rather than replacing it silently.
-
-The new workflow runs deployment-control tests, archive checks and the full handler/rules suite before production credentials are loaded. Its dedicated release branch is `release/production-card-backend-20261024`; the checked-in run record initially has `applyBackend: false`. The owner's existing release instruction authorizes the separate recorded backend apply. The helper cannot enable checkout, initialize a charge, refund, mutate customer records or publish mobile stores. Real driver LIVE payout setup, accepted provider/device evidence and the existing server-only approval record remain separate activation steps.
-
-For an existing human Cloud Shell to execute the same prepared operation if the Actions identity lacks permissions:
-
-```bash
-cd ~/asiye-production-release-review
-git pull --ff-only origin fix/paystack-subaccounts-cash-card-no-wallet
-gcloud config set project asiye-80386
-npm --prefix .asiye-release-cli install --no-audit --no-fund --no-save firebase-tools@15.34.0
-node scripts/deploy_production_release.cjs --apply
-```
-
-Use a clean review checkout. Re-running inspects exact deployed source and key bindings and skips endpoints already matching this runtime. A source or backup failure stops before subsequent rules/Hosting work; consult the redacted result and keep raw diagnostics private.
-
-The owner has requested release preparation and LIVE Card activation. Continue that work without asking again for general permission. Production is **asiye-80386 / 531902350858**, in `us-central1`; isolated TEST staging remains **asiye-paystack-staging / 1000800408896**. The requested payment model remains Cash/Card, direct driver-owned Paystack subaccounts, 80% driver / 20% Asiye, with processing fees borne by Asiye. Historical Wallet/EFT records remain available for reconciliation.
-
-**Activation has not been performed.** The current evidence establishes a production deployment gap. The server's existing `paymentLaunch/paystack` approval gate is retained; a Live merchant account or a Live API key alone does not open checkout. A source inspection or successful build cannot supply missing provider/device acceptance.
-
-## Current evidence
-
-| Check | Verified result and limits |
+| Area | Current status |
 | --- | --- |
-| Reviewed source | Review branch `fix/paystack-subaccounts-cash-card-no-wallet`, PR [#19](https://github.com/Gatcheni2025/asiye_app/pull/19). Checkpoint `89629e8`; runtime is unchanged from staging-verified `a017820`. `main` is an older release source. |
-| Staging | 43/43 functions ACTIVE; reviewed rules and 46/46 hosted files match. Rating endpoint source MATCH=1/1; full exported-handler/rules/UI suite passed 208/208. |
-| Application acceptance | Operator confirmed Cash early completion with a different passenger login. The rating repair is deployed; actual save/reopen confirmation remains pending on the completed Cash ride. No new booking/payment is needed for that rating check. |
-| Paystack merchant | Owner reported the merchant account Live on 21 October. Preserve that fact. The actual approval/validation references required by the server launch record have not been reviewed here. |
-| Fresh cloud inventory | The read-only [technical-readiness run 40061425242](https://github.com/Gatcheni2025/asiye_app/actions/runs/40061425242), rerun 24 October at **10:37 SAST**, finds 58 active production functions, six missing reviewed endpoints and different production rules. Staging rules now match; the earlier staging mismatch is resolved. |
-| Missing production endpoints | `configureDriverCardPayout`, `createParcelRequestSecure`, `acceptParcelRequestSecure`, `cancelParcelBookingSecure`, `getParcelPickupPinSecure`, `parcelTripActionSecure`. Existing function names alone do not attest their deployed code. |
-| Broader release inspection | The new [production Card preflight 40079742243](https://github.com/Gatcheni2025/asiye_app/actions/runs/40079742243), completed at **10:53 SAST**, checks the full 42-function release scope: **34/42 ACTIVE**. It additionally finds `adminEnrollmentConsole` and `reviewDriverEnrollmentSecure` missing/inactive, making **eight** gaps overall. Production Hosting matches **0/43** selected files (content differences or HTTP 404s), and the public payment return does not match the reviewed renderer. The launch gate is **OFF**, with approval/validation references missing. Bound LIVE credentials are not verified by that first inspection; the follow-up adds safe per-function mode/read-error categories. |
-| Confirmed production key mode | Follow-up [preflight 40080045831](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080045831), **10:58 SAST** at `760e8b2`, successfully reads the deployed numeric secret versions: all seven existing payment/refund consumers use **TEST** keys; the eighth consumer, `configureDriverCardPayout`, is absent. This is a confirmed TEST binding, not a Secret Manager permission error. The same eight endpoint gaps, 0/43 public-file parity result, callback mismatch and launch gate OFF remain. |
-| Rules | Production digest `195fc06e9b49f37aabf990ebc0de0c24020b5f9dfc15df05c61b56c655a4bf8a`; reviewed/staging digest `315cac1dc85c2bd65805a45f4136ebcaad90fbeb78136e963a125df717ff041a`. |
-| Provider evidence | TEST subaccount prerequisite passes, including active/verified 80/20 configuration. Real checkout, signed webhook, cancellation/refund and final device acceptance remain separately unverified. The Asiye Group TEST subaccount must never become a real driver's LIVE payout destination. |
-| Mobile | Existing Android 11.0.77 (347) / iOS 46522.0.5 (95526) candidates predate these runtime changes. Prepare fresh signed packages from the final accepted source using unused store build numbers. No new binary or store publication is certified here. |
+| Production backend | [Verified on 24 October](https://github.com/Gatcheni2025/asiye_app/actions/runs/40111382791): 44/44 immutable function sources matched |
+| Production rules and callback | Reviewed rules matched; exact payment-return HTML returned HTTP 200 |
+| Production web at that checkpoint | 43/43 checked files matched; homepage and policy pages preserved |
+| Paystack credential | All nine selected consumers bind authenticated LIVE secret version 2 |
+| Wallet | Funding endpoints retired; balances and financial history preserved |
+| Driver banking | New dashboard/menu entry and clearer verification screen prepared on 25 October; deployment evidence follows in PR #19 |
+| New signed apps | Android 11.0.79 (349), iOS 46522.0.7 candidates; build evidence follows in PR #19 |
+| LIVE checkout | OFF until real driver banking and provider setup are verified |
 
-The refreshed readiness artifact is ID `12554511490`; its downloaded ZIP SHA-256 was independently verified as `115921cf194ad47459c7baf2b0c693c0ba21d9ea5ae5e14290b1087b6bc593b5`. Its source is `43ee994`; the subsequent `a017820` commit only fixes a test fixture and `89629e8` only records deployment evidence. The runtime/rules checked in that report are therefore unchanged at the reviewed deployment checkpoint.
+## What the driver does
 
-## Prepared production inspection
+1. Open the driver app, then **Menu → Banking details**, or tap the dashboard's **Banking details** card.
+2. Choose the supported South African bank and enter the account-holder name, account number, account type and verification document.
+3. Tap **Verify banking details**. Pending verification is shown honestly; it is not a success message.
+4. Use **Check verification again** until **Your bank is verified** appears. The verified account is shown only by bank name and its final four digits.
 
-`scripts/production_card_preflight.cjs` checks the production project/number, reviewed inventory, rules, public assets and exact payment-return page. It inspects the **numeric Secret Manager versions actually bound to eight payment/refund functions**, including Gen1 triggers; all must contain the same LIVE key. It prints only safe result categories. It also reports the existing launch gate without modifying it. An optional exact driver profile ID checks that driver's stored owner/bank suffix against an active, verified LIVE ZAR subaccount with 20% main-account commission. It does not scan customer collections or print identities, keys, account details or approval references.
+The signed-in driver's actual profile is resolved before any banking request, so switching accounts cannot reuse another driver's saved ID. The server still requires driver/vehicle approval, verifies bank ownership with Paystack and creates each payout destination once. Bank/ID details are entered privately in the app; do not send them through chat.
 
-The production scope is **42 reviewed functions** and **43 selected public files**: the staging-only `adminStagingTestConsole` and its three testing-page files are excluded. This is a readback scope, not an instruction to rebuild every existing production function or delete legacy exports. Public checks distinguish content mismatch, HTTP errors and unavailable reads. A failed network read is not evidence of different deployed content.
+Card payments retain **80% to the driver's own Paystack subaccount / 20% to Asiye**. Asiye bears processing fees from its share. Paystack controls settlement timing.
 
-The new **Production Card Release Preflight (read only)** workflow runs the inspection with existing production credentials. Its first run passed the inspection's 28 JavaScript checks and two package-layout tests; the production job correctly failed on deployment/configuration gaps. The existing source gate [40079742224](https://github.com/Gatcheni2025/asiye_app/actions/runs/40079742224), Firebase security [40079745433](https://github.com/Gatcheni2025/asiye_app/actions/runs/40079745433), and Paystack regression [40079742219](https://github.com/Gatcheni2025/asiye_app/actions/runs/40079742219) all passed at `df62341`. The follow-up distinguishes TEST mode from an unreadable secret and checks existing LIVE credentials even if the payout endpoint is missing; its ten focused tests pass locally. The script can also run in the owner's human-authenticated Cloud Shell. Use a clean review checkout so locally generated staging wrappers do not contaminate production comparisons:
+## What remains before public launch
 
-```bash
-cd ~
-git clone --single-branch --branch fix/paystack-subaccounts-cash-card-no-wallet https://github.com/Gatcheni2025/asiye_app.git asiye-production-release-review
-cd ~/asiye-production-release-review
-gcloud config set project asiye-80386
-node scripts/production_card_preflight.cjs --check
-```
+- Verify at least one actual approved driver's LIVE bank/subaccount through this flow. The last private inspection on 24 October found zero configured profiles; that was a setup requirement, not a missing function.
+- Confirm the Paystack Dashboard's **Live Mode** webhook is saved as:
+  https://us-central1-asiye-80386.cloudfunctions.net/paystackWebhook
+- The callback supplied by checkout is:
+  https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn
+- Record the owner's release instruction and actual validation evidence in the server-only launch record, enable new checkout with a conditional write/readback, then verify one authorized LIVE booking with separate driver/passenger accounts before public distribution.
+- On the new installed Android/iOS packages, verify payment return, pickup PIN, completion and rating save/reopen. Upload to internal Play/TestFlight before public store release.
 
-If that dedicated checkout already exists, update it with `git pull --ff-only` instead of cloning over it. For driver-specific inspection, append `--driver=THE_EXACT_DRIVER_PROFILE_ID` to `--check`, keeping the real ID in the private operator session. No key is accepted as a command-line argument. `--public-only` needs no cloud credentials.
+These are concrete remaining checks; successful CI does not establish an actual payment, refund or bank settlement. No new general permission is needed for the already requested release work.
 
-Passing these infrastructure checks still prints `DEPLOYED_FUNCTION_SOURCE_REVISION: NOT_ATTESTED`, leaves actual provider/device acceptance uncertified, and never enables payments. Source attestation must compare immutable deployed build archives/versions with the accepted runtime before activation; inventory presence is insufficient. Any unavailable secret/rules/source read is a missing result, not permission to weaken the gate.
+## Release evidence
 
-## Private LIVE-key preparation
+The 24 October [production readback ZIP](https://github.com/Gatcheni2025/asiye_app/actions/runs/40111382791/artifacts/12566479927) was independently verified with SHA-256 `616614b0c5fa532505e521974b4316e671ad9f8abed1acb8b524eee7b0fb8c7c`. Its source is `e509fb897eea3dfda333e7f265ce1197cade85d5`; runtime digest `dd0a54a8d853b6b5e8ec9903d1f9ba4b0f794da790b454a492507ff50276154e`. It preserved private rollback backups. The full exported-handler/rules/UI suite passed 208 tests before that rollout.
 
-The owner must enter the LIVE secret directly in their existing authorized Cloud Shell. If a correct LIVE version is already staged, retain it for the controlled deployment. Otherwise, the following creates a production Secret Manager version, validates the LIVE prefix, keeps input out of the command arguments/history, and suppresses shell tracing. It uses the same pinned Firebase CLI version as the reviewed staging tooling. Keep all existing versions for reconciliation and rollback. The production key value is never needed in this chat.
+The 25 October banking update changes only the listed driver/shared UI assets. Its Hosting-only operation refuses any backend/rules/native-code or unrelated UI change, requires all deployed functions and bindings already to match, preserves the existing Hosting file map and keeps checkout off. It does not rebuild functions.
 
-```bash
-(
-  set +x
-  set -euo pipefail
-  test "$(gcloud projects describe asiye-80386 --format='value(projectNumber)')" = '531902350858'
-  read -r -s -p 'Paystack LIVE secret: ' ASIYE_LIVE_KEY_INPUT
-  printf '\n'
-  [[ "$ASIYE_LIVE_KEY_INPUT" =~ ^sk_live_[A-Za-z0-9_]+$ ]] || { printf 'A Paystack LIVE secret is required.\n' >&2; exit 1; }
-  printf '%s' "$ASIYE_LIVE_KEY_INPUT" | npx --yes firebase-tools@15.34.0 functions:secrets:set PAYSTACK_SECRET_KEY --data-file=- --non-interactive --project asiye-80386
-  unset ASIYE_LIVE_KEY_INPUT
-)
-```
-
-The CLI's `--non-interactive` path explicitly skips its automatic endpoint-update and stale-version-destruction prompt. [Its exact command implementation](https://github.com/firebase/firebase-tools/blob/v15.34.0/src/commands/functions-secrets-set.ts) was checked for this behavior. The created version still needs the controlled release deployment and numeric binding readback; the existing server launch gate remains off. Retain only the safe version-created result, never the entered key.
-
-At `760e8b2`, all **30 JavaScript preparation/regression tests**, **two mobile-package tests**, the [full source gate 40080045834](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080045834) (including **208/208** exported-handler/rules/UI tests), [Firebase security 40080048703](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080048703), and [Paystack regression 40080045824](https://github.com/Gatcheni2025/asiye_app/actions/runs/40080045824) passed. The production inspection remains red because the observed release/configuration gaps are real, not because these code tests failed.
-
-## Production rollout and activation sequence
-
-| Stage | Concrete work and exit condition |
-| --- | --- |
-| 1. Close acceptance evidence | Retain the current staging deployment. Confirm rating save/reopen on its existing completed Cash ride. Record TEST Card return, exact fare/ZAR/reference, authenticated webhook, correct driver's 80/20 allocation and fee bearer, retry/decline and eligible refund; complete the supported Go/Club/Parcel and native device cases in the [acceptance register](ASIYE_347_STAGING_TO_RELEASE_ACCEPTANCE_20261022.md). Keep real references and personal data private. |
-| 2. Record production state | Read the current launch state, bound secret versions, function metadata/source versions, rules, Hosting release and relevant configuration. Back up them privately before promotion. Reconcile outstanding Wallet/EFT/refund obligations without deleting balances or ledgers. Review existing Card references/webhook mode before changing a production key. |
-| 3. Promote accepted source | Use the final reviewed branch/SHA, an explicit production project, the matching rules and production-configured web assets. Review which endpoints differ, add the eight missing release endpoints, and update changed existing endpoints. Preserve unrelated legacy functions and historical financial data; exclude staging test tools. Keep new LIVE checkout off while deploying. Read back immutable deployed source, rules, public callback and assets. |
-| 4. Configure LIVE credentials | If the bound key is already correct and LIVE, retain it. Otherwise enter the LIVE secret directly into production Secret Manager through the Firebase CLI's secret prompt, then redeploy its bound payment/webhook/refund functions. Never paste a secret into chat, GitHub, a dispatch input, a command argument or web assets. Recheck numeric deployed bindings; checking only `latest` is insufficient. Do not change the staging TEST secret. |
-| 5. Configure LIVE provider routes and drivers | In Paystack **Live Mode**, set the webhook to `https://us-central1-asiye-80386.cloudfunctions.net/paystackWebhook` and callback to `https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn`. Keep Test Mode routes on staging. Register each real approved driver's own bank/identity through the production payout setup; verify ownership, active/verified LIVE ZAR status and `percentage_charge: 20`. Do not copy TEST mappings. |
-| 6. Enable server checkout | After the accepted evidence and immutable production readback are recorded, the trusted production operator records the real `approvalReference` and `validationReference` with `liveEnabled: true` at `paymentLaunch/paystack`. Preserve prior metadata and use a transaction/conditional write with readback. This enables new LIVE checkout generally; the current gate is not a pilot-driver allowlist. Do not put dummy references into it. Passenger/driver/admin clients remain unable to write the path. |
-| 7. Verify a controlled LIVE booking | Use distinct passenger/approved-driver accounts and an agreed, authorized fare. Verify server-confirmed LIVE amount/ZAR/reference, signed webhook, direct driver subaccount allocation, pickup navigation only after verification, PIN at pickup, return/restart and completion. Record actual provider settlement when it occurs; TEST mode or the app's internal `held` label does not establish bank settlement. |
-| 8. Package and distribute | Freeze the accepted final runtime. Prepare the next unused Android versionCode and fresh iOS build number, signed with the established identities. Verify the actual APK/AAB/IPA, final store SDK/native requirements and installed/upgrade behavior, then internal Play/TestFlight acceptance before public release. Existing 347 packages cannot pick up bundled fixes solely through Hosting. |
-
-The mobile package validator now checks the driver completion screen and shared history assets, in addition to the existing payment/auth/trip files. A signed package with an old rating screen or history file fails even if its payment files are current. Tests exercise the default guard on APK, AAB and IPA layouts.
-
-If LIVE checkout needs to stop, the operator sets only `paymentLaunch/paystack/liveEnabled` false with conditional readback. That prevents new initialization through the reviewed gate while preserving verification/refund/webhook processing and existing ledgers. Disabling checkout is not cancellation, refund or settlement reversal. Restore application/backend versions only after checking compatibility with the new server-owned trip fields; do not restore weaker rules as a blanket rollback.
-
-## Provider references checked for this preparation
-
-- [Paystack API keys and authentication](https://paystack.com/docs/api/): TEST and LIVE key modes.
-- [Paystack split payments](https://paystack.com/docs/payments/split-payments/): percentage allocation and fee bearer.
-- [Paystack webhook authentication](https://paystack.com/docs/payments/webhooks/): verify the `x-paystack-signature` before processing an event.
-- [Paystack server-side transaction verification](https://paystack.com/docs/payments/verify-payments/).
-- [Firebase secret configuration](https://firebase.google.com/docs/functions/config-env): deploy bound functions after updating a secret.
-
-No production deployment, key change, launch write, live charge/refund or public store release has been performed by this preparation.
+See [RELEASE_349.md](RELEASE_349.md) for the new signed candidate scope. Earlier 347/348 packages remain historical candidates and do not contain the new banking menu.

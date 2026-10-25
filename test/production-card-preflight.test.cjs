@@ -5,7 +5,6 @@ const path = require('node:path');
 const fs = require('node:fs');
 const {PROJECT, NUMBER, DATABASE, CALLBACK, SECRET_FUNCTIONS, PRODUCTION_FILES, productionFunctions,
   parseArgs, bindingOf, driverCheck, main, cloudChecks} = require('../scripts/production_card_preflight.cjs');
-const {FILES} = require('../scripts/audit_347_staging_readonly.cjs');
 const {renderPaymentReturn} = require('../functions/paystack-return');
 const root = path.resolve(__dirname, '..');
 const driverId = 'PRIVATE_DRIVER_ID', uid = 'PRIVATE_AUTH_UID';
@@ -35,7 +34,7 @@ function harness({oldBinding = false, allBindingsTest = false, stagedTest = fals
     assert.equal(options.redirect, 'error');
     if (parsed.origin === 'https://' + PROJECT + '.web.app') {
       assert.equal(options.headers.Authorization, undefined);
-      assert.ok(FILES.includes(parsed.pathname.slice(1)));
+      assert.ok(PRODUCTION_FILES.includes(parsed.pathname.slice(1)));
       return response(fs.readFileSync(path.join(root, 'assets', parsed.pathname), 'utf8'));
     }
     if (url === CALLBACK) {
@@ -77,7 +76,7 @@ test('release inspection exposes no write mode, validates IDs and excludes the s
   assert.deepEqual(parseArgs([]), {mode: '--check', driver: null});
   assert.equal(productionFunctions().length, 42);
   assert.equal(productionFunctions().includes('adminStagingTestConsole'), false);
-  assert.equal(PRODUCTION_FILES.length, 43);
+  assert.equal(PRODUCTION_FILES.length, 44);
   assert.equal(PRODUCTION_FILES.some(file => file.startsWith('admin/testing.')), false);
   for (const args of [['--enable'], ['--apply'], ['--public-only', '--driver=x'], ['--check', '--driver=../../requests'], ['--check', '--key=secret']])
     assert.throws(() => parseArgs(args), /ARGUMENT_INVALID/);

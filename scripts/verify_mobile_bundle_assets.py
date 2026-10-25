@@ -18,6 +18,8 @@ REQUIRED = (
     'passenger-v2/js/parcels.js', 'driver-v2/js/requests.js',
     'driver-v2/js/trip-controller.js', 'club-live.js', 'payment-status.html',
     'driver-v2/index.html', 'driver-v2/js/app.js', 'member-pages.js', 'member-pages.css',
+    'driver-v2/payout.html', 'driver-v2/js/payout.js', 'driver-v2/css/payout.css',
+    'driver-v2/css/app.css',
 )
 
 

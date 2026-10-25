@@ -5025,3 +5025,6 @@ body.navigation-camera-mode #driverNavigationButton {
 .trip-end-safety{background:#fff8eb;border:1px solid #e6c98e;border-radius:16px;padding:16px;margin:12px 0;color:#332611;line-height:1.5;text-align:left}
 .trip-end-safety h3,.trip-end-safety p{margin:0 0 10px}.trip-end-safety h3{font-size:18px}.trip-end-safety p{font-size:14px}
 .trip-end-safety-actions{display:flex;flex-wrap:wrap;gap:10px}.trip-end-safety-actions button{flex:1;min-width:140px;min-height:48px}
+/* Driver-owned bank verification is available before the first Card booking. */
+.driver-banking-card{display:flex;align-items:center;gap:13px;margin-top:14px;padding:16px;border:1px solid #d8e7df;border-radius:17px;background:#f2f8f5;color:#174c36;text-decoration:none;min-height:66px}
+.driver-banking-card>span{flex:1;min-width:0}.driver-banking-card strong,.driver-banking-card small{display:block}.driver-banking-card strong{font-size:14px}.driver-banking-card small{margin-top:4px;font-size:11px;line-height:1.5;color:#526b5e}.driver-banking-card:focus-visible{outline:3px solid #257854;outline-offset:3px}
