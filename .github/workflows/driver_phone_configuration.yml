@@ -1,0 +1,25 @@
+name: Driver phone authentication configuration (read only)
+on:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths: ['scripts/diagnose_driver_phone_auth.cjs', '.github/workflows/driver_phone_configuration.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          project_id: asiye-80386
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: asiye-80386
+      - run: node scripts/diagnose_driver_phone_auth.cjs
