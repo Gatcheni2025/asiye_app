@@ -1,6 +1,7 @@
 {
   "project": "asiye-80386",
-  "runtimeSha256": "dd0a54a8d853b6b5e8ec9903d1f9ba4b0f794da790b454a492507ff50276154e",
+  "runtimeSha256": "d4c13961b5623168d7d6c5e2f673d8bfdc17af4dcd91b4db0bdd4dba85ab515f",
   "applyBackend": false,
-  "checkoutActivation": false
+  "checkoutActivation": false,
+  "applyHosting": false
 }

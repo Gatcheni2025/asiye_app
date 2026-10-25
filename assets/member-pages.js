@@ -1595,7 +1595,7 @@ window.AsiyePages = {
                 const link = document.createElement('a');
                 link.href = './payout.html';
                 link.className = 'member-primary member-secondary-support';
-                link.textContent = 'Set up Paystack subaccount · direct 80% settlement';
+                link.textContent = 'Banking details · verify your bank';
                 body.append(link);
                 const payoutInfo = document.createElement('p');
                 payoutInfo.className = 'member-note';

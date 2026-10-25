@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),vm=require('node:vm');
 const {FUNCTIONS,FUNDING_OFF,SECRET_CONSUMERS,renderEntry}=require('../scripts/production_release_scope.cjs');
-const {checkAuthorization,reviewedDigest,privateBucket,assertOff,stagedLive,neededFunctions,promote,apiResponse,main}=require('../scripts/deploy_production_release.cjs');
+const {checkAuthorization,reviewedDigest,privateBucket,assertOff,stagedLive,neededFunctions,promote,apiResponse,assertBankingHostingScope,main}=require('../scripts/deploy_production_release.cjs');
 const hosting=require('../scripts/production_release_hosting.cjs');
 const {PROJECT,NUMBER}=require('../scripts/production_card_preflight.cjs');
 test('the promotion wrapper exposes the reviewed 44 endpoints and preserves unrelated deployed functions',()=>{
@@ -27,6 +27,11 @@ test('only a project-owned uniform private bucket qualifies for source/config ba
  for(const member of ['allUsers','allAuthenticatedUsers'])assert.equal(privateBucket(meta,{bindings:[{members:[member]}]}),false);
  assert.equal(privateBucket({...meta,projectNumber:'other'},{bindings:[]}),false);
  assert.equal(privateBucket({...meta,iamConfiguration:{}},{bindings:[]}),false);
+});
+test('banking Hosting mode rejects backend, rules, native code and unrelated UI changes',()=>{
+ assert.doesNotThrow(()=>assertBankingHostingScope(()=>['assets/driver-v2/index.html','assets/driver-v2/js/payout.js','assets/driver-v2/css/payout.css'].join('\n'),'reviewed'));
+ for(const changed of ['functions/index.js','database.rules.json','lib/main.dart','assets/passenger-v2/js/booking.js'])
+  assert.throws(()=>assertBankingHostingScope(()=>changed,'reviewed'),/BANKING_HOSTING_SCOPE_EXCEEDED/);
 });
 test('an enabled checkout gate or wrong project stops the promotion without writes',async()=>{
  const calls=[];

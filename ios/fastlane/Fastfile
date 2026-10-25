@@ -26,7 +26,7 @@ platform :ios do
     ios_version = ENV.fetch("ASIYE_IOS_MARKETING_VERSION", "")
     source_version = ENV.fetch("ASIYE_SOURCE_VERSION", "")
     UI.user_error!("A three-component iOS version is required.") unless ios_version.match?(/\A\d+\.\d+\.\d+\z/)
-    UI.user_error!("The selected mobile source must be 11.0.78+348.") unless source_version == "11.0.78+348"
+    UI.user_error!("The selected mobile source must be 11.0.79+349.") unless source_version == "11.0.79+349"
 
     # Authenticate before compilation and select a fresh build above Apple's
     # current train and this workflow's unique run/attempt floor.

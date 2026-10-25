@@ -1,37 +1,46 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Asiye Driver · Paystack Subaccount</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#16472e">
+<title>Asiye Driver · Banking details</title>
 <link rel="stylesheet" href="./css/enrollment.css">
-<style>
-body{background:#edf4ef}.enrollment{max-width:620px}.payout-bar{background:#16472e;color:white;border-radius:18px;padding:22px}
-.payout-bar h1,.payout-bar p{color:white;margin:4px 0 10px}
-.payout-share{display:flex;justify-content:space-around;gap:10px;margin:20px 0}
-.payout-share div{background:#e2f0e8;border-radius:14px;padding:14px;text-align:center;flex:1}
-.payout-share strong{font-size:28px;display:block;color:#175c35}
-.status-card{padding:12px;background:#f6faf6;border-radius:10px;margin:14px 0}
-footer{display:flex;gap:12px;margin-top:24px}
-footer a,footer button{flex:1;text-align:center}
-</style>
-</head><body>
-<main class="enrollment">
-<header class="payout-bar"><img src="../data/AsiyeNew.png" alt="Asiye">
-<p>DRIVER PAYOUTS</p><h1>Get your card earnings</h1>
-<p>For card-paid rides, Paystack splits each successful payment: 80% to your verified driver subaccount and 20% to Asiye. Paystack settles according to its schedule; Asiye does not hold or forward your share.</p></header>
-<div class="payout-share"><div><strong>80%</strong>Driver payout</div><div><strong>20%</strong>Asiye platform</div></div>
-<div id="payoutStatus" class="status-card" role="status" aria-live="polite">Loading payout account…</div>
+<link rel="stylesheet" href="./css/payout.css">
+</head>
+<body>
+<main class="enrollment banking">
+<a class="banking-back" href="./index.html">← Driver dashboard</a>
+<header class="payout-bar">
+<img src="../data/AsiyeNew.png" alt="Asiye">
+<p>DRIVER BANKING</p><h1>Your card earnings</h1>
+<p>Verify your own bank account in the app. Paystack sends your share of card payments directly to your verified account.</p>
+</header>
+<div class="payout-share" aria-label="Card payment split">
+<div><strong>80%</strong><span>Your share</span></div><div><strong>20%</strong><span>Asiye share</span></div>
+</div>
+<section class="status-card" aria-live="polite" aria-atomic="true">
+<span id="payoutBadge" class="payout-badge">Checking</span>
+<h2 id="payoutHeading">Checking your bank status…</h2>
+<p id="payoutStatus" role="status">Please wait while we check your signed-in driver account.</p>
+<p id="payoutAccount" hidden></p>
+</section>
 <form id="payoutForm" hidden>
 <h2>Verify your bank account</h2>
-<p>Paystack must validate your banking details and approve your driver subaccount before passengers can pay you by card. Use your exact registered account-holder and identity details.</p>
-<label>South African bank <select id="payoutBank" required><option value="">Loading supported banks…</option></select></label>
-<label>Name on bank account <input id="payoutName" type="text" maxlength="120" autocomplete="name" required></label>
-<label>Bank account number <input id="payoutNumber" type="text" inputmode="numeric" autocomplete="off" pattern="[0-9]{6,20}" required></label>
-<label>Bank account type <select id="payoutType" required><option value="personal">Personal</option><option value="business">Business</option></select></label>
-<label>Verification document type <select id="payoutDocType"><option value="identityNumber">South African ID</option><option value="passportNumber">Passport</option><option value="businessRegistrationNumber">Business registration</option></select></label>
-<label>Verification document number <input id="payoutDoc" type="text" autocomplete="off" maxlength="30" required></label>
-<p>We send your verification details securely to Paystack. Your full bank account and ID numbers are not retained in Asiye's payout account record.</p>
-<button type="submit" id="verifyPayoutBank">Apply for Paystack driver subaccount</button>
+<p>Use the account-holder and identity details registered with your bank. Your driver and vehicle must be approved by Asiye.</p>
+<label>South African bank<select id="payoutBank" required><option value="">Choose your bank</option></select></label>
+<label>Name on bank account<input id="payoutName" type="text" minlength="4" maxlength="120" autocomplete="name" required></label>
+<label>Bank account number<input id="payoutNumber" type="text" inputmode="numeric" autocomplete="off" pattern="[0-9]{6,20}" required></label>
+<label>Bank account type<select id="payoutType" required><option value="personal">Personal</option><option value="business">Business</option></select></label>
+<label>Verification document type<select id="payoutDocType" required><option value="identityNumber">South African ID</option><option value="passportNumber">Passport</option><option value="businessRegistrationNumber">Business registration</option></select></label>
+<label>Verification document number<input id="payoutDoc" type="text" autocomplete="off" minlength="5" maxlength="30" pattern="[A-Za-z0-9]{5,30}" required></label>
+<p class="banking-privacy">Your bank and identity details are sent securely to Paystack for verification. Asiye's payout record keeps only a masked account number. Your online-banking password is never required.</p>
+<button type="submit" id="verifyPayoutBank">Verify banking details</button>
 </form>
-<button type="button" id="checkPayoutStatus">Check verification again</button>
-<footer><a href="./index.html">Back to driver app</a><button type="button" id="logoutBank">Log out</button></footer>
+<button type="button" id="checkPayoutStatus" class="banking-secondary">Check verification again</button>
+<p class="banking-note">Paystack verifies the account and controls settlement timing. Asiye pays the payment-processing fees from its share.</p>
+<a href="mailto:admin@asiye.cloud" class="banking-support">Need help? Contact Asiye support</a>
+<footer><a href="./index.html">Back to driver app</a><button type="button" id="logoutBank" class="banking-secondary">Log out</button></footer>
 </main>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
@@ -41,4 +50,5 @@ footer a,footer button{flex:1;text-align:center}
 <script src="./js/presence.js"></script>
 <script src="../session.js"></script>
 <script src="./js/payout.js" defer></script>
-</body></html>
+</body>
+</html>

@@ -15,7 +15,8 @@ const PROJECT = 'asiye-80386', NUMBER = '531902350858', REGION = 'us-central1';
 const DATABASE = 'https://asiye-80386-default-rtdb.firebaseio.com';
 const CALLBACK = 'https://us-central1-asiye-80386.cloudfunctions.net/paystackPaymentReturn';
 const WEBHOOK = 'https://us-central1-asiye-80386.cloudfunctions.net/paystackWebhook';
-const PRODUCTION_FILES = Object.freeze(FILES.filter(file => !file.startsWith('admin/testing.')));
+const PRODUCTION_FILES = Object.freeze([...FILES.filter(file => !file.startsWith('admin/testing.')),
+  'driver-v2/css/payout.css']);
 const SECRET_FUNCTIONS = Object.freeze([
   'configureDriverCardPayout', 'prepareTripPayment', 'verifyTripCardPayment',
   'paystackWebhook', 'releaseTripPayment', 'releaseCancelledGoTripPayment',

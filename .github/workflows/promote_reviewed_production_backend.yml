@@ -1,10 +1,10 @@
-name: Promote reviewed production backend (checkout off)
+name: Promote reviewed production release (checkout off)
 on:
   workflow_dispatch:
     inputs:
       mode:
         type: choice
-        options: ['check', 'apply']
+        options: ['check', 'apply', 'hosting-only']
         default: 'check'
         required: true
   push:
@@ -46,9 +46,10 @@ jobs:
           assert.equal(run.project,'asiye-80386');
           assert.equal(run.checkoutActivation,false);
           assert.equal(typeof run.applyBackend,'boolean');
+          assert.ok(!run.applyHosting || run.applyBackend===false);
           assert.equal(run.runtimeSha256,record.runtimeSha256);
-          const mode=process.env.GITHUB_EVENT_NAME==='workflow_dispatch'?process.env.REQUESTED_MODE:run.applyBackend?'apply':'check';
-          assert.ok(['check','apply'].includes(mode));
+          const mode=process.env.GITHUB_EVENT_NAME==='workflow_dispatch'?process.env.REQUESTED_MODE:run.applyHosting?'hosting-only':run.applyBackend?'apply':'check';
+          assert.ok(['check','apply','hosting-only'].includes(mode));
           fs.appendFileSync(process.env.GITHUB_OUTPUT,'mode='+mode+'\n');
           console.log('Reviewed production payload verified; checkout activation is excluded.');
           JS
