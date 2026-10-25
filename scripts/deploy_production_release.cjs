@@ -10,13 +10,13 @@ const {hash}=require('./audit_347_staging_readonly.cjs');
 const {runDeployment}=require('./repair_staging_paystack_return.cjs');
 const ROOT=path.resolve(__dirname,'..'),REGION='us-central1';
 const CF='https://cloudfunctions.googleapis.com',SM='https://secretmanager.googleapis.com/v1/projects/'+PROJECT;
-const BANKING_BASELINE='ecb91346c529ccac523db62ffd73efd79c63bf0a';
-const BANKING_ASSETS=new Set(['assets/driver-v2/index.html','assets/driver-v2/js/app.js',
- 'assets/driver-v2/css/app.css','assets/driver-v2/payout.html','assets/driver-v2/js/payout.js',
- 'assets/driver-v2/css/payout.css','assets/member-pages.js']);
-function assertBankingHostingScope(run,source){
- const changed=run('git',['diff','--name-only',BANKING_BASELINE,source,'--','functions','database.rules.json','lib','assets']).split('\n').filter(Boolean);
- if(changed.some(file=>!BANKING_ASSETS.has(file)))throw Error('BANKING_HOSTING_SCOPE_EXCEEDED');
+const HOSTING_BASELINE='e60511914be4893ca87902520bef892d83a1ccb1';
+const AUTH_ASSETS=new Set(['assets/native-auth-session.js']);
+function assertReleaseHostingScope(run,source){
+ // Dart is compiled/tested in the signed-app pipeline and is never uploaded
+ // by Hosting. Backend/rules and every other web asset remain frozen.
+ const changed=run('git',['diff','--name-only',HOSTING_BASELINE,source,'--','functions','database.rules.json','assets']).split('\n').filter(Boolean);
+ if(changed.some(file=>!AUTH_ASSETS.has(file)))throw Error('AUTH_HOSTING_SCOPE_EXCEEDED');
 }
 function command(program,args,{cwd=ROOT,timeout=90000,quiet=true}={}){
  const r=spawnSync(program,args,{cwd,encoding:'utf8',timeout,maxBuffer:12*1024*1024,stdio:quiet?'pipe':'inherit'});
@@ -107,7 +107,7 @@ async function main(args=process.argv.slice(2),deps={}){
  if(!/^[a-f0-9]{40}$/.test(source)||run('git',['diff','--name-only','HEAD','--','functions','assets','scripts','database.rules.json']))throw Error('REVIEWED_SOURCE_UNAVAILABLE_OR_MODIFIED');
  run('git',['merge-base','--is-ancestor','69d5ae51d3e9599d3100ee79ee68a87e40e01a9c','HEAD']);
  const digest=reviewedDigest();checkAuthorization(JSON.parse(fs.readFileSync(path.join(ROOT,'scripts/production_release_authorization.json'),'utf8')),digest);
- if(mode==='--hosting-only')assertBankingHostingScope(run,source);
+ if(mode==='--hosting-only')assertReleaseHostingScope(run,source);
  const api=async(method,url,body,raw=false)=>{
   const u=new URL(url);if(!['cloudfunctions.googleapis.com','secretmanager.googleapis.com','storage.googleapis.com','firebasehosting.googleapis.com',
    'upload-firebasehosting.googleapis.com',new URL(DATABASE).hostname].includes(u.hostname)||u.protocol!=='https:'||u.username||u.password||u.port)throw Error('PRODUCTION_API_TARGET_INVALID');
@@ -199,4 +199,4 @@ if(require.main===module)main().catch(e=>{
  const code=/^[A-Z0-9_]+$/.test(String(e.code||''))?e.code:'NONE';
  console.error('PRODUCTION_RELEASE: BLOCKED '+(/^[A-Z0-9_]+$/.test(e.message)?e.message:'DEPLOYMENT_STOPPED_SEE_PRIVATE_DIAGNOSTICS')+' | KIND='+kind+' | CODE='+code);process.exitCode=1;
 });
-module.exports={reviewedDigest,checkAuthorization,privateBucket,inventory,assertOff,stagedLive,boundVersions,neededFunctions,promote,apiResponse,assertBankingHostingScope,main};
+module.exports={reviewedDigest,checkAuthorization,privateBucket,inventory,assertOff,stagedLive,boundVersions,neededFunctions,promote,apiResponse,assertReleaseHostingScope,main};

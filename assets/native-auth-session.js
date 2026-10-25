@@ -79,6 +79,7 @@
     const pendingStartedAtKey =
         'asiyePendingPhoneAuthStartedAt';
     const pendingLinkUidKey = 'asiyePendingPhoneAuthLinkUid';
+    const pendingRoleKey = 'asiyePendingPhoneAuthRole';
     const pendingTtlMs =
         5 * 60 * 1000;
 
@@ -140,6 +141,7 @@
         verificationId = ''
     ) => {
         if (phone) {
+            localStorage.setItem(pendingRoleKey, role);
             const linkUid = phoneLinkUid();
             if (linkUid) localStorage.setItem(pendingLinkUidKey, linkUid);
             else localStorage.removeItem(pendingLinkUidKey);
@@ -166,6 +168,7 @@
     };
 
     const clearPendingPhoneState = () => {
+        localStorage.removeItem(pendingRoleKey);
         localStorage.removeItem(pendingLinkUidKey);
         localStorage.removeItem(
             pendingPhoneKey
@@ -300,10 +303,22 @@
         state => {
 
             if (role !== 'driver') { clearPendingPhoneState(); return; }
+            if (state?.role && state.role !== role) return;
             const restoredUid = state?.linkUid || localStorage.getItem(pendingLinkUidKey);
-            if (!restoredUid || firebase.auth().currentUser?.uid !== restoredUid) {
+            if (!restoredUid) {
                 clearPendingPhoneState(); return;
             }
+            const current = firebase.auth().currentUser;
+            // A recreated WebView restores Firebase asynchronously. Keep the
+            // native driver's recovery binding until that restoration finishes.
+            if (!current) {
+                if (state?.role === 'driver' && state?.linkUid) {
+                    localStorage.setItem(pendingRoleKey, 'driver');
+                    localStorage.setItem(pendingLinkUidKey, state.linkUid);
+                }
+                return;
+            }
+            if (current.uid !== restoredUid) { clearPendingPhoneState(); return; }
             if (state?.linkUid && role === 'driver') {
                 localStorage.setItem(pendingLinkUidKey, state.linkUid);
                 login.awaitingPhoneLink = true;
@@ -569,7 +584,13 @@
 
             // Reject a native sign-in fallback before it can replace the
             // WebView's original Apple/Google identity.
-            const expectedLinkUid = phoneLinkUid();
+            const payloadRole = payload.role === 'commuter' ? 'passenger' : payload.role;
+            if (payloadRole && payloadRole !== role) {
+                throw new Error('This verification belongs to a different Asiye sign-in screen. Return to the driver sign-in screen.');
+            }
+            const expectedLinkUid = phoneLinkUid() ||
+                (role === 'driver' && payload.provider === 'phone' && payload.role === 'driver' &&
+                 payload.linkUid === payload.uid ? payload.linkUid : null);
             if (payload.provider === 'phone' && (role !== 'driver' || !expectedLinkUid)) {
                 throw new Error('Use Google or Apple to sign in. Phone verification is for signed-in drivers only.');
             }
@@ -621,6 +642,9 @@
             }
 
             clearPendingPhoneState();
+            if (payload.provider === 'phone') {
+                postNative({action:'nativeAuthSessionAccepted',provider:'phone',role,uid:user.uid});
+            }
 
             if (
                 payload.provider ===
@@ -744,7 +768,8 @@
                     action:
                         'startPhoneSignIn',
                     phone,
-                    linkUid
+                    linkUid,
+                    role
                 })
             ) {
                 setButton(
@@ -801,7 +826,8 @@
                 action:
                     'resendPhoneOtp',
                 phone,
-                linkUid: phoneLinkUid()
+                linkUid: phoneLinkUid(),
+                role
             });
         };
 
@@ -850,7 +876,8 @@
                 verificationId:
                     this.nativeVerificationId ||
                     '',
-                code
+                code,
+                role
             });
         };
 

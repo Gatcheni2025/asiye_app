@@ -22,6 +22,7 @@ import 'dart:convert';
 import 'face_scan_screen.dart';
 import 'vehicle_camera_screen.dart';
 import 'native_phone_auth.dart';
+import 'native_auth_routing.dart';
 import 'dart:io' show ContentType, HttpClient, HttpHeaders, Platform;
 
 bool _isFirebaseInitialized = false;
@@ -126,9 +127,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   String? _phoneVerificationNumber;
   String? _phoneVerificationId;
   String? _phoneLinkUid;
+  String? _phoneAuthRole;
+  String? _activeAppRole;
   int _phoneAuthEpoch = 0;
   bool _showNativeOtp = false;
   bool _nativeOtpBusy = false;
+  bool _phoneHandoffBusy = false;
   String? _nativeOtpError;
   final TextEditingController _nativeOtpController = TextEditingController();
 
@@ -146,11 +150,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _phoneVerificationId = null;
       _phoneResendToken = null;
       _phoneLinkUid = null;
+      _phoneAuthRole = null;
       await prefs.remove('pendingPhoneAuthNumber');
       await prefs.remove('pendingPhoneAuthVerificationId');
       await prefs.remove('pendingPhoneAuthInProgress');
       await prefs.remove('pendingPhoneAuthStartedAt');
       await prefs.remove('pendingPhoneAuthLinkUid');
+      await prefs.remove('pendingPhoneAuthRole');
       return;
     }
 
@@ -161,6 +167,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         await prefs.remove('pendingPhoneAuthVerificationId');
       }
       _phoneLinkUid = linkUid;
+      _phoneAuthRole = linkUid == null ? null : 'driver';
+      if (_phoneAuthRole != null) {
+        _activeAppRole = _phoneAuthRole;
+        await prefs.setString('pendingPhoneAuthRole', _phoneAuthRole!);
+        await prefs.setString('authRole', _phoneAuthRole!);
+      }
       if (linkUid == null) {
         await prefs.remove('pendingPhoneAuthLinkUid');
       } else {
@@ -185,6 +197,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<void> _restorePendingPhoneAuthToWeb() async {
     final prefs = await SharedPreferences.getInstance();
+    final role = _phoneAuthRole ?? prefs.getString('pendingPhoneAuthRole');
+    if (role != 'driver' || _activeAppRole != 'driver') return;
     final phone =
         _phoneVerificationNumber ??
         prefs.getString('pendingPhoneAuthNumber') ??
@@ -197,6 +211,15 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
     if (phone.isEmpty && verificationId.isEmpty && !inProgress) return;
 
+    final nativeUser = Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser;
+    final linkUid = _phoneLinkUid ?? prefs.getString('pendingPhoneAuthLinkUid');
+    if (nativeUser?.uid != linkUid) return;
+    _phoneAuthRole = role;
+    _phoneLinkUid = linkUid;
+    _phoneVerificationNumber = phone;
+    if (nativeUser != null && nativeUser.phoneNumber == phone &&
+        await _deliverVerifiedDriverPhoneAuth(nativeUser)) return;
+
     _phoneVerificationNumber =
         phone.isNotEmpty ? phone : _phoneVerificationNumber;
     _phoneVerificationId =
@@ -207,6 +230,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       'verificationId': verificationId,
       'inProgress': inProgress,
       'linkUid': _phoneLinkUid ?? prefs.getString('pendingPhoneAuthLinkUid'),
+      'role': _phoneAuthRole ?? prefs.getString('pendingPhoneAuthRole'),
+      'startedAt': prefs.getInt('pendingPhoneAuthStartedAt'),
     });
 
     await _controller?.runJavaScript(
@@ -222,7 +247,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     final inProgress =
         prefs.getBool('pendingPhoneAuthInProgress') ?? false;
 
-    if (!inProgress || phone.isEmpty || verificationId.isEmpty) {
+    if (!inProgress) {
       return;
     }
 
@@ -231,7 +256,10 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     // actively returned from verification, reset to the normal login screen.
     final startedAt = prefs.getInt('pendingPhoneAuthStartedAt') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch;
-    if (startedAt <= 0 || now - startedAt > const Duration(minutes: 5).inMilliseconds) {
+    final role = prefs.getString('pendingPhoneAuthRole');
+    final linkUid = prefs.getString('pendingPhoneAuthLinkUid');
+    if (!freshDriverPhoneAttempt(role:role,linkUid:linkUid,phone:phone,
+        inProgress:inProgress,startedAt:startedAt,now:now)) {
       await _savePendingPhoneAuth(clear: true);
       return;
     }
@@ -239,6 +267,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     _phoneVerificationNumber = phone;
     _phoneVerificationId = verificationId;
     _phoneLinkUid = prefs.getString('pendingPhoneAuthLinkUid');
+    _phoneAuthRole = role;
+    _activeAppRole = role;
+
+    // The reCAPTCHA round trip can recreate the Activity before codeSent.
+    // Retain driver routing then, but only show an OTP for its original UID.
+    if (verificationId.isEmpty || Firebase.apps.isEmpty ||
+        FirebaseAuth.instance.currentUser?.uid != linkUid) return;
 
     if (mounted) {
       setState(() {
@@ -331,8 +366,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
     User user,
     String provider,
   ) async {
+    final linkUid = _phoneLinkUid;
     final exchange =
         await _exchangeNativeFirebaseSession(user);
+    if (provider == 'phone' && (_activeAppRole != 'driver' ||
+        _phoneAuthRole != 'driver' || linkUid != user.uid || _phoneLinkUid != linkUid)) {
+      throw FirebaseAuthException(code:'phone-link-session-changed');
+    }
 
     final payload = <String, dynamic>{
       'provider': provider,
@@ -342,11 +382,29 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       'email': user.email ?? '',
       'displayName': user.displayName ?? '',
       'photoURL': user.photoURL ?? '',
+      'role': provider == 'phone' ? 'driver' : _activeAppRole,
+      if (provider == 'phone') 'linkUid': linkUid,
     };
 
     await _controller?.runJavaScript(
       "window.onNativeAuthSession?.(${jsonEncode(payload)});",
     );
+  }
+
+  Future<bool> _deliverVerifiedDriverPhoneAuth(User user) async {
+    if (_phoneHandoffBusy || _controller == null || _activeAppRole != 'driver' ||
+        _phoneAuthRole != 'driver' || user.uid != _phoneLinkUid ||
+        user.phoneNumber != _phoneVerificationNumber) return false;
+    final ready = await _controller!.runJavaScriptReturningResult(
+      "Boolean(window.ASIYE_DRIVER_LOGIN && typeof window.onNativeAuthSession === 'function')",
+    );
+    if (ready != true && ready.toString() != 'true') return false;
+    _phoneHandoffBusy = true;
+    try {
+      await _sendNativeAuthSessionToWeb(user, 'phone');
+      // Recovery is cleared only after the driver's WebView accepts this UID.
+      return true;
+    } finally { _phoneHandoffBusy = false; }
   }
 
   Future<void> _sendNativeAuthError(
@@ -610,14 +668,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               },
             );
 
-            // 🚨 CRITICAL FIX: Track Navigation to sync SharedPreferences
+            // Selected UI role is separate from the last authenticated profile.
             final prefs = await SharedPreferences.getInstance();
-            if (url.contains('/driver-v2/') || url.contains('taxi.html')) {
-              await prefs.setString('userType', 'driver');
-            } else if (url.contains('/passenger-v2/') && !url.contains('login.html')) {
-              await prefs.setString('userType', 'commuter');
-            } else if (url.contains('handler.html')) {
-              await prefs.setString('userType', 'handler');
+            final role = nativeRoleForAppUrl(url);
+            if (role != null) {
+              if (nativeLoginPage(url) && _phoneAuthRole != null && _phoneAuthRole != role) {
+                await _savePendingPhoneAuth(clear:true);
+                if (mounted) setState(() => _showNativeOtp = false);
+              }
+              _activeAppRole = role;
+              await prefs.setString('authRole', role);
             }
           },
           onPageFinished: (url) async {
@@ -635,13 +695,17 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             }
 
             final prefs = await SharedPreferences.getInstance();
+            final pageRole = nativeRoleForAppUrl(url);
+            if (pageRole == null) return;
+            final nativeUid = Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser?.uid;
 
             // 🚨 CRITICAL FIX: Extract Javascript Session if Flutter missed the message
             try {
               final result = await _controller?.runJavaScriptReturningResult("""
                 JSON.stringify({
                     uid: localStorage.getItem('userId'),
-                    type: localStorage.getItem('userType')
+                    type: localStorage.getItem('userType'),
+                    authUid: typeof firebase !== 'undefined' ? firebase.auth().currentUser?.uid : null
                 })
               """);
 
@@ -649,11 +713,12 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                 String unquoted = result.toString().replaceAll(RegExp(r'^"|"$'), '').replaceAll(r'\"', '"');
                 Map<String, dynamic> data = jsonDecode(unquoted);
 
-                if (data['uid'] != null && data['uid'].toString().isNotEmpty) {
-                  await prefs.setString('userId', data['uid']);
-                }
-                if (data['type'] != null && data['type'].toString().isNotEmpty) {
-                  await prefs.setString('userType', data['type']);
+                if (canImportNativeWebSession(pageUrl:url,
+                    webRole:data['type']?.toString(),webUserId:data['uid']?.toString(),
+                    webAuthUid:data['authUid']?.toString(),nativeAuthUid:nativeUid)) {
+                  await prefs.setString('userId', data['uid'].toString());
+                  await prefs.setString('userType', canonicalNativeRole(data['type'].toString())!);
+                  await prefs.setString('sessionAuthUid', nativeUid!);
                 }
               }
             } catch(e) {
@@ -663,26 +728,18 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             final String? userId = prefs.getString('userId');
             final String? userType = prefs.getString('userType');
 
-            if (userId != null && userType != null) {
+            if (!nativeLoginPage(url) && userId != null && userType != null &&
+                canonicalNativeRole(userType) == pageRole && nativeUid != null &&
+                prefs.getString('sessionAuthUid') == nativeUid) {
               final String? fcmToken = prefs.getString('fcmToken');
 
-              // Hard guard to prevent drivers loading index.html and reverting to commuter
-              String protectionLogic = "";
-              if (url.contains('/passenger-v2/index.html') && userType == 'driver') {
-                protectionLogic = "window.location.replace('../driver-v2/index.html');";
-              } else if (url.contains('taxi.html') && userType == 'commuter') {
-                protectionLogic = "window.location.replace('index.html');";
-              }
-
               _controller?.runJavaScript("""
-                localStorage.setItem('userId', '$userId');
-                localStorage.setItem('userType', '$userType');
-                localStorage.setItem('fcmToken', '${fcmToken ?? ''}');
-                
-                $protectionLogic
+                localStorage.setItem('userId', ${jsonEncode(userId)});
+                localStorage.setItem('userType', ${jsonEncode(userType)});
+                localStorage.setItem('fcmToken', ${jsonEncode(fcmToken ?? '')});
 
                 if (typeof window.checkUserTypeAndRedirect === 'function') {
-                    window.checkUserTypeAndRedirect('$userId', '$userType');
+                    window.checkUserTypeAndRedirect(${jsonEncode(userId)}, ${jsonEncode(userType)});
                 }
               """);
             }
@@ -703,6 +760,9 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             });
           },
           onNavigationRequest: (request) async {
+            final nextRole = nativeRoleForAppUrl(request.url);
+            if (_phoneAuthRole == 'driver' && nextRole == 'commuter' &&
+                !nativeLoginPage(request.url)) return NavigationDecision.prevent;
             if (request.url.contains('success.html') || request.url.contains('cancel.html')) {
               final bool isSuccess = request.url.contains('success.html');
 
@@ -815,7 +875,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       );
     } catch (e) {
       debugPrint("Initial load error: $e");
-      await controller.loadFlutterAsset('assets/passenger-v2/login.html').catchError((_) => null);
+      await controller.loadFlutterAsset(nativeLoginAsset(_activeAppRole)).catchError((_) => null);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -967,18 +1027,17 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
 
   Future<String> _determineStartPage() async {
     final prefs = await SharedPreferences.getInstance();
-    final String? userType = prefs.getString('userType');
-
-    if (userType != null) {
-      switch (userType) {
-        case 'driver': return 'assets/driver-v2/index.html';
-        case 'rank_manager': return 'assets/taxiRank.html';
-        case 'handler': return 'assets/handler.html';
-        case 'passenger':
-        case 'commuter': return 'assets/passenger-v2/index.html';
-      }
-    }
-    return 'assets/passenger-v2/index.html';
+    final selected = prefs.getString('authRole');
+    final session = prefs.getString('userType');
+    _activeAppRole = canonicalNativeRole(selected) ?? canonicalNativeRole(session);
+    final pending = freshDriverPhoneAttempt(
+      role:prefs.getString('pendingPhoneAuthRole'),linkUid:prefs.getString('pendingPhoneAuthLinkUid'),
+      phone:prefs.getString('pendingPhoneAuthNumber'),inProgress:prefs.getBool('pendingPhoneAuthInProgress') ?? false,
+      startedAt:prefs.getInt('pendingPhoneAuthStartedAt') ?? 0,now:DateTime.now().millisecondsSinceEpoch,
+    );
+    if (pending) _activeAppRole = 'driver';
+    return nativeStartAsset(selectedRole:selected,sessionRole:session,
+        userId:prefs.getString('userId'),pendingDriverPhone:pending);
   }
 
   void _handleNavCalls(String message) async {
@@ -1135,6 +1194,16 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           else if (action == 'verifyPhoneOtp') {
             await _verifyPhoneOtp(data['verificationId']?.toString() ?? '', data['code']?.toString() ?? '');
           }
+          else if (action == 'nativeAuthSessionAccepted') {
+            final user = Firebase.apps.isEmpty ? null : FirebaseAuth.instance.currentUser;
+            if (data['provider'] == 'phone' && data['role'] == 'driver' &&
+                _activeAppRole == 'driver' && user != null &&
+                user.uid == data['uid'] && user.uid == _phoneLinkUid &&
+                user.phoneNumber == _phoneVerificationNumber) {
+              await _savePendingPhoneAuth(clear:true);
+              if (mounted) setState(() { _showNativeOtp = false; _nativeOtpBusy = false; _nativeOtpError = null; });
+            }
+          }
           else if (action == 'resetNativeAuthForSignIn') {
             await _resetNativeAuthForSignIn(data['requestId']?.toString() ?? '');
           }
@@ -1229,12 +1298,6 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       return;
     }
 
-    if (_phoneVerificationNumber != cleanPhone || _phoneLinkUid != linkUid) {
-      _phoneVerificationNumber = cleanPhone;
-      _phoneResendToken = null;
-      _phoneVerificationId = null;
-    }
-
     try {
       if (Firebase.apps.isEmpty) {
         await Firebase.initializeApp();
@@ -1242,14 +1305,20 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       _isFirebaseInitialized = Firebase.apps.isNotEmpty;
       final existingUser =
           FirebaseAuth.instance.currentUser;
-
-      if (linkUid != null &&
-          (linkUid.isEmpty || existingUser == null || existingUser.uid != linkUid)) {
+      final prefs = await SharedPreferences.getInstance();
+      final requestLinkUid = driverPhoneOwner(suppliedUid:linkUid,
+          savedUid:_phoneLinkUid ?? prefs.getString('pendingPhoneAuthLinkUid'),
+          nativeUid:existingUser?.uid,selectedRole:_activeAppRole,resend:forceResend);
+      if (requestLinkUid == null || requestLinkUid.isEmpty || existingUser == null ||
+          !existingUser.providerData.any((provider) =>
+              provider.providerId == 'google.com' || provider.providerId == 'apple.com')) {
         throw FirebaseAuthException(code: 'phone-link-session-changed');
       }
-      if (linkUid == null && existingUser != null &&
-          existingUser.phoneNumber != cleanPhone) {
-        await FirebaseAuth.instance.signOut();
+
+      if (_phoneVerificationNumber != cleanPhone || _phoneLinkUid != requestLinkUid) {
+        _phoneVerificationNumber = cleanPhone;
+        _phoneResendToken = null;
+        _phoneVerificationId = null;
       }
 
       if (mounted) {
@@ -1261,7 +1330,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
       }
 
       final epoch = ++_phoneAuthEpoch;
-      await _savePendingPhoneAuth(phone: cleanPhone, linkUid: linkUid);
+      await _savePendingPhoneAuth(phone: cleanPhone, linkUid: requestLinkUid);
+      if (existingUser.phoneNumber == cleanPhone) {
+        await _deliverVerifiedDriverPhoneAuth(existingUser);
+        return;
+      }
 
       // Recover cleanly if Firebase initialization timed out during app startup.
       // Phone authentication must always use the native Firebase SDK in the
@@ -1277,15 +1350,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               auth: FirebaseAuth.instance,
               credential: credential,
               phone: cleanPhone,
-              linkUid: linkUid,
+              linkUid: requestLinkUid,
             );
             if (epoch != _phoneAuthEpoch) return;
 
-            await _sendNativeAuthSessionToWeb(
-              user,
-              'phone',
-            );
-            await _savePendingPhoneAuth(clear: true);
+            await _deliverVerifiedDriverPhoneAuth(user);
 
             if (mounted) {
               setState(() {
@@ -1295,6 +1364,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
               });
             }
           } catch (error) {
+            if (epoch != _phoneAuthEpoch) return;
             await _sendNativeAuthError('phone', Exception(_phoneAuthUserMessage(error)));
           }
         },
@@ -1331,7 +1401,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           await _savePendingPhoneAuth(
             phone: cleanPhone,
             verificationId: verificationId,
-            linkUid: linkUid,
+            linkUid: requestLinkUid,
           );
           if (epoch != _phoneAuthEpoch) return;
 
@@ -1359,7 +1429,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
             _savePendingPhoneAuth(
               phone: cleanPhone,
               verificationId: verificationId,
-              linkUid: linkUid,
+              linkUid: requestLinkUid,
             ),
           );
           _controller?.runJavaScript(
@@ -1410,6 +1480,13 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         throw Exception('Your verification session has expired. Tap Resend code.');
       }
       final epoch = _phoneAuthEpoch;
+      final linkUid = driverPhoneOwner(
+        suppliedUid:_phoneLinkUid ?? prefs.getString('pendingPhoneAuthLinkUid'),
+        nativeUid:FirebaseAuth.instance.currentUser?.uid,selectedRole:_activeAppRole,resend:false,
+      );
+      if (linkUid == null || (_phoneAuthRole ?? prefs.getString('pendingPhoneAuthRole')) != 'driver') {
+        throw FirebaseAuthException(code:'phone-link-session-changed');
+      }
       final user = await completeNativePhoneAuth(
         auth: FirebaseAuth.instance,
         credential: PhoneAuthProvider.credential(
@@ -1417,15 +1494,11 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
           smsCode: digits,
         ),
         phone: phone,
-        linkUid: _phoneLinkUid ?? prefs.getString('pendingPhoneAuthLinkUid'),
+        linkUid: linkUid,
       );
       if (epoch != _phoneAuthEpoch) return;
 
-      await _sendNativeAuthSessionToWeb(
-        user,
-        'phone',
-      );
-      await _savePendingPhoneAuth(clear: true);
+      await _deliverVerifiedDriverPhoneAuth(user);
 
       if (mounted) {
         setState(() {
@@ -1444,6 +1517,7 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
         );
       }
     } catch (error) {
+      if (_activeAppRole != 'driver') return;
       final message = error is FirebaseAuthException
           ? _phoneAuthUserMessage(error)
           : error is Exception && error.toString().startsWith('Exception: Enter the')
@@ -1776,9 +1850,22 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
   }
 
   Future<void> _saveSessionAndRedirect(String uid, String type) async {
+    final role = canonicalNativeRole(type);
+    if (role == null || uid.trim().isEmpty ||
+        (_activeAppRole != null && _activeAppRole != role)) return;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('userId', uid);
-    await prefs.setString('userType', type);
+    await prefs.setString('userType', role);
+    await prefs.setString('authRole', role);
+    if (Firebase.apps.isNotEmpty && FirebaseAuth.instance.currentUser != null) {
+      await prefs.setString('sessionAuthUid', FirebaseAuth.instance.currentUser!.uid);
+      final current = FirebaseAuth.instance.currentUser!;
+      if (role == 'driver' && current.uid == _phoneLinkUid &&
+          current.phoneNumber == _phoneVerificationNumber) {
+        await _savePendingPhoneAuth(clear:true);
+        if (mounted) setState(() { _showNativeOtp = false; _nativeOtpBusy = false; });
+      }
+    }
 
     String target = 'assets/passenger-v2/index.html';
     if (type == 'driver') target = 'assets/driver-v2/index.html';
@@ -1973,7 +2060,8 @@ class _AsiyeMainShellState extends State<AsiyeMainShell> {
                     TextButton(
                       onPressed: _nativeOtpBusy ? null : () {
                         if (_phoneVerificationNumber != null) {
-                          _startPhoneSignIn(_phoneVerificationNumber!, forceResend: true);
+                          _startPhoneSignIn(_phoneVerificationNumber!, forceResend: true,
+                              linkUid:_phoneLinkUid);
                         }
                       },
                       child: const Text('Resend code'),
