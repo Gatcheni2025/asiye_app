@@ -12,6 +12,7 @@ import plistlib
 import secrets
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
 from cryptography import x509
@@ -25,6 +26,7 @@ SOURCE = 'Gatcheni2025/asiye-certs'
 TARGET = 'Gatcheni2025/Business-lift'
 TEAM = 'AC775BUGG5'
 BUNDLE = 'za.co.teyza.shopper'
+STAGE = 'configuration'
 
 
 def decrypt_candidates(encoded, password):
@@ -144,30 +146,41 @@ def set_secret(name, value):
 
 
 def main():
+    global STAGE
     for name in ('GH_TOKEN', 'MATCH_PASSWORD', 'TEYZA_PROFILE_BASE64'):
         if not os.environ.get(name):
             raise ValueError('Missing ' + name + '; configure the source workflow secret first')
     # Verify destination visibility before decrypting anything.
+    STAGE = 'checking Business-lift secret access'
+    print('Checking Business-lift secret access.', flush=True)
     api('repos/' + TARGET + '/actions/secrets/public-key')
+    STAGE = 'validating Teyza provisioning profile'
+    print('Validating Teyza provisioning profile.', flush=True)
     profile_raw = base64.b64decode(os.environ['TEYZA_PROFILE_BASE64'].strip(), validate=True)
     decoded = subprocess.run(['openssl', 'cms', '-verify', '-noverify', '-inform', 'DER'], input=profile_raw,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
     if decoded.returncode:
         raise ValueError('Cannot decode the signed Teyza provisioning profile')
     profile_cert = validate_profile(plistlib.loads(decoded.stdout))
+    STAGE = 'reading asiye-certs distribution files'
+    print('Reading asiye-certs distribution files.', flush=True)
     entries = api('repos/' + SOURCE + '/contents/certs/distribution?ref=master')
     selected = None
     for entry in entries:
         if entry.get('type') == 'file' and entry['name'].endswith('.cer'):
+            STAGE = 'decrypting existing distribution certificate'
             cert = parse_certificate(content(entry['path']), os.environ['MATCH_PASSWORD'])
             if cert.fingerprint(hashes.SHA256()) == profile_cert.fingerprint(hashes.SHA256()):
                 selected = (entry['path'][:-4] + '.p12', cert)
                 break
     if selected is None:
         raise ValueError('No certificate in asiye-certs matches Teyza profile; no secrets changed')
+    STAGE = 'decrypting matching private key'
+    print('Matching certificate found; validating its private key.', flush=True)
     key = parse_private_key(content(selected[0]), os.environ['MATCH_PASSWORD'])
     identity, password = make_identity(selected[1], key, profile_cert)
     # Only the encrypted PKCS12 is sent; its random password goes as a separate secret.
+    STAGE = 'saving Teyza signing secrets'
     set_secret('TEYZA_IOS_CERTIFICATE_BASE64', base64.b64encode(identity).decode('ascii'))
     set_secret('TEYZA_IOS_CERTIFICATE_PASSWORD', password)
     set_secret('TEYZA_IOS_KEYCHAIN_PASSWORD', secrets.token_urlsafe(32))
@@ -178,7 +191,12 @@ def main():
 if __name__ == '__main__':
     try:
         main()
+    except urllib.error.HTTPError as error:
+        print('Signing setup stopped while ' + STAGE + ': GitHub HTTP ' + str(error.code) +
+              '. Check transfer-token repository access and expiry.', file=sys.stderr)
+        sys.exit(1)
     except Exception:
         # Never include API responses, environment values, or private parsing data in logs.
-        print('Signing setup stopped. Check profile, MATCH_PASSWORD, and transfer-token repository permissions.', file=sys.stderr)
+        print('Signing setup stopped while ' + STAGE +
+              '. Check profile, MATCH_PASSWORD, and transfer-token repository permissions.', file=sys.stderr)
         sys.exit(1)
