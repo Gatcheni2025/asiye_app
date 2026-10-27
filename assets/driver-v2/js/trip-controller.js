@@ -2644,11 +2644,12 @@ ASIYE_DRIVER.trip = {
            STEP 2 — Give reserved passengers their turn
            ==================================================== */
 
-        const queuedRequestId =
-
-            await ASIYE_DRIVER
-                .requests
-                ?.promoteNextQueuedRequest?.();
+        // Completing an existing trip never depends on bank readiness. Only
+        // the next queue/offer does; an unverified driver stays safely offline.
+        const bankingReady = await window.AsiyeDriverBanking.require({redirect:false});
+        const queuedRequestId = bankingReady
+            ? await ASIYE_DRIVER.requests?.promoteNextQueuedRequest?.()
+            : null;
 
 
         /* ====================================================
@@ -2656,7 +2657,7 @@ ASIYE_DRIVER.trip = {
            ==================================================== */
 
         const broadcasting =
-            !queuedRequestId;
+            bankingReady && !queuedRequestId;
 
 
         await firebase
@@ -2725,6 +2726,9 @@ ASIYE_DRIVER.trip = {
             ASIYE_DRIVER.ui
                 .showDashboard();
         }
+
+        if (broadcasting && ASIYE_DRIVER.state.availability.isOnline)
+            ASIYE_DRIVER.requests?.start?.();
     },
 
 
