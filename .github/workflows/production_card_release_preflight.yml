@@ -1,4 +1,5 @@
 name: Production Card Release Preflight (read only)
+# Recheck production readiness for the verified-banking booking requirement, 27 October 2026.
 
 on:
   workflow_dispatch:
