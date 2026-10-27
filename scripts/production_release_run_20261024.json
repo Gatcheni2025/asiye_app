@@ -3,5 +3,6 @@
   "runtimeSha256": "0652f29e2f34191faa34938f3a8e4ddc8775d7fe25e09902c99456bd98aa4ec9",
   "applyBackend": true,
   "checkoutActivation": false,
-  "applyHosting": false
+  "applyHosting": false,
+  "resumeBatchSize": 2
 }
