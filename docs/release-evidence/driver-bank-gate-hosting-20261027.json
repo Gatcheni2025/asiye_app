@@ -1,0 +1,22 @@
+{
+  "project": "asiye-80386",
+  "source": "7850f3306405d26b82e38a305a13c6905097f277",
+  "runtimeSha256": "0652f29e2f34191faa34938f3a8e4ddc8775d7fe25e09902c99456bd98aa4ec9",
+  "functionSourceMatches": 44,
+  "functionsExpected": 44,
+  "rulesMatch": true,
+  "publicFilesMatched": 44,
+  "publicFilesExpected": 44,
+  "callbackMatches": true,
+  "walletFundingDisabled": true,
+  "liveSecretVersion": "2",
+  "checkoutEnabled": false,
+  "liveActivationPerformed": false,
+  "hostingOnly": false,
+  "providerAndDeviceAcceptanceNotCertified": true,
+  "hosting": {
+    "version": "sites/asiye-80386/versions/fb02bec96914799f",
+    "files": 108,
+    "preservedFiles": 10
+  }
+}

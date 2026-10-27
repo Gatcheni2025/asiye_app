@@ -1,18 +1,17 @@
-# Asiye production status — updated 25 October 2026
+# Asiye production status — updated 27 October 2026
 
-The backend rollout and driver banking publication are complete. The driver OTP return repair is now included in signed build 350, and its shared bridge is published. Installing the new app is required for the native routing fix; another function deployment is unnecessary.
+Verified banking is now required before drivers receive or accept any new Cash or Card booking. The backend, rules and web update are published. Signed build 352 includes the bank prompt, safe trip cleanup and the retained driver OTP repair.
 
 | Area | Current status |
 | --- | --- |
-| Production backend | [Verified on 24 October](https://github.com/Gatcheni2025/asiye_app/actions/runs/40111382791): 44/44 immutable function sources matched |
-| Production rules and callback | Reviewed rules matched; exact payment-return HTML returned HTTP 200 |
-| Production web | [Latest OTP bridge publication](https://github.com/Gatcheni2025/asiye_app/actions/runs/40202049798): 44/44 files matched; 0 functions redeployed; merchant pages preserved |
-| Paystack credential | All nine selected consumers bind authenticated LIVE secret version 2 |
-| Wallet | Funding endpoints retired; balances and financial history preserved |
-| Driver banking | Published on 25 October; dashboard/menu and banking verification screen match production |
-| New signed apps | Signed Android 11.0.80 (350) and iOS 46522.0.8 (95826) built successfully; links below |
-| Driver phone OTP | Stale passenger routing, linked-account resend and recovery repaired; actual device/SMS check pending |
-| LIVE checkout | OFF until real driver banking and provider setup are verified |
+| Production backend | [Verified 27 October](https://github.com/Gatcheni2025/asiye_app/actions/runs/40546662325/attempts/2): 44/44 immutable function sources matched |
+| Production rules and callback | Banking requirement rules matched; exact payment return matched |
+| Production web | 44/44 checked files matched; 108 Hosting files with ten unrelated files preserved |
+| Paystack credential | Selected consumers bind authenticated LIVE secret version 2 |
+| Wallet | Funding endpoints remain retired; balances and financial history preserved |
+| Driver banking | Same-owner verified LIVE bank required before any new Go, Club or Parcel booking |
+| Signed apps | Android 11.0.82 (352) and iOS 46522.0.10 (96026), both successful |
+| LIVE checkout | OFF; latest inspection found zero payout profiles and missing launch-evidence references |
 
 ## What the driver does
 
@@ -20,6 +19,7 @@ The backend rollout and driver banking publication are complete. The driver OTP 
 2. Choose the supported South African bank and enter the account-holder name, account number, account type and verification document.
 3. Tap **Verify banking details**. Pending verification is shown honestly; it is not a success message.
 4. Use **Check verification again** until **Your bank is verified** appears. The verified account is shown only by bank name and its final four digits.
+5. Return to the dashboard and **Go Online**. Missing or pending bank verification keeps all new bookings paused.
 
 The signed-in driver's actual profile is resolved before any banking request, so switching accounts cannot reuse another driver's saved ID. The server still requires driver/vehicle approval, verifies bank ownership with Paystack and creates each payout destination once. Bank/ID details are entered privately in the app; do not send them through chat.
 
@@ -27,7 +27,7 @@ Card payments retain **80% to the driver's own Paystack subaccount / 20% to Asiy
 
 ## What remains before public launch
 
-- Verify at least one actual approved driver's LIVE bank/subaccount through this flow. The fresh inspection on 25 October at 13:56 SAST found zero configured profiles; that was a setup requirement, not a missing function.
+- Verify at least one actual approved driver's LIVE bank/subaccount through this flow. The [fresh post-publication inspection](https://github.com/Gatcheni2025/asiye_app/actions/runs/40552519485) on 27 October at **19:39 SAST** found zero configured payout profiles.
 - Confirm the Paystack Dashboard's **Live Mode** webhook is saved as:
   https://us-central1-asiye-80386.cloudfunctions.net/paystackWebhook
 - The callback supplied by checkout is:
@@ -37,26 +37,28 @@ Card payments retain **80% to the driver's own Paystack subaccount / 20% to Asiy
 
 These are concrete remaining checks; successful CI does not establish an actual payment, refund or bank settlement. No new general permission is needed for the already requested release work.
 
-## Current signed apps and driver OTP acceptance
+## Current signed apps and booking acceptance
 
 | Signed download | Version |
 | --- | --- |
-| [Android APK + AAB](https://github.com/Gatcheni2025/asiye_app/actions/runs/40201742355/artifacts/12602975221) | 11.0.80 (350) |
-| [iOS IPA](https://github.com/Gatcheni2025/asiye_app/actions/runs/40201742355/artifacts/12601504646) | 46522.0.8 (95826) |
+| [Android APK + AAB](https://github.com/Gatcheni2025/asiye_app/actions/runs/40544591246/artifacts/12753058855) | 11.0.82 (352) |
+| [iOS IPA](https://github.com/Gatcheni2025/asiye_app/actions/runs/40544591246/artifacts/12753269840) | 46522.0.10 (96026) |
 
-The [signed build](https://github.com/Gatcheni2025/asiye_app/actions/runs/40201742355) passed Flutter analysis, native routing/phone-account-link tests, 218 exported-handler/rules/UI tests, package signatures and all 32 reviewed bundled assets. Android API 36/16 KB packaging and iOS SDK 26.5/minimum 15.5 passed. TestFlight upload and public store publication were not performed.
+The [signed build](https://github.com/Gatcheni2025/asiye_app/actions/runs/40544591246) passed Flutter analysis, native OTP/routing tests, all 234 handler/rule/browser regressions, signatures and all 32 reviewed bundled assets. Android API 36/16 KB checks and actual iOS SDK 26.5/minimum 15.5 passed. TestFlight upload and public store publication were not performed.
 
-Driver phone verification now keeps the selected Driver role separate from an old passenger session, binds Resend to the same original Google/Apple account, and retains recovery until the driver WebView accepts the authenticated UID. Existing approval and OTP requirements remain enforced.
+The driver must complete provider bank verification before going online for new bookings. Existing trips remain finishable; cleanup resumes queues/offers only after banking is ready. The earlier OTP repair preserves the Driver role and original Google/Apple UID through verification and Resend.
 
-The [read-only phone configuration inspection](https://github.com/Gatcheni2025/asiye_app/actions/runs/40202142858), 25 October at **16:25 SAST**, confirmed phone authentication enabled, South African SMS allowed, the Firebase return domain authorized and both release signing fingerprints registered. Nine configured Firebase test numbers use their configured code and receive no real SMS ([Firebase documentation](https://firebase.google.com/docs/auth/flutter/phone-auth#testing)); the affected number has not been identified as test or normal. No SMS was sent and no auth configuration was changed by the diagnostic.
+On the installed new apps, still verify real phone/reCAPTCHA return, banking, payment return, pickup PIN, completion and rating save/reopen with the actual driver/passenger accounts. Automated provider and identity tests use simulated data. See [RELEASE_352.md](RELEASE_352.md).
 
-Install the new app and verify Driver → Google/Apple → phone → OTP/Resend → same driver account, including return from Firebase verification. Actual carrier SMS and physical-device recovery still require this acceptance check. See [RELEASE_350.md](RELEASE_350.md) and [the current evidence record](release-evidence/driver-otp-20261025.json).
+## Latest production verification
 
-## Latest production Hosting evidence
+[Publication attempt 2](https://github.com/Gatcheni2025/asiye_app/actions/runs/40546662325/attempts/2) completed at **19:34 SAST** on 27 October: function source MATCH=44/44, rules MATCH, web MATCH=44/44, exact callback MATCH and checkout OFF. It resumed only the remaining seven source updates; 37 matching functions were skipped.
 
-[OTP bridge Hosting-only run 40202049798](https://github.com/Gatcheni2025/asiye_app/actions/runs/40202049798) completed at **16:29 SAST** on 25 October: function source MATCH=44/44, rules MATCH, web MATCH=44/44, exact callback MATCH, **0 functions redeployed**, and checkout OFF. Source `42df207da8039d16120b41103ba2a2f16404cc09`; runtime `a5ef66e679551fe4a1166f35f07fb5d2bb2d0fe02ce93c88d81c8da4337c073a`. Hosting `c314b37354492b43` contains 108 files, with 10 unrelated files preserved. The scoped publication changed only the allowed shared authentication bridge; backend and rules already matched.
+Source `7850f3306405d26b82e38a305a13c6905097f277`; runtime `0652f29e2f34191faa34938f3a8e4ddc8775d7fe25e09902c99456bd98aa4ec9`. Hosting `fb02bec96914799f` contains 108 files, with ten unrelated files preserved. [Readback artifact](https://github.com/Gatcheni2025/asiye_app/actions/runs/40546662325/artifacts/12755625851) ZIP SHA-256 `291440fcf86d0c7d3299f0918d951232753e1952e4906bef70f280722257a164` was independently verified.
 
-The [readback artifact](https://github.com/Gatcheni2025/asiye_app/actions/runs/40202049798/artifacts/12602297098) was independently verified with ZIP SHA-256 `35a3f419d0183f9f49d06dda322ce5fa8cdb9c7be6249dd5a686d7ad9a6cb1e0`. [Sanitized release fields](release-evidence/driver-otp-hosting-20261025.json) contain no private backup location. This publication did not enable LIVE checkout or certify actual provider/device acceptance.
+The [independent preflight](https://github.com/Gatcheni2025/asiye_app/actions/runs/40552519485) passed at **19:39 SAST** with LIVE credentials authenticated, matching rules/public files/callback and **0 payout profiles**. Checkout stays OFF. No actual bank settlement, LIVE charge/refund or physical-device acceptance is certified by this release.
+
+[Current machine-readable evidence](release-evidence/driver-bank-gate-20261027.json) · [Sanitized publication fields](release-evidence/driver-bank-gate-hosting-20261027.json)
 
 ## Earlier banking and backend evidence
 
@@ -80,4 +82,4 @@ The 24 October [production readback ZIP](https://github.com/Gatcheni2025/asiye_a
 
 The 25 October banking update changes only the listed driver/shared UI assets. Its Hosting-only operation refuses any backend/rules/native-code or unrelated UI change, requires all deployed functions and bindings already to match, preserves the existing Hosting file map and keeps checkout off. It does not rebuild functions.
 
-[RELEASE_349.md](RELEASE_349.md) records the earlier banking candidate. Build 350 includes that banking flow and supersedes 349 for driver OTP routing/recovery. Earlier 347/348 packages do not contain the banking menu.
+[RELEASE_349.md](RELEASE_349.md) records the earlier banking candidate. Build 352 includes the banking flow and the OTP repair, and supersedes earlier candidates for mandatory banking and safe trip cleanup. Earlier 347/348 packages do not contain the banking menu.
