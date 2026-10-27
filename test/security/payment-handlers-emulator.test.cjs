@@ -83,8 +83,8 @@ beforeEach(async()=>{
     commuters:{sender:{authUid:'sender-auth',bookingFaceAuthUid:'sender-auth',bookingFaceSavedAt:1,profileImageUrl:'https://example.test/face.jpg',name:'Sender',email:'sender@example.test'},
       member:{authUid:'member-auth',bookingFaceAuthUid:'member-auth',bookingFaceSavedAt:1,profileImageUrl:'https://example.test/face.jpg',name:'Member',email:'member@example.test'}},
     taxis:{driver,otherDriver:{...driver,authUid:'other-driver-auth',userUid:'other-driver-auth'}},
-    driverPaystackSubaccounts:{driver:{status:'verified',subaccountCode:account,
-      platformCommissionPercent:20,accountLast4:'7890'},otherDriver:{status:'verified',
+    driverPaystackSubaccounts:{driver:{ownerUid:'driver-auth',paystackDomain:'test',status:'verified',subaccountCode:account,
+      platformCommissionPercent:20,accountLast4:'7890'},otherDriver:{ownerUid:'other-driver-auth',paystackDomain:'test',status:'verified',
       subaccountCode:account,platformCommissionPercent:20,accountLast4:'7890'}}
   });
 });
@@ -380,6 +380,7 @@ test('a driver who comes online later receives the open offer in the real client
     await db.ref('taxis/driver').update({...pickup,isOnline:true,isBroadcasting:true,lastSeen:Date.now()});
     w.AsiyeEnrollment={requireApproval:async()=>true};
     w.firebase={database:()=>db,auth:()=>({currentUser:{uid:'driver-auth'}})};
+    w.AsiyeDriverBanking={isReady:()=>true,require:async()=>true};
     w.ASIYE_DRIVER={state:{driverId:'driver',driver:await read('taxis/driver')},
       ui:{hasApprovedVehicle:()=>true,showIncomingRequest:request=>{displayed=request;opened();},closeIncomingRequest(){},toast(){}},
       trip:{start(){}}};
@@ -855,7 +856,7 @@ test('unverified passenger cannot create Parcel or submit a Go offer, lock or ch
  assert.equal(await read('commuters/sender/currentRequest'),null);assert.equal(await read('notifications/taxis'),null);assert.equal(initializations.length,0);
 });
 
-test('agreed Card fare recovers missing TEST subaccount setup, charges the exact split and starts driver pickup after signed confirmation',async()=>{
+test('bank verification precedes Card fare agreement, exact split checkout and signed pickup confirmation',async()=>{
  const vm=require('node:vm');
  const {makeStagingTestConsole,PROJECT}=require('../../functions/staging-test-console');
  const {HttpsError}=require('node:module').createRequire(require.resolve('../../functions/package.json'))('firebase-functions/v2/https');
@@ -866,15 +867,18 @@ test('agreed Card fare recovers missing TEST subaccount setup, charges the exact
   commuterLocation:pickup,destinationCoords:destination});
  const offered=await call('submitGoFareOffer','sender-auth',{requestId,amount:100});
  assert.equal(offered.status,200,JSON.stringify(offered.body));
- const accepted=await call('acceptGoFareOffer','driver-auth',{requestId,amount:100});
- assert.equal(accepted.status,200,JSON.stringify(accepted.body));
- const blocked=await call('prepareTripPayment','sender-auth',{requestId});
- assert.equal(blocked.status,409);assert.equal(blocked.body.code,'payment/driver-subaccount-required');assert.equal(initializations.length,0);
+ const blocked=await call('acceptGoFareOffer','driver-auth',{requestId,amount:100});
+ assert.equal(blocked.status,409);assert.match(blocked.body.error,/banking details/);assert.equal(initializations.length,0);
+ assert.equal((await read('requests/'+requestId)).taxiId,undefined);
  const src=fs.readFileSync('../../functions/index.js','utf8');
  const eligible=vm.runInNewContext(src.slice(src.indexOf('function driverProfileCanReceiveRequests('),src.indexOf('async function nearbyWorkDrivers('))+'\ndriverProfileCanReceiveRequests;');
  const consoleApi=makeStagingTestConsole({admin,projectId:()=>PROJECT,paymentDomain:()=> 'test',HttpsError,driverEligible:eligible,
   paystackRequest:async path=>(await global.fetch('https://api.paystack.co'+path,{headers:{Authorization:'Bearer '+secret}})).json()});
  await consoleApi({action:'linkTestSubaccount',driverId:'driver',subaccountCode:account},{auth:{uid:'test-owner',token:{stagingTripTester:true}}});
+ const redispatched=await call('dispatchGoRideRequest','sender-auth',{requestId});
+ assert.equal(redispatched.status,200);assert.equal(redispatched.body.mode,'broadcast');
+ const accepted=await call('acceptGoFareOffer','driver-auth',{requestId,amount:100});
+ assert.equal(accepted.status,200,JSON.stringify(accepted.body));
  const checkout=await call('prepareTripPayment','sender-auth',{requestId});assert.equal(checkout.status,200,JSON.stringify(checkout.body));
  assert.equal(initializations.length,1);assert.equal(initializations[0].amount,'10000');assert.equal(initializations[0].subaccount,account);
  assert.equal((await read('driverPaystackSubaccounts/driver')).platformCommissionPercent,20);

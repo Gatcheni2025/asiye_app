@@ -57,7 +57,7 @@ async function loadStatus() {
     showAccount(info);
     if (info.status === 'verified') {
         message('verified','Your bank is verified',
-            'Your banking setup is complete. Paystack will settle your 80% share of successful card fares directly to this account.');
+            'Your banking setup is complete. Return to the dashboard and go online to receive bookings. Paystack will settle your 80% share of successful card fares directly to this account.');
         return;
     }
     if (info.status === 'not_configured') {
@@ -67,13 +67,13 @@ async function loadStatus() {
         (banks.banks || []).forEach(bank => list.add(new Option(bank.name,bank.code)));
         if (list.options.length < 2) throw Error('Supported banks could not load. Check verification again to retry.');
         message('not_configured','Add your banking details',
-            'Verify your own bank account before passengers can pay you by card.');
+            'Verify your own bank account before you can receive any new bookings.');
         form.hidden = false;
         return;
     }
     if (info.status === 'pending_paystack_verification' || info.status === 'provisioning') {
         message(info.status,'Your bank verification is in progress',
-            'Your details have been submitted. Tap Check verification again to see the latest status. You do not need to submit another application.');
+            'New bookings stay paused while verification is pending. Tap Check verification again to see the latest status. You do not need to submit another application.');
         return;
     }
     message('manual_review','Your banking setup needs review',

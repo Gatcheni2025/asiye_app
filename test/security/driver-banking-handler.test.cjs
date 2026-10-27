@@ -12,7 +12,7 @@ before(()=>{
  app=admin.initializeApp({projectId:project,databaseURL:'http://'+host+'?ns='+project});db=app.database();
  originalVerify=admin.auth().verifyIdToken;admin.auth().verifyIdToken=async uid=>({uid});
  originalFetch=global.fetch;originalSecret=process.env.PAYSTACK_SECRET_KEY;
- process.env.PAYSTACK_SECRET_KEY='sk_live_EMULATOR_ONLY_NO_NETWORK';
+ process.env.PAYSTACK_SECRET_KEY='sk_test_EMULATOR_ONLY_NO_NETWORK';
  global.fetch=async(url,options={})=>{
   const u=new URL(url);assert.equal(u.origin,'https://api.paystack.co');calls.push({u,options});
   let data;
@@ -20,7 +20,7 @@ before(()=>{
   else if(u.pathname==='/bank/validate')data={verified:validated,accountAcceptsCredits:true,accountHolderMatch:validated};
   else if(u.pathname==='/subaccount'||u.pathname==='/subaccount/'+subaccount)data={
    subaccount_code:subaccount,percentage_charge:20,active:true,is_verified:verified,
-   domain:'live',currency:'ZAR',account_number:bank.accountNumber,settlement_bank:'Example Bank'};
+   domain:'test',currency:'ZAR',account_number:bank.accountNumber,settlement_bank:'Example Bank'};
   else assert.fail('Unexpected provider operation');
   return {ok:true,status:200,json:async()=>({status:true,data})};
  };
@@ -79,5 +79,20 @@ test('bank submission creates the 80/20 destination once, persists no full bank 
  assert.equal((await call('driver-auth')).body.status,'pending_paystack_verification');
  verified=true;const refreshed=await call('driver-auth');assert.equal(refreshed.body.status,'verified');
  assert.equal(await read('taxis/driver/payoutStatus'),'verified');
+ assert.equal(calls.some(c=>c.u.pathname.includes('transaction')||c.u.pathname.includes('transfer')),false);
+});
+
+test('bank refresh revalidates a legacy verified link and revocation pauses new bookings',async()=>{
+ verified=true;
+ const created=await call('driver-auth','POST',bank);assert.equal(created.body.bookingReady,true);
+ await db.ref('driverPaystackSubaccounts/driver/paystackDomain').remove();
+ await db.ref('taxis/driver/bookingBankingReady').remove();
+ const restored=await call('driver-auth');assert.equal(restored.body.bookingReady,true);
+ assert.equal(await read('driverPaystackSubaccounts/driver/paystackDomain'),'test');
+ assert.equal(await read('taxis/driver/bookingBankingReady'),true);
+ verified=false;
+ const revoked=await call('driver-auth');assert.equal(revoked.body.bookingReady,false);
+ assert.equal(revoked.body.status,'pending_paystack_verification');
+ assert.equal(await read('taxis/driver/bookingBankingReady'),false);
  assert.equal(calls.some(c=>c.u.pathname.includes('transaction')||c.u.pathname.includes('transfer')),false);
 });

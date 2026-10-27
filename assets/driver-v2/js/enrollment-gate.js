@@ -87,3 +87,63 @@
 
     window.AsiyeEnrollment = { getStatus, stateFromRecords, resolveDriverProfile, requireApproval };
 })();
+
+// Banking is separate from enrollment approval: an approved driver must be
+// able to set up banking and complete an existing trip while new jobs pause.
+(() => {
+    let accepted = null, attempt = 0;
+    const app = () => window.ASIYE_DRIVER;
+    window.AsiyeDriverBanking = {
+        isReady() {
+            const user = firebase.auth().currentUser;
+            return !!user && accepted?.uid === user.uid &&
+                accepted.driverId === app()?.state?.driverId && accepted.ready === true;
+        },
+        invalidate() {
+            attempt++;
+            accepted = null;
+            app()?.requests?.stop?.();
+            app()?.ui?.closeIncomingRequest?.();
+        },
+        open() { window.location.assign('./payout.html'); },
+        async pause() {
+            const current = app();
+            this.invalidate();
+            if (!current?.state?.driverId || current.state.availability?.currentRequest) return;
+            await firebase.database().ref(`taxis/${current.state.driverId}`).update({isOnline:false,isBroadcasting:false});
+            Object.assign(current.state.driver || {}, {isOnline:false,isBroadcasting:false});
+            Object.assign(current.state.availability || {}, {isOnline:false,isBroadcasting:false});
+            current.ui?.renderDashboard?.();
+        },
+        async require({redirect = true} = {}) {
+            const current = app(), user = firebase.auth().currentUser;
+            const driverId = current?.state?.driverId, epoch = ++attempt;
+            accepted = null;
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(),15000);
+            try {
+                if (!user || !driverId) throw Error('Sign in with your driver account to check banking.');
+                const token = await user.getIdToken();
+                const response = await fetch('https://us-central1-asiye-80386.cloudfunctions.net/configureDriverCardPayout?driverId=' + encodeURIComponent(driverId), {
+                    headers:{Authorization:'Bearer ' + token}, cache:'no-store', signal:controller.signal
+                });
+                const info = await response.json();
+                if (epoch !== attempt || firebase.auth().currentUser?.uid !== user.uid || app()?.state?.driverId !== driverId) return false;
+                if (!response.ok || info.ok !== true) throw Error(info.error || 'Bank status could not be confirmed. Please retry.');
+                accepted = {uid:user.uid,driverId,ready:info.bookingReady === true && info.status === 'verified'};
+                if (accepted.ready) return true;
+                await this.pause();
+                current.ui?.toast?.('Verify your banking details to receive bookings.','warning');
+                if (redirect && !current.state.availability?.currentRequest) this.open();
+                return false;
+            } catch (error) {
+                if (epoch !== attempt || firebase.auth().currentUser?.uid !== user?.uid || app()?.state?.driverId !== driverId) return false;
+                await this.pause().catch(() => {});
+                current?.ui?.toast?.(error.name === 'AbortError'
+                    ? 'Bank check timed out. Check your connection and try again.'
+                    : error.message || 'Bank status could not be confirmed. Please retry.','warning');
+                return false;
+            } finally { clearTimeout(timeout); }
+        }
+    };
+})();

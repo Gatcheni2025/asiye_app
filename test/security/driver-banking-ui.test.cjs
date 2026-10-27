@@ -92,3 +92,42 @@ test('the driver dashboard exposes banking before a Card booking is created',()=
   assert.equal(w.document.querySelector('.driver-banking-card').getAttribute('href'),'./payout.html');
  }finally{dom.window.close();}
 });
+
+async function bankingGate(info,{failure=false,changedAccount=false}={}){
+ const dom=new JSDOM('',{url:'https://example.test/driver-v2/index.html',runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+ const w=dom.window,events=[];let actor={uid:'driver-auth',getIdToken:async()=> 'signed-token'};
+ w.ASIYE_DRIVER={state:{driverId:'owned-driver',driver:{authUid:'driver-auth'},availability:{isOnline:true}},requests:{stop:()=>events.push('stopped')},ui:{closeIncomingRequest(){},renderDashboard(){},toast:text=>events.push(text)}};
+ w.firebase={auth:()=>({currentUser:actor}),database:()=>({ref:p=>({update:async patch=>events.push({p,patch})})})};
+ w.fetch=async(url,options)=>{
+  assert.match(url,/driverId=owned-driver/);assert.equal(options.headers.Authorization,'Bearer signed-token');
+  if(failure)throw Error('Network unavailable');
+  if(changedAccount){actor={uid:'another-auth'};w.ASIYE_DRIVER.state.driverId='another-driver';}
+  return {ok:true,json:async()=>info};
+ };
+ w.eval(fs.readFileSync(path.join(root,'assets/driver-v2/js/enrollment-gate.js'),'utf8'));w.AsiyeDriverBanking.open=()=>events.push('banking opened');
+ return {dom,w,events};
+}
+for(const status of ['not_configured','pending_paystack_verification','manual_review'])test(`bank gate: ${status} pauses new jobs and opens setup`,async()=>{
+ const h=await bankingGate({ok:true,status,bookingReady:false});try{
+  assert.equal(await h.w.AsiyeDriverBanking.require(),false);assert.equal(h.w.AsiyeDriverBanking.isReady(),false);
+  assert.ok(h.events.includes('banking opened'));assert.ok(h.events.some(e=>e.patch?.isOnline===false&&e.patch.isBroadcasting===false));
+  assert.equal(h.w.ASIYE_DRIVER.state.loggingOut,undefined);
+ }finally{h.dom.window.close();}
+});
+test('bank gate requires authenticated server readiness, not just a verified status string',async()=>{
+ for(const bookingReady of [false,true]){const h=await bankingGate({ok:true,status:'verified',bookingReady});try{
+  assert.equal(await h.w.AsiyeDriverBanking.require(),bookingReady);assert.equal(h.w.AsiyeDriverBanking.isReady(),bookingReady);
+  assert.equal(h.events.includes('banking opened'),!bookingReady);
+ }finally{h.dom.window.close();}}
+});
+test('bank status failures cannot enable bookings or claim verification',async()=>{
+ const h=await bankingGate(null,{failure:true});try{
+  assert.equal(await h.w.AsiyeDriverBanking.require(),false);assert.equal(h.w.AsiyeDriverBanking.isReady(),false);
+  assert.ok(h.events.includes('Network unavailable'));assert.equal(h.events.includes('banking opened'),false);
+ }finally{h.dom.window.close();}
+});
+test('a delayed bank response cannot enable or take another signed-in driver offline',async()=>{
+ const h=await bankingGate({ok:true,status:'verified',bookingReady:true},{changedAccount:true});try{
+  assert.equal(await h.w.AsiyeDriverBanking.require(),false);assert.equal(h.w.AsiyeDriverBanking.isReady(),false);assert.equal(h.events.some(e=>e.patch),false);
+ }finally{h.dom.window.close();}
+});

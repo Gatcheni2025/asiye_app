@@ -339,6 +339,7 @@ function registerClubLifecycle(deps) {
     resolvePassenger,
     nearbyDrivers,
     driverEligible,
+    bankingEligible,
     marketFare,
     preparePayments,
     paymentPath,
@@ -435,7 +436,8 @@ function registerClubLifecycle(deps) {
     ) {
       for (const candidate of await nearbyDrivers(pool, 8)) {
         const taxiRef = db.ref(`taxis/${candidate.driverId}`);
-        await taxiRef.once("value");
+        const candidateTaxi = (await taxiRef.once('value')).val();
+        if (!await bankingEligible(candidate.driverId, candidateTaxi)) continue;
         const claim = await taxiRef.transaction(
           (taxi) => {
             if (!taxi) return taxi;
@@ -918,6 +920,9 @@ function registerClubLifecycle(deps) {
         ))
           fail("The driver reservation is no longer valid.", 403);
       }
+      if (['acceptWaiting','acceptFare'].includes(body.action) &&
+          !await bankingEligible(pool.taxiId, taxi))
+        fail('Verify your banking details before accepting new bookings. Open Menu → Banking details.');
       const p = pool.passengers?.[body.passengerId];
       const nearPickup = !!(
         p &&

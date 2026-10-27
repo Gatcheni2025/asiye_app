@@ -38,6 +38,7 @@ async function approve(type){
  await seedApplication(type);
  const reviewed=await handlers.reviewDriverEnrollmentSecure.run({auth:{uid:'reviewer',token:{enrollmentReviewer:true}},data:{uid:'driver',decision:'approved'}});
  assert.equal(reviewed.status,'approved');
+ await db.ref('driverPaystackSubaccounts/driver').set({ownerUid:'driver',status:'verified',paystackDomain:'test',subaccountCode:'ACCT_enrolleddriver',platformCommissionPercent:20,accountLast4:'7890'});
  await db.ref('taxis/driver').update({...pickup,isOnline:true,isBroadcasting:true,lastSeen:Date.now()});
  return read('taxis/driver');
 }
@@ -106,4 +107,46 @@ test('fresh physical approval replaces stale unsupported category mirrors',async
  const driver=await approve('hatchback');
  assert.equal(driver.carCategory,'hatchback');assert.equal(driver.vehicleType,'hatchback');
  const response=await offer('cash');assert.equal(response.status,200);assert.equal(response.body.dispatch.mode,'broadcast');
+});
+
+for(const method of ['cash','card'])test(`${method}: unlinked banking blocks dispatch and stale offer acceptance`,async()=>{
+ await approve('sedan');await db.ref('driverPaystackSubaccounts/driver').remove();
+ await db.ref('taxis/driver').update({payoutStatus:'verified',bookingBankingReady:true});
+ const submitted=await offer(method);assert.equal(submitted.status,200);
+ assert.equal(submitted.body.dispatch.mode,'none');assert.equal(await read('notifications/taxis/driver/ride'),null);
+ await db.ref('notifications/taxis/driver/ride').set({requestId:'ride'});
+ const accepted=await call('acceptGoFareOffer','driver',{requestId:'ride',amount:65});
+ assert.equal(accepted.status,409);assert.match(accepted.body.error,/banking details/);
+ assert.equal((await read('requests/ride')).taxiId,undefined);assert.equal(await read('taxis/driver/currentRequest'),null);
+});
+test('pending, wrong-owner and other-environment banking cannot receive or queue new requests',async()=>{
+ await approve('sedan');const account=await read('driverPaystackSubaccounts/driver');
+ for(const patch of [{status:'pending_paystack_verification'},{ownerUid:'someone-else'},{paystackDomain:'live'},
+  {paystackDomain:null},{subaccountCode:'RCP_oldtransfer'},{platformCommissionPercent:0}]){
+  await db.ref('driverPaystackSubaccounts/driver').set({...account,...patch});
+  const submitted=await offer('card');assert.equal(submitted.body.dispatch.mode,'none',JSON.stringify(patch));
+  assert.equal(await read('notifications/taxis/driver/ride'),null);
+ }
+ await db.ref('taxis/driver/currentRequest').set('existing-trip');
+ assert.equal((await offer('cash')).body.dispatch.mode,'none');assert.equal(await read('taxis/driver/bookingQueue/ride'),null);
+});
+test('verified banking unlocks the next dispatch retry for the same passenger booking',async()=>{
+ await approve('sedan');const account=await read('driverPaystackSubaccounts/driver');
+ await db.ref('driverPaystackSubaccounts/driver').remove();assert.equal((await offer('card')).body.dispatch.mode,'none');
+ await db.ref('driverPaystackSubaccounts/driver').set(account);
+ assert.equal((await call('dispatchGoRideRequest','passenger',{requestId:'ride'})).body.mode,'broadcast');
+ assert.equal((await call('acceptGoFareOffer','driver',{requestId:'ride',amount:65})).status,200);
+ assert.equal((await read('requests/ride')).status,'payment_required');
+});
+test('Club assignment waits for banking and acceptance rechecks it',async()=>{
+ await approve('sedan');const account=await read('driverPaystackSubaccounts/driver');await db.ref('driverPaystackSubaccounts/driver').remove();
+ const body={requestId:'pool-bank-gate',clubMode:'club4',paymentMethod:'cash',pickupAddress:'Pickup',pickupLat:pickup.latitude,pickupLng:pickup.longitude,
+  destination:'Destination',destinationLat:destination.latitude,destinationLng:destination.longitude,departureTime:'08:00'};
+ const created=await call('createClubBookingSecure','passenger',body);assert.equal(created.status,200,JSON.stringify(created.body));
+ assert.equal((await read('requests/pool-bank-gate')).taxiId,undefined);
+ await db.ref('driverPaystackSubaccounts/driver').set(account);
+ await handlers.synchronizeClubBooking.run({before:{val:()=>null},after:{val:()=>({clubSecurityVersion:2})}},{params:{requestId:'pool-bank-gate'}});
+ assert.equal((await read('requests/pool-bank-gate')).taxiId,'driver');await db.ref('driverPaystackSubaccounts/driver').remove();
+ const accepted=await call('clubDriverActionSecure','driver',{requestId:'pool-bank-gate',action:'acceptWaiting'});
+ assert.equal(accepted.status,409);assert.match(accepted.body.error,/banking details/);
 });

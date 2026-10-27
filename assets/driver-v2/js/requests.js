@@ -665,6 +665,7 @@ ASIYE_DRIVER.requests = {
 
     isDriverAvailable() {
 
+        if (!window.AsiyeDriverBanking?.isReady()) return false;
         if (ASIYE_DRIVER.state?.loggingOut) return false;
 
         const driver =
@@ -825,6 +826,7 @@ ASIYE_DRIVER.requests = {
         const displayedOffer = Number(this.activeRequest?.passengerOffer);
 
         if (!await AsiyeEnrollment.requireApproval()) return;
+        if (!await window.AsiyeDriverBanking.require()) return;
 
         const driverId =
             ASIYE_DRIVER.state

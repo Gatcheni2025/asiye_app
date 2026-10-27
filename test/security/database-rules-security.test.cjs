@@ -43,17 +43,20 @@ beforeEach(async () => {
         club2: { authUid: 'club-auth', bookingFaceAuthUid: 'club-auth', bookingFaceSavedAt: 1, name: 'Club Two' },
         club3: { authUid: 'club-join-auth', bookingFaceAuthUid: 'club-join-auth', bookingFaceSavedAt: 1, name: 'Club Three' }
       },
+      driverPaystackSubaccounts:{'driver-record':{ownerUid:'driver-auth',status:'verified',paystackDomain:'test',subaccountCode:'ACCT_rulesdriver',platformCommissionPercent:20,accountLast4:'7890'},'other-driver':{ownerUid:'other-driver-auth',status:'verified',paystackDomain:'test',subaccountCode:'ACCT_rulesother',platformCommissionPercent:20,accountLast4:'7890'}},
       taxis: {
         'driver-record': {
           authUid: 'driver-auth',
           userUid: 'driver-auth',
           name: 'Driver One',
+          bookingBankingReady:true,
           isOnline: true
         },
         'other-driver': {
           authUid: 'other-driver-auth',
           userUid: 'other-driver-auth',
           name: 'Other Driver',
+          bookingBankingReady:true,
           isOnline: true
         }
       },
@@ -1178,4 +1181,24 @@ test('legacy Go cancellation also closes at driver arrival', async () => {
   });
   for (const actor of ['passenger-auth','driver-auth'])
     await assertFails(update(ref(dbFor(actor),'requests/trip1'), {status:actor === 'driver-auth' ? 'cancelled_by_driver':'cancelled_by_commuter'}));
+});
+
+test('private verified banking is needed to go online and clients cannot forge its public status',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{
+  await update(ref(c.database(),'taxis/driver-record'),{isOnline:false,isBroadcasting:false,bookingBankingReady:false});
+  await set(ref(c.database(),'driverPaystackSubaccounts/driver-record'),null);
+ });
+ const db=dbFor('driver-auth');
+ await assertFails(update(ref(db,'taxis/driver-record'),{isOnline:true,isBroadcasting:true}));
+ await assertFails(update(ref(db,'taxis/driver-record'),{payoutStatus:'verified',bookingBankingReady:true}));
+ await assertFails(set(ref(db,'driverPaystackSubaccounts/driver-record'),{ownerUid:'driver-auth',status:'verified',subaccountCode:'ACCT_forged',platformCommissionPercent:20,paystackDomain:'live'}));
+ await env.withSecurityRulesDisabled(async c=>{await set(ref(c.database(),'driverPaystackSubaccounts/driver-record'),{ownerUid:'driver-auth',status:'verified',subaccountCode:'ACCT_verifiedbank',platformCommissionPercent:20,paystackDomain:'live',accountLast4:'7890'});await update(ref(c.database(),'taxis/driver-record'),{bookingBankingReady:true});});
+ await assertSucceeds(update(ref(db,'taxis/driver-record'),{isOnline:true,isBroadcasting:true}));
+});
+test('a legacy direct assignment needs banking while existing trips and GPS can continue',async()=>{
+ await env.withSecurityRulesDisabled(async c=>{await set(ref(c.database(),'driverPaystackSubaccounts/driver-record'),null);});
+ const db=dbFor('driver-auth');
+ await assertFails(update(ref(db,'requests/unassigned'),{taxiId:'driver-record',driverAuthUid:'driver-auth',status:'accepted'}));
+ await assertSucceeds(update(ref(db,'requests/trip1'),{status:'driver_on_way'}));
+ await assertSucceeds(update(ref(db,'taxis/driver-record'),{lastSeen:1234}));
 });

@@ -32,6 +32,8 @@ before(async () => {
     }),
     nearbyDrivers: async () => [{ driverId: "driver" }],
     driverEligible: (d) => d.vehicleApproved === true,
+    bankingEligible: async (id, driver) => require('../../functions/driver-booking-banking').bookingBankingReady(id,driver,
+      (await db.ref('driverPaystackSubaccounts/'+id).once('value')).val(),'test'),
     marketFare: () => 300,
     paymentPath: (r, p) => `tripPayments/${r}/${p}`,
     distanceKm: (a, b, c, d) => Math.hypot(a - c, b - d) * 111,
@@ -59,6 +61,7 @@ beforeEach(async () => {
       p1: { authUid: "p1", bookingFaceAuthUid: "p1", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "Second Passenger" },
       p2: { authUid: "p2", bookingFaceAuthUid: "p2", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "Third Passenger" },
     },
+    driverPaystackSubaccounts:{driver:{ownerUid:'driver',status:'verified',paystackDomain:'test',subaccountCode:'ACCT_clubdriver',platformCommissionPercent:20,accountLast4:'7890'}},
     taxis: {
       driver: {
         authUid: "driver",
