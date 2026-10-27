@@ -77,7 +77,8 @@ function neededFunctions(report,items,version,versions={}){
 async function promote({needed,deploy,guard,audit,verify,rules,web}){
  const first=FUNDING_OFF.filter(n=>needed.includes(n));if(first.length){await guard();await deploy(first);}
  const rest=needed.filter(n=>!FUNDING_OFF.includes(n));
- for(let i=0;i<rest.length;i+=8){await guard();await deploy(rest.slice(i,i+8));}
+ // Small, sequential batches avoid Cloud Run update/startup quota bursts.
+ for(let i=0;i<rest.length;i+=2){await guard();await deploy(rest.slice(i,i+2));}
  await guard();await audit();await verify();await guard();await rules();await guard();return web();
 }
 async function apiResponse(http,url,options,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))){

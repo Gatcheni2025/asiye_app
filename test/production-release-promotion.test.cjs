@@ -61,7 +61,7 @@ test('funding stops first; all function source and LIVE bindings are verified be
  await promote({needed:FUNCTIONS,guard:async()=>events.push('guard'),deploy:async names=>events.push(names),audit:async()=>events.push('source'),
   verify:async()=>events.push('keys'),rules:async()=>events.push('rules'),web:async()=>events.push('web')});
  assert.deepEqual(events[1],FUNDING_OFF);
- for(const batch of events.filter(Array.isArray))assert.ok(batch.length<=8);
+ for(const batch of events.filter(Array.isArray))assert.ok(batch.length<=2);
  assert.ok(events.indexOf('source')<events.indexOf('keys'));
  assert.ok(events.indexOf('keys')<events.indexOf('rules'));
  assert.ok(events.indexOf('rules')<events.indexOf('web'));

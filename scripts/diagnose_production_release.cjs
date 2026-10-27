@@ -5,7 +5,7 @@ const {analyze}=require('./diagnose_paystack_deploy_log.cjs');
 const {FUNCTIONS}=require('./production_release_scope.cjs');
 const {PROJECT,NUMBER}=require('./production_card_preflight.cjs');
 const BUCKET='gcf-v2-sources-531902350858-us-central1';
-const RELEASE_SOURCE='7a8a81ebd4c7567e03e5afdb6cb81d082e58bf19';
+const RELEASE_SOURCE='a8dd3ef7a2f26c6b54750cbdd729d13348f4e9ff';
 function classify(raw){
  const patterns=[
   ['TRIGGER_CHANGE',/cannot.{0,80}chang.{0,80}trigger|trigger.{0,80}cannot.{0,80}chang/i],
@@ -20,7 +20,10 @@ function classify(raw){
   ['ORG_POLICY',/org.?policy|constraint\.[A-Za-z.]+|organization policy/i],
   ['NPM_DEPENDENCY',/cannot find module|MODULE_NOT_FOUND|npm ERR!/i],
   ['BUILD_ERROR',/build failed|build status.{0,30}FAILURE|build error/i],
-  ['QUOTA',/RESOURCE_EXHAUSTED|quota.{0,80}(?:exceeded|limit)|429/],
+  ['QUOTA',/RESOURCE_EXHAUSTED|quota.{0,80}(?:exceeded|limit)|\b429\b/],
+  ['REGIONAL_CPU_LIMIT',/(?:total|regional|max(?:imum)?).{0,60}cpu.{0,80}(?:quota|allocat|limit)|cpu.{0,50}quota/i],
+  ['REGIONAL_MEMORY_LIMIT',/memory.{0,50}quota|quota.{0,50}memory/i],
+  ['INSTANCE_LIMIT',/(?:max(?:imum)?|allowed).{0,40}instances.{0,60}(?:quota|exceed|limit)/i],
   ['FUNCTION_BUSY',/operation.{0,70}progress|409.{0,70}conflict|already exists/i]
  ];
  const permissionNames=[...new Set(raw.match(/\b(?:cloudfunctions\.functions|cloudbuild\.builds|storage\.objects|iam\.serviceAccounts|run\.services|artifactregistry\.repositories)\.[A-Za-z]+/g)||[])];
