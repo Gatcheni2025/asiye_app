@@ -5,7 +5,7 @@ const {analyze}=require('./diagnose_paystack_deploy_log.cjs');
 const {FUNCTIONS}=require('./production_release_scope.cjs');
 const {PROJECT,NUMBER}=require('./production_card_preflight.cjs');
 const BUCKET='gcf-v2-sources-531902350858-us-central1';
-const PREFIX='asiye-release-backups/a2c24845bd9046f28557add3fd16f7b4d5102489/1792856862926/private-diagnostics/';
+const RELEASE_SOURCE='7a8a81ebd4c7567e03e5afdb6cb81d082e58bf19';
 function classify(raw){
  const patterns=[
   ['TRIGGER_CHANGE',/cannot.{0,80}chang.{0,80}trigger|trigger.{0,80}cannot.{0,80}chang/i],
@@ -34,6 +34,10 @@ async function main(){
   if(!r.ok)throw Error('PRIVATE_READ_HTTP_'+r.status);
   const text=await r.text();if(text.length>30*1024*1024)throw Error('PRIVATE_LOG_SIZE_LIMIT');return json?JSON.parse(text):text;
  };
+ const index=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:'asiye-release-backups/'+RELEASE_SOURCE+'/',maxResults:'1000'}));
+ const states=(index.items||[]).filter(o=>o.name.endsWith('/state.json')).sort((a,b)=>String(b.timeCreated||'').localeCompare(String(a.timeCreated||'')));
+ if(!states.length)throw Error('CURRENT_RELEASE_PRIVATE_BACKUP_NOT_FOUND');
+ const PREFIX=states[0].name.replace(/state\.json$/,'private-diagnostics/');
  const objects=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:PREFIX,maxResults:'100'}));
  console.log('PRIVATE_DIAGNOSTIC_OBJECT_COUNT='+(objects.items||[]).length);
  const parent=PREFIX.replace(/private-diagnostics\/$/,'');
