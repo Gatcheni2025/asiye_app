@@ -49,12 +49,14 @@ beforeEach(async () => {
           authUid: 'driver-auth',
           userUid: 'driver-auth',
           name: 'Driver One',
+          bookingBankingReady:true,
           isOnline: true
         },
         'other-driver': {
           authUid: 'other-driver-auth',
           userUid: 'other-driver-auth',
           name: 'Other Driver',
+          bookingBankingReady:true,
           isOnline: true
         }
       },
@@ -1183,14 +1185,14 @@ test('legacy Go cancellation also closes at driver arrival', async () => {
 
 test('private verified banking is needed to go online and clients cannot forge its public status',async()=>{
  await env.withSecurityRulesDisabled(async c=>{
-  await update(ref(c.database(),'taxis/driver-record'),{isOnline:false,isBroadcasting:false});
+  await update(ref(c.database(),'taxis/driver-record'),{isOnline:false,isBroadcasting:false,bookingBankingReady:false});
   await set(ref(c.database(),'driverPaystackSubaccounts/driver-record'),null);
  });
  const db=dbFor('driver-auth');
  await assertFails(update(ref(db,'taxis/driver-record'),{isOnline:true,isBroadcasting:true}));
  await assertFails(update(ref(db,'taxis/driver-record'),{payoutStatus:'verified',bookingBankingReady:true}));
  await assertFails(set(ref(db,'driverPaystackSubaccounts/driver-record'),{ownerUid:'driver-auth',status:'verified',subaccountCode:'ACCT_forged',platformCommissionPercent:20,paystackDomain:'live'}));
- await env.withSecurityRulesDisabled(async c=>{await set(ref(c.database(),'driverPaystackSubaccounts/driver-record'),{ownerUid:'driver-auth',status:'verified',subaccountCode:'ACCT_verifiedbank',platformCommissionPercent:20,paystackDomain:'live',accountLast4:'7890'});});
+ await env.withSecurityRulesDisabled(async c=>{await set(ref(c.database(),'driverPaystackSubaccounts/driver-record'),{ownerUid:'driver-auth',status:'verified',subaccountCode:'ACCT_verifiedbank',platformCommissionPercent:20,paystackDomain:'live',accountLast4:'7890'});await update(ref(c.database(),'taxis/driver-record'),{bookingBankingReady:true});});
  await assertSucceeds(update(ref(db,'taxis/driver-record'),{isOnline:true,isBroadcasting:true}));
 });
 test('a legacy direct assignment needs banking while existing trips and GPS can continue',async()=>{

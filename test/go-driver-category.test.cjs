@@ -14,9 +14,9 @@ async function dispatch(driver){
  let trip={commuterId:'passenger',type:'ehailing',status:'searching',paymentMethod:'cash',finalAmount:65,commuterLocation:{latitude:-29.85,longitude:30.95}};
  const updates={};
  const snapshot=value=>({val:()=>value});
- const database=()=>({ref:p=>({once:async()=>p==='taxis'?{forEach:fn=>fn({key:'driver',val:()=>driver})}:snapshot(trip),update:async patch=>Object.assign(updates,patch)})});
+ const database=()=>({ref:p=>({once:async()=>p==='taxis'?{forEach:fn=>fn({key:'driver',val:()=>driver})}:snapshot(p==='driverPaystackSubaccounts'?{driver:{ownerUid:'driver',status:'verified',paystackDomain:'test',subaccountCode:'ACCT_vehiclefixture',platformCommissionPercent:20,accountLast4:'7890'}}:trip),update:async patch=>Object.assign(updates,patch)})});
  database.ServerValue={TIMESTAMP:123};
- const context={admin:{database},isGoNegotiationTrip:()=>false,haversineKm:()=>0.1,
+ const context={admin:{database},runtimeFirebaseProjectId:()=> 'asiye-paystack-staging',bookingBankingReady:require('../functions/driver-booking-banking').bookingBankingReady,isGoNegotiationTrip:()=>false,haversineKm:()=>0.1,
   transactGoContinuation:async(ref,update)=>{trip=update(trip);return {committed:!!trip,snapshot:snapshot(trip)};}};
  const guard=source.slice(source.indexOf('function driverProfileCanReceiveRequests('),source.indexOf('async function nearbyWorkDrivers('));
  const start=source.indexOf('function goVehicleCategoryAllowed(');

@@ -81,3 +81,18 @@ test('bank submission creates the 80/20 destination once, persists no full bank 
  assert.equal(await read('taxis/driver/payoutStatus'),'verified');
  assert.equal(calls.some(c=>c.u.pathname.includes('transaction')||c.u.pathname.includes('transfer')),false);
 });
+
+test('bank refresh revalidates a legacy verified link and revocation pauses new bookings',async()=>{
+ verified=true;
+ const created=await call('driver-auth','POST',bank);assert.equal(created.body.bookingReady,true);
+ await db.ref('driverPaystackSubaccounts/driver/paystackDomain').remove();
+ await db.ref('taxis/driver/bookingBankingReady').remove();
+ const restored=await call('driver-auth');assert.equal(restored.body.bookingReady,true);
+ assert.equal(await read('driverPaystackSubaccounts/driver/paystackDomain'),'test');
+ assert.equal(await read('taxis/driver/bookingBankingReady'),true);
+ verified=false;
+ const revoked=await call('driver-auth');assert.equal(revoked.body.bookingReady,false);
+ assert.equal(revoked.body.status,'pending_paystack_verification');
+ assert.equal(await read('taxis/driver/bookingBankingReady'),false);
+ assert.equal(calls.some(c=>c.u.pathname.includes('transaction')||c.u.pathname.includes('transfer')),false);
+});

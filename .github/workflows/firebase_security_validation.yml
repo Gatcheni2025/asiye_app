@@ -7,6 +7,7 @@ on:
       - 'firebase.json'
       - 'test/security/**'
       - 'functions/index.js'
+      - 'functions/driver-booking-banking.js'
       - 'functions/club-lifecycle.js'
       - 'functions/parcel-security.js'
       - 'functions/paystack-subaccount-split.js'
@@ -45,6 +46,7 @@ on:
       - 'firebase.json'
       - 'test/security/**'
       - 'functions/index.js'
+      - 'functions/driver-booking-banking.js'
       - 'functions/club-lifecycle.js'
       - 'functions/parcel-security.js'
       - 'functions/paystack-subaccount-split.js'
@@ -100,6 +102,7 @@ jobs:
       - name: Validate changed JavaScript syntax
         run: |
           node --check functions/index.js
+          node --check functions/driver-booking-banking.js
           node --check functions/club-lifecycle.js
           node --check functions/parcel-security.js
           node --check assets/passenger-v2/js/parcels.js

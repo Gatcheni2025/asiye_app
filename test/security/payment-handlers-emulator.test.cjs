@@ -856,7 +856,7 @@ test('unverified passenger cannot create Parcel or submit a Go offer, lock or ch
  assert.equal(await read('commuters/sender/currentRequest'),null);assert.equal(await read('notifications/taxis'),null);assert.equal(initializations.length,0);
 });
 
-test('agreed Card fare recovers missing TEST subaccount setup, charges the exact split and starts driver pickup after signed confirmation',async()=>{
+test('bank verification precedes Card fare agreement, exact split checkout and signed pickup confirmation',async()=>{
  const vm=require('node:vm');
  const {makeStagingTestConsole,PROJECT}=require('../../functions/staging-test-console');
  const {HttpsError}=require('node:module').createRequire(require.resolve('../../functions/package.json'))('firebase-functions/v2/https');
@@ -875,6 +875,8 @@ test('agreed Card fare recovers missing TEST subaccount setup, charges the exact
  const consoleApi=makeStagingTestConsole({admin,projectId:()=>PROJECT,paymentDomain:()=> 'test',HttpsError,driverEligible:eligible,
   paystackRequest:async path=>(await global.fetch('https://api.paystack.co'+path,{headers:{Authorization:'Bearer '+secret}})).json()});
  await consoleApi({action:'linkTestSubaccount',driverId:'driver',subaccountCode:account},{auth:{uid:'test-owner',token:{stagingTripTester:true}}});
+ const redispatched=await call('dispatchGoRideRequest','sender-auth',{requestId});
+ assert.equal(redispatched.status,200);assert.equal(redispatched.body.mode,'broadcast');
  const accepted=await call('acceptGoFareOffer','driver-auth',{requestId,amount:100});
  assert.equal(accepted.status,200,JSON.stringify(accepted.body));
  const checkout=await call('prepareTripPayment','sender-auth',{requestId});assert.equal(checkout.status,200,JSON.stringify(checkout.body));
