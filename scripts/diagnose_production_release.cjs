@@ -46,14 +46,35 @@ async function main(){
  const parent=PREFIX.replace(/private-diagnostics\/$/,'');
  const saved=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:parent,maxResults:'1000'}));
  console.log('PRIVATE_BACKUP_CHECK='+JSON.stringify({objects:(saved.items||[]).length,stateSaved:(saved.items||[]).some(o=>o.name===parent+'state.json'),sourceArchives:(saved.items||[]).filter(o=>o.name.endsWith('.archive')).length}));
+ const failed=new Set();
  for(const object of objects.items||[]){
   if(!object.name.startsWith(PREFIX)||!object.name.endsWith('.log'))continue;
   const raw=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o/'+encodeURIComponent(object.name)+'?alt=media',false);
-  console.log('PRIVATE_LOG_DIAGNOSIS='+JSON.stringify(classify(raw)));
+  const diagnosis=classify(raw);for(const name of diagnosis.summary.explicitFailed)failed.add(name);
+  console.log('PRIVATE_LOG_DIAGNOSIS='+JSON.stringify(diagnosis));
  }
  const functions=await get('https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+'/locations/us-central1/functions?pageSize=1000');
  console.log('CURRENT_SELECTED_FUNCTION_STATES='+JSON.stringify((functions.functions||[]).filter(f=>FUNCTIONS.includes(f.name.split('/').pop())).map(f=>({
   name:f.name.split('/').pop(),state:f.state||'UNKNOWN',errorCategories:(f.stateMessages||[]).flatMap(m=>classify(String(m.message||'')).categories)}))));
+ // Inspect failed services without printing condition messages or resource URLs.
+ for(const f of functions.functions||[]){
+  const name=f.name.split('/').pop();if(!failed.has(name))continue;
+  const service=f.serviceConfig?.service||'';
+  if(!new RegExp('^projects/(?:'+PROJECT+'|'+NUMBER+')/locations/us-central1/services/[a-z0-9-]+$').test(service))continue;
+  try{
+   const current=await get('https://run.googleapis.com/v2/'+service);
+   const revision=current.latestCreatedRevision;
+   const detail=revision&&revision.startsWith(service+'/revisions/')?await get('https://run.googleapis.com/v2/'+revision):{};
+   const conditions=[...(current.conditions||[]),...(detail.conditions||[])].map(c=>{
+    const message=String(c.message||'');
+    return {type:c.type||'',state:c.state||'',reason:c.reason||c.revisionReason||'',
+     labels:[...message.matchAll(/(?:metric|limit)\s*['"]([A-Za-z0-9 _./-]{1,90})['"]/gi)].map(m=>m[1]),
+     keywords:['cpu','memory','instance','quota','resource','startup','capacity','concurrency'].filter(k=>new RegExp('\\b'+k,'i').test(message)),
+     categories:classify(message).categories};
+   });
+   console.log('FAILED_SERVICE_RESOURCES='+JSON.stringify({name,cpu:f.serviceConfig?.availableCpu||'',memory:f.serviceConfig?.availableMemory||'',maxInstances:f.serviceConfig?.maxInstanceCount||null,conditions}));
+  }catch(_){console.log('FAILED_SERVICE_RESOURCES='+name+':READ_UNAVAILABLE');}
+ }
  const payoutKeys=await get('https://asiye-80386-default-rtdb.firebaseio.com/driverPaystackSubaccounts.json?shallow=true');
  console.log('PRODUCTION_DRIVER_PAYOUT_PROFILE_COUNT='+Object.keys(payoutKeys||{}).length);
  console.log('GET-only. No private log lines, identities, keys or API response bodies printed.');
