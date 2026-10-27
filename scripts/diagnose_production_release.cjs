@@ -5,7 +5,7 @@ const {analyze}=require('./diagnose_paystack_deploy_log.cjs');
 const {FUNCTIONS}=require('./production_release_scope.cjs');
 const {PROJECT,NUMBER}=require('./production_card_preflight.cjs');
 const BUCKET='gcf-v2-sources-531902350858-us-central1';
-const RELEASE_SOURCE='a8dd3ef7a2f26c6b54750cbdd729d13348f4e9ff';
+const RELEASE_SOURCE='7850f3306405d26b82e38a305a13c6905097f277';
 function classify(raw){
  const patterns=[
   ['TRIGGER_CHANGE',/cannot.{0,80}chang.{0,80}trigger|trigger.{0,80}cannot.{0,80}chang/i],
