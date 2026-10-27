@@ -6,6 +6,7 @@ const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const tripEndSafety = require('./trip-end-safety');
 const tripRatings = require('./trip-ratings');
+const {bookingBankingReady, BANKING_REQUIRED} = require('./driver-booking-banking');
 
 // =================================================================
 // --- INITIALIZE FIREBASE ADMIN ---
@@ -1992,6 +1993,20 @@ function driverVehicleCategoryAllowed(driver = {}) {
   return ['sedan', 'hatchback', 'ehailing', 'e-hailing', 'go', 'car'].includes(category);
 }
 
+// Dispatch reads private verification records in one batch; it never contacts
+// Paystack once per driver or requires payment secrets in dispatch handlers.
+function bookingBankingDomain() {
+  return runtimeFirebaseProjectId() === 'asiye-80386' ? 'live' : 'test';
+}
+async function hasDriverBookingBanking(driverId, driver) {
+  const account = (await admin.database().ref(`driverPaystackSubaccounts/${driverId}`).once('value')).val();
+  return bookingBankingReady(driverId, driver, account, bookingBankingDomain());
+}
+async function requireDriverBookingBanking(driverId, driver) {
+  if (!await hasDriverBookingBanking(driverId, driver))
+    throw Object.assign(new Error(BANKING_REQUIRED), {status:409, code:'driver/banking-required'});
+}
+
 async function nearbyWorkDrivers(
   request,
   limit = 8
@@ -2022,11 +2037,12 @@ async function nearbyWorkDrivers(
       )
     );
 
-  const taxisSnapshot =
-    await admin.database()
-      .ref("/taxis")
-      .once("value");
-
+  const [taxisSnapshot, bankingSnapshot] = await Promise.all([
+    admin.database().ref('/taxis').once('value'),
+    admin.database().ref('driverPaystackSubaccounts').once('value')
+  ]);
+  const banking = bankingSnapshot.val() || {};
+  const domain = bookingBankingDomain();
   const candidates = [];
 
   taxisSnapshot.forEach(child => {
@@ -2035,6 +2051,7 @@ async function nearbyWorkDrivers(
     if (
       taxi.isOnline !== true ||
       taxi.isBroadcasting !== true ||
+      !bookingBankingReady(child.key, taxi, banking[child.key], domain) ||
       taxi.currentRequest ||
       taxi.isFull === true ||
       !driverProfileCanReceiveRequests(
@@ -5931,6 +5948,7 @@ async function reserveGoNegotiatedDriver({
     error.code = 'negotiation/not-available';
     throw error;
   }
+  await requireDriverBookingBanking(driver.id, driver.data);
   const requestRef =
     admin.database()
       .ref(
@@ -6963,6 +6981,7 @@ exports.counterGoFare =
           return response.status(409).json({error:'Go online and finish any active trip before sending a counter-offer.'});
         }
 
+        await requireDriverBookingBanking(driver.id, driver.data);
         const notification =
           await admin.database()
             .ref(
@@ -7128,7 +7147,7 @@ exports.counterGoFare =
         );
 
         return response
-          .status(500)
+          .status(error.status || 500)
           .json({
             error:
               error?.message ||
@@ -7210,6 +7229,7 @@ exports.acceptGoFareOffer =
             request.body?.requestId
           );
 
+        await requireDriverBookingBanking(driver.id, driver.data);
         const notification =
           await admin.database()
             .ref(
@@ -7317,7 +7337,7 @@ exports.acceptGoFareOffer =
             : error?.code ===
                 "negotiation/not-available"
               ? 409
-              : 500;
+              : error?.status || 500;
 
         console.error(
           "Accept Go fare offer failed",
@@ -7520,7 +7540,7 @@ exports.acceptGoFareCounter =
             : error?.code ===
                 "negotiation/not-available"
               ? 409
-              : 500;
+              : error?.status || 500;
 
         console.error(
           "Accept Go fare counter failed",
@@ -8342,12 +8362,7 @@ exports.acceptParcelRequestSecure = onRequest(
         return res.status(409).json({error:"Another driver already accepted this Parcel."});
       if(trip.queuedTaxiId&&trip.queuedTaxiId!==driverId)
         return res.status(409).json({error:"Parcel is reserved for another driver."});
-      if(trip.paymentMethod==="card"){
-        const account=(await db.ref(`driverPaystackSubaccounts/${driverId}`).once("value")).val();
-        if(account?.status!=="verified"||
-          !/^ACCT_[A-Za-z0-9]+$/.test(String(account.subaccountCode||"")))
-          return res.status(409).json({error:"Complete Paystack subaccount verification before accepting Card bookings."});
-      }
+      if (trip.taxiId !== driverId) await requireDriverBookingBanking(driverId, driver);
       const driverLock=await driverRef.child("currentRequest").transaction(
         v=>v==null||v===""||v===id?id:undefined,undefined,false);
       if(!driverLock.committed)
@@ -8672,10 +8687,15 @@ async function dispatchGoRideToDrivers(requestId, expectedOwner) {
   const lng = Number(trip.commuterLocation?.longitude);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) fail(400, "Pickup location is unavailable.");
   const idleDrivers = [], busyDrivers = [];
-  const taxis = await db.ref("taxis").once("value");
+  const [taxis, bankingSnapshot] = await Promise.all([
+    db.ref('taxis').once('value'), db.ref('driverPaystackSubaccounts').once('value')
+  ]);
+  const banking = bankingSnapshot.val() || {};
+  const domain = bookingBankingDomain();
   taxis.forEach(child => {
     const taxi = child.val() || {};
     if (taxi.isOnline !== true || !driverProfileCanReceiveRequests(taxi) ||
+        !bookingBankingReady(child.key, taxi, banking[child.key], domain) ||
         trip.fareCounterDeclinedDrivers?.[child.key] === true ||
         trip.fareOfferDeclinedDrivers?.[child.key]?.offerRound === Number(trip.passengerOfferRound || 1)) return;
     const driverLat = Number(taxi.latitude), driverLng = Number(taxi.longitude);
@@ -11732,21 +11752,28 @@ exports.configureDriverCardPayout = onRequest(
       if (request.method === "GET") {
         const subRef=admin.database().ref(`driverPaystackSubaccounts/${driverId}`);
         let saved=(await subRef.once("value")).val();
-        if (saved?.subaccountCode && saved?.status === "pending_paystack_verification") {
-          const result=await paystackRequest("/subaccount/"+
-            encodeURIComponent(saved.subaccountCode));
-          const live=result.data||{};
-          if (isVerifiedSubaccount(live,saved.subaccountCode) &&
-              (!live.account_number ||
-               String(live.account_number).slice(-4) === saved.accountLast4)) {
-            await subRef.update({status:"verified",verifiedAt:admin.database.ServerValue.TIMESTAMP});
-            await admin.database().ref(`taxis/${driverId}`).update({payoutStatus:"verified"});
-            saved={...saved,status:"verified"};
-          }
+        if (saved && saved.ownerUid !== (driver.authUid || driver.userUid || driverId))
+          return response.status(409).json({error:'This banking record needs owner review. Contact Asiye support.'});
+        if (saved?.subaccountCode && ['verified','pending_paystack_verification'].includes(saved.status)) {
+          const result = await paystackRequest('/subaccount/' + encodeURIComponent(saved.subaccountCode));
+          const live = result.data || {};
+          const domain = configuredPaystackDomain();
+          const ready = live.domain === domain && isVerifiedSubaccount(live, saved.subaccountCode) &&
+            /^[0-9]{4}$/.test(String(saved.accountLast4 || '')) &&
+            typeof live.account_number === 'string' && live.account_number.slice(-4) === saved.accountLast4;
+          const patch = {status:ready ? 'verified' : 'pending_paystack_verification',
+            paystackDomain:domain, platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
+            verifiedAt:ready ? admin.database.ServerValue.TIMESTAMP : null};
+          await subRef.update(patch);
+          saved = {...saved, ...patch};
         }
-        return response.status(200).json({ok:true,status:saved?.status||"not_configured",
-          accountLast4:saved?.accountLast4||"",bankName:saved?.bankName||"",
-          accountName:saved?.accountName||"",subaccountCode:saved?.subaccountCode||""});
+        const bookingReady = bookingBankingReady(driverId, driver, saved, bookingBankingDomain());
+        await admin.database().ref(`taxis/${driverId}`).update({
+          payoutStatus:saved?.status || 'not_configured', bookingBankingReady:bookingReady
+        });
+        return response.status(200).json({ok:true,status:saved?.status||'not_configured',bookingReady,
+          accountLast4:saved?.accountLast4||'',bankName:saved?.bankName||'',
+          accountName:saved?.accountName||'',subaccountCode:saved?.subaccountCode||''});
       }
       if (request.method !== "POST")
         return response.status(405).json({ error: "Method not supported." });
@@ -11803,9 +11830,11 @@ exports.configureDriverCardPayout = onRequest(
         await subRef.update({status:"manual_review"});
         throw Error("Paystack subaccount requires manual review.");
       }
-      const ready=isVerifiedSubaccount(sub,subCode);
+      const domain = configuredPaystackDomain();
+      const ready = sub.domain === domain && isVerifiedSubaccount(sub,subCode) &&
+        typeof sub.account_number === 'string' && sub.account_number.slice(-4) === clean.accountNumber.slice(-4);
       await subRef.set({
-        status:ready?"verified":"pending_paystack_verification",
+        status:ready?"verified":"pending_paystack_verification",paystackDomain:domain,
         subaccountCode:subCode,platformCommissionPercent:PLATFORM_COMMISSION_PERCENT,
         bankCode:clean.bankCode,bankName:String(sub.settlement_bank||clean.bankCode),
         accountName:clean.accountName,accountLast4:clean.accountNumber.slice(-4),
@@ -11813,10 +11842,11 @@ exports.configureDriverCardPayout = onRequest(
       });
       await admin.database().ref(`taxis/${driverId}`).update({
         payoutStatus:ready?"verified":"pending_paystack_verification",
+        bookingBankingReady:ready && domain === bookingBankingDomain(),
         payoutAccountLast4:clean.accountNumber.slice(-4)
       });
       return response.status(200).json({ok:true,
-        status:ready?"verified":"pending_paystack_verification",
+        status:ready?"verified":"pending_paystack_verification",bookingReady:ready && domain === bookingBankingDomain(),
         subaccountCode:subCode,accountLast4:clean.accountNumber.slice(-4)});
     } catch (error) {
       console.error("Driver payout bank configuration error", error?.message);
@@ -14596,7 +14626,8 @@ const { registerClubLifecycle } = require('./club-lifecycle');
 const secureClub = registerClubLifecycle({
   admin, onRequest, cors: walletSmsCors, verifyUser: verifiedRequestUser,
   resolvePassenger: resolvePassengerForWallet, nearbyDrivers: nearbyWorkDrivers,
-  driverEligible: driverProfileCanReceiveRequests, marketFare: goMarketReference,
+  driverEligible: driverProfileCanReceiveRequests, bankingEligible: hasDriverBookingBanking,
+  marketFare: goMarketReference,
   preparePayments: prepareClubPoolPayments, paymentPath: tripPaymentPath,
   distanceKm: haversineKm
 });

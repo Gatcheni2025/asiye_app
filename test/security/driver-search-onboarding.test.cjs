@@ -14,6 +14,7 @@ test('driver startup reaches map, GPS, dashboard and offers even when optional c
   w.firebase={database:()=>({ref:()=>({on:()=>()=>{},off(){}})})};
   w.AsiyeEnrollment={requireApproval:async()=>true};
   w.AsiyeDriverPresence={start:()=>calls.push('presence')};
+  w.AsiyeDriverBanking={isReady:()=>true,require:async()=>true};
   w.AsiyeSafetyContact={ensure:()=>{calls.push('contact');return new Promise(()=>{});}};
   load(w,'assets/driver-v2/js/state.js');load(w,'assets/driver-v2/js/app.js');
   const a=w.ASIYE_DRIVER;a.initialize=()=>{};

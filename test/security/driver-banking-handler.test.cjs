@@ -12,7 +12,7 @@ before(()=>{
  app=admin.initializeApp({projectId:project,databaseURL:'http://'+host+'?ns='+project});db=app.database();
  originalVerify=admin.auth().verifyIdToken;admin.auth().verifyIdToken=async uid=>({uid});
  originalFetch=global.fetch;originalSecret=process.env.PAYSTACK_SECRET_KEY;
- process.env.PAYSTACK_SECRET_KEY='sk_live_EMULATOR_ONLY_NO_NETWORK';
+ process.env.PAYSTACK_SECRET_KEY='sk_test_EMULATOR_ONLY_NO_NETWORK';
  global.fetch=async(url,options={})=>{
   const u=new URL(url);assert.equal(u.origin,'https://api.paystack.co');calls.push({u,options});
   let data;
@@ -20,7 +20,7 @@ before(()=>{
   else if(u.pathname==='/bank/validate')data={verified:validated,accountAcceptsCredits:true,accountHolderMatch:validated};
   else if(u.pathname==='/subaccount'||u.pathname==='/subaccount/'+subaccount)data={
    subaccount_code:subaccount,percentage_charge:20,active:true,is_verified:verified,
-   domain:'live',currency:'ZAR',account_number:bank.accountNumber,settlement_bank:'Example Bank'};
+   domain:'test',currency:'ZAR',account_number:bank.accountNumber,settlement_bank:'Example Bank'};
   else assert.fail('Unexpected provider operation');
   return {ok:true,status:200,json:async()=>({status:true,data})};
  };

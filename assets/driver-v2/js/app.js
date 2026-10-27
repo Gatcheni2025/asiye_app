@@ -684,10 +684,10 @@ ASIYE_DRIVER.ui = {
                 <i class="fas fa-building-columns" aria-hidden="true"></i>
                 <span><strong>Banking details</strong><small>${
                     driver.payoutStatus === 'verified'
-                        ? 'Bank verified · manage your card earnings'
+                        ? 'Bank verified · ready to receive bookings'
                         : driver.payoutStatus === 'pending_paystack_verification'
-                            ? 'Bank verification pending · check status'
-                            : 'Verify your bank to receive card earnings'
+                            ? 'Bank verification pending · bookings paused'
+                            : 'Verify banking details to receive bookings'
                 }</small></span>
                 <i class="fas fa-chevron-right" aria-hidden="true"></i>
             </a>
@@ -1007,6 +1007,7 @@ ASIYE_DRIVER.ui = {
 
         try {
 
+            if (newOnline && !await window.AsiyeDriverBanking.require()) return;
             if (newOnline) await window.AsiyeDriverPresence.prepare(driverId);
 
             await firebase
@@ -4628,6 +4629,8 @@ async function (
                         }
 
 
+                        if (liveDriver.bookingBankingReady === false &&
+                            window.AsiyeDriverBanking?.isReady()) window.AsiyeDriverBanking.invalidate();
                         ASIYE_DRIVER.state.driver =
                             liveDriver;
 
@@ -4708,6 +4711,9 @@ async function (
         const restoredTrip = await ASIYE_DRIVER.requests
             .restoreActiveRequest();
 
+        const bankingReady = restoredTrip === false &&
+            await window.AsiyeDriverBanking.require({redirect:false});
+
 
         /*
          * Start incoming bookings only
@@ -4718,7 +4724,7 @@ async function (
         if (
             ASIYE_DRIVER.state
                 .availability
-                .isOnline &&
+                .isOnline && bankingReady &&
 
             !ASIYE_DRIVER.state
                 .availability
@@ -4736,7 +4742,7 @@ async function (
 
         // Optional contacts must never stop the map, GPS, restored trips or
         // incoming offers. Show setup only after the dashboard is ready.
-        if (restoredTrip === false && !ASIYE_DRIVER.state.availability.isOnline && window.AsiyeSafetyContact) {
+        if (bankingReady && restoredTrip === false && !ASIYE_DRIVER.state.availability.isOnline && window.AsiyeSafetyContact) {
             void AsiyeSafetyContact.ensure({role: 'driver'}).catch(error => {
                 console.warn('Optional trusted-contact setup:', error.message);
             });
