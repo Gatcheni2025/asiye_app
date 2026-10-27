@@ -6,7 +6,7 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const file = name => fs.readFileSync(path.join(root, name), 'utf8');
 const pubspec = file('pubspec.yaml');
-assert.match(pubspec, /^version: 11\.0\.81\+351\s*$/m, 'Must build the selected 351 mobile source.');
+assert.match(pubspec, /^version: 11\.0\.82\+352\s*$/m, 'Must build the selected 352 mobile source.');
 const runner = file('ios/Runner/Info.plist');
 const google = file('ios/Runner/GoogleService-Info.plist');
 const tag = (xml, key) => {
@@ -28,4 +28,4 @@ assert.ok(fastfile.includes('File.expand_path("../../scripts/verify_asiye_ios_me
 assert.ok(fastfile.includes('Shellwords.escape(validator)'), 'Validator path must be safely quoted.');
 assert.ok(!fastfile.includes('python3 ../scripts/verify_asiye_ios_metadata.py'), 'Incorrect legacy validator path must not return.');
 assert.ok(fs.statSync(path.join(root,'scripts/verify_asiye_ios_metadata.py')).isFile(), 'Signed IPA validator file must exist.');
-console.log('PASS Asiye 351 source, bundle ID, Google Sign In, export compliance and gated Fastlane version.');
+console.log('PASS Asiye 352 source, bundle ID, Google Sign In, export compliance and gated Fastlane version.');

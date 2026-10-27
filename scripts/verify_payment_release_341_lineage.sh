@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guardrail: payment work, including the Android 351 mobile builds,
+# Guardrail: payment work, including the Android 352 mobile builds,
 # MUST descend from the actual signed Android 11.0.71 (341) build and iOS
 # 46522.0.0 (93124) IPA source. These are source commits, not store approvals.
 set -euo pipefail
@@ -19,9 +19,9 @@ for anchor in "$ANDROID_341" "$IOS_93124"; do
 done
 SOURCE_VERSION="$(awk '/^version:/ {print $2}' pubspec.yaml)"
 case "$SOURCE_VERSION" in
-  11.0.71+341|11.0.72+342|11.0.73+343|11.0.74+344|11.0.75+345|11.0.76+346|11.0.77+347|11.0.78+348|11.0.79+349|11.0.80+350|11.0.81+351) ;;
+  11.0.71+341|11.0.72+342|11.0.73+343|11.0.74+344|11.0.75+345|11.0.76+346|11.0.77+347|11.0.78+348|11.0.79+349|11.0.80+350|11.0.81+351|11.0.82+352) ;;
   *)
-    echo "::error::Expected reviewed source version 11.0.71+341, 11.0.72+342 11.0.73+343 11.0.74+344, 11.0.75+345 11.0.76+346 11.0.77+347 11.0.78+348 11.0.79+349 11.0.80+350 or 11.0.81+351; found $SOURCE_VERSION." >&2
+    echo "::error::Expected reviewed source version 11.0.71+341, 11.0.72+342 11.0.73+343 11.0.74+344, 11.0.75+345 11.0.76+346 11.0.77+347 11.0.78+348 11.0.79+349 11.0.80+350 11.0.81+351 or 11.0.82+352; found $SOURCE_VERSION." >&2
     exit 1
     ;;
 esac

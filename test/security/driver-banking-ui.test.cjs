@@ -131,3 +131,21 @@ test('a delayed bank response cannot enable or take another signed-in driver off
   assert.equal(await h.w.AsiyeDriverBanking.require(),false);assert.equal(h.w.AsiyeDriverBanking.isReady(),false);assert.equal(h.events.some(e=>e.patch),false);
  }finally{h.dom.window.close();}
 });
+
+for(const ready of [false,true])test(`trip completion releases the trip and resumes new offers only when bank readiness is ${ready}`,async()=>{
+ const dom=new JSDOM('',{url:'https://example.test/driver-v2/index.html',runScripts:'outside-only',virtualConsole:new VirtualConsole()});
+ const w=dom.window,updates=[];let started=0,queued=0,dashboard=0;
+ w.ASIYE_DRIVER={state:{driverId:'driver',driver:{currentRequest:'existing'},availability:{currentRequest:'existing',isOnline:true}},
+  requests:{start:()=>started++,promoteNextQueuedRequest:async()=>{queued++;return null;}},ui:{showDashboard:()=>dashboard++},map:{clearRoute(){}}};
+ const database=()=>({ref:()=>({update:async patch=>{assert.ok(ready||patch.isBroadcasting!==true,'An unverified driver must never attempt a forbidden broadcast write');updates.push(patch);}})});
+ database.ServerValue={TIMESTAMP:123};w.firebase={database};
+ w.AsiyeDriverBanking={require:async()=>{assert.equal(w.ASIYE_DRIVER.state.availability.currentRequest,null);if(!ready)w.ASIYE_DRIVER.state.availability.isOnline=false;return ready;}};
+ w.eval(fs.readFileSync(path.join(root,'assets/driver-v2/js/trip-controller.js'),'utf8'));
+ w.ASIYE_DRIVER.trip.stop=()=>{};
+ try{
+  await w.ASIYE_DRIVER.trip.releaseDriver();
+  assert.equal(updates[0].currentRequest,null);assert.equal(w.ASIYE_DRIVER.trip.requestId,null);
+  assert.equal(w.ASIYE_DRIVER.state.availability.isBroadcasting,ready);assert.equal(queued,ready?1:0);
+  assert.equal(started,ready?1:0);assert.equal(dashboard,1);
+ }finally{dom.window.close();}
+});

@@ -1,12 +1,12 @@
 {
   "project": "asiye-80386",
   "projectNumber": "531902350858",
-  "runtimeSha256": "b4cb1ac8fc507f09826d9dbb2d0d2ac8e46d080541e43d9c2ea8660b4326c9ef",
+  "runtimeSha256": "0652f29e2f34191faa34938f3a8e4ddc8775d7fe25e09902c99456bd98aa4ec9",
   "checkoutMustRemainOff": true,
   "stagingRuntime": "a017820c1ffae046fb22ac03fa6cfb40df2bdb05",
   "reviewedSource": "69d5ae51d3e9599d3100ee79ee68a87e40e01a9c",
   "ownerInstruction": "27 October 2026: drivers without linked banking must add and verify banking before receiving bookings",
-  "scope": "Verified same-owner LIVE banking required before any new booking; Go and Club dispatch, secure acceptance, database rules and driver app prompts; existing trips preserved; checkout remains gated separately",
+  "scope": "Banking gate for all new bookings, including safe trip cleanup and resumption; backend/rules validated; checkout remains gated separately",
   "previousProductionRuntimeSha256": "a5ef66e679551fe4a1166f35f07fb5d2bb2d0fe02ce93c88d81c8da4337c073a",
   "uiBaseline": "e60511914be4893ca87902520bef892d83a1ccb1"
 }
