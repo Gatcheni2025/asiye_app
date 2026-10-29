@@ -1,0 +1,24 @@
+name: Asiye Android and iOS Release Candidates
+
+on:
+  workflow_dispatch:
+    inputs:
+      upload_to_testflight:
+        description: 'Build and upload the signed iOS beta to TestFlight'
+        required: true
+        type: choice
+        options: ['no', 'yes']
+        default: 'no'
+
+permissions:
+  contents: read
+
+jobs:
+  select_reviewed_release:
+    name: Select the reviewed release branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Stop releases from stale main
+        run: |
+          echo '::error::Select fix/paystack-subaccounts-cash-card-no-wallet in Run workflow. Main is a launcher registration only; it must not build or upload.'
+          exit 1
