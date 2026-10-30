@@ -1,0 +1,7 @@
+{
+  "project": "asiye-80386",
+  "runtimeSha256": "0652f29e2f34191faa34938f3a8e4ddc8775d7fe25e09902c99456bd98aa4ec9",
+  "applyBackend": false,
+  "checkoutActivation": false,
+  "applyHosting": false
+}

@@ -263,7 +263,7 @@ ASIYE.wallet = {
    Negotiated Go: no money is reserved until driver + passenger agree a fare.
    Cash: marks the agreed fare due after negotiation.
    Wallet: reserves the agreed fare after negotiation; Club reserves when full.
-   Card: opens Paystack only after negotiation; funds remain held until completion.
+   Card: opens Paystack after driver/fare agreement; Paystack splits the charge directly.
    ============================================================ */
 
 ASIYE.payments = {
@@ -339,13 +339,53 @@ ASIYE.payments = {
                 );
 
         if (!response.ok) {
-            throw new Error(
-                payload.error ||
-                'Payment could not be prepared.'
-            );
+            const error = new Error(payload.error || 'Payment could not be prepared.');
+            error.code = payload.code || 'payment/unavailable';
+            throw error;
         }
 
         return payload;
+    },
+
+    cardFailure: null,
+
+    cardErrorMessage(error) {
+        return error?.code === 'payment/driver-subaccount-required'
+            ? 'Your driver needs to finish card payment setup. Ask the driver to open Card earnings, then try again. Checkout has not opened.'
+            : error?.message || 'Card payment could not be opened. Try again.';
+    },
+
+    paintCardPaymentState() {
+        const node = document.querySelector('[data-card-payment-state]');
+        if (!node) return;
+        const id = node.dataset.requestId;
+        const failure = this.cardFailure?.requestId === id ? this.cardFailure : null;
+        const pending = this.pendingCard()?.requestId === id;
+        node.querySelector('[data-card-payment-message]').textContent = failure
+            ? this.cardErrorMessage(failure)
+            : pending ? 'Complete the secure Paystack checkout. If you have paid, check confirmation below.'
+            : 'Opening secure Paystack checkout for your agreed fare…';
+        const retry = node.querySelector('[data-card-payment-retry]');
+        retry.hidden = !failure && !pending;
+        retry.disabled = this._prepareRequestId === id && !!this._preparePromise;
+        retry.textContent = pending ? 'Continue to Paystack' : 'Try card payment again';
+        retry.onclick = async () => {
+            retry.disabled = true;
+            if (this.cardFailure?.requestId === id) this.cardFailure = null;
+            try {
+                await this.prepare(id);
+            } catch (error) {
+                this.cardFailure = {requestId: id, message: error.message, code: error.code};
+            } finally { this.paintCardPaymentState(); }
+        };
+        const check = node.querySelector('[data-card-payment-check]');
+        check.hidden = !pending;
+        check.onclick = async () => {
+            check.disabled = true;
+            try { await this.handleCardReturn(); }
+            catch (error) { this.cardFailure = {requestId: id, message: error.message, code: error.code}; }
+            finally { check.disabled = false; this.paintCardPaymentState(); }
+        };
     },
 
     async prepare(requestId) {
@@ -446,9 +486,13 @@ ASIYE.payments = {
 
         try {
 
-            return await run;
+            const result = await run;
+            if (this.cardFailure?.requestId === requestId) this.cardFailure = null;
+            return result;
 
-
+        } catch (error) {
+            this.cardFailure = {requestId, message: error.message, code: error.code};
+            throw error;
         } finally {
 
             if (
@@ -461,6 +505,7 @@ ASIYE.payments = {
                 this._prepareRequestId =
                     null;
             }
+            this.paintCardPaymentState();
         }
     },
 
@@ -498,6 +543,35 @@ ASIYE.payments = {
         } catch (_) {
             return null;
         }
+    },
+
+    _returnCheck: null,
+
+    async resumeCardReturn() {
+        if (this._returnCheck) return this._returnCheck;
+        if (!firebase.auth().currentUser || !ASIYE.state?.userId || !this.pendingCard()?.requestId) return false;
+        const run = async () => {
+            const params = new URLSearchParams(window.location?.search || '');
+            const reference = params.get('payment_return') === '1' ? params.get('reference') || '' : '';
+            try {
+                const handled = await this.handleCardReturn(reference);
+                if (handled && params.get('payment_return') === '1' && window.history?.replaceState) {
+                    const url = new URL(window.location.href);
+                    for (const name of ['payment_return', 'reference', 'trxref']) url.searchParams.delete(name);
+                    window.history.replaceState(null, '', url.pathname + url.search + url.hash);
+                }
+                return handled;
+            } catch (error) {
+                const pending = this.pendingCard();
+                if (pending) this.cardFailure = {requestId: pending.requestId, message: error.message, code: error.code};
+                this.paintCardPaymentState();
+                ASIYE.ui?.toast?.(error.message || 'Payment is still being confirmed. Tap Check payment to retry.');
+                return false;
+            }
+        };
+        this._returnCheck = run();
+        try { return await this._returnCheck; }
+        finally { this._returnCheck = null; }
     },
 
     async handleCardReturn(reference) {
@@ -696,28 +770,21 @@ ASIYE.payments = {
                 );
 
             ASIYE.ui?.toast?.(
-                'Card payment held. Your Club will move once all passenger payments are ready.'
+                'Card payment confirmed. Your Club will move once all passenger payments are ready.'
             );
 
             return true;
         }
 
 
-        /*
-         * Parcel/card flows already complete their safety share before
-         * checkout in build 329. Keep their existing dispatch behaviour.
-         */
+        // Parcel card charges follow driver acceptance: never redispatch a paid ride.
         if (
-            request.status ===
-                'pending' ||
-            request.paymentStatus ===
-                'held'
+            request.status === 'pending' ||
+            request.paymentStatus === 'held'
         ) {
-            await ASIYE.booking
-                ?.notifyGoDrivers?.(
-                    pending.requestId,
-                    request
-                );
+            if (!request.taxiId) {
+                throw new Error('Paid parcel cannot resume without its assigned driver. Contact Asiye support.');
+            }
 
             await ASIYE.ride
                 ?.start?.(
@@ -725,7 +792,7 @@ ASIYE.payments = {
                 );
 
             ASIYE.ui?.toast?.(
-                'Card payment confirmed. Looking for your driver.'
+                'Card payment confirmed. Your assigned driver can proceed to collection.'
             );
 
             return true;
@@ -802,8 +869,8 @@ ASIYE.payments = {
             }
 
             if (
-                request.poolReady !==
-                    true
+                request.poolReady !== true ||
+                (method === 'card' && (!request.taxiId || !request.driverAcceptedAt))
             ) {
                 return;
             }
@@ -870,7 +937,7 @@ ASIYE.payments = {
 
                 ASIYE.ui?.toast?.(
                     error.message ||
-                    'Payment is confirmed. Share the trip with a loved one to complete booking.'
+                    'Payment is confirmed. Reopen this booking to resume pickup.'
                 );
             } finally {
                 this._cardSafetyFinalizeActive =
@@ -980,10 +1047,11 @@ ASIYE.payments = {
 
 
         if (
-            method !==
-                'card' ||
-            status !==
-                'payment_required'
+            method !== 'card' ||
+            this.cardFailure?.requestId === request.requestId ||
+            status !== 'payment_required' ||
+            !request.taxiId ||
+            (request.type === 'club' && (!request.poolReady || !request.driverAcceptedAt))
         ) {
             return;
         }

@@ -32,6 +32,8 @@ before(async () => {
     }),
     nearbyDrivers: async () => [{ driverId: "driver" }],
     driverEligible: (d) => d.vehicleApproved === true,
+    bankingEligible: async (id, driver) => require('../../functions/driver-booking-banking').bookingBankingReady(id,driver,
+      (await db.ref('driverPaystackSubaccounts/'+id).once('value')).val(),'test'),
     marketFare: () => 300,
     paymentPath: (r, p) => `tripPayments/${r}/${p}`,
     distanceKm: (a, b, c, d) => Math.hypot(a - c, b - d) * 111,
@@ -55,10 +57,11 @@ before(async () => {
 beforeEach(async () => {
   await db.ref().set({
     commuters: {
-      p0: { authUid: "p0", name: "First Passenger" },
-      p1: { authUid: "p1", name: "Second Passenger" },
-      p2: { authUid: "p2", name: "Third Passenger" },
+      p0: { authUid: "p0", bookingFaceAuthUid: "p0", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "First Passenger" },
+      p1: { authUid: "p1", bookingFaceAuthUid: "p1", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "Second Passenger" },
+      p2: { authUid: "p2", bookingFaceAuthUid: "p2", bookingFaceSavedAt: 1, profileImageUrl: "https://test.invalid/face.jpg", name: "Third Passenger" },
     },
+    driverPaystackSubaccounts:{driver:{ownerUid:'driver',status:'verified',paystackDomain:'test',subaccountCode:'ACCT_clubdriver',platformCommissionPercent:20,accountLast4:'7890'}},
     taxis: {
       driver: {
         authUid: "driver",
@@ -154,8 +157,8 @@ test("driver and passenger receive the same reservation alert and deadline; PIN 
       403,
     );
 });
-test("Cash Wallet Card accept empty shareToken without storing a client PIN", async () => {
-  for (const method of ["cash", "wallet", "card"]) {
+test("Cash and Card accept empty shareToken without storing a client PIN", async () => {
+  for (const method of ["cash", "card"]) {
     for (const path of [
       "commuters/p0/currentRequest",
       "commuters/p1/currentRequest",
@@ -176,6 +179,13 @@ test("Cash Wallet Card accept empty shareToken without storing a client PIN", as
     assert.equal(p.passengers.p1.pickupPin, undefined);
     assert.equal(p.passengers.p1.safetyShareRequired, false);
   }
+});
+test("new Club Wallet bookings are rejected before saving passenger funds", async () => {
+  await db.ref("commuters/p0/currentRequest").remove();
+  const id = "pool-wallet-disabled";
+  const response = await call(service.create,"p0",body(id,"wallet"));
+  assert.equal(response.status,400);
+  assert.equal(await read("requests/"+id),null);
 });
 test("concurrent joins keep shared count, pickup, destination and countdown", async () => {
   const initial = await create();
@@ -317,7 +327,11 @@ test("arrival PIN start completion lifecycle and repeated completion never doubl
       200,
     );
   }
-  for (const action of ["start", "complete", "complete"])
+  assert.equal((await call(service.action,"driver",{requestId,action:"start"})).status,200);
+  assert.equal((await call(service.action,"driver",{requestId,action:"complete"})).status,409,
+    'An away-from-destination driver must obtain passenger consent');
+  await db.ref('taxis/driver').update({latitude:-29.9,longitude:31.1,lastSeen:Date.now()});
+  for (const action of ["complete", "complete"])
     assert.equal(
       (await call(service.action, "driver", { requestId, action })).status,
       200,
@@ -355,4 +369,15 @@ test("cancel negotiated membership ends the group and releases everyone for rebo
   );
   assert.equal(await read("taxis/driver/currentRequest"), null);
   assert.equal(await read("commuters/p0/currentRequest"), null);
+});
+
+test('Club create and join cannot reserve an unverified passenger before photo saving',async()=>{
+ await db.ref('commuters/p0/bookingFaceSavedAt').remove();
+ assert.equal((await call(service.create,'p0',body())).status,403);
+ assert.equal(await read('requests/pool-one'),null);assert.equal(await read('commuters/p0/currentRequest'),null);
+ await db.ref('commuters/p0/bookingFaceSavedAt').set(1);
+ await create();
+ await db.ref('commuters/p1/bookingFaceSavedAt').remove();
+ assert.equal((await call(service.join,'p1',body())).status,403);
+ assert.equal(await read('commuters/p1/currentRequest'),null);
 });

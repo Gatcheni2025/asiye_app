@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-27",
+  "timezone": "Africa/Johannesburg",
+  "project": "asiye-80386",
+  "change": "Require verified same-owner LIVE banking before all new Go, Club and Parcel bookings; preserve existing-trip completion and safe availability resumption",
+  "mobileSource": "041b880e31dd9dcf7ef6d9b2ff906d8cbe50b880",
+  "production": {
+    "project": "asiye-80386",
+    "source": "7850f3306405d26b82e38a305a13c6905097f277",
+    "runtimeSha256": "0652f29e2f34191faa34938f3a8e4ddc8775d7fe25e09902c99456bd98aa4ec9",
+    "functionSourceMatches": 44,
+    "functionsExpected": 44,
+    "rulesMatch": true,
+    "publicFilesMatched": 44,
+    "publicFilesExpected": 44,
+    "callbackMatches": true,
+    "walletFundingDisabled": true,
+    "liveSecretVersion": "2",
+    "checkoutEnabled": false,
+    "liveActivationPerformed": false,
+    "hostingOnly": false,
+    "providerAndDeviceAcceptanceNotCertified": true,
+    "hosting": {
+      "version": "sites/asiye-80386/versions/fb02bec96914799f",
+      "files": 108,
+      "preservedFiles": 10
+    },
+    "runId": 40546662325,
+    "attempt": 2,
+    "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40546662325/attempts/2",
+    "verifiedAt": "2026-10-27T17:34:16Z",
+    "functionsUpdatedInSuccessfulResume": 7,
+    "functionsAlreadyMatched": 37,
+    "readbackArtifact": {
+      "id": 12755625851,
+      "zipSha256": "291440fcf86d0c7d3299f0918d951232753e1952e4906bef70f280722257a164",
+      "zipHashIndependentlyVerified": true
+    }
+  },
+  "mobile": {
+    "runId": 40544591246,
+    "conclusion": "success",
+    "flutterAnalyze": "passed",
+    "nativeOtpAndRoutingTests": "passed",
+    "android": {
+      "version": "11.0.82",
+      "versionCode": 352,
+      "package": "com.asiyeapp.asiye",
+      "artifactId": 12753058855,
+      "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40544591246/artifacts/12753058855",
+      "zipSha256": "d42f3b16c101bca96ec6b64fb7a0f5d431e9e184b7b7445274fe11917f718133",
+      "signingCertificateSha256": "8e72a01ad73956b4e21dc9e4f73ac044b2c3c770e367ba01deebb354b21180cf",
+      "firebaseReleaseCertificateMatches": true,
+      "targetApi": 36,
+      "reviewedWebAssetsMatched": 32,
+      "nativeLibraries16KbAligned": 20
+    },
+    "ios": {
+      "version": "46522.0.10",
+      "build": "96026",
+      "artifactId": 12753269840,
+      "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40544591246/artifacts/12753269840",
+      "zipSha256": "2203e09d2f7fba6464dbf70d9b746a14e22b0c0b4bd965420002483cd120d3fc",
+      "actualSdk": "iphoneos26.5",
+      "minimumVersion": "15.5",
+      "reviewedWebAssetsMatched": 32,
+      "signatureAndExportCompliance": "passed"
+    },
+    "testFlightUploadPerformed": false,
+    "publicStorePublicationPerformed": false
+  },
+  "validation": {
+    "exportedHandlerRulesBrowserTestsPassed": 234,
+    "bankingPromotionAndVehicleUnitTestsPassed": 26,
+    "broaderHistoricalRootSweep": {
+      "total": 391,
+      "passed": 379,
+      "failed": 12,
+      "failedTestsAlsoReproducedOnBaseline": "907b3a1ac398caeb96c2fb0f4efd5050d60e6804",
+      "files": [
+        "test/enrollment.test.cjs",
+        "test/release327-admin-support.test.cjs",
+        "test/release328-recovery.test.cjs",
+        "test/trip-chat.test.cjs",
+        "test/v2-map.test.cjs"
+      ]
+    }
+  },
+  "independentPreflight": {
+    "runId": 40552519485,
+    "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40552519485",
+    "conclusion": "success",
+    "observedAt": "2026-10-27T17:39:17Z",
+    "expectedApplicationFunctionsActive": 42,
+    "applicationFunctionsExpected": 42,
+    "retiredFundingFunctionsSeparatelyVerified": 2,
+    "rulesMatch": true,
+    "liveCredentialAuthenticated": true,
+    "boundCredentialsLiveAndConsistent": true,
+    "driverPayoutProfileCount": 0,
+    "checkoutEnabled": false,
+    "launchEvidenceReferencesPresent": false,
+    "artifactId": 12756201093,
+    "artifactZipSha256": "e15a76fd22d7854e009ef8d755264ec2207ed574d6c258800ad652e98660c7d0"
+  },
+  "providerDeviceAndSettlementAcceptanceCertified": false
+}

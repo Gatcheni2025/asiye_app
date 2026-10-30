@@ -1,0 +1,19 @@
+[
+  "submitDriverEnrollmentSecure",
+  "reviewDriverEnrollmentSecure",
+  "submitDriverVehicleForReview",
+  "submitGoFareOffer",
+  "dispatchGoRideRequest",
+  "counterGoFare",
+  "acceptGoFareOffer",
+  "acceptGoFareCounter",
+  "acceptParcelRequestSecure",
+  "createClubBookingSecure",
+  "joinClubPoolSecure",
+  "clubDriverActionSecure",
+  "submitWorkEarlyDepartureOffer",
+  "synchronizeClubBooking",
+  "expireClubWaiting",
+  "prepareTripPayment",
+  "configureDriverCardPayout"
+]

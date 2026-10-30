@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-25",
+  "timezone": "Africa/Johannesburg",
+  "repository": "Gatcheni2025/asiye_app",
+  "change": "Preserve selected driver role, original social UID and verified phone recovery across OTP and reCAPTCHA return",
+  "source": "458e130025535b57261addea64e9a446f3c06eae",
+  "build": {
+    "runId": 40201742355,
+    "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40201742355",
+    "conclusion": "success",
+    "android": {
+      "version": "11.0.80",
+      "versionCode": 350,
+      "package": "com.asiyeapp.asiye",
+      "artifactId": 12602975221,
+      "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40201742355/artifacts/12602975221",
+      "zipSha256": "16416add0ea2f2e3b6afb5d0811087ec475cdba166f912a4b431741ddff0dfaa",
+      "releaseCertificateSha256": "8e72a01ad73956b4e21dc9e4f73ac044b2c3c770e367ba01deebb354b21180cf",
+      "apiLevel": 36,
+      "nativeLibrariesAligned": 20,
+      "webAssetsMatched": 32
+    },
+    "ios": {
+      "version": "46522.0.8",
+      "build": "95826",
+      "artifactId": 12601504646,
+      "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40201742355/artifacts/12601504646",
+      "zipSha256": "1bb73f95ab7e807911395986a5853d85ace1c39a46c2e03cc9d2e8ec9422e6ba",
+      "sdk": "iphoneos26.5",
+      "minimumVersion": "15.5",
+      "webAssetsMatched": 32
+    },
+    "testFlightUploadPerformed": false,
+    "publicStorePublicationPerformed": false
+  },
+  "validation": {
+    "flutterAnalyze": "passed",
+    "nativeRoutingAndPhoneLinkTests": "passed",
+    "focusedJavaScriptTestsPassed": 60,
+    "exportedHandlerRulesUiTestsPassed": 218
+  },
+  "production": {
+    "runId": 40202049798,
+    "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40202049798",
+    "conclusion": "success",
+    "project": "asiye-80386",
+    "source": "42df207da8039d16120b41103ba2a2f16404cc09",
+    "runtimeSha256": "a5ef66e679551fe4a1166f35f07fb5d2bb2d0fe02ce93c88d81c8da4337c073a",
+    "functionSourceMatches": 44,
+    "functionsExpected": 44,
+    "rulesMatch": true,
+    "publicFilesMatched": 44,
+    "publicFilesExpected": 44,
+    "callbackMatches": true,
+    "walletFundingDisabled": true,
+    "liveSecretVersion": "2",
+    "checkoutEnabled": false,
+    "liveActivationPerformed": false,
+    "hostingOnly": true,
+    "providerAndDeviceAcceptanceNotCertified": true,
+    "hosting": {
+      "version": "sites/asiye-80386/versions/c314b37354492b43",
+      "files": 108,
+      "preservedFiles": 10
+    },
+    "functionsRedeployed": 0,
+    "readbackArtifact": {
+      "id": 12602297098,
+      "zipSha256": "35a3f419d0183f9f49d06dda322ce5fa8cdb9c7be6249dd5a686d7ad9a6cb1e0",
+      "zipSha256IndependentlyVerified": true
+    }
+  },
+  "phoneConfiguration": {
+    "runId": 40202142858,
+    "url": "https://github.com/Gatcheni2025/asiye_app/actions/runs/40202142858",
+    "checkedAtSast": "2026-10-25T16:25:33+02:00",
+    "phoneProviderEnabled": true,
+    "southAfricaSmsAllowed": true,
+    "firebaseAuthReturnDomainAuthorized": true,
+    "androidAppIdentityMatches": true,
+    "releaseSha1Registered": true,
+    "releaseSha256Registered": true,
+    "configuredTestNumberCount": 9,
+    "affectedNumberIsConfiguredTestNumber": null,
+    "smsSentByDiagnostic": false,
+    "authConfigurationChanged": false
+  },
+  "acceptance": {
+    "actualCarrierSmsDeliveryCertified": false,
+    "physicalDeviceRecaptchaReturnCertified": false,
+    "livePaymentOrSettlementCertified": false
+  }
+}

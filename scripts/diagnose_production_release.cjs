@@ -1,0 +1,83 @@
+'use strict';
+// GET-only inspection of this release's private diagnostics. No raw log output.
+const {spawnSync}=require('node:child_process');
+const {analyze}=require('./diagnose_paystack_deploy_log.cjs');
+const {FUNCTIONS}=require('./production_release_scope.cjs');
+const {PROJECT,NUMBER}=require('./production_card_preflight.cjs');
+const BUCKET='gcf-v2-sources-531902350858-us-central1';
+const RELEASE_SOURCE='7850f3306405d26b82e38a305a13c6905097f277';
+function classify(raw){
+ const patterns=[
+  ['TRIGGER_CHANGE',/cannot.{0,80}chang.{0,80}trigger|trigger.{0,80}cannot.{0,80}chang/i],
+  ['GENERATION_CHANGE',/cannot.{0,80}(?:generation|1st gen|2nd gen)|upgrad.{0,80}(?:1st gen|2nd gen)/i],
+  ['ACT_AS_PERMISSION',/iam\.serviceAccounts\.actAs/],
+  ['CLOUD_BUILD_PERMISSIONS',/cloudbuild\.builds\.(?:create|get)|cloud build service account.{0,100}(?:permission|denied)|build.{0,100}service account.{0,100}(?:missing|permission|denied)/i],
+  ['SOURCE_PERMISSIONS',/storage\.objects\.(?:get|create)|cloudfunctions\.functions\.sourceCodeGet/],
+  ['ARTIFACT_PERMISSIONS',/artifactregistry\.[A-Za-z.]+|artifact.{0,80}permission denied/i],
+  ['UNSUPPORTED_RUNTIME',/(?:unsupported|not supported|not available).{0,60}nodejs22|nodejs22.{0,60}(?:unsupported|not supported)/i],
+  ['SECRET_ACCESS',/(?:secretmanager|secret).{0,100}(?:permission|denied|not found)/i],
+  ['TRIGGER_VALIDATION',/trigger validation|eventarc|invalid.{0,60}event trigger/i],
+  ['ORG_POLICY',/org.?policy|constraint\.[A-Za-z.]+|organization policy/i],
+  ['NPM_DEPENDENCY',/cannot find module|MODULE_NOT_FOUND|npm ERR!/i],
+  ['BUILD_ERROR',/build failed|build status.{0,30}FAILURE|build error/i],
+  ['QUOTA',/RESOURCE_EXHAUSTED|quota.{0,80}(?:exceeded|limit)|\b429\b/],
+  ['REGIONAL_CPU_LIMIT',/(?:total|regional|max(?:imum)?).{0,60}cpu.{0,80}(?:quota|allocat|limit)|cpu.{0,50}quota/i],
+  ['REGIONAL_MEMORY_LIMIT',/memory.{0,50}quota|quota.{0,50}memory/i],
+  ['INSTANCE_LIMIT',/(?:max(?:imum)?|allowed).{0,40}instances.{0,60}(?:quota|exceed|limit)/i],
+  ['FUNCTION_BUSY',/operation.{0,70}progress|409.{0,70}conflict|already exists/i]
+ ];
+ const permissionNames=[...new Set(raw.match(/\b(?:cloudfunctions\.functions|cloudbuild\.builds|storage\.objects|iam\.serviceAccounts|run\.services|artifactregistry\.repositories)\.[A-Za-z]+/g)||[])];
+ return {summary:analyze(raw),categories:patterns.filter(([_,rx])=>rx.test(raw)).map(([key])=>key),permissionNames};
+}
+async function main(){
+ const run=args=>{const r=spawnSync('gcloud',args,{encoding:'utf8',timeout:30000,maxBuffer:1024*1024});if(r.status!==0||r.error)throw Error('CLOUD_READ_UNAVAILABLE');return r.stdout.trim();};
+ if(run(['config','get-value','project'])!==PROJECT||run(['projects','describe',PROJECT,'--format=value(projectNumber)'])!==NUMBER)throw Error('PROJECT_MISMATCH');
+ const get=async(url,json=true)=>{
+  const r=await fetch(url,{method:'GET',redirect:'error',headers:{Authorization:'Bearer '+run(['auth','print-access-token'])},signal:AbortSignal.timeout(30000)});
+  if(!r.ok)throw Error('PRIVATE_READ_HTTP_'+r.status);
+  const text=await r.text();if(text.length>30*1024*1024)throw Error('PRIVATE_LOG_SIZE_LIMIT');return json?JSON.parse(text):text;
+ };
+ const index=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:'asiye-release-backups/'+RELEASE_SOURCE+'/',maxResults:'1000'}));
+ const states=(index.items||[]).filter(o=>o.name.endsWith('/state.json')).sort((a,b)=>String(b.timeCreated||'').localeCompare(String(a.timeCreated||'')));
+ if(!states.length)throw Error('CURRENT_RELEASE_PRIVATE_BACKUP_NOT_FOUND');
+ const PREFIX=states[0].name.replace(/state\.json$/,'private-diagnostics/');
+ const objects=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:PREFIX,maxResults:'100'}));
+ console.log('PRIVATE_DIAGNOSTIC_OBJECT_COUNT='+(objects.items||[]).length);
+ const parent=PREFIX.replace(/private-diagnostics\/$/,'');
+ const saved=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o?'+new URLSearchParams({prefix:parent,maxResults:'1000'}));
+ console.log('PRIVATE_BACKUP_CHECK='+JSON.stringify({objects:(saved.items||[]).length,stateSaved:(saved.items||[]).some(o=>o.name===parent+'state.json'),sourceArchives:(saved.items||[]).filter(o=>o.name.endsWith('.archive')).length}));
+ const failed=new Set();
+ for(const object of objects.items||[]){
+  if(!object.name.startsWith(PREFIX)||!object.name.endsWith('.log'))continue;
+  const raw=await get('https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o/'+encodeURIComponent(object.name)+'?alt=media',false);
+  const diagnosis=classify(raw);for(const name of diagnosis.summary.explicitFailed)failed.add(name);
+  console.log('PRIVATE_LOG_DIAGNOSIS='+JSON.stringify(diagnosis));
+ }
+ const functions=await get('https://cloudfunctions.googleapis.com/v2/projects/'+PROJECT+'/locations/us-central1/functions?pageSize=1000');
+ console.log('CURRENT_SELECTED_FUNCTION_STATES='+JSON.stringify((functions.functions||[]).filter(f=>FUNCTIONS.includes(f.name.split('/').pop())).map(f=>({
+  name:f.name.split('/').pop(),state:f.state||'UNKNOWN',errorCategories:(f.stateMessages||[]).flatMap(m=>classify(String(m.message||'')).categories)}))));
+ // Inspect failed services without printing condition messages or resource URLs.
+ for(const f of functions.functions||[]){
+  const name=f.name.split('/').pop();if(!failed.has(name))continue;
+  const service=f.serviceConfig?.service||'';
+  if(!new RegExp('^projects/(?:'+PROJECT+'|'+NUMBER+')/locations/us-central1/services/[a-z0-9-]+$').test(service))continue;
+  try{
+   const current=await get('https://run.googleapis.com/v2/'+service);
+   const revision=current.latestCreatedRevision;
+   const detail=revision&&revision.startsWith(service+'/revisions/')?await get('https://run.googleapis.com/v2/'+revision):{};
+   const conditions=[...(current.conditions||[]),...(detail.conditions||[])].map(c=>{
+    const message=String(c.message||'');
+    return {type:c.type||'',state:c.state||'',reason:c.reason||c.revisionReason||'',
+     labels:[...message.matchAll(/(?:metric|limit)\s*['"]([A-Za-z0-9 _./-]{1,90})['"]/gi)].map(m=>m[1]),
+     keywords:['cpu','memory','instance','quota','resource','startup','capacity','concurrency'].filter(k=>new RegExp('\\b'+k,'i').test(message)),
+     categories:classify(message).categories};
+   });
+   console.log('FAILED_SERVICE_RESOURCES='+JSON.stringify({name,cpu:f.serviceConfig?.availableCpu||'',memory:f.serviceConfig?.availableMemory||'',maxInstances:f.serviceConfig?.maxInstanceCount||null,conditions}));
+  }catch(_){console.log('FAILED_SERVICE_RESOURCES='+name+':READ_UNAVAILABLE');}
+ }
+ const payoutKeys=await get('https://asiye-80386-default-rtdb.firebaseio.com/driverPaystackSubaccounts.json?shallow=true');
+ console.log('PRODUCTION_DRIVER_PAYOUT_PROFILE_COUNT='+Object.keys(payoutKeys||{}).length);
+ console.log('GET-only. No private log lines, identities, keys or API response bodies printed.');
+}
+if(require.main===module)main().catch(e=>{console.error('PRODUCTION_DIAGNOSIS: '+(/^[A-Z0-9_]+$/.test(e.message)?e.message:'READ_UNAVAILABLE'));process.exitCode=2;});
+module.exports={classify};

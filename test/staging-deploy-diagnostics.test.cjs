@@ -1,0 +1,115 @@
+"use strict";
+const { test } = require("node:test");
+const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+test("Firebase deploy diagnostics report failing API without printing bearer tokens or raw log", () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "asiye-deploy-log-"));
+  const file = path.join(folder, "firebase.log");
+  try {
+    fs.writeFileSync(file, [
+      "[debug] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/asiye-paystack-staging/services/cloudfunctions.googleapis.com?token=DO_NOT_LEAK",
+      "[debug] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/asiye-paystack-staging/services/cloudfunctions.googleapis.com?token=DO_NOT_LEAK 404",
+      "[debug] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/asiye-paystack-staging/services/cloudfunctions.googleapis.com { \"secret\": \"DO_NOT_LEAK\" }",
+      "[debug] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/1000800408896/services/cloudbilling.googleapis.com:enable?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/asiye-paystack-staging/services/cloudbuild.googleapis.com?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/asiye-80386/services:batchEnable?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/UNKNOWN_PROJECT_PRIVATE_ID/services/private-do-not-leak.googleapis.com?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/asiye-paystack-staging/secrets/TWILIO_ACCOUNT_SID?token=DO_NOT_LEAK 404",
+      "[debug] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/asiye-paystack-staging/secrets/PRIVATE_DO_NOT_LEAK?token=DO_NOT_LEAK 404",
+      "[debug] <<< [apiv2][status] GET https://compute.googleapis.com/compute/v1/projects/asiye-paystack-staging?auth=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/asiye-paystack-staging:testIamPermissions?auth=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/asiye-paystack-staging:getIamPolicy?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/1000800408896:testIamPermissions?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/asiye-80386:getIamPolicy?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/UNKNOWN_PROJECT_PRIVATE_ID:unknownRpcPrivateSuffix?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/asiye-paystack-staging?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/asiye-80386?token=DO_NOT_LEAK 403",
+      "[debug] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/UNRELATED_PROJECT_PRIVATE_ID?token=DO_NOT_LEAK 403",
+      "[debug] Authorization: Bearer DO_NOT_LEAK",
+      "Error: Permission denied, DO_NOT_LEAK",
+    ].join("\n"));
+    const output = spawnSync(process.execPath, ["scripts/summarize_staging_deploy_error.cjs", file, "Cloud Functions"], {encoding: "utf8"});
+    assert.equal(output.status, 0, output.stderr);
+    assert.match(output.stderr, /cloudfunctions\.googleapis\.com/);
+    assert.match(output.stderr, /HTTP 404/);
+    assert.match(output.stderr, /permission error/i);
+    assert.match(output.stderr, /Known missing secret IDs \(names only\): TWILIO_ACCOUNT_SID/);
+    assert.match(output.stderr, /compute.googleapis.com compute project metadata -> HTTP 403/);
+    assert.ok(output.stderr.includes("Denied Service Usage operations (sanitized):"));
+    assert.ok(output.stderr.includes("POST staging enable cloudbilling.googleapis.com"));
+    assert.ok(output.stderr.includes("GET staging getService cloudbuild.googleapis.com"));
+    assert.ok(output.stderr.includes("POST PRODUCTION batchEnable unspecified"));
+    assert.ok(output.stderr.includes("GET OTHER (redacted) getService OTHER_API (redacted)"));
+    assert.doesNotMatch(output.stderr,/private-do-not-leak|UNKNOWN_PROJECT_PRIVATE_ID/);
+    assert.match(output.stderr, /cloudresourcemanager.googleapis.com project IAM permission probe -> HTTP 403/);
+    assert.doesNotMatch(output.stderr,/asiye-paystack-staging:testIamPermissions/);
+    assert.match(output.stderr,/Denied Resource Manager lookup targets \(redacted\):/);
+    assert.match(output.stderr,/GET staging/);
+    assert.match(output.stderr,/GET PRODUCTION/);
+    assert.ok(output.stderr.includes("GET OTHER (redacted) getProject"), "expected safe classification: GET OTHER (redacted) getProject");
+    assert.ok(output.stderr.includes("POST staging getIamPolicy"), "expected safe classification: POST staging getIamPolicy");
+    assert.ok(output.stderr.includes("POST staging testIamPermissions"), "expected safe classification: POST staging testIamPermissions");
+    assert.ok(output.stderr.includes("POST PRODUCTION getIamPolicy"), "expected safe classification: POST PRODUCTION getIamPolicy");
+    assert.ok(output.stderr.includes("POST OTHER (redacted) OTHER_RPC (redacted)"), "expected safe classification: POST OTHER (redacted) OTHER_RPC (redacted)");
+    assert.match(output.stderr,/project IAM policy read -> HTTP 403/);
+    assert.doesNotMatch(output.stderr,/UNRELATED_PROJECT_PRIVATE_ID|UNKNOWN_PROJECT_PRIVATE_ID|unknownRpcPrivateSuffix|asiye-80386|1000800408896/);
+    assert.doesNotMatch(output.stderr, /DO_NOT_LEAK|Bearer|token=/i);
+  } finally { fs.rmSync(folder, {force: true, recursive: true}); }
+});
+
+test("safely classifies non-HTTP Firebase CLI failures without emitting raw debug lines", () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "asiye-deploy-diagnostic-"));
+  const file = path.join(folder, "functions-debug.log");
+  try {
+    fs.writeFileSync(file, [
+      "Error: Must enable required APIs to deploy.",
+      "Error: Cloud Functions codebase could not be analyzed. Secret=DO_NOT_LEAK"
+    ].join("\n"));
+    const output = spawnSync(process.execPath, ["scripts/summarize_staging_deploy_error.cjs",file,"Cloud Functions"],{encoding:"utf8"});
+    assert.equal(output.status, 0, output.stderr);
+    assert.match(output.stderr,/Firebase terminal error category: Firebase refused missing required API/);
+    assert.match(output.stderr,/Cloud Functions code discovery failed/);
+    assert.doesNotMatch(output.stderr,/DO_NOT_LEAK|Secret=/);
+  } finally { fs.rmSync(folder,{force:true,recursive:true}); }
+});
+test("staging Cloud Billing API preflight checks exact project ID and number without writes", () => {
+  const yaml=fs.readFileSync(".github/workflows/deploy_paystack_review_staging.yml","utf8");
+  const start=yaml.indexOf("      - name: Read-only Cloud Billing API state as GitHub deployer");
+  const write=yaml.indexOf("      - name: Configure only the staging TEST secret");
+  assert.ok(start>=0 && write>start, "Cloud Billing preflight must run before any secret or deployment writes");
+  const next=yaml.indexOf("      - name:",start+12);
+  const step=yaml.slice(start,next);
+  assert.ok(step.includes('test "$STAGING_PROJECT" = "asiye-paystack-staging"'));
+  assert.ok(step.includes('test "$PROJECT_NUMBER" = "1000800408896"'));
+  assert.ok(step.includes('for PROJECT_REF in "$STAGING_PROJECT" "$PROJECT_NUMBER"'));
+  assert.ok(step.includes("value.state === 'ENABLED'"));
+  assert.ok(step.includes("serviceusage.googleapis.com/v1/projects/"));
+  assert.ok(!step.includes("services:enable") && !step.includes(":enable"));
+  assert.ok(!step.includes("gcloud services enable"));
+});
+
+test("one-time staging Cloud Shell bootstrap is syntactically valid and fail-closed", () => {
+  const script = "scripts/deploy_paystack_staging_cloud_shell.sh";
+  const syntax = spawnSync("bash", ["-n", script], {encoding:"utf8"});
+  assert.equal(syntax.status, 0, syntax.stderr);
+  const content = fs.readFileSync(script, "utf8");
+  assert.ok(content.includes('readonly STAGING_PROJECT="asiye-paystack-staging"'));
+  assert.ok(content.includes('readonly STAGING_NUMBER="1000800408896"'));
+  assert.ok(content.includes('readonly REVIEW_BRANCH="fix/paystack-subaccounts-cash-card-no-wallet"'));
+  assert.ok(content.includes('[[ "$STAGING_PROJECT" != "$PROD_PROJECT" ]]'));
+  assert.ok(content.includes('sk_test_'));
+  assert.ok(content.includes('DEPLOY-STAGING'));
+  assert.ok(content.includes('x-goog-user-project: $STAGING_PROJECT'), "Firebase API must use isolated staging for quota");
+  assert.ok(content.includes('Firebase Management API HTTP %s; category: %s'), "403 diagnostics must be safely classified");
+  assert.ok(content.includes('APP_RESPONSE="$(mktemp'), "Raw Firebase API replies stay in private temp files");
+  assert.ok(content.includes('trap '), "Temporary Firebase replies must be cleaned");
+  assert.ok(!content.includes('curl --fail --silent --show-error --header "Authorization: Bearer $ACCESS_TOKEN"'), "Old opaque Firebase 403 path must not recur");
+  assert.ok(content.includes('--only "$SELECTOR"'));
+  assert.ok(content.includes('node scripts/prepare_staging_function_scope.cjs'));
+  assert.ok(content.includes('node scripts/build_staging_web_preview.cjs'));
+  assert.ok(content.includes('Cloud Shell'));
+  assert.ok(!content.includes('sk_live_') && !content.includes('firebase deploy --project asiye-80386'));
+});

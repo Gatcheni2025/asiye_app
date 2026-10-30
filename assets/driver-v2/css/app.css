@@ -4979,6 +4979,15 @@ body.navigation-camera-mode #driverNavigationButton {
     align-items:center;
     margin-top:12px;
 }
+.driver-go-offer-status{font-size:12px;line-height:1.45;color:#245e40;font-weight:700;margin:12px 0}
+.driver-go-recommendation{background:#fff;border:1px solid #c5dccd;border-radius:12px;padding:12px}
+.driver-go-recommendation > span{display:block;font-size:12px;color:#536c5b}
+.driver-go-recommendation > strong{display:block;font-size:24px;color:#16472e;margin:4px 0}
+.driver-go-recommendation p{margin:4px 0;font-size:13px;color:#244f34}
+.driver-go-recommendation small{display:block;font-size:11px;line-height:1.45;color:#66756b}
+.driver-go-counter-choices{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.driver-go-counter-choices button{min-height:44px;flex:1;min-width:125px;border:1px solid #c6d6cb;background:#fff;border-radius:10px;padding:8px;color:#245837;font-size:12px;font-weight:700}
+.driver-go-counter-choices button:disabled{opacity:.55}
 .driver-go-counter-row > span{
     font-weight:900;
     color:#234d35;
@@ -5009,3 +5018,13 @@ body.navigation-camera-mode #driverNavigationButton {
         grid-template-columns:1fr;
     }
 }
+
+.driver-map-notice{position:absolute;top:135px;left:16px;right:80px;z-index:85;display:flex;align-items:center;gap:10px;padding:12px 14px;border:1px solid #dce7dc;border-radius:14px;background:#fffffff2;box-shadow:0 5px 20px #17352a12;color:#3b5846;font-size:12px;line-height:1.5}.driver-map-notice[hidden]{display:none}.driver-map-notice>button{border:0;border-radius:9px;padding:8px 10px;flex-shrink:0;font:inherit;font-size:11px;font-weight:700;background:#e9f3eb;color:#234c34}.driver-map-notice>button[hidden]{display:none}
+
+/* Passenger-approved early trip ending. */
+.trip-end-safety{background:#fff8eb;border:1px solid #e6c98e;border-radius:16px;padding:16px;margin:12px 0;color:#332611;line-height:1.5;text-align:left}
+.trip-end-safety h3,.trip-end-safety p{margin:0 0 10px}.trip-end-safety h3{font-size:18px}.trip-end-safety p{font-size:14px}
+.trip-end-safety-actions{display:flex;flex-wrap:wrap;gap:10px}.trip-end-safety-actions button{flex:1;min-width:140px;min-height:48px}
+/* Driver-owned bank verification is available before the first Card booking. */
+.driver-banking-card{display:flex;align-items:center;gap:13px;margin-top:14px;padding:16px;border:1px solid #d8e7df;border-radius:17px;background:#f2f8f5;color:#174c36;text-decoration:none;min-height:66px}
+.driver-banking-card>span{flex:1;min-width:0}.driver-banking-card strong,.driver-banking-card small{display:block}.driver-banking-card strong{font-size:14px}.driver-banking-card small{margin-top:4px;font-size:11px;line-height:1.5;color:#526b5e}.driver-banking-card:focus-visible{outline:3px solid #257854;outline-offset:3px}

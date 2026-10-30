@@ -152,8 +152,7 @@
                 class="login-subtitle"
             >
 
-                Sign in using the mobile number
-                registered to your driver account.
+                Sign in with Google or Apple, then verify your driver mobile number once.
 
             </p>
 
@@ -162,6 +161,7 @@
                  SOCIAL SIGN-IN
             ============================================== -->
 
+            <div id="loginStep" class="login-step active">
             <div class="social-login-section">
                 <button id="googleLoginButton" class="social-login-button" type="button">
                     <span class="social-provider-icon google-icon">G</span>
@@ -174,7 +174,8 @@
                 </button>
             </div>
 
-            <div class="login-divider"><span></span><strong>or</strong><span></span></div>
+            <a class="role-switch-link" href="../passenger-v2/login.html">Login as a passenger</a>
+            </div>
 
             <!-- =============================================
                  PHONE STEP
@@ -182,10 +183,12 @@
 
             <div
                 id="phoneStep"
-                class="login-step active"
+                class="login-step"
             >
 
 
+                <h2>Verify your driver phone</h2>
+                <p class="login-subtitle">You’re signed in. Link your mobile number by SMS to finish setting up your driver account. Future sign-ins with this account won’t need another OTP.</p>
                 <label
                     for="driverPhoneInput"
                     class="login-label"
@@ -248,10 +251,7 @@
 
                 </div>
 
-                <a class="role-switch-link" href="../passenger-v2/login.html">
-                    <i class="fas fa-user"></i>
-                    Login as a passenger
-                </a>
+                <button id="switchDriverSignInButton" type="button" class="change-number">Use another Google or Apple account</button>
 
 
             </div>

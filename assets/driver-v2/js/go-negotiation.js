@@ -121,14 +121,20 @@ ASIYE_DRIVER.goNegotiation = {
                 maximum,
                 Math.max(
                     passengerOffer,
-                    passengerOffer + 5
+                    Math.round(Number(request.suggestedFare || Number(request.marketReferenceFare || 0) * 0.90 || passengerOffer))
                 )
             );
+
+        const waiting = request.fareStatus === 'driver_counter';
+        const canCounter = !waiting && passengerOffer < maximum;
+        const recommendedMinimum = Number(request.recommendedMinimumFare || Number(request.marketReferenceFare || 0) * 0.65 || 1);
+        const lowOffer = passengerOffer < recommendedMinimum;
+        const counterNet = amount => this.money(Number(amount) * (1 - commissionRate));
 
 
         panel.innerHTML = `
             <div class="driver-go-negotiation-title">
-                Protected Asiye Go fare
+                Passenger’s fare offer
             </div>
 
             <div class="driver-go-negotiation-summary">
@@ -161,6 +167,18 @@ ASIYE_DRIVER.goNegotiation = {
                 </div>
             </div>
 
+            <p class="driver-go-offer-status" role="status">${waiting
+                ? `Counter R${this.money(request.driverCounterFare)} sent · waiting for the passenger`
+                : lowOffer ? 'Low passenger offer · you decide whether to accept, decline or counter'
+                    : 'Live passenger offer · accept, decline or counter'}</p>
+
+            <div class="driver-go-recommendation">
+                <span>Recommended counter</span>
+                <strong>R${suggestedCounter.toFixed(0)}</strong>
+                <p>You receive R${counterNet(suggestedCounter)} after commission.</p>
+                <small>Based on the route fare. This is a recommendation; you can accept the passenger’s lower offer.</small>
+            </div>
+
             <div class="driver-go-negotiation-copy">
                 Accept the passenger offer, or counter between
                 <strong>
@@ -170,7 +188,12 @@ ASIYE_DRIVER.goNegotiation = {
                 <strong>
                     R${maximum.toFixed(0)}
                 </strong>.
-                The server will reject anything outside this protected range.
+                Your passenger can accept your counter-offer before payment.
+            </div>
+
+            <div class="driver-go-counter-choices">
+                <button type="button" data-counter-choice="${suggestedCounter}" ${canCounter ? '' : 'disabled'}>Use recommended R${suggestedCounter}</button>
+                <button type="button" data-counter-choice="${maximum}" ${canCounter ? '' : 'disabled'}>Maximum R${maximum}</button>
             </div>
 
             <div class="driver-go-counter-row">
@@ -184,6 +207,7 @@ ASIYE_DRIVER.goNegotiation = {
                     max="${maximum}"
                     step="1"
                     value="${suggestedCounter}"
+                    ${canCounter ? '' : 'disabled'}
                     aria-label="Driver counter fare"
                 >
 
@@ -191,16 +215,18 @@ ASIYE_DRIVER.goNegotiation = {
                     id="counterFareButton"
                     type="button"
                     class="driver-btn driver-btn-secondary"
-                    ${passengerOffer >= maximum
+                    ${!canCounter
                         ? 'disabled'
                         : ''}
                 >
-                    Counter
+                    Make counter-offer
                 </button>
             </div>
 
             <small>
-                No payment is taken until the fare is agreed.
+                You receive <strong id="driverCounterNet">R${counterNet(suggestedCounter)}</strong> for this counter.
+                The offer stays open until you or the passenger makes a decision.
+                No payment is taken until the passenger agrees.
             </small>
         `;
 
@@ -217,9 +243,19 @@ ASIYE_DRIVER.goNegotiation = {
 
 
         if (acceptButton) {
+            acceptButton.disabled = waiting;
             acceptButton.textContent =
-                `Accept R${passengerOffer.toFixed(0)}`;
+                waiting ? 'Waiting for passenger' : `Accept R${passengerOffer.toFixed(0)}`;
         }
+
+        const counterInput = panel.querySelector('#driverCounterFareInput');
+        const updateNet = () => { panel.querySelector('#driverCounterNet').textContent = `R${counterNet(counterInput.value)}`; };
+        counterInput.addEventListener('input', updateNet);
+        panel.querySelectorAll('[data-counter-choice]').forEach(button => button.addEventListener('click', () => {
+            counterInput.value = button.dataset.counterChoice;
+            updateNet();
+            counterInput.focus();
+        }));
 
 
         const counterButton =
@@ -286,8 +322,14 @@ ASIYE_DRIVER.goNegotiation = {
                             );
 
 
-                        ASIYE_DRIVER.ui
-                            ?.closeIncomingRequest?.();
+                        button.textContent = 'Counter sent';
+                        counterInput.disabled = true;
+                        panel.querySelectorAll('[data-counter-choice]').forEach(choice => { choice.disabled = true; });
+                        panel.querySelector('[role="status"]').textContent = `Counter R${amount} sent · waiting for the passenger`;
+                        if (acceptButton) {
+                            acceptButton.disabled = true;
+                            acceptButton.textContent = 'Waiting for passenger';
+                        }
 
 
                     } catch (error) {
@@ -310,7 +352,7 @@ ASIYE_DRIVER.goNegotiation = {
                             false;
 
                         button.textContent =
-                            'Counter';
+                            'Make counter-offer';
                     }
                 }
             );

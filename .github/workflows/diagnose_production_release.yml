@@ -1,0 +1,25 @@
+name: Diagnose production promotion (read only)
+on:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths: ['scripts/diagnose_production_release.cjs', '.github/workflows/diagnose_production_release.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          project_id: asiye-80386
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: asiye-80386
+      - run: node scripts/diagnose_production_release.cjs

@@ -1,26 +1,68 @@
 require 'base64'
 require 'shellwords'
+require 'json'
 
 default_platform(:ios)
 
 platform :ios do
-  desc "Push a new beta build to TestFlight"
+  desc "Build and verify a signed IPA without uploading to TestFlight"
+  lane :candidate do
+    signed_candidate(upload_to_testflight: false)
+  end
+
+  desc "Build, verify and explicitly upload the selected IPA to TestFlight"
   lane :beta do
+    unless ENV["ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED"] == "yes"
+      UI.user_error!("Upload gate is closed; release confirmation is required.")
+    end
+    signed_candidate(upload_to_testflight: true)
+  end
+
+  private_lane :signed_candidate do |options|
     ENV["FASTLANE_XCODEBUILD_SETTINGS_TIMEOUT"] = "120"
     ENV["FASTLANE_XCODEBUILD_SETTINGS_RETRIES"] = "5"
-
     setup_ci
 
-    # 1. Fetch certificates
+    ios_version = ENV.fetch("ASIYE_IOS_MARKETING_VERSION", "")
+    source_version = ENV.fetch("ASIYE_SOURCE_VERSION", "")
+    UI.user_error!("A three-component iOS version is required.") unless ios_version.match?(/\A\d+\.\d+\.\d+\z/)
+    UI.user_error!("The selected mobile source must be 11.0.83+353.") unless source_version == "11.0.83+353"
+
+    # Authenticate before compilation and select a fresh build above Apple's
+    # current train and this workflow's unique run/attempt floor.
+    key_secret = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].to_s.strip.gsub('\n', "\n")
+    key_secret = Base64.decode64(key_secret) unless key_secret.include?("BEGIN")
+    clean_data = key_secret.gsub(/-----(BEGIN|END) PRIVATE KEY-----/, "").gsub(/\s+/, "")
+    formatted_key = "-----BEGIN PRIVATE KEY-----\n" +
+                    clean_data.scan(/.{1,64}/).join("\n") +
+                    "\n-----END PRIVATE KEY-----"
+    api_key = app_store_connect_api_key(
+      key_id: ENV["APP_STORE_CONNECT_KEY_ID"].to_s.strip,
+      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s.strip,
+      key_content: formatted_key,
+      duration: 1200,
+      in_house: false
+    )
+    latest = latest_testflight_build_number(
+      api_key: api_key,
+      app_identifier: "com.asiyeapp.asiye",
+      version: ios_version,
+      initial_build_number: 93124
+    )
+    run_floor = 93125 + ENV.fetch("GITHUB_RUN_NUMBER", "0").to_i * 100 +
+                ENV.fetch("GITHUB_RUN_ATTEMPT", "1").to_i
+    build_string = [latest.to_i + 1, run_floor].max.to_s
+    ENV["ASIYE_IOS_BUILD_NUMBER"] = build_string
+    UI.message("Building Asiye #{source_version} as iOS #{ios_version} (#{build_string}); latest Apple build #{latest}")
+
     match(
       git_url: "https://github.com/Gatcheni2025/asiye-certs",
       type: "appstore",
       app_identifier: "com.asiyeapp.asiye",
       team_id: "AC775BUGG5",
+      api_key: api_key,
       readonly: true
     )
-
-    # 2. Update signing settings
     update_code_signing_settings(
       use_automatic_signing: false,
       path: "Runner.xcodeproj",
@@ -29,28 +71,15 @@ platform :ios do
       profile_name: "match AppStore com.asiyeapp.asiye"
     )
 
-    # 3. Keep Android's pubspec version (11.0.71+341) while building the
-    # approved iOS marketing version. The workflow supplies an increasing
-    # build number, independently of Android's versionCode.
-    ios_version = ENV.fetch("ASIYE_IOS_MARKETING_VERSION", "")
-    build_string = ENV.fetch("ASIYE_IOS_BUILD_NUMBER", "")
-    unless ios_version.match?(/\A\d+\.\d+\.\d+\z/)
-      UI.user_error!("A three-component iOS version is required.")
-    end
-    unless build_string.match?(/\A[1-9]\d*\z/) && build_string.to_i >= 46523
-      UI.user_error!("The iOS build number must be numeric and >= 46523.")
-    end
-    UI.message("Building Asiye 11.0.71 source as iOS #{ios_version} (#{build_string})")
-
-    # 4. Build Flutter without signing; archive and sign with Fastlane Match.
     sh("cd ../.. && flutter build ios --release --no-codesign --build-name=#{ios_version} --build-number=#{build_string}")
-
-    # 5. Build and Sign IPA (Workspace)
+    export_dir = File.expand_path("../release-output", __dir__)
     ipa_path = build_app(
       scheme: "Runner",
       workspace: "Runner.xcworkspace",
       export_method: "app-store",
       export_team_id: "AC775BUGG5",
+      output_directory: export_dir,
+      output_name: "Asiye-#{source_version.tr('+', '-')}.ipa",
       xcargs: "DEVELOPMENT_TEAM=AC775BUGG5 PROVISIONING_PROFILE_SPECIFIER='match AppStore com.asiyeapp.asiye'",
       export_options: {
         provisioningProfiles: {
@@ -59,48 +88,46 @@ platform :ios do
       }
     )
 
-    # 6. SMART AUTHENTICATION (Fixes the nil error and Bearer Token error)
-    key_secret = ENV["APP_STORE_CONNECT_PRIVATE_KEY"].to_s.strip
-
-    # If the secret doesn't have the "BEGIN" header, it's Base64. Decode it.
-    if !key_secret.include?("BEGIN")
-      key_secret = Base64.decode64(key_secret)
-    end
-
-    # Clean up the key data and enforce 64-character line breaks (Apple requirement)
-    clean_data = key_secret.gsub(/-----(BEGIN|END) PRIVATE KEY-----/, "").gsub(/\s+/, "")
-    formatted_key = "-----BEGIN PRIVATE KEY-----\n" +
-                    clean_data.scan(/.{1,64}/).join("\n") +
-                    "\n-----END PRIVATE KEY-----"
-
-    # Use 'key_content' directly to avoid the 'IO.binread' crash
-    api_key = app_store_connect_api_key(
-      key_id: ENV["APP_STORE_CONNECT_KEY_ID"].to_s.strip,
-      issuer_id: ENV["APP_STORE_CONNECT_ISSUER_ID"].to_s.strip,
-      key_content: formatted_key,
-      in_house: false
-    )
-
-    # 7. Check the actual signed IPA's version, bundle ID, build and
-    # export-compliance flag before anything is sent to Apple.
-    # Fastlane evaluates this file from ios/fastlane, not the repository root.
-    # Resolve the validator from this Fastfile's physical directory so the
-    # signed IPA is verified before any upload occurs.
     validator = File.expand_path("../../scripts/verify_asiye_ios_metadata.py", __dir__)
-    unless File.file?(validator)
-      UI.user_error!("Missing signed IPA validator at #{validator}")
-    end
+    UI.user_error!("Missing signed IPA validator at #{validator}") unless File.file?(validator)
     sh("python3 #{Shellwords.escape(validator)} --ipa #{Shellwords.escape(ipa_path.to_s)} --version #{Shellwords.escape(ios_version)} --build #{Shellwords.escape(build_string)}")
-
-    # This lane runs only via the explicitly confirmed manual upload job.
-    unless ENV["ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED"] == "yes"
-      UI.user_error!("Upload gate is closed; release confirmation is required.")
+    asset_validator = File.expand_path("../../scripts/verify_mobile_bundle_assets.py", __dir__)
+    sh("python3 #{Shellwords.escape(asset_validator)} --artifact #{Shellwords.escape(ipa_path.to_s)} --expected-project asiye-80386")
+    File.write(File.join(export_dir, "release-info.json"), JSON.pretty_generate({
+      source_version: source_version,
+      source_commit: ENV["GITHUB_SHA"],
+      ios_version: ios_version,
+      ios_build_number: build_string,
+      bundle_identifier: "com.asiyeapp.asiye",
+      firebase_project: "asiye-80386",
+      staging_capable: false,
+      distribution: options[:upload_to_testflight] ? "TestFlight-candidate" : "signed-candidate",
+      testflight_uploaded: false,
+      live_payments_verified: false
+    }))
+    if ENV["GITHUB_OUTPUT"]
+      File.open(ENV["GITHUB_OUTPUT"], "a") do |file|
+        file.puts("ipa_path=#{ipa_path}")
+        file.puts("ios_version=#{ios_version}")
+        file.puts("ios_build_number=#{build_string}")
+      end
     end
 
-    upload_to_testflight(
+    if options[:upload_to_testflight]
+      upload_to_testflight(
       api_key: api_key,
       ipa: ipa_path,
-      skip_waiting_for_build_processing: true
-    )
+      skip_waiting_for_build_processing: false,
+      wait_processing_interval: 30,
+      wait_processing_timeout_duration: 1800,
+      distribute_external: false,
+      notify_external_testers: false,
+      changelog: "Vehicle illustrations now appear on driver match and pickup cards, including colour-matched Toyota Corolla artwork. Bank verification funding messages clarify that Asiye funds the verification service. Verified driver banking remains required before new bookings. Live Card acceptance remains separately gated."
+      )
+      info_path = File.join(export_dir, "release-info.json")
+      info = JSON.parse(File.read(info_path))
+      info["testflight_uploaded"] = true
+      File.write(info_path, JSON.pretty_generate(info))
+    end
   end
 end

@@ -1,0 +1,74 @@
+name: Production Card Release Preflight (read only)
+# Recheck the published final 352 banking gate after verified production rollout, 27 October 2026.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['fix/paystack-subaccounts-cash-card-no-wallet']
+    paths:
+      - 'scripts/production_card_preflight.cjs'
+      - 'test/production-card-preflight.test.cjs'
+      - '.github/workflows/production_card_release_preflight.yml'
+      - 'scripts/verify_mobile_bundle_assets.py'
+      - 'test/test_mobile_bundle_assets.py'
+
+permissions:
+  contents: read
+
+jobs:
+  inspection-tests:
+    name: Verify read-only scope and payment configuration guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check scripts/production_card_preflight.cjs
+      - run: node --test test/production-card-preflight.test.cjs test/paystack-payment-safety.test.cjs test/paystack-return.test.cjs test/trip-ratings.test.cjs test/trip-end-safety.test.cjs
+      - run: python3 -m unittest discover -s test -p 'test_mobile_bundle_assets.py'
+
+  production-inspection:
+    name: Inspect production deployment, bound key mode and launch state
+    needs: inspection-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_ASIYE_80386 || secrets.FIREBASE_SERVICE_ACCOUNT }}'
+          project_id: asiye-80386
+      - uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: asiye-80386
+      - name: Read only; no deployment or payment activation
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p production-card-preflight
+          node scripts/production_card_preflight.cjs --check | tee production-card-preflight/readback.txt
+      - name: Record inspection limit
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p production-card-preflight
+          cat > production-card-preflight/limits.txt <<'EOF'
+          Read-only preparation for asiye-80386.
+          No launch gate, secret, deployment, customer record, payment, refund or IAM write.
+          Missing endpoints, blocked reads and mismatched rules/assets must be resolved.
+          Driver-specific live payout verification requires the operator's exact driver ID.
+          Function source attestation and real provider/device acceptance remain separate.
+          EOF
+          cat production-card-preflight/limits.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: asiye-production-card-preflight
+          path: production-card-preflight/
+          if-no-files-found: error
+          retention-days: 14

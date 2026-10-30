@@ -78,10 +78,16 @@
         'asiyePendingPhoneAuthVerificationId';
     const pendingStartedAtKey =
         'asiyePendingPhoneAuthStartedAt';
+    const pendingLinkUidKey = 'asiyePendingPhoneAuthLinkUid';
+    const pendingRoleKey = 'asiyePendingPhoneAuthRole';
     const pendingTtlMs =
         5 * 60 * 1000;
 
     let sessionPromise = null;
+    const phoneLinkUid = () => role === 'driver' ?
+        (login.awaitingPhoneLink ? login.pendingUser?.uid : null) ||
+        localStorage.getItem(pendingLinkUidKey) || null : null;
+    const phoneControls = () => ({phone: ids.phone, error: 'phoneError', send: ids.send});
 
     const original = {
         prepareRecaptcha:
@@ -107,7 +113,8 @@
         apple:
             typeof login.signInWithApple === 'function'
                 ? login.signInWithApple.bind(login)
-                : null
+                : null,
+        useAnotherSignInMethod: login.useAnotherSignInMethod?.bind(login)
     };
 
     const setButton = (
@@ -134,6 +141,10 @@
         verificationId = ''
     ) => {
         if (phone) {
+            localStorage.setItem(pendingRoleKey, role);
+            const linkUid = phoneLinkUid();
+            if (linkUid) localStorage.setItem(pendingLinkUidKey, linkUid);
+            else localStorage.removeItem(pendingLinkUidKey);
             localStorage.setItem(
                 pendingPhoneKey,
                 phone
@@ -157,6 +168,8 @@
     };
 
     const clearPendingPhoneState = () => {
+        localStorage.removeItem(pendingRoleKey);
+        localStorage.removeItem(pendingLinkUidKey);
         localStorage.removeItem(
             pendingPhoneKey
         );
@@ -177,13 +190,14 @@
         phone,
         verificationId
     ) => {
+        if (role !== 'driver' || !phoneLinkUid()) { clearPendingPhoneState(); return; }
         if (phone) {
             login.currentPhone =
                 phone;
 
             const phoneInput =
                 document.getElementById(
-                    ids.phone
+                    phoneControls().phone
                 );
 
             if (phoneInput) {
@@ -277,9 +291,9 @@
         }
 
         setButton(
-            ids.send,
+            phoneControls().send,
             false,
-            role === 'driver'
+            phoneLinkUid() ? 'Send verification code' : role === 'driver'
                 ? 'Continue'
                 : 'Continue with phone'
         );
@@ -287,6 +301,30 @@
 
     const restorePendingPhoneState =
         state => {
+
+            if (role !== 'driver') { clearPendingPhoneState(); return; }
+            if (state?.role && state.role !== role) return;
+            const restoredUid = state?.linkUid || localStorage.getItem(pendingLinkUidKey);
+            if (!restoredUid) {
+                clearPendingPhoneState(); return;
+            }
+            const current = firebase.auth().currentUser;
+            // A recreated WebView restores Firebase asynchronously. Keep the
+            // native driver's recovery binding until that restoration finishes.
+            if (!current) {
+                if (state?.role === 'driver' && state?.linkUid) {
+                    localStorage.setItem(pendingRoleKey, 'driver');
+                    localStorage.setItem(pendingLinkUidKey, state.linkUid);
+                }
+                return;
+            }
+            if (current.uid !== restoredUid) { clearPendingPhoneState(); return; }
+            if (state?.linkUid && role === 'driver') {
+                localStorage.setItem(pendingLinkUidKey, state.linkUid);
+                login.awaitingPhoneLink = true;
+                if (firebase.auth().currentUser?.uid === state.linkUid)
+                    login.pendingUser = firebase.auth().currentUser;
+            }
 
             const phone =
                 String(
@@ -452,7 +490,7 @@
                 document.getElementById(
                     login.nativeVerificationId
                         ? 'otpError'
-                        : 'phoneError'
+                        : phoneControls().error
                 );
 
             if (error) {
@@ -461,9 +499,9 @@
             }
 
             setButton(
-                ids.send,
+                phoneControls().send,
                 false,
-                role === 'driver'
+                phoneLinkUid() ? 'Send verification code' : role === 'driver'
                     ? 'Continue'
                     : 'Continue with phone'
             );
@@ -544,6 +582,22 @@
                 );
             }
 
+            // Reject a native sign-in fallback before it can replace the
+            // WebView's original Apple/Google identity.
+            const payloadRole = payload.role === 'commuter' ? 'passenger' : payload.role;
+            if (payloadRole && payloadRole !== role) {
+                throw new Error('This verification belongs to a different Asiye sign-in screen. Return to the driver sign-in screen.');
+            }
+            const expectedLinkUid = phoneLinkUid() ||
+                (role === 'driver' && payload.provider === 'phone' && payload.role === 'driver' &&
+                 payload.linkUid === payload.uid ? payload.linkUid : null);
+            if (payload.provider === 'phone' && (role !== 'driver' || !expectedLinkUid)) {
+                throw new Error('Use Google or Apple to sign in. Phone verification is for signed-in drivers only.');
+            }
+            if (expectedLinkUid && payload.uid !== expectedLinkUid) {
+                throw new Error('Phone verification did not preserve your original account. Choose a sign-in method and try again.');
+            }
+
             try {
                 await firebase
                     .auth()
@@ -588,6 +642,9 @@
             }
 
             clearPendingPhoneState();
+            if (payload.provider === 'phone') {
+                postNative({action:'nativeAuthSessionAccepted',provider:'phone',role,uid:user.uid});
+            }
 
             if (
                 payload.provider ===
@@ -642,7 +699,8 @@
 
     login.sendOtp =
         async function () {
-
+            if (role !== 'driver') { clearPendingPhoneState(); return; }
+            if (!this.awaitingPhoneLink || !this.pendingUser) { this.showStep('loginStep'); return; }
             if (
                 !isInstalledApp()
             ) {
@@ -652,7 +710,7 @@
 
             const input =
                 document.getElementById(
-                    ids.phone
+                    phoneControls().phone
                 );
             const phone =
                 this.normalizePhone?.(
@@ -662,7 +720,7 @@
             if (!phone) {
                 const error =
                     document.getElementById(
-                        'phoneError'
+                        phoneControls().error
                     );
 
                 if (error) {
@@ -670,6 +728,13 @@
                         'Enter a valid South African mobile number.';
                 }
 
+                return;
+            }
+
+            const linkUid = phoneLinkUid();
+            if (role === 'driver' && this.awaitingPhoneLink &&
+                (!linkUid || firebase.auth().currentUser?.uid !== linkUid)) {
+                showError({provider: 'phone', message: 'Your Apple or Google session changed. Choose a sign-in method and try again.'});
                 return;
             }
 
@@ -683,14 +748,14 @@
             );
 
             setButton(
-                ids.send,
+                phoneControls().send,
                 true,
                 'Sending code...'
             );
 
             const error =
                 document.getElementById(
-                    'phoneError'
+                    phoneControls().error
                 );
 
             if (error) {
@@ -702,11 +767,13 @@
                 !postNative({
                     action:
                         'startPhoneSignIn',
-                    phone
+                    phone,
+                    linkUid,
+                    role
                 })
             ) {
                 setButton(
-                    ids.send,
+                    phoneControls().send,
                     false,
                     role === 'driver'
                         ? 'Continue'
@@ -724,6 +791,7 @@
 
     login.resendOtp =
         async function () {
+            if (role !== 'driver' || !phoneLinkUid() || firebase.auth().currentUser?.uid !== phoneLinkUid()) { clearPendingPhoneState(); return; }
 
             if (
                 !isInstalledApp()
@@ -757,12 +825,15 @@
             postNative({
                 action:
                     'resendPhoneOtp',
-                phone
+                phone,
+                linkUid: phoneLinkUid(),
+                role
             });
         };
 
     login.verifyOtp =
         async function () {
+            if (role !== 'driver' || !phoneLinkUid() || firebase.auth().currentUser?.uid !== phoneLinkUid()) { clearPendingPhoneState(); return; }
 
             if (
                 !isInstalledApp()
@@ -805,7 +876,8 @@
                 verificationId:
                     this.nativeVerificationId ||
                     '',
-                code
+                code,
+                role
             });
         };
 
@@ -835,6 +907,35 @@
                 'triggerGoogleSignIn'
             );
         };
+
+    // The native SDK and WebView have separate persisted sessions. Wait for
+    // native sign-out acknowledgement before the web chooser can reset.
+    let resetSequence = 0, resetRequest = null;
+    window.onNativeSignInReset = payload => {
+        if (!resetRequest || payload?.requestId !== resetRequest.id) return;
+        resetRequest.finish(payload.success === true);
+    };
+    if (original.useAnotherSignInMethod) {
+        login.useAnotherSignInMethod = async function () {
+            if (!isInstalledApp()) return original.useAnotherSignInMethod();
+            if (resetRequest) return;
+            const id = `${Date.now()}-${++resetSequence}`;
+            const success = await new Promise(resolve => {
+                const timer = setTimeout(() => resetRequest?.finish(false), 15000);
+                resetRequest = {id, finish(value) {
+                    clearTimeout(timer); resetRequest = null; resolve(value);
+                }};
+                if (!postNative({action: 'resetNativeAuthForSignIn', requestId: id}))
+                    resetRequest.finish(false);
+            });
+            if (!success) {
+                showError({provider: 'phone', message: 'Could not switch sign-in methods. Please try again.'});
+                return;
+            }
+            clearPendingPhoneState();
+            return original.useAnotherSignInMethod();
+        };
+    }
 
     login.signInWithApple =
         async function () {
