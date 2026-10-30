@@ -32,3 +32,39 @@ jobs:
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           TEYZA_PROFILE_BASE64: ${{ secrets.TEYZA_PROFILE_FOR_SIGNING }}
         run: python tools/teyza_signing_transfer.py
+
+  android_recovery:
+    name: Recover original Teyza Play upload key
+    if: github.repository == 'Gatcheni2025/asiye_app' && github.ref == 'refs/heads/fix/teyza-legacy-android-key'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Verify recovery with disposable keys before loading credentials
+        run: python -m unittest discover -s tools -p test_teyza_android_key_recovery.py -v
+      - name: Restore only the exact existing Play upload key
+        env:
+          GH_TOKEN: ${{ secrets.TEYZA_SIGNING_TRANSFER_TOKEN || secrets.GH_PAT }}
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: python tools/teyza_android_key_recovery.py --restore
+      - name: Save public recovery result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: teyza-legacy-android-public
+          path: ${{ runner.temp }}/teyza-legacy-android-public/
+          retention-days: 14
+          if-no-files-found: warn
+
