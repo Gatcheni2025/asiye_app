@@ -1,4 +1,4 @@
-name: Asiye 352 Android and iOS Release Candidates
+name: Asiye 353 Android and iOS Release Candidates
 
 on:
   workflow_dispatch:
@@ -22,8 +22,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ASIYE_SOURCE_VERSION: '11.0.82+352'
-  ASIYE_IOS_MARKETING_VERSION: '46522.0.10'
+  ASIYE_SOURCE_VERSION: '11.0.83+353'
+  ASIYE_IOS_MARKETING_VERSION: '46522.0.11'
 
 jobs:
   validation:
@@ -44,7 +44,7 @@ jobs:
       - name: Verify release ancestry and selected review version
         run: |
           test "$GITHUB_REF_NAME" = 'fix/paystack-subaccounts-cash-card-no-wallet'
-          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.82+352'
+          test "$(awk '/^version:/ {print $2}' pubspec.yaml)" = '11.0.83+353'
           bash scripts/verify_payment_release_341_lineage.sh
           node scripts/ios_release_preflight.cjs
       - name: Check JavaScript syntax
@@ -65,6 +65,7 @@ jobs:
           test/parcel-security.test.cjs
           test/driver-first-card-booking.test.cjs
           test/driver-booking-banking.test.cjs
+          test/vehicle-illustration.test.cjs
           test/go-continuation.test.cjs
           test/club-lifecycle.test.cjs
           test/card-booking-sequence.test.cjs
@@ -103,13 +104,13 @@ jobs:
         run: node render-ride-confirmation.cjs
       - uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.82-352-ui-review
+          name: asiye-11.0.83-353-ui-review
           path: ui-review/
           if-no-files-found: error
           retention-days: 7
 
   android:
-    name: Signed Android 11.0.82 (352) APK and AAB
+    name: Signed Android 11.0.83 (353) APK and AAB
     needs: validation
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -174,8 +175,8 @@ jobs:
           APK_PACKAGE=$("$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | sed -n '1p')
           printf '%s\n' "$APK_PACKAGE"
           printf '%s\n' "$APK_PACKAGE" | grep -F "name='com.asiyeapp.asiye'"
-          printf '%s\n' "$APK_PACKAGE" | grep -F "versionCode='352'"
-          printf '%s\n' "$APK_PACKAGE" | grep -F "versionName='11.0.82'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionCode='353'"
+          printf '%s\n' "$APK_PACKAGE" | grep -F "versionName='11.0.83'"
           TARGET_API=$("$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | sed -n "s/^targetSdkVersion:'\([0-9]*\)'.*/\1/p")
           test "$TARGET_API" -ge 36
           ZIPALIGN=$(find "$ANDROID_HOME/build-tools" -name zipalign -type f | sort -V | tail -1)
@@ -186,8 +187,8 @@ jobs:
           grep -F 'jar verified' aab-signature.txt
           curl --fail --location --silent --show-error https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar --output "$RUNNER_TEMP/bundletool.jar"
           java -jar "$RUNNER_TEMP/bundletool.jar" validate --bundle=build/app/outputs/bundle/release/app-release.aab
-          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionCode')" = '352'
-          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionName')" = '11.0.82'
+          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionCode')" = '353'
+          test "$(java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle=build/app/outputs/bundle/release/app-release.aab --xpath='/manifest/@android:versionName')" = '11.0.83'
           java -jar "$RUNNER_TEMP/bundletool.jar" dump config --bundle=build/app/outputs/bundle/release/app-release.aab > "$RUNNER_TEMP/asiye-aab-config.json"
           grep -F 'PAGE_ALIGNMENT_16K' "$RUNNER_TEMP/asiye-aab-config.json"
       - name: Prepare installation download and build details
@@ -198,19 +199,21 @@ jobs:
           python3 scripts/verify_android_native_pages.py --artifact build/app/outputs/flutter-apk/app-release.apk
           python3 scripts/verify_android_native_pages.py --artifact build/app/outputs/bundle/release/app-release.aab
           mkdir -p review-apk
-          cp build/app/outputs/flutter-apk/app-release.apk review-apk/Asiye-11.0.82-352.apk
-          cp build/app/outputs/bundle/release/app-release.aab review-apk/Asiye-11.0.82-352.aab
+          cp build/app/outputs/flutter-apk/app-release.apk review-apk/Asiye-11.0.83-353.apk
+          cp build/app/outputs/bundle/release/app-release.aab review-apk/Asiye-11.0.83-353.aab
           (
             cd review-apk
-            sha256sum Asiye-11.0.82-352.apk Asiye-11.0.82-352.aab > SHA256SUMS.txt
+            sha256sum Asiye-11.0.83-353.apk Asiye-11.0.83-353.aab > SHA256SUMS.txt
           )
           cat > review-apk/BUILD-INFO.txt <<EOF
-          Asiye Android 11.0.82 (352) — APK for testing and AAB for Play review
+          Asiye Android 11.0.83 (353) — APK for testing and AAB for Play review
           Source commit: $GITHUB_SHA
           Source branch: $GITHUB_REF_NAME
           Package: com.asiyeapp.asiye
           Firebase project: asiye-80386 (production-configured candidate; NOT a staging build)
           Native Google/Apple phone verification links the OTP to the existing UID.
+          Original animated Corolla SVG artwork replaces passenger-facing car photos; other models use generic artwork.
+          Bank verification funding errors identify Asiye as the service payer; no driver fee or verification bypass.
           Verified banking is required before new Go, Club or Parcel bookings, for Cash and Card.
           Missing or pending bank verification pauses new requests; existing trips remain restorable.
           All reviewed WebView assets match this commit inside each signed package.
@@ -233,7 +236,7 @@ jobs:
           cat review-apk/SHA256SUMS.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.82-352-android
+          name: asiye-11.0.83-353-android
           path: review-apk/
           if-no-files-found: error
           retention-days: 30
@@ -244,8 +247,9 @@ jobs:
     needs: validation
     runs-on: macos-latest
     timeout-minutes: 65
+    # Explicit user-authorized 353 release commit only; ordinary pushes stay candidate-only.
     env:
-      ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED: ${{ github.event_name == 'workflow_dispatch' && inputs.upload_to_testflight == 'yes' && 'yes' || 'no' }}
+      ASIYE_TESTFLIGHT_UPLOAD_CONFIRMED: ${{ ((github.event_name == 'workflow_dispatch' && inputs.upload_to_testflight == 'yes') || (github.event_name == 'push' && github.event.head_commit.message == 'Release Asiye 11.0.83 (353) and upload iOS to TestFlight')) && 'yes' || 'no' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -296,7 +300,7 @@ jobs:
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: asiye-11.0.82-352-ios
+          name: asiye-11.0.83-353-ios
           path: |
             ios/release-output/*.ipa
             ios/release-output/release-info.json

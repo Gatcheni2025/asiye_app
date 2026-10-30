@@ -26,7 +26,7 @@ platform :ios do
     ios_version = ENV.fetch("ASIYE_IOS_MARKETING_VERSION", "")
     source_version = ENV.fetch("ASIYE_SOURCE_VERSION", "")
     UI.user_error!("A three-component iOS version is required.") unless ios_version.match?(/\A\d+\.\d+\.\d+\z/)
-    UI.user_error!("The selected mobile source must be 11.0.82+352.") unless source_version == "11.0.82+352"
+    UI.user_error!("The selected mobile source must be 11.0.83+353.") unless source_version == "11.0.83+353"
 
     # Authenticate before compilation and select a fresh build above Apple's
     # current train and this workflow's unique run/attempt floor.
@@ -122,7 +122,7 @@ platform :ios do
       wait_processing_timeout_duration: 1800,
       distribute_external: false,
       notify_external_testers: false,
-      changelog: "Start Go offers at 65 percent of the route reference. Valid offers are sent to nearby drivers during submission for acceptance, decline or counter-offer; notification retries preserve the booking. Release candidate; provider acceptance remains required for live Card activation."
+      changelog: "Vehicle illustrations now appear on driver match and pickup cards, including colour-matched Toyota Corolla artwork. Bank verification funding messages clarify that Asiye funds the verification service. Verified driver banking remains required before new bookings. Live Card acceptance remains separately gated."
       )
       info_path = File.join(export_dir, "release-info.json")
       info = JSON.parse(File.read(info_path))
