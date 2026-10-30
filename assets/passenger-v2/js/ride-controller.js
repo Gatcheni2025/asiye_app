@@ -1540,6 +1540,39 @@ ASIYE.ride = {
         }
     },
 
+    // Illustrations are display assets only. Approval still requires the real car photo.
+    vehicleIllustration(request = {}) {
+        const make = String(request.vehicleMake || '').trim().toLowerCase();
+        const model = String(request.vehicleModel || '').trim().toLowerCase();
+        const corolla = /\btoyota\b/.test(make) && /\bcorolla\b/.test(model);
+        const palette = {white:'#f5f5f0',silver:'#aeb9c1',grey:'#66737f',gray:'#66737f',
+            black:'#303b47',blue:'#3973ad',red:'#b94442',green:'#50846c',
+            gold:'#b4a077',brown:'#8a6954',orange:'#ce7c39',yellow:'#dfbd51'};
+        const colour = String(request.vehicleColor || '').trim().toLowerCase();
+        const paint = palette[colour] || '#aeb9c1';
+        const label = corolla ? 'Toyota Corolla illustration' : 'Vehicle illustration';
+        // Static, original SVG geometry; user input never enters SVG markup.
+        const body = corolla
+            ? 'M39 104 70 97 106 66Q112 61 127 61H205Q219 62 233 74L262 97 291 104Q300 106 302 119L299 139H27L26 122Q26 109 39 104Z'
+            : 'M36 104 72 97 104 69Q114 63 131 63H199Q215 64 228 76L255 97 287 104Q298 108 299 121L297 139H28L26 122Q26 109 36 104Z';
+        return `<svg class="asiye-vehicle-art" viewBox="0 0 330 180" role="img" aria-label="${label}" xmlns="http://www.w3.org/2000/svg" data-vehicle-art="${corolla ? 'toyota-corolla' : 'generic'}">
+            <ellipse cx="165" cy="148" rx="140" ry="9" fill="#263746" opacity=".10"/>
+            <g class="asiye-vehicle-body">
+                <path d="${body}" fill="${paint}" stroke="#344350" stroke-width="2"/>
+                <path d="m88 96 27-26h38v26Zm72-26h42q10 0 20 9l19 17h-81Z" fill="#344c60" stroke="#203545" stroke-width="2"/>
+                <path d="m119 74-20 19h12l20-19m39 0v19h9V74" fill="#d6edf4" opacity=".28"/>
+                <path d="M36 118h258M85 103v30m74-32v32m78-30v30" fill="none" stroke="#344350" stroke-width="1.5" opacity=".45"/>
+                <path d="M137 107h12m66 0h12" stroke="#344350" stroke-width="3" stroke-linecap="round"/>
+                <path d="m29 111 22-4 9 11H28Z" fill="#f9d4ad"/><path d="m276 108 21 5 2 8h-27Z" fill="#f6f5dd"/>
+                <path d="M118 132h94" stroke="#344350" stroke-width="3" stroke-linecap="round" opacity=".5"/>
+                <path d="M47 139a32 32 0 0 1 64 0m112 0a32 32 0 0 1 64 0" fill="#293743"/>
+            </g>
+            <g fill="#26323d" stroke="#18232c" stroke-width="2"><circle cx="79" cy="139" r="25"/><circle cx="255" cy="139" r="25"/></g>
+            <g fill="#c9d3d9" stroke="#6f818f" stroke-width="2"><circle cx="79" cy="139" r="15"/><circle cx="255" cy="139" r="15"/></g>
+            <g fill="#435565"><circle cx="79" cy="139" r="5"/><circle cx="255" cy="139" r="5"/></g>
+        </svg>`;
+    },
+
     renderPickupCard(request, arrived) {
         const container = document.getElementById('sheetContent');
         if (!container) return;
@@ -1555,10 +1588,6 @@ ASIYE.ride = {
             request.driverProfileImageUrl ||
             request.profileImageUrl ||
             request.profile_picture_url ||
-            '';
-        const vehiclePhoto =
-            request.driverVehiclePhoto ||
-            request.vehiclePhoto ||
             '';
         const vehicleDescription =
             [
@@ -1599,11 +1628,10 @@ ASIYE.ride = {
                         <strong>${escape(request.vehicleReg || 'Not available')}</strong>
                     </div>
                 </div>
-                ${vehiclePhoto ? `
-                    <div style="margin:12px 0 0;border-radius:14px;overflow:hidden;background:#f4f4f4;">
-                        <img src="${escape(vehiclePhoto)}" alt="Driver vehicle" style="display:block;width:100%;max-height:160px;object-fit:cover;">
-                    </div>
-                ` : ''}
+                <div class="pickup-vehicle-illustration">
+                    ${this.vehicleIllustration(request)}
+                    <span>Vehicle illustration · Confirm the number plate before boarding</span>
+                </div>
                 <div class="pickup-pin">
                     <div class="pickup-pin-heading"><span>${arrived ? 'Give your driver this PIN' : 'Your pickup PIN'}</span>${icon('safety')}</div>
                     <div class="pickup-pin-digits" ${secureParcel ? 'data-parcel-pin' : ''} aria-label="Pickup PIN ${escape(pin)}">${Array.from(pin).map(digit => `<span aria-hidden="true">${escape(digit)}</span>`).join('')}</div>
@@ -1952,7 +1980,6 @@ ASIYE.ride = {
         const image = value => /^(https?:\/\/|\.{0,2}\/|assets\/)/i.test(String(value || ''))
             ? String(value) : '';
         const photo = image(request.driverProfileImageUrl || request.profileImageUrl || request.profile_picture_url);
-        const carPhoto = image(request.driverVehiclePhoto || request.vehiclePhoto);
         const vehicle = [request.vehicleColor, request.vehicleMake, request.vehicleModel, request.vehicleYear]
             .filter(Boolean).join(' ');
         const rating = Number(request.driverRating);
@@ -1969,8 +1996,7 @@ ASIYE.ride = {
                     </div>
                 </div>
                 <div class="ride-match-vehicle">
-                    <div class="ride-match-car-photo" aria-hidden="true">${this.rideMatchIcon('car')}
-                        ${carPhoto ? `<img src="${escape(carPhoto)}" alt="">` : ''}</div>
+                    <div class="ride-match-car-photo">${this.vehicleIllustration(request)}</div>
                     <div class="ride-match-vehicle-info">
                         <span>${escape(vehicle || 'Vehicle details will appear here')}</span>
                         ${request.vehicleReg ? `<strong class="ride-match-plate">${escape(request.vehicleReg)}</strong>` : ''}

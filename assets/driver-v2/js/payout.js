@@ -80,6 +80,11 @@ async function loadStatus() {
         'Contact Asiye support for help with your existing bank application. Do not submit a second application.');
 }
 function showError(error) {
+    if (/insufficient.*(balance|funds|credit)|(balance|funds|credit).*(insufficient|not enough)/i.test(String(error.message || ''))) {
+        message('error','Asiye needs to restore bank verification',
+            'Bank verification is temporarily unavailable because Asiye must fund its verification service. You do not need to deposit money into your bank account or pay a driver top-up. Contact Asiye support, then retry once service is restored.');
+        return;
+    }
     message('error', error.status === 403 ? 'Driver approval required' : 'Bank status could not be confirmed',
         error.message || 'Check your connection and try again.');
 }
