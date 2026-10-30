@@ -92,6 +92,7 @@ jobs:
         run: |
           npm --prefix test/security install --no-audit --no-fund
           npm --prefix functions install --no-audit --no-fund
+      # Isolate emulator transactions between files; retain all authorization assertions.
       - name: Firebase authorization, cancellation, verified driver logout and exported handlers
         working-directory: test/security
         run: npx firebase emulators:exec --only database --project asiye-security-validation --config ../../firebase.json 'npm test'

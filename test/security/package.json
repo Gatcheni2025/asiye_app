@@ -3,7 +3,7 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
-    "test": "node --test --test-timeout=30000 *.test.cjs"
+    "test": "node --test --test-timeout=45000 --test-concurrency=1 *.test.cjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "latest",

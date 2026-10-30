@@ -25,7 +25,10 @@ test('confirmation has one identity card, compact vehicle, route, agreed fare an
   try {
     assert.equal(body.querySelectorAll('.ride-match-driver-card').length, 1);
     assert.equal(body.querySelector('.ride-match-avatar img').getAttribute('src'), fixture.request.driverProfileImageUrl);
-    assert.equal(body.querySelectorAll('.ride-match-car-photo img').length, 1);
+    assert.equal(body.querySelectorAll('.ride-match-car-photo img').length, 0);
+    assert.equal(body.querySelectorAll('.ride-match-car-photo svg.asiye-vehicle-art').length, 1);
+    assert.equal(body.querySelector('.ride-match-car-photo svg').getAttribute('data-vehicle-art'), 'toyota-corolla');
+    assert.match(body.querySelector('.ride-match-plate').textContent, /ND/);
     assert.match(body.querySelector('.ride-match-driver-info').textContent, /Alex Dlamini/);
     assert.match(body.querySelector('.ride-match-route').textContent, /Pickup Road/);
     assert.match(body.querySelector('.ride-match-fare').textContent, /R113.00/);
